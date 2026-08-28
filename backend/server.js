@@ -5,6 +5,8 @@ import storageRoutes from "./routes/storage.js";
 import { connectMongo } from "./db/mongodb.js";
 import { setStorageCollection } from "./routes/storage.js";
 import claudeRoutes from "./routes/claude.js";
+import resourceRoutes from "./routes/resources.js";
+import { seedResources } from "./routes/resources.js";
 
 dotenv.config();
 console.log("Anthropic API key loaded:", !!process.env.ANTHROPIC_API_KEY);
@@ -24,6 +26,7 @@ app.use(express.json({ limit: "5mb" }));
 
 app.use("/api/storage", storageRoutes);
 app.use("/api/claude", claudeRoutes);
+app.use("/api/resources", resourceRoutes);
 
 app.get("/api/health", (req, res) => res.json({ ok: true }));
 
@@ -39,6 +42,8 @@ async function startServer() {
   const collection = await connectMongo();
   if (collection) {
     setStorageCollection(collection);
+    const resourceCollection = (await import("./db/mongodb.js")).getResourceCollection();
+    await seedResources(resourceCollection);
     console.log("MongoDB storage connected");
   } else {
     console.log("MONGODB_URI not set; using local JSON storage");
