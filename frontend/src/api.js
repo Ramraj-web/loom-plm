@@ -11,7 +11,7 @@ async function request(path, options = {}) {
 }
 
 export const resourcesApi = {
-  list: resource => request(`/api/resources/${resource}`),
+  list: (resource, suffix = "") => request(`/api/resources/${resource}${suffix}`),
   create: (resource, data) => request(`/api/resources/${resource}`, { method: "POST", body: JSON.stringify(data) }),
   update: (resource, id, data) => request(`/api/resources/${resource}/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(data) }),
   remove: (resource, id) => request(`/api/resources/${resource}/${encodeURIComponent(id)}`, { method: "DELETE" }),

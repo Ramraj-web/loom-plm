@@ -32,9 +32,12 @@ router.get("/:resource", async (req, res, next) => {
   if (!validResource(resource)) return res.status(404).json({ error: "Unknown resource" });
   try {
     const collection = getResourceCollection();
-    if (collection) return res.json(await collection.find({ resource }).project({ _id: 0 }).toArray());
+    const filter = ["orders", "tasks"].includes(resource)
+      ? { resource, isDeleted: req.query.trash === "true" ? true : { $ne: true } }
+      : { resource };
+    if (collection) return res.json(await collection.find(filter).project({ _id: 0 }).toArray());
     const db = readDB();
-    res.json(db[resource] || []);
+    res.json((db[resource] || []).filter(record => !["orders", "tasks"].includes(resource) || (req.query.trash === "true" ? record.isDeleted === true : record.isDeleted !== true)));
   } catch (error) { next(error); }
 });
 
@@ -52,7 +55,7 @@ router.get("/:resource/:id", async (req, res, next) => {
 router.post("/:resource", async (req, res, next) => {
   const { resource } = req.params;
   if (!validResource(resource)) return res.status(404).json({ error: "Unknown resource" });
-  const record = { ...req.body, id: makeId(resource, req.body) };
+  const record = { ...req.body, id: makeId(resource, req.body), ...(["orders", "tasks"].includes(resource) ? { isDeleted: false } : {}) };
   try {
     const collection = getResourceCollection();
     if (collection) await collection.insertOne({ resource, ...record });
@@ -84,6 +87,18 @@ router.delete("/:resource/:id", async (req, res, next) => {
   if (!validResource(resource)) return res.status(404).json({ error: "Unknown resource" });
   try {
     const collection = getResourceCollection();
+    if (["orders", "tasks"].includes(resource)) {
+      const update = { $set: { isDeleted: true, deletedAt: new Date().toISOString() } };
+      if (collection) {
+        const result = await collection.updateOne({ resource, id }, update);
+        if (!result.matchedCount) return res.status(404).json({ error: "Record not found" });
+      } else {
+        const db = readDB(); const record = db[resource]?.find(item => String(item.id) === id);
+        if (!record) return res.status(404).json({ error: "Record not found" });
+        Object.assign(record, update.$set); writeDB(db);
+      }
+      return res.json({ id, deleted: true, isDeleted: true });
+    }
     if (collection) {
       const result = await collection.deleteOne({ resource, id });
       if (!result.deletedCount) return res.status(404).json({ error: "Record not found" });

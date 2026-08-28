@@ -33,8 +33,9 @@ function Dashboard() {
   const [error, setError] = useState("");
   async function load() {
     try {
-      const values = await Promise.all(routes.slice(1).map(route => resourcesApi.list(route.key)));
-      setCounts(Object.fromEntries(routes.slice(1).map((route, index) => [route.key, values[index].length])));
+      const orders = await resourcesApi.list("orders");
+      const tasks = await resourcesApi.list("tasks");
+      setCounts(current => ({ ...current, orders: orders.filter(order => order.isDeleted !== true).length, tasks: tasks.filter(task => task.isDeleted !== true).length }));
       setError("");
     } catch (e) { setError(e.message); }
   }

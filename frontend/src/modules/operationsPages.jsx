@@ -1,9 +1,12 @@
 import React, { useEffect, useState } from "react";
+import { Eye, Pencil, Plus, RotateCcw, Save, Trash2, X } from "lucide-react";
 import { resourcesApi } from "../api.js";
 
 const panel = { background: "#fff", border: "1px solid #E4E7EC", borderRadius: 10, padding: 18, marginBottom: 16 };
 const muted = { color: "#697386", fontSize: 13 };
 const button = { border: 0, borderRadius: 7, padding: "8px 12px", cursor: "pointer", fontWeight: 600, color: "#fff", background: "#168A78" };
+const inputStyle = { width: "100%", padding: "8px 10px", border: "1px solid #DDE1E8", borderRadius: 7, fontSize: 13, boxSizing: "border-box" };
+const iconButton = { border: "1px solid #DDE1E8", background: "#fff", color: "#315E8A", borderRadius: 6, padding: 6, cursor: "pointer" };
 
 function useOrders() {
   const [orders, setOrders] = useState([]);
@@ -16,16 +19,82 @@ function Layout({ title, description, children, error }) {
   return <section><div style={{ marginBottom: 22 }}><h1 style={{ margin: 0, color: "#172033", fontSize: 26 }}>{title}</h1><p style={{ ...muted, margin: "7px 0 0" }}>{description}</p></div>{error && <div style={{ ...panel, color: "#8B2630", background: "#FCEBEB" }}>{error}</div>}{children}</section>;
 }
 
-function OrderTable({ orders, onOpen }) {
-  return <div style={{ ...panel, overflowX: "auto" }}>{orders.length === 0 ? <div style={muted}>No live orders found.</div> : <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}><thead><tr>{["PO / Style", "Buyer", "Country", "Quantity", "Ship date", "Risk", "Status"].map(label => <th key={label} style={th}>{label}</th>)}</tr></thead><tbody>{orders.map(order => <tr key={order.id} onClick={() => onOpen?.(order)} style={{ cursor: onOpen ? "pointer" : "default" }}><td style={td}><strong>{order.id}</strong><br /><span style={muted}>{order.style}</span></td><td style={td}>{order.buyer}</td><td style={td}>{order.country}</td><td style={td}>{Number(order.qty || 0).toLocaleString()}</td><td style={td}>{order.ship}</td><td style={td}>{order.risk}</td><td style={td}>{order.status}</td></tr>)}</tbody></table>}</div>;
+function OrderTable({ orders, onOpen, onEdit, onDelete, onRestore, deleted = false }) {
+  return <div style={{ ...panel, overflowX: "auto" }}>{orders.length === 0 ? <div style={muted}>{deleted ? "Trash is empty." : "No live orders found."}</div> : <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 780 }}><thead><tr>{["PO / Style", "Buyer", "Country", "Quantity", "Ship date", "Risk", "Status", "Actions"].map(label => <th key={label} style={th}>{label}</th>)}</tr></thead><tbody>{orders.map(order => <tr key={order.id}><td style={td}><strong>{order.id}</strong><br /><span style={muted}>{order.style}</span></td><td style={td}>{order.buyer}</td><td style={td}>{order.country}</td><td style={td}>{Number(order.qty || 0).toLocaleString()}</td><td style={td}>{order.ship}</td><td style={td}>{order.risk}</td><td style={td}>{order.status}</td><td style={td}><div style={{ display: "flex", gap: 6 }}><button onClick={() => onOpen(order)} title="View" style={iconButton}><Eye size={14} /></button>{deleted ? <button onClick={() => onRestore(order)} title="Restore" style={{ ...iconButton, color: "#168A78" }}><RotateCcw size={14} /></button> : <><button onClick={() => onEdit(order)} title="Edit" style={iconButton}><Pencil size={14} /></button><button onClick={() => onDelete(order)} title="Delete" style={{ ...iconButton, color: "#B53D45" }}><Trash2 size={14} /></button></>}</div></td></tr>)}</tbody></table>}</div>;
 }
 
-export function OrdersPage({ onOpenOrder }) { const { orders, error } = useOrders(); return <Layout title="Orders" description="Live purchase orders across buyers and factories." error={error}><OrderTable orders={orders} onOpen={onOpenOrder} /></Layout>; }
+const orderFields = ["id", "buyer", "country", "season", "style", "qty", "ship", "risk", "status"];
+const emptyOrder = { id: "", buyer: "", country: "", season: "", style: "", qty: "", ship: "", risk: "medium", status: "On Track" };
+
+export function OrdersPage({ onOpenOrder }) {
+  const { orders: initialOrders, error: initialError } = useOrders();
+  const [orders, setOrders] = useState([]);
+  const [deletedOrders, setDeletedOrders] = useState([]);
+  const [form, setForm] = useState(emptyOrder);
+  const [mode, setMode] = useState(null);
+  const [showTrash, setShowTrash] = useState(false);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { setOrders(initialOrders); }, [initialOrders]);
+  async function loadTrash() { try { setDeletedOrders(await resourcesApi.list("orders?trash=true")); } catch (e) { setError(e.message); } }
+  function beginAdd() { setForm(emptyOrder); setMode("add"); setError(""); }
+  function beginEdit(order) { setForm(Object.fromEntries(orderFields.map(field => [field, order[field] ?? ""]))); setMode("edit"); setError(""); }
+  function view(order) { setForm(order); setMode("view"); setError(""); }
+  async function save(event) {
+    event.preventDefault(); setSaving(true); setError("");
+    try {
+      const value = { ...form, id: form.id.trim(), qty: Number(form.qty) };
+      const saved = mode === "add" ? await resourcesApi.create("orders", value) : await resourcesApi.update("orders", form.id, value);
+      setOrders(current => mode === "add" ? [saved, ...current] : current.map(order => order.id === saved.id ? saved : order));
+      setMode(null);
+    } catch (e) { setError(e.message); } finally { setSaving(false); }
+  }
+  async function remove(order) { if (!window.confirm(`Delete order ${order.id}?`)) return; try { await resourcesApi.remove("orders", order.id); setOrders(current => current.filter(item => item.id !== order.id)); await loadTrash(); } catch (e) { setError(e.message); } }
+  async function restore(order) { try { const saved = await resourcesApi.update("orders", order.id, { ...order, isDeleted: false, deletedAt: null }); setDeletedOrders(current => current.filter(item => item.id !== order.id)); setOrders(current => [saved, ...current]); } catch (e) { setError(e.message); } }
+  const readOnly = mode === "view";
+  return <Layout title="Orders" description="Live purchase orders across buyers and factories." error={initialError || error}>
+    <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 12 }}><button onClick={beginAdd} style={button}><Plus size={15} /> Add Order</button><button onClick={() => { setShowTrash(current => !current); if (!showTrash) loadTrash(); }} style={{ ...button, color: "#315E8A", background: "#EDF5FB" }}><Trash2 size={15} /> {showTrash ? "Active Orders" : "Deleted Orders"}</button></div>
+    {mode && <div style={panel}><h2 style={h2}>{readOnly ? "View order" : mode === "add" ? "Add order" : "Edit order"}</h2><form onSubmit={save} style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr)) auto", gap: 10, alignItems: "end" }}>{orderFields.map(field => <label key={field} style={{ color: "#697386", fontSize: 11 }}>{field === "id" ? "PO / ID" : field[0].toUpperCase() + field.slice(1)}<input type={field === "qty" ? "number" : "text"} value={form[field] ?? ""} readOnly={readOnly || (field === "id" && mode === "edit")} onChange={event => setForm(current => ({ ...current, [field]: event.target.value }))} style={inputStyle} /></label>)}<div style={{ display: "flex", gap: 6 }}>{!readOnly && <button type="submit" disabled={saving} style={button}><Save size={15} /> {saving ? "Saving..." : mode === "add" ? "Save Order" : "Save Changes"}</button>}<button type="button" onClick={() => setMode(null)} style={{ ...button, color: "#697386", background: "#F2F4F7" }}><X size={15} /> Close</button></div></form></div>}
+    <OrderTable orders={showTrash ? deletedOrders : orders} onOpen={view} onEdit={beginEdit} onDelete={remove} onRestore={restore} deleted={showTrash} />
+  </Layout>;
+}
 
 export function OrderDetailPage({ order, onBack }) { return <Layout title={order.style || order.id} description={`PO ${order.id} · ${order.buyer} · ${order.country}`}><button onClick={onBack} style={{ ...button, marginBottom: 16 }}>Back to orders</button><div style={panel}><h2 style={h2}>Order details</h2>{Object.entries(order).filter(([key]) => !["id", "_id"].includes(key)).map(([key, value]) => <div key={key} style={detail}><span>{key}</span><strong>{typeof value === "object" ? JSON.stringify(value) : String(value ?? "")}</strong></div>)}</div></Layout>; }
 
+const taskFields = ["title", "description", "assignee", "dueDate", "status"];
+const emptyTask = { title: "", description: "", assignee: "", dueDate: "", status: "open" };
+
+export function TasksPage() {
+  const [tasks, setTasks] = useState([]);
+  const [deletedTasks, setDeletedTasks] = useState([]);
+  const [form, setForm] = useState(emptyTask);
+  const [editingId, setEditingId] = useState(null);
+  const [mode, setMode] = useState(null);
+  const [showTrash, setShowTrash] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function load() { setLoading(true); try { setTasks(await resourcesApi.list("tasks")); setError(""); } catch (e) { setError(e.message); } finally { setLoading(false); } }
+  async function loadTrash() { try { setDeletedTasks(await resourcesApi.list("tasks", "?trash=true")); } catch (e) { setError(e.message); } }
+  useEffect(() => { load(); }, []);
+  function beginAdd() { setForm(emptyTask); setEditingId(null); setMode("add"); setError(""); }
+  function beginEdit(task) { setForm(Object.fromEntries(taskFields.map(field => [field, task[field] ?? ""]))); setEditingId(task.id); setMode("edit"); setError(""); }
+  function view(task) { setForm(task); setMode("view"); setError(""); }
+  async function save(event) { event.preventDefault(); setSaving(true); try { const value = { ...form, title: form.title.trim() }; const saved = mode === "add" ? await resourcesApi.create("tasks", value) : await resourcesApi.update("tasks", editingId, value); setTasks(current => mode === "add" ? [saved, ...current] : current.map(task => task.id === saved.id ? saved : task)); setMode(null); setEditingId(null); } catch (e) { setError(e.message); } finally { setSaving(false); } }
+  async function remove(task) { if (!window.confirm(`Delete task ${task.title}?`)) return; try { await resourcesApi.remove("tasks", task.id); setTasks(current => current.filter(item => item.id !== task.id)); await loadTrash(); } catch (e) { setError(e.message); } }
+  async function restore(task) { try { const saved = await resourcesApi.update("tasks", task.id, { ...task, isDeleted: false, deletedAt: null }); setDeletedTasks(current => current.filter(item => item.id !== task.id)); setTasks(current => [saved, ...current]); } catch (e) { setError(e.message); } }
+  const readOnly = mode === "view";
+  return <Layout title="My tasks" description="Open operational tasks from live task records." error={error}>
+    <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 12 }}><button onClick={beginAdd} style={button}><Plus size={15} /> Add Task</button><button onClick={() => { setShowTrash(current => !current); if (!showTrash) loadTrash(); }} style={{ ...button, color: "#315E8A", background: "#EDF5FB" }}><Trash2 size={15} /> {showTrash ? "Active Tasks" : "Deleted Tasks"}</button></div>
+    {mode && <div style={panel}><h2 style={h2}>{readOnly ? "View task" : mode === "add" ? "Add task" : "Edit task"}</h2><form onSubmit={save} style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr)) auto", gap: 10, alignItems: "end" }}>{taskFields.map(field => <label key={field} style={{ color: "#697386", fontSize: 11 }}>{field[0].toUpperCase() + field.slice(1)}<input value={form[field] ?? ""} readOnly={readOnly} required={field === "title"} onChange={event => setForm(current => ({ ...current, [field]: event.target.value }))} style={inputStyle} /></label>)}<div style={{ display: "flex", gap: 6 }}>{!readOnly && <button type="submit" disabled={saving} style={button}><Save size={15} /> {saving ? "Saving..." : mode === "add" ? "Save Task" : "Save Changes"}</button>}<button type="button" onClick={() => setMode(null)} style={{ ...button, color: "#697386", background: "#F2F4F7" }}><X size={15} /> Close</button></div></form></div>}
+    {loading ? <div style={panel}><span style={muted}>Loading live tasks...</span></div> : <TaskTable tasks={showTrash ? deletedTasks : tasks} deleted={showTrash} onView={view} onEdit={beginEdit} onDelete={remove} onRestore={restore} />}
+  </Layout>;
+}
+
+function TaskTable({ tasks, deleted, onView, onEdit, onDelete, onRestore }) { return <div style={{ ...panel, overflowX: "auto" }}>{tasks.length === 0 ? <div style={muted}>{deleted ? "Trash is empty." : "No tasks yet."}</div> : <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}><thead><tr>{["Task", "Description", "Assignee", "Due date", "Status", "Actions"].map(label => <th key={label} style={th}>{label}</th>)}</tr></thead><tbody>{tasks.map(task => <tr key={task.id}><td style={td}><strong>{task.title}</strong></td><td style={td}>{task.description}</td><td style={td}>{task.assignee}</td><td style={td}>{task.dueDate}</td><td style={td}>{task.status}</td><td style={td}><div style={{ display: "flex", gap: 6 }}><button onClick={() => onView(task)} title="View" style={iconButton}><Eye size={14} /></button>{deleted ? <button onClick={() => onRestore(task)} title="Restore" style={{ ...iconButton, color: "#168A78" }}><RotateCcw size={14} /></button> : <><button onClick={() => onEdit(task)} title="Edit" style={iconButton}><Pencil size={14} /></button><button onClick={() => onDelete(task)} title="Delete" style={{ ...iconButton, color: "#B53D45" }}><Trash2 size={14} /></button></>}</div></td></tr>)}</tbody></table>}</div>; }
 function DerivedPage({ title, description, filter, emptyText }) { const { orders, error } = useOrders(); const rows = orders.filter(filter); return <Layout title={title} description={description} error={error}><div style={panel}>{rows.length ? rows.map(order => <div key={order.id} style={row}><strong>{order.id} · {order.style}</strong><span style={muted}>{order.buyer} · {order.status}</span></div>) : <span style={muted}>{emptyText}</span>}</div></Layout>; }
-export function TasksPage() { return <DerivedPage title="My tasks" description="Open operational tasks from live orders." filter={order => order.status !== "On Track"} emptyText="No open tasks." />; }
 export function CalendarPage() { return <DerivedPage title="Timeline / calendar" description="Shipment schedule from live order records." filter={() => true} emptyText="No scheduled orders." />; }
 export function ApprovalsPage() { return <DerivedPage title="Approvals" description="Orders requiring operational attention or approval." filter={order => order.status !== "On Track"} emptyText="No pending approvals." />; }
 export function ProductionPage() { return <DerivedPage title="Production" description="Production status across live orders." filter={order => ["At Risk", "Delayed"].includes(order.status)} emptyText="No production exceptions." />; }
