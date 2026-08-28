@@ -60,7 +60,134 @@ export function OrdersPage({ onOpenOrder }) {
   </Layout>;
 }
 
-export function OrderDetailPage({ order, onBack }) { return <Layout title={order.style || order.id} description={`PO ${order.id} · ${order.buyer} · ${order.country}`}><button onClick={onBack} style={{ ...button, marginBottom: 16 }}>Back to orders</button><div style={panel}><h2 style={h2}>Order details</h2>{Object.entries(order).filter(([key]) => !["id", "_id"].includes(key)).map(([key, value]) => <div key={key} style={detail}><span>{key}</span><strong>{typeof value === "object" ? JSON.stringify(value) : String(value ?? "")}</strong></div>)}</div></Layout>; }
+export function OrderDetailPage({ order, onBack }) {
+  const [techNotes, setTechNotes] = useState(order.notes || order.comments || "Double needle stitch at hem. Contrast bartack on front pocket. Pre-wash fabric before cutting. Deliver fit samples by May 10.");
+  const [highlights, setHighlights] = useState([]);
+  const [loadingAi, setLoadingAi] = useState(false);
+  const [aiError, setAiError] = useState("");
+
+  async function handleExtractHighlights() {
+    if (!techNotes.trim()) return;
+    setLoadingAi(true);
+    setAiError("");
+    try {
+      const res = await fetch("/api/gemini/extract-highlights", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          techPackNotes: techNotes,
+          deptOptions: ["Merchandising", "Sample", "Quality", "Cutting", "Production", "Finishing", "All"],
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to extract highlights");
+      setHighlights(data.items || []);
+    } catch (e) {
+      setAiError(e.message);
+    } finally {
+      setLoadingAi(false);
+    }
+  }
+
+  return (
+    <Layout title={order.style || order.id} description={`PO ${order.id} · ${order.buyer} · ${order.country}`}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <button onClick={onBack} style={button}>Back to orders</button>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+        <div style={panel}>
+          <h2 style={h2}>Order details</h2>
+          {Object.entries(order)
+            .filter(([key]) => !["id", "_id"].includes(key))
+            .map(([key, value]) => (
+              <div key={key} style={detail}>
+                <span>{key}</span>
+                <strong>{typeof value === "object" ? JSON.stringify(value) : String(value ?? "")}</strong>
+              </div>
+            ))}
+        </div>
+
+        <div style={panel}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <h2 style={{ ...h2, margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+              ✨ Gemini AI Tech Pack Analysis
+            </h2>
+          </div>
+          <p style={{ ...muted, marginTop: 0, marginBottom: 12 }}>
+            Extract actionable instructions, trims, and quality checks from tech pack notes using Google Gemini.
+          </p>
+
+          <textarea
+            value={techNotes}
+            onChange={(e) => setTechNotes(e.target.value)}
+            rows={4}
+            placeholder="Paste buyer tech pack notes, instructions, or specifications here..."
+            style={{ ...inputStyle, marginBottom: 10, fontFamily: "inherit" }}
+          />
+
+          <button
+            onClick={handleExtractHighlights}
+            disabled={loadingAi || !techNotes.trim()}
+            style={{
+              ...button,
+              background: loadingAi ? "#93C5FD" : "#168A78",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            {loadingAi ? "Analyzing with Gemini..." : "⚡ Auto-extract Highlights (Gemini AI)"}
+          </button>
+
+          {aiError && (
+            <div style={{ marginTop: 10, padding: 8, background: "#FCEBEB", color: "#8B2630", borderRadius: 6, fontSize: 12 }}>
+              {aiError}
+            </div>
+          )}
+
+          {highlights.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <strong style={{ fontSize: 13, color: "#172033" }}>Extracted Critical Highlights ({highlights.length})</strong>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
+                {highlights.map((h, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      padding: "8px 12px",
+                      background: "#F8FAFC",
+                      border: "1px solid #E2E8F0",
+                      borderRadius: 6,
+                      fontSize: 13,
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <span>{h.text}</span>
+                    <span
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 600,
+                        padding: "2px 6px",
+                        borderRadius: 4,
+                        background: "#E0F2FE",
+                        color: "#0369A1",
+                      }}
+                    >
+                      {h.dept || "All"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </Layout>
+  );
+}
+
 
 const taskFields = ["title", "description", "assignee", "dueDate", "status"];
 const emptyTask = { title: "", description: "", assignee: "", dueDate: "", status: "open" };

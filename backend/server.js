@@ -4,12 +4,13 @@ import dotenv from "dotenv";
 import storageRoutes from "./routes/storage.js";
 import { connectMongo } from "./db/mongodb.js";
 import { setStorageCollection } from "./routes/storage.js";
+import geminiRoutes from "./routes/gemini.js";
 import claudeRoutes from "./routes/claude.js";
 import resourceRoutes from "./routes/resources.js";
 import { seedResources } from "./routes/resources.js";
 
 dotenv.config();
-console.log("Anthropic API key loaded:", !!process.env.ANTHROPIC_API_KEY);
+console.log("Gemini API key loaded:", !!(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.ANTHROPIC_API_KEY));
 
 const app = express();
 
@@ -22,6 +23,7 @@ app.use(cors({
 app.use(express.json({ limit: "10mb" }));
 
 app.use("/api/storage", storageRoutes);
+app.use("/api/gemini", geminiRoutes);
 app.use("/api/claude", claudeRoutes);
 app.use("/api/resources", resourceRoutes);
 

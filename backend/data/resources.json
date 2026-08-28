@@ -158,7 +158,9 @@
       "title": "merch",
       "dept": "wwww",
       "status": "new",
-      "id": "staff-1787907316552-o1hn9l"
+      "id": "staff-1787907316552-o1hn9l",
+      "isDeleted": true,
+      "deletedAt": "2026-08-28T14:08:20.051Z"
     }
   ],
   "leaveRequests": [
@@ -386,7 +388,8 @@
       "name": "Arasinth Raja",
       "department": "Merchandising",
       "level": "Manager",
-      "isDeleted": false
+      "isDeleted": true,
+      "deletedAt": "2026-08-28T14:06:32.955Z"
     },
     {
       "id": "dept-2",
@@ -435,6 +438,13 @@
       "name": "Kavitha",
       "department": "QC",
       "level": "Junior",
+      "isDeleted": false
+    },
+    {
+      "name": "ww2ww",
+      "department": "Cutting",
+      "level": "Senior",
+      "id": "departments-1787926033031-w87hbv",
       "isDeleted": false
     }
   ],
