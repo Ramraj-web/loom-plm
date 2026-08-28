@@ -62,6 +62,7 @@ export default function LoomPLM() {
   if (view === "myDepartment") content = <MyDepartmentPage />;
   if (view === "production") content = <ProductionPage />;
   if (view === "quality") content = <QualityPage />;
+  if (view === "attendance") content = <StaffModule />;
   if (view === "compliance") content = <ComplianceModule />;
   if (view === "reports") content = <ReportsPage />;
   if (view === "insights") content = <InsightsPage />;
