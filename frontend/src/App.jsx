@@ -8,6 +8,7 @@ import {
   Upload, Paperclip, Send, RefreshCw, UserCheck, TrendingUp, Landmark, Globe, Gauge, Lock
 } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Legend, PieChart, Pie, Cell } from "recharts";
+import { API_BASE_URL } from "./storage.js";
 
 const SHIPMENT_PERFORMANCE = [
   { month: "Dec", onTime: 74, target: 75 },
@@ -1058,7 +1059,7 @@ function OrderHighlightsCard({ order, role }) {
       // NOTE: this now calls OUR backend (/api/claude/extract-highlights), which holds the
       // real Anthropic API key server-side and forwards the request. Never call
       // api.anthropic.com directly from the browser — that would expose the key.
-      const response = await fetch("/api/claude/extract-highlights", {
+      const response = await fetch(`${API_BASE_URL}/api/claude/extract-highlights`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ techPackNotes: source, deptOptions: HIGHLIGHT_DEPT_OPTIONS }),

@@ -8,11 +8,12 @@
 //   DELETE /api/storage/:key?shared=true|false
 //   GET    /api/storage?prefix=xxx&shared=true|false
 
-const BASE = "/api/storage";
+export const API_BASE_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+const BASE = `${API_BASE_URL}/api/storage`;
 
 async function get(key, shared = false) {
   const res = await fetch(`${BASE}/${encodeURIComponent(key)}?shared=${shared}`);
-  if (res.status === 404) throw new Error("Key not found");
+  if (res.status === 404) return null;
   if (!res.ok) throw new Error("Storage get failed");
   return res.json(); // { key, value, shared }
 }

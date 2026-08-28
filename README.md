@@ -11,7 +11,7 @@ Rendu separate folder:
 cd backend
 npm install
 cp .env.example .env
-# .env file open pannunga, ANTHROPIC_API_KEY = ungaloda real key vachunga
+# Fill in MONGODB_URI and ANTHROPIC_API_KEY in backend/.env
 ```
 
 ```bash
@@ -63,7 +63,7 @@ loom-plm/
     ├── routes/
     │   ├── storage.js       ← docs/chat/highlights save & fetch (JSON file db)
     │   └── claude.js        ← "Auto-extract highlights" AI feature (Anthropic API proxy)
-    ├── data/storage.json    ← simple file-based DB (production ku real DB maathikalam)
+    ├── data/storage.json    ← local fallback storage when MONGODB_URI is not set
     └── .env                 ← ungaloda ANTHROPIC_API_KEY (idha git la commit pannadhinga!)
 ```
 
@@ -79,6 +79,8 @@ uள்ளே mattும் work aagும். Idha vera edhavadhu server la run
 
 ## 6. Next steps / production ku vaikkanumna
 
-- `backend/data/storage.json` ku pathila real database (Postgres, MongoDB, etc.) mathanum
+- Set `MONGODB_URI` (and optionally `MONGODB_DB_NAME`) in the backend environment; the storage API uses MongoDB Atlas when configured
+- Set `FRONTEND_URL` in the backend environment to the deployed frontend origin
+- Set `VITE_API_URL` in the frontend environment to the deployed backend URL, then rebuild
 - Authentication (login) add pannanum — ippo edhavadhu role select pannalam nu simple ah irukku
 - File upload feature (docs) ku, real file storage (S3, etc.) venum — ippo file name mattum save aagுthu
