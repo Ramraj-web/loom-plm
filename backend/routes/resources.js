@@ -16,16 +16,40 @@ export async function seedResources(collection) {
   }
 }
 
-function readDB() {
-  if (!fs.existsSync(DATA_FILE)) {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(RESOURCE_SEEDS, null, 2));
+function getStoragePath() {
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    const tmpPath = path.join("/tmp", "resources.json");
+    if (!fs.existsSync(tmpPath)) {
+      try {
+        if (fs.existsSync(DATA_FILE)) {
+          fs.writeFileSync(tmpPath, fs.readFileSync(DATA_FILE, "utf8"));
+        } else {
+          fs.writeFileSync(tmpPath, JSON.stringify(RESOURCE_SEEDS, null, 2));
+        }
+      } catch {
+        // Continue to fallback
+      }
+    }
+    return tmpPath;
   }
+  return DATA_FILE;
+}
+
+let inMemoryDB = null;
+
+function readDB() {
+  if (inMemoryDB && (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME)) {
+    return inMemoryDB;
+  }
+  const filePath = getStoragePath();
   let db;
   try {
-    db = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
+    if (!fs.existsSync(filePath)) {
+      fs.writeFileSync(filePath, JSON.stringify(RESOURCE_SEEDS, null, 2));
+    }
+    db = JSON.parse(fs.readFileSync(filePath, "utf8"));
   } catch {
-    db = { ...RESOURCE_SEEDS };
-    fs.writeFileSync(DATA_FILE, JSON.stringify(db, null, 2));
+    db = inMemoryDB || { ...RESOURCE_SEEDS };
   }
   let updated = false;
   for (const [key, seedList] of Object.entries(RESOURCE_SEEDS)) {
@@ -35,12 +59,26 @@ function readDB() {
     }
   }
   if (updated) {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(db, null, 2));
+    try {
+      fs.writeFileSync(filePath, JSON.stringify(db, null, 2));
+    } catch {
+      // Ignore if read-only disk
+    }
   }
+  inMemoryDB = db;
   return db;
 }
 
-function writeDB(db) { fs.writeFileSync(DATA_FILE, JSON.stringify(db, null, 2)); }
+function writeDB(db) {
+  inMemoryDB = db;
+  const filePath = getStoragePath();
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(db, null, 2));
+  } catch (err) {
+    console.warn("Storage write fallback to memory:", err.message);
+  }
+}
+
 function validResource(name) { return Object.prototype.hasOwnProperty.call(RESOURCE_SEEDS, name); }
 function makeId(resource, record) { return record.id || `${resource}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`; }
 

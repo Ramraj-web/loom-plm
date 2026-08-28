@@ -17,15 +17,51 @@ export function setStorageCollection(collection) {
 // Production ku pogum bothu, ithuku pathila real DB (Postgres / MongoDB) vachukalam —
 // but ippo start panna idhu podhum.
 
-function readDB() {
-  if (!fs.existsSync(DATA_FILE)) {
-    fs.writeFileSync(DATA_FILE, JSON.stringify({ personal: {}, shared: {} }, null, 2));
+function getStoragePath() {
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    const tmpPath = path.join("/tmp", "storage.json");
+    if (!fs.existsSync(tmpPath)) {
+      try {
+        if (fs.existsSync(DATA_FILE)) {
+          fs.writeFileSync(tmpPath, fs.readFileSync(DATA_FILE, "utf8"));
+        } else {
+          fs.writeFileSync(tmpPath, JSON.stringify({ personal: {}, shared: {} }, null, 2));
+        }
+      } catch {}
+    }
+    return tmpPath;
   }
-  return JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
+  return DATA_FILE;
+}
+
+let inMemoryStorage = null;
+
+function readDB() {
+  if (inMemoryStorage && (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME)) {
+    return inMemoryStorage;
+  }
+  const filePath = getStoragePath();
+  let db;
+  try {
+    if (!fs.existsSync(filePath)) {
+      fs.writeFileSync(filePath, JSON.stringify({ personal: {}, shared: {} }, null, 2));
+    }
+    db = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+  } catch {
+    db = inMemoryStorage || { personal: {}, shared: {} };
+  }
+  inMemoryStorage = db;
+  return db;
 }
 
 function writeDB(db) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(db, null, 2));
+  inMemoryStorage = db;
+  const filePath = getStoragePath();
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(db, null, 2));
+  } catch (err) {
+    console.warn("Storage write fallback to memory:", err.message);
+  }
 }
 
 const router = Router();
