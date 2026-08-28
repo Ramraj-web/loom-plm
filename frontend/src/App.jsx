@@ -40,7 +40,7 @@ function Dashboard() {
     } catch (e) { setError(e.message); }
   }
   useEffect(() => { load(); }, []);
-  return <section><div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}><div><h1 style={titleStyle}>Operations dashboard</h1><p style={subStyle}>Live counts from the backend resource routes.</p></div><button onClick={load} style={refreshStyle}><RefreshCw size={15} /> Refresh</button></div>{error && <div style={errorStyle}>{error}</div>}<div style={statsGrid}>{routes.slice(1).map(route => <div key={route.key} style={statStyle}><route.icon size={18} color="#168A78" /><div style={{ marginTop: 16, color: "#697386", fontSize: 12 }}>{route.label}</div><strong style={{ display: "block", marginTop: 4, color: "#172033", fontSize: 28 }}>{counts[route.key] ?? "-"}</strong><span style={{ color: "#8A94A6", fontSize: 11 }}>records</span></div>)}</div><div style={panelStyle}><div style={{ display: "flex", alignItems: "center", gap: 10, color: "#172033", fontWeight: 700 }}><FileCheck2 size={18} color="#168A78" /> All modules use the same live CRUD API</div><p style={{ ...subStyle, marginBottom: 0 }}>Changes made in any form are persisted by the backend and remain available after a refresh or restart.</p></div></section>;
+  return <section><div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}><div><h1 style={titleStyle}>Operations dashboard</h1><p style={subStyle}>Live counts from the backend resource routes.</p></div><button onClick={load} style={refreshStyle}><RefreshCw size={15} /> Refresh</button></div>{error && <div style={errorStyle}>{error}</div>}<div style={statsGrid}>{routes.slice(1).map((route, index) => { const color = statColors[index % statColors.length]; return <div key={route.key} style={{ ...statStyle, background: color }}><route.icon size={18} color="#fff" /><div style={{ marginTop: 16, color: "rgba(255, 255, 255, 0.82)", fontSize: 12 }}>{route.label}</div><strong style={{ display: "block", marginTop: 4, color: "#fff", fontSize: 28 }}>{counts[route.key] ?? "-"}</strong><span style={{ color: "rgba(255, 255, 255, 0.72)", fontSize: 11 }}>records</span></div>; })}</div><div style={panelStyle}><div style={{ display: "flex", alignItems: "center", gap: 10, color: "#172033", fontWeight: 700 }}><FileCheck2 size={18} color="#168A78" /> All modules use the same live CRUD API</div><p style={{ ...subStyle, marginBottom: 0 }}>Changes made in any form are persisted by the backend and remain available after a refresh or restart.</p></div></section>;
 }
 
 export default function LoomPLM() {
@@ -78,7 +78,7 @@ export default function LoomPLM() {
   </div>;
 }
 
-const appStyle = { display: "flex", minHeight: "100vh", background: "#F5F7FA", color: "#273142", fontFamily: "Georgia, 'Times New Roman', serif" };
+const appStyle = { display: "flex", minHeight: "100vh", background: "#F5F7FA", color: "#273142", fontFamily: "'Rubik', sans-serif" };
 const sidebarStyle = { width: 220, background: "#172033", padding: "20px 12px", boxSizing: "border-box", flexShrink: 0, zIndex: 3 };
 const brandStyle = { display: "flex", alignItems: "center", gap: 9, color: "#fff", padding: "0 8px 24px", fontSize: 16 };
 const brandMark = { width: 28, height: 28, borderRadius: 7, background: "#168A78", display: "grid", placeItems: "center", fontWeight: 700 };
@@ -93,6 +93,7 @@ const subStyle = { color: "#697386", fontSize: 13, margin: "7px 0 0" };
 const panelStyle = { background: "#fff", border: "1px solid #E4E7EC", borderRadius: 10, padding: 20, marginTop: 18 };
 const statsGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 };
 const statStyle = { background: "#fff", border: "1px solid #E4E7EC", borderRadius: 10, padding: 18 };
+const statColors = ["#168A78", "#315E8A", "#B06A22", "#7B4B94", "#2E7D5B", "#C24B5A", "#4D6FAE", "#9A6B1F", "#287D8A", "#A04C78", "#56733B", "#C05A2B", "#3F6C9B", "#82613D", "#2A8A70", "#A23D58", "#5B5BA6", "#647A38", "#B26A3C"];
 const refreshStyle = { border: 0, borderRadius: 7, padding: "8px 12px", display: "flex", gap: 6, alignItems: "center", cursor: "pointer", color: "#315E8A", background: "#EDF5FB", fontWeight: 600 };
 const errorStyle = { background: "#FCEBEB", color: "#8B2630", border: "1px solid #F0C6CA", borderRadius: 8, padding: 10, marginBottom: 16, fontSize: 13 };
 const menuStyle = { display: "none", border: 0, background: "transparent", cursor: "pointer", color: "inherit" };
