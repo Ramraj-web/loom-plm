@@ -6,7 +6,11 @@ async function request(path, options = {}) {
     ...options,
   });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error || "Request failed");
+  if (!response.ok) {
+    const errorMsg = payload.error || `HTTP ${response.status}: ${response.statusText || "Request failed"}`;
+    console.error(`API Error on ${options.method || "GET"} ${path}:`, errorMsg, payload);
+    throw new Error(errorMsg);
+  }
   return payload;
 }
 
@@ -14,5 +18,6 @@ export const resourcesApi = {
   list: (resource, suffix = "") => request(`/api/resources/${resource}${suffix}`),
   create: (resource, data) => request(`/api/resources/${resource}`, { method: "POST", body: JSON.stringify(data) }),
   update: (resource, id, data) => request(`/api/resources/${resource}/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(data) }),
+  patch: (resource, id, data) => request(`/api/resources/${resource}/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(data) }),
   remove: (resource, id) => request(`/api/resources/${resource}/${encodeURIComponent(id)}`, { method: "DELETE" }),
 };

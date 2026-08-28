@@ -28,19 +28,182 @@ const routes = [
   { section: "Account", key: "settings", label: "Settings", icon: Wrench },
 ];
 
-function Dashboard() {
+function Dashboard({ onNavigate }) {
   const [counts, setCounts] = useState({});
+  const [metrics, setMetrics] = useState({
+    totalOrders: 0,
+    totalQty: 0,
+    delayedOrders: 0,
+    pendingApprovals: 0,
+    openTasks: 0,
+    activeProduction: 0,
+  });
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
   async function load() {
+    setLoading(true);
+    setError("");
     try {
-      const orders = await resourcesApi.list("orders");
-      const tasks = await resourcesApi.list("tasks");
-      setCounts(current => ({ ...current, orders: orders.filter(order => order.isDeleted !== true).length, tasks: tasks.filter(task => task.isDeleted !== true).length }));
-      setError("");
-    } catch (e) { setError(e.message); }
+      const [
+        ordersRes,
+        tasksRes,
+        approvalsRes,
+        departmentsRes,
+        productionRes,
+        staffRes,
+        leaveRes,
+        financeRes,
+        certsRes,
+        debitRes,
+        capasRes,
+      ] = await Promise.allSettled([
+        resourcesApi.list("orders"),
+        resourcesApi.list("tasks"),
+        resourcesApi.list("approvals"),
+        resourcesApi.list("departments"),
+        resourcesApi.list("production"),
+        resourcesApi.list("staff"),
+        resourcesApi.list("leaveRequests"),
+        resourcesApi.list("financials"),
+        resourcesApi.list("certifications"),
+        resourcesApi.list("debitNotes"),
+        resourcesApi.list("capas"),
+      ]);
+
+      const val = res => (res.status === "fulfilled" && Array.isArray(res.value) ? res.value.filter(r => r.isDeleted !== true) : []);
+
+      const orders = val(ordersRes);
+      const tasks = val(tasksRes);
+      const approvals = val(approvalsRes);
+      const departments = val(departmentsRes);
+      const production = val(productionRes);
+      const staff = val(staffRes);
+      const leave = val(leaveRes);
+      const finance = val(financeRes);
+      const certs = val(certsRes);
+      const debit = val(debitRes);
+      const capas = val(capasRes);
+
+      const calculatedCounts = {
+        orders: orders.length,
+        tasks: tasks.length,
+        calendar: orders.length,
+        approvals: approvals.length,
+        departments: departments.length,
+        production: production.length,
+        quality: orders.filter(o => o.risk === "high" || o.status === "Delayed").length,
+        attendance: staff.length,
+        finance: finance.length,
+        compliance: certs.length,
+        reports: orders.length,
+        insights: orders.filter(o => o.risk !== "low").length,
+        supplierPerformance: orders.length,
+        notifications: orders.filter(o => o.status !== "On Track").length + tasks.filter(t => t.status === "open").length,
+        debitNotes: debit.length,
+        capas: capas.length,
+        executiveOverview: orders.length,
+        staff: staff.length,
+        leaveRequests: leave.length,
+        settings: 1,
+      };
+
+      setCounts(calculatedCounts);
+
+      const totalQty = orders.reduce((sum, o) => sum + (Number(o.qty) || 0), 0);
+      const delayed = orders.filter(o => o.status === "Delayed" || o.risk === "high").length;
+      const pendingApps = approvals.filter(a => a.status !== "Approved").length;
+      const openTasksCount = tasks.filter(t => t.status === "open" || t.status === "in_progress").length;
+
+      setMetrics({
+        totalOrders: orders.length,
+        totalQty,
+        delayedOrders: delayed,
+        pendingApprovals: pendingApps,
+        openTasks: openTasksCount,
+        activeProduction: production.length,
+      });
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
   }
+
   useEffect(() => { load(); }, []);
-  return <section><div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}><div><h1 style={titleStyle}>Operations dashboard</h1><p style={subStyle}>Live counts from the backend resource routes.</p></div><button onClick={load} style={refreshStyle}><RefreshCw size={15} /> Refresh</button></div>{error && <div style={errorStyle}>{error}</div>}<div style={statsGrid}>{routes.slice(1).map((route, index) => { const color = statColors[index % statColors.length]; return <div key={route.key} style={{ ...statStyle, background: color }}><route.icon size={18} color="#fff" /><div style={{ marginTop: 16, color: "rgba(255, 255, 255, 0.82)", fontSize: 12 }}>{route.label}</div><strong style={{ display: "block", marginTop: 4, color: "#fff", fontSize: 28 }}>{counts[route.key] ?? "-"}</strong><span style={{ color: "rgba(255, 255, 255, 0.72)", fontSize: 11 }}>records</span></div>; })}</div><div style={panelStyle}><div style={{ display: "flex", alignItems: "center", gap: 10, color: "#172033", fontWeight: 700 }}><FileCheck2 size={18} color="#168A78" /> All modules use the same live CRUD API</div><p style={{ ...subStyle, marginBottom: 0 }}>Changes made in any form are persisted by the backend and remain available after a refresh or restart.</p></div></section>;
+
+  return (
+    <section>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+        <div>
+          <h1 style={titleStyle}>Operations dashboard</h1>
+          <p style={subStyle}>Live counts and metrics synced across all application modules.</p>
+        </div>
+        <button onClick={load} style={refreshStyle} title="Refresh all live data">
+          <RefreshCw size={15} /> {loading ? "Refreshing..." : "Refresh"}
+        </button>
+      </div>
+
+      {error && <div style={errorStyle}>{error}</div>}
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, marginBottom: 20 }}>
+        <div style={statStyle}>
+          <span style={subStyle}>Active Orders</span>
+          <h2 style={{ ...titleStyle, color: "#168A78", margin: "6px 0 0", fontSize: 24 }}>{metrics.totalOrders}</h2>
+        </div>
+        <div style={statStyle}>
+          <span style={subStyle}>Total Quantity (Pcs)</span>
+          <h2 style={{ ...titleStyle, color: "#315E8A", margin: "6px 0 0", fontSize: 24 }}>{metrics.totalQty.toLocaleString()}</h2>
+        </div>
+        <div style={statStyle}>
+          <span style={subStyle}>Delayed / At Risk</span>
+          <h2 style={{ ...titleStyle, color: metrics.delayedOrders > 0 ? "#C24B5A" : "#168A78", margin: "6px 0 0", fontSize: 24 }}>{metrics.delayedOrders}</h2>
+        </div>
+        <div style={statStyle}>
+          <span style={subStyle}>Pending Approvals</span>
+          <h2 style={{ ...titleStyle, color: metrics.pendingApprovals > 0 ? "#B06A22" : "#168A78", margin: "6px 0 0", fontSize: 24 }}>{metrics.pendingApprovals}</h2>
+        </div>
+        <div style={statStyle}>
+          <span style={subStyle}>Active Production Lines</span>
+          <h2 style={{ ...titleStyle, color: "#2E7D5B", margin: "6px 0 0", fontSize: 24 }}>{metrics.activeProduction}</h2>
+        </div>
+        <div style={statStyle}>
+          <span style={subStyle}>Open Tasks</span>
+          <h2 style={{ ...titleStyle, color: "#7B4B94", margin: "6px 0 0", fontSize: 24 }}>{metrics.openTasks}</h2>
+        </div>
+      </div>
+
+      <div style={statsGrid}>
+        {routes.slice(1).map((route, index) => {
+          const color = statColors[index % statColors.length];
+          return (
+            <div
+              key={route.key}
+              onClick={() => onNavigate && onNavigate(route.key)}
+              style={{ ...statStyle, background: color, cursor: "pointer", transition: "transform 0.15s ease" }}
+              title={`Open ${route.label}`}
+            >
+              <route.icon size={18} color="#fff" />
+              <div style={{ marginTop: 16, color: "rgba(255, 255, 255, 0.88)", fontSize: 12 }}>{route.label}</div>
+              <strong style={{ display: "block", marginTop: 4, color: "#fff", fontSize: 28 }}>
+                {counts[route.key] ?? "-"}
+              </strong>
+              <span style={{ color: "rgba(255, 255, 255, 0.72)", fontSize: 11 }}>active records</span>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={panelStyle}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, color: "#172033", fontWeight: 700 }}>
+          <FileCheck2 size={18} color="#168A78" /> All modules use the live persistent REST API
+        </div>
+        <p style={{ ...subStyle, marginBottom: 0 }}>
+          Changes made in any module (Orders, Tasks, Approvals, Departments, Production, Attendance, Finance, Certs, etc.) are immediately persisted and reflected on this dashboard.
+        </p>
+      </div>
+    </section>
+  );
 }
 
 export default function LoomPLM() {
@@ -52,7 +215,7 @@ export default function LoomPLM() {
   const current = routes.find(route => route.key === view) || routes[0];
   const moduleMap = { orders: OrdersModule, staff: StaffModule, leaveRequests: LeaveModule, finance: FinanceModule, certifications: ComplianceModule, debitNotes: DebitNotesModule, capas: CapasModule };
   const ActiveModule = moduleMap[view];
-  let content = ActiveModule ? <ActiveModule /> : <Dashboard />;
+  let content = ActiveModule ? <ActiveModule /> : <Dashboard onNavigate={setView} />;
   if (view === "orders") content = <OrdersPage onOpenOrder={order => { setSelectedOrder(order); setView("order"); }} />;
   if (view === "order" && selectedOrder) content = <OrderDetailPage order={selectedOrder} onBack={() => setView("orders")} />;
   if (view === "tasks") content = <TasksPage />;

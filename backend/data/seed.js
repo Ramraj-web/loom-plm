@@ -38,4 +38,27 @@ export const RESOURCE_SEEDS = {
     { id: "capa-1", season: "AW26", buyer: "H&M", po: "ST-7788", issue: "PP approval delay", action: "Escalate samples within 24 hrs", status: "in_progress", date: "3 Jun" },
     { id: "capa-2", season: "AW26", buyer: "Uniqlo", po: "JKT-2231", issue: "Trims shortage", action: "Add supplier lead-time buffer", status: "open", date: "6 Jun" },
   ],
+  approvals: [
+    { id: "app-101", title: "Fit Sample Approval", order: "GKT-1054", buyer: "Zara", department: "Sample", dueDate: "20 May", status: "Pending", comments: "Awaiting lab dip match approval", isDeleted: false },
+    { id: "app-102", title: "PP Sample Sign-off", order: "ST-7788", buyer: "H&M", department: "Merchandising", dueDate: "18 May", status: "Under Review", comments: "Size specs verified, pending buyer sign-off", isDeleted: false },
+    { id: "app-103", title: "Fabric Quality Approval", order: "JKT-2231", buyer: "Uniqlo", department: "Quality", dueDate: "22 May", status: "Approved", comments: "Color fastness test passed grade 4", isDeleted: false },
+    { id: "app-104", title: "Trim Card Approval", order: "TR-8899", buyer: "M&S", department: "Purchase – Trims", dueDate: "25 May", status: "Approved", comments: "All zippers and buttons confirmed", isDeleted: false },
+  ],
+  departments: [
+    { id: "dept-1", name: "Arasinth Raja", department: "Merchandising", level: "Manager", isDeleted: false },
+    { id: "dept-2", name: "Suresh", department: "Merchandising", level: "Senior", isDeleted: false },
+    { id: "dept-3", name: "Selva Kumar", department: "Purchase – Fabric", level: "Senior", isDeleted: false },
+    { id: "dept-4", name: "Durai", department: "Cutting", level: "Manager", isDeleted: false },
+    { id: "dept-5", name: "Praveen Kumar", department: "Production", level: "Manager", isDeleted: false },
+    { id: "dept-6", name: "Sezhiyan", department: "QC", level: "Manager", isDeleted: false },
+    { id: "dept-7", name: "Vidhya", department: "Planning", level: "Senior", isDeleted: false },
+    { id: "dept-8", name: "Kavitha", department: "QC", level: "Junior", isDeleted: false },
+  ],
+  production: [
+    { id: "prod-1", order: "GKT-1054", style: "Hoodie", stage: "Cutting", dueDate: "20 May", status: "At Risk", isDeleted: false },
+    { id: "prod-2", order: "ST-7788", style: "T-Shirt", stage: "Sewing", dueDate: "18 May", status: "Delayed", isDeleted: false },
+    { id: "prod-3", order: "JKT-2231", style: "Jacket", stage: "Feeding", dueDate: "22 May", status: "In Progress", isDeleted: false },
+    { id: "prod-4", order: "TR-8899", style: "Trouser", stage: "Finishing", dueDate: "25 May", status: "On Track", isDeleted: false },
+    { id: "prod-5", order: "PL-3321", style: "Polo", stage: "Packing", dueDate: "28 May", status: "On Track", isDeleted: false },
+  ],
 };
