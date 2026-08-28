@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { BarChart3, ClipboardList, FileCheck2, LayoutDashboard, Menu, Moon, Package, Receipt, RefreshCw, ShieldCheck, Users, Wrench, X } from "lucide-react";
 import { resourcesApi } from "./api.js";
 import { OrdersModule, StaffModule, LeaveModule, FinanceModule, ComplianceModule, DebitNotesModule, CapasModule } from "./modules/domainModules.jsx";
-import { ApprovalsPage, CalendarPage, DepartmentsPage, DepartmentDetailPage, ExecutiveOverviewPage, InsightsPage, MyDepartmentPage, NotificationsPage, OrderDetailPage, OrdersPage, ProductionPage, QualityPage, ReportsPage, SettingsPage, SupplierPerformancePage, TasksPage } from "./modules/operationsPages.jsx";
+import { ApprovalsPage, CalendarPage, DepartmentsPage, DepartmentDetailPage, ExecutiveOverviewPage, InsightsPage, MyDepartmentPage, NotificationsPage, OrderDetailPage, OrdersPage, ProductionPage, QualityPage, ReportsPage, SupplierPerformancePage, TasksPage } from "./modules/operationsPages.jsx";
 
 const routes = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -25,7 +25,6 @@ const routes = [
   { section: "Insights", key: "executiveOverview", label: "Executive Dashboard (MD)", icon: BarChart3 },
   { section: "Account", key: "staff", label: "Staff", icon: Users },
   { section: "Account", key: "leaveRequests", label: "Leave requests", icon: ClipboardList },
-  { section: "Account", key: "settings", label: "Settings", icon: Wrench },
 ];
 
 function Dashboard({ onNavigate }) {
@@ -105,7 +104,6 @@ function Dashboard({ onNavigate }) {
         executiveOverview: orders.length,
         staff: staff.length,
         leaveRequests: leave.length,
-        settings: 1,
       };
 
       setCounts(calculatedCounts);
@@ -233,7 +231,6 @@ export default function LoomPLM() {
   if (view === "supplierPerformance") content = <SupplierPerformancePage />;
   if (view === "notifications") content = <NotificationsPage />;
   if (view === "executiveOverview") content = <ExecutiveOverviewPage />;
-  if (view === "settings") content = <SettingsPage />;
   return <div style={appStyle}>
     <aside style={{ ...sidebarStyle, transform: mobileNav ? "translateX(0)" : undefined }}><div style={brandStyle}><span style={brandMark}>L</span><strong>Loom PLM</strong><button onClick={() => setMobileNav(false)} style={closeStyle}><X size={18} /></button></div>{routes.map((route, index) => <React.Fragment key={route.key}>{route.section && (index === 0 || routes[index - 1].section !== route.section) && <div style={sectionStyle}>{route.section}</div>}<button onClick={() => { setView(route.key); setMobileNav(false); }} style={{ ...navStyle, ...(current.key === route.key ? activeNavStyle : {}) }}><route.icon size={16} />{route.label}</button></React.Fragment>)}</aside>
     {mobileNav && <div onClick={() => setMobileNav(false)} style={scrimStyle} />}

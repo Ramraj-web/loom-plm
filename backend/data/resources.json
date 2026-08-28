@@ -61,14 +61,14 @@
     },
     {
       "id": "PL-3321",
-      "buyer": "Zara",
+      "buyer": "Zaraaaaa",
       "country": "Spain",
       "season": "SS26",
       "style": "Polo",
       "qty": 9100,
       "ship": "28 May",
-      "risk": "low",
-      "status": "On Track"
+      "risk": "high",
+      "status": "high"
     },
     {
       "ship": "qqqq",
@@ -80,7 +80,8 @@
       "status": "On Track",
       "country": "india",
       "risk": "medium",
-      "isDeleted": false
+      "isDeleted": true,
+      "deletedAt": "2026-08-28T16:14:43.566Z"
     },
     {
       "id": "sr-34",
@@ -158,9 +159,7 @@
       "title": "merch",
       "dept": "wwww",
       "status": "new",
-      "id": "staff-1787907316552-o1hn9l",
-      "isDeleted": true,
-      "deletedAt": "2026-08-28T14:08:20.051Z"
+      "id": "staff-1787907316552-o1hn9l"
     }
   ],
   "leaveRequests": [
@@ -181,6 +180,17 @@
       "to": "31 May",
       "reason": "Family function",
       "status": "pending"
+    },
+    {
+      "name": "qqqq",
+      "dept": "ww",
+      "from": "YYYY",
+      "to": "DDDDDDDD",
+      "reason": "CCCCCC",
+      "status": "VVVVVV",
+      "id": "leaveRequests-1787935029731-q0cthe",
+      "isDeleted": true,
+      "deletedAt": "2026-08-28T16:37:26.956Z"
     }
   ],
   "financials": [
@@ -228,6 +238,15 @@
       "note": "Organic content certification",
       "status": "not_applied",
       "file": null
+    },
+    {
+      "name": "eeeeeeeee",
+      "note": "eeeeeee",
+      "status": "qqqqqqqq",
+      "file": "eeeeee",
+      "id": "certifications-1787934547787-ib9jwn",
+      "isDeleted": true,
+      "deletedAt": "2026-08-28T16:29:17.936Z"
     }
   ],
   "debitNotes": [
@@ -261,6 +280,17 @@
       "status": "Updated Status",
       "isDeleted": true,
       "deletedAt": "2026-08-28T11:48:44.880Z"
+    },
+    {
+      "season": "ttttt",
+      "buyer": "tttt",
+      "po": "ffff",
+      "amount": 11111111,
+      "reason": "qqqq",
+      "date": "1/2/2222",
+      "id": "debitNotes-1787934676778-7jnt56",
+      "isDeleted": true,
+      "deletedAt": "2026-08-28T16:31:32.612Z"
     }
   ],
   "capas": [
@@ -296,6 +326,18 @@
       "notes": "Updated note",
       "isDeleted": true,
       "deletedAt": "2026-08-28T11:48:45.063Z"
+    },
+    {
+      "season": "wwww",
+      "buyer": "eeeee",
+      "po": "rrr",
+      "issue": "hhh",
+      "action": "aaaa",
+      "status": "xxxxx",
+      "date": "cccc",
+      "id": "capas-1787934820342-4b7lt4",
+      "isDeleted": true,
+      "deletedAt": "2026-08-28T16:34:00.526Z"
     }
   ],
   "tasks": [
@@ -328,12 +370,14 @@
       "deletedAt": "2026-08-28T08:53:25.144Z"
     },
     {
-      "title": "wwww",
+      "title": "www",
       "description": "sssssssss",
       "assignee": "rrrrr",
-      "dueDate": "20/8/2026",
+      "dueDate": "20/8/2028",
       "status": "open",
-      "id": "tasks-1787907776266-2tg7t0"
+      "id": "tasks-1787907776266-2tg7t0",
+      "isDeleted": true,
+      "deletedAt": "2026-08-28T16:16:02.478Z"
     }
   ],
   "approvals": [
@@ -380,6 +424,18 @@
       "status": "Approved",
       "comments": "All zippers and buttons confirmed",
       "isDeleted": false
+    },
+    {
+      "title": "wewe",
+      "order": "2222",
+      "buyer": "2fee",
+      "department": "ttttttt",
+      "dueDate": "today",
+      "status": "Approved",
+      "comments": "wwwwwwwwwww",
+      "id": "approvals-1787933955361-r52fg9",
+      "isDeleted": true,
+      "deletedAt": "2026-08-28T16:19:40.259Z"
     }
   ],
   "departments": [
@@ -439,13 +495,6 @@
       "department": "QC",
       "level": "Junior",
       "isDeleted": false
-    },
-    {
-      "name": "ww2ww",
-      "department": "Cutting",
-      "level": "Senior",
-      "id": "departments-1787926033031-w87hbv",
-      "isDeleted": false
     }
   ],
   "production": [
@@ -493,6 +542,16 @@
       "dueDate": "28 May",
       "status": "On Track",
       "isDeleted": false
+    },
+    {
+      "order": "er234",
+      "style": "hoddy",
+      "stage": "Cutting",
+      "dueDate": "12/4/2026",
+      "status": "On Track",
+      "id": "production-1787934139412-7zq6q7",
+      "isDeleted": true,
+      "deletedAt": "2026-08-28T16:22:38.924Z"
     }
   ]
 }
