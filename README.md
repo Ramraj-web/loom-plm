@@ -52,16 +52,19 @@ Unga previous project maadhiri:
 loom-plm/
 ├── frontend/
 │   ├── src/
-│   │   ├── App.jsx        ← ungaloda முழு dashboard UI (idhையே edit pannுவீங்க)
-│   │   ├── main.jsx        ← entry point
-│   │   └── storage.js      ← window.storage-a backend API kூடa connect pannudhu
+│   │   ├── App.jsx        ← application shell and route switcher
+│   │   ├── api.js         ← REST API client
+│   │   ├── components/CrudModule.jsx ← reusable add/edit/delete UI
+│   │   └── modules/domainModules.jsx  ← domain-specific module definitions
 │   ├── index.html
 │   ├── vite.config.js
 │   └── package.json
 └── backend/
     ├── server.js            ← Express entry point
     ├── routes/
-    │   ├── storage.js       ← docs/chat/highlights save & fetch (JSON file db)
+    │   ├── storage.js       ← legacy key/value storage compatibility API
+    │   ├── resources.js     ← CRUD routes for all business resources
+    │   └── seed.js          ← server-side development seed data
     │   └── claude.js        ← "Auto-extract highlights" AI feature (Anthropic API proxy)
     ├── data/storage.json    ← local fallback storage when MONGODB_URI is not set
     └── .env                 ← ungaloda ANTHROPIC_API_KEY (idha git la commit pannadhinga!)
@@ -84,3 +87,17 @@ uள்ளே mattும் work aagும். Idha vera edhavadhu server la run
 - Set `VITE_API_URL` in the frontend environment to the deployed backend URL, then rebuild
 - Authentication (login) add pannanum — ippo edhavadhu role select pannalam nu simple ah irukku
 - File upload feature (docs) ku, real file storage (S3, etc.) venum — ippo file name mattum save aagுthu
+
+## 7. Domain API routes
+
+The frontend uses these live REST resources. Each supports `GET /api/resources/:resource`, `POST`, `PUT /api/resources/:resource/:id`, and `DELETE /api/resources/:resource/:id`:
+
+- `orders`
+- `staff`
+- `leaveRequests`
+- `financials`
+- `certifications`
+- `debitNotes`
+- `capas`
+
+MongoDB stores resources in the `resources` collection. Without `MONGODB_URI`, the backend persists them in `backend/data/resources.json`.

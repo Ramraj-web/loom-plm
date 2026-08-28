@@ -1,4 +1,3 @@
-import "./storage.js"; // sets up window.storage BEFORE App.jsx runs
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App.jsx";
