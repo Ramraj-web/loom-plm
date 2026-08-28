@@ -140,13 +140,6 @@
       "status": "present"
     },
     {
-      "id": "staff-praveen-kumar",
-      "name": "Praveen Kumar",
-      "title": "FM",
-      "dept": "Production",
-      "status": "present"
-    },
-    {
       "id": "staff-gopal",
       "name": "Gopal",
       "title": "Finishing Incharge",
