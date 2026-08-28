@@ -353,4 +353,14 @@ app.use((error, req, res, next) => {
   res.status(500).json({ error: error.message || "Internal server error" });
 });
 
-export default app;
+export default function handler(req, res) {
+  try {
+    if (req.url && !req.url.startsWith("/api")) {
+      req.url = "/api" + (req.url.startsWith("/") ? req.url : "/" + req.url);
+    }
+    return app(req, res);
+  } catch (err) {
+    console.error("Handler error:", err);
+    res.status(500).json({ error: err.message || "Internal server error" });
+  }
+}
