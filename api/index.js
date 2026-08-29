@@ -197,7 +197,7 @@ export default async function handler(req, res) {
       if (req.method === "GET") {
         if (key) {
           const val = memoryStorage[bucket][key];
-          if (val === undefined) return res.status(404).json({ error: "Key not found" });
+          if (val === undefined) return res.status(200).json({ key, value: null, shared });
           return res.status(200).json({ key, value: val, shared });
         }
         const prefix = url.searchParams.get("prefix") || "";

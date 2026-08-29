@@ -66,74 +66,12 @@ function writeDB(db) {
 
 const router = Router();
 
-// GET /api/storage/:key?shared=true|false
-router.get("/:key", async (req, res, next) => {
-  if (storageCollection) {
-    try {
-      const shared = req.query.shared === "true";
-      const record = await storageCollection.findOne({ key: req.params.key, shared });
-      if (!record) return res.status(404).json({ error: "Key not found" });
-      return res.json({ key: record.key, value: record.value, shared });
-    } catch (error) {
-      return next(error);
-    }
-  }
-  const db = readDB();
-  const bucket = req.query.shared === "true" ? "shared" : "personal";
-  const value = db[bucket][req.params.key];
-  if (value === undefined) return res.status(404).json({ error: "Key not found" });
-  res.json({ key: req.params.key, value, shared: bucket === "shared" });
-});
-
-// POST /api/storage/:key   body: { value, shared }
-router.post("/:key", async (req, res, next) => {
-  if (storageCollection) {
-    try {
-      const shared = !!req.body.shared;
-      const value = req.body.value;
-      await storageCollection.updateOne(
-        { key: req.params.key, shared },
-        { $set: { key: req.params.key, value, shared } },
-        { upsert: true },
-      );
-      return res.json({ key: req.params.key, value, shared });
-    } catch (error) {
-      return next(error);
-    }
-  }
-  const db = readDB();
-  const { value, shared } = req.body;
-  const bucket = shared ? "shared" : "personal";
-  db[bucket][req.params.key] = value;
-  writeDB(db);
-  res.json({ key: req.params.key, value, shared: !!shared });
-});
-
-// DELETE /api/storage/:key?shared=true|false
-router.delete("/:key", async (req, res, next) => {
-  if (storageCollection) {
-    try {
-      const shared = req.query.shared === "true";
-      const result = await storageCollection.deleteOne({ key: req.params.key, shared });
-      return res.json({ key: req.params.key, deleted: result.deletedCount > 0, shared });
-    } catch (error) {
-      return next(error);
-    }
-  }
-  const db = readDB();
-  const bucket = req.query.shared === "true" ? "shared" : "personal";
-  const deleted = req.params.key in db[bucket];
-  delete db[bucket][req.params.key];
-  writeDB(db);
-  res.json({ key: req.params.key, deleted, shared: bucket === "shared" });
-});
-
 // GET /api/storage?prefix=xxx&shared=true|false
 router.get("/", async (req, res, next) => {
+  const shared = req.query.shared === "true";
+  const prefix = req.query.prefix || "";
   if (storageCollection) {
     try {
-      const shared = req.query.shared === "true";
-      const prefix = req.query.prefix || "";
       const records = await storageCollection.find({ shared, key: { $regex: `^${escapeRegExp(prefix)}` } }, { projection: { _id: 0, key: 1 } }).toArray();
       return res.json({ keys: records.map(record => record.key), prefix, shared });
     } catch (error) {
@@ -141,10 +79,107 @@ router.get("/", async (req, res, next) => {
     }
   }
   const db = readDB();
-  const bucket = req.query.shared === "true" ? "shared" : "personal";
-  const prefix = req.query.prefix || "";
-  const keys = Object.keys(db[bucket]).filter(k => k.startsWith(prefix));
-  res.json({ keys, prefix, shared: bucket === "shared" });
+  const bucket = shared ? "shared" : "personal";
+  const keys = Object.keys(db[bucket] || {}).filter(k => k.startsWith(prefix));
+  return res.json({ keys, prefix, shared: bucket === "shared" });
+});
+
+// Helper to decode parameter keys safely
+function extractKey(raw) {
+  if (!raw) return "";
+  try {
+    return decodeURIComponent(raw);
+  } catch (e) {
+    return raw;
+  }
+}
+
+// GET /api/storage/:key?shared=true|false
+router.get("/:key(*)", async (req, res, next) => {
+  const shared = req.query.shared === "true";
+  const key = extractKey(req.params.key);
+  const rawKey = req.params.key;
+
+  if (storageCollection) {
+    try {
+      let record = await storageCollection.findOne({ key, shared });
+      if (!record && rawKey !== key) {
+        record = await storageCollection.findOne({ key: rawKey, shared });
+      }
+      if (!record) {
+        return res.status(200).json({ key, value: null, shared });
+      }
+      return res.status(200).json({ key: record.key, value: record.value, shared });
+    } catch (error) {
+      return next(error);
+    }
+  }
+
+  const db = readDB();
+  const bucket = shared ? "shared" : "personal";
+  const store = db[bucket] || {};
+  let value = store[key];
+  if (value === undefined && rawKey !== key) {
+    value = store[rawKey];
+  }
+  if (value === undefined) {
+    return res.status(200).json({ key, value: null, shared: bucket === "shared" });
+  }
+  return res.status(200).json({ key, value, shared: bucket === "shared" });
+});
+
+// POST /api/storage/:key   body: { value, shared }
+router.post("/:key(*)", async (req, res, next) => {
+  const shared = !!req.body.shared;
+  const key = extractKey(req.params.key);
+  const value = req.body.value;
+
+  if (storageCollection) {
+    try {
+      await storageCollection.updateOne(
+        { key, shared },
+        { $set: { key, value, shared } },
+        { upsert: true }
+      );
+      return res.status(200).json({ key, value, shared });
+    } catch (error) {
+      return next(error);
+    }
+  }
+
+  const db = readDB();
+  const bucket = shared ? "shared" : "personal";
+  if (!db[bucket]) db[bucket] = {};
+  db[bucket][key] = value;
+  writeDB(db);
+  return res.status(200).json({ key, value, shared: !!shared });
+});
+
+// DELETE /api/storage/:key?shared=true|false
+router.delete("/:key(*)", async (req, res, next) => {
+  const shared = req.query.shared === "true";
+  const key = extractKey(req.params.key);
+  const rawKey = req.params.key;
+
+  if (storageCollection) {
+    try {
+      const result = await storageCollection.deleteMany({
+        $or: [{ key, shared }, { key: rawKey, shared }]
+      });
+      return res.status(200).json({ key, deleted: result.deletedCount > 0, shared });
+    } catch (error) {
+      return next(error);
+    }
+  }
+
+  const db = readDB();
+  const bucket = shared ? "shared" : "personal";
+  const store = db[bucket] || {};
+  const deleted = (key in store) || (rawKey in store);
+  delete store[key];
+  delete store[rawKey];
+  writeDB(db);
+  return res.status(200).json({ key, deleted, shared: bucket === "shared" });
 });
 
 function escapeRegExp(value) {
