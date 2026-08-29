@@ -1,0 +1,855 @@
+import React, { useState, useEffect } from "react";
+import {
+  Calendar, CheckCircle2, Clock, Circle, Lock, ChevronDown, Upload, Send, Zap,
+  AlertTriangle, FileText, ClipboardList, Package, Layers, ShieldCheck, Factory, Truck, TrendingUp
+} from "lucide-react";
+import {
+  REASONS, VAP_SUPPLIERS, DOC_TABS_CONFIG, DOC_TAB_NAMES, DOC_TAB_ICONS, CUSTOMIZABLE_TABS,
+  STAGE_CHAT_TABS, TAB_ALLOWED_DEPTS, PRE_PROD_DOC_TYPES, allPreProdApproved,
+  HIGHLIGHT_DEPT_OPTIONS, ALL_PEOPLE, COSTING_TEMPLATES
+} from "../../constants/loomData.js";
+import {
+  Card, CardHeader, BackLink, statusPill, riskDot, gatingApproval, renderWithMentions
+} from "../common/CommonUI.jsx";
+
+function StageNode({ stage, idx, onCycle, onReason, onSupplierChange, lockedBy }) {
+  const [open, setOpen] = useState(false);
+  const locked = !!lockedBy;
+  const icon =
+    stage.status === "done" ? <CheckCircle2 size={17} color="#1F9E8D" /> :
+    locked ? <Lock size={14} color="#B0B2BA" /> :
+    stage.status === "in_progress" ? <Clock size={17} color="#E2A83B" /> :
+    <Circle size={17} color="#C7CAD1" />;
+
+  return (
+    <div style={{ flex: "0 0 128px", minWidth: 128, position: "relative", opacity: locked ? 0.6 : 1 }}>
+      <div style={{ display: "flex", alignItems: "center" }}>
+        <div
+          onClick={() => { if (!locked) onCycle(idx); }}
+          title={locked ? `Locked until ${lockedBy} is approved` : "Click to change status"}
+          style={{
+            width: 30, height: 30, borderRadius: 999, background: "#fff",
+            border: `2px solid ${stage.status === "done" ? "#1F9E8D" : locked ? "#D9DBE1" : stage.status === "in_progress" ? "#E2A83B" : "#D9DBE1"}`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            cursor: locked ? "not-allowed" : "pointer", flexShrink: 0
+          }}
+        >
+          {icon}
+        </div>
+        <div style={{ flex: 1, height: 2, background: stage.status === "done" ? "#1F9E8D" : "#E7E8ED" }} />
+      </div>
+      <div style={{ marginTop: 8, fontSize: 11.5, fontWeight: 600, color: locked ? "#B0B2BA" : "#1B2130", lineHeight: 1.3 }}>{stage.name}</div>
+      <div style={{ fontSize: 10.5, color: "#8A8D98", marginTop: 2 }}>{stage.planned}</div>
+      <div style={{ fontSize: 10, color: "#B0B2BA", marginTop: 2 }}>{stage.dept}</div>
+      {stage.dept === "VAP" && (
+        <select
+          value={stage.supplier || ""}
+          onChange={e => onSupplierChange(idx, e.target.value)}
+          style={{ marginTop: 4, width: "100%", fontSize: 9.5, padding: "2px 4px", borderRadius: 5, border: "1px solid #E0DBF5", color: "#534AB7", background: "#F8F7FD" }}
+        >
+          <option value="">No supplier set</option>
+          {VAP_SUPPLIERS.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+      )}
+      {locked && (
+        <div style={{ fontSize: 10, color: "#B0812E", marginTop: 4, fontWeight: 600, display: "flex", alignItems: "center", gap: 3 }}>
+          <Lock size={9} /> Needs {lockedBy}
+        </div>
+      )}
+      {!locked && stage.status !== "pending" && (
+        <div style={{ fontSize: 10.5, color: "#565A66", marginTop: 2 }}>{stage.assignee}</div>
+      )}
+      {!locked && stage.status === "in_progress" && (
+        <div style={{ marginTop: 6 }}>
+          <button
+            onClick={() => setOpen(!open)}
+            style={{
+              fontSize: 10.5, background: stage.reason ? "#FCEBEB" : "#F4F4F6",
+              color: stage.reason ? "#791F1F" : "#565A66", border: "none",
+              padding: "3px 7px", borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", gap: 4
+            }}
+          >
+            {stage.reason || "Flag delay"} <ChevronDown size={10} />
+          </button>
+          {open && (
+            <div style={{ position: "absolute", top: "100%", left: 0, background: "#fff", border: "1px solid #E7E8ED", borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.08)", zIndex: 10, minWidth: 170, marginTop: 4 }}>
+              {REASONS.map(r => (
+                <div
+                  key={r}
+                  onClick={() => { onReason(idx, r); setOpen(false); }}
+                  style={{ padding: "8px 12px", fontSize: 12.5, cursor: "pointer", color: "#1B2130" }}
+                  onMouseEnter={e => e.currentTarget.style.background = "#F7F7F9"}
+                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                >
+                  {r}
+                </div>
+              ))}
+              <div
+                onClick={() => { onReason(idx, null); setOpen(false); }}
+                style={{ padding: "8px 12px", fontSize: 12.5, cursor: "pointer", color: "#8A8D98", borderTop: "1px solid #F0F0F2" }}
+              >
+                Clear
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PreProductionTab({ order, role, onFieldChange, onSubmit, onApprove }) {
+  const canApprove = role.fullAccess;
+  const allApproved = allPreProdApproved(order);
+
+  return (
+    <div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: "#1B2130", marginBottom: 4 }}>Pre-production sign-off</div>
+      <div style={{ fontSize: 11.5, color: "#8A8D98", marginBottom: 16 }}>
+        Fill these in here instead of on paper. Bulk production (Cutting onward) stays locked until every document below is approved by a manager.
+      </div>
+      {allApproved ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#E1F5EE", border: "1px solid #BFE7D8", borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 12.5, color: "#085041", fontWeight: 600 }}>
+          <CheckCircle2 size={14} /> All pre-production documents approved — bulk production is unlocked.
+        </div>
+      ) : (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#FAEEDA", border: "1px solid #F0DBAA", borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 12.5, color: "#633806", fontWeight: 600 }}>
+          <Lock size={13} /> Cutting and every stage after it stay locked until all documents below are approved.
+        </div>
+      )}
+      {PRE_PROD_DOC_TYPES.map(doc => {
+        const state = (order.preProd && order.preProd[doc.key]) || { values: {}, status: "draft" };
+        const st = state.status === "approved" ? { bg: "#E1F5EE", fg: "#085041", label: "Approved" }
+          : state.status === "submitted" ? { bg: "#FAEEDA", fg: "#633806", label: "Submitted — awaiting approval" }
+          : { bg: "#F0F0F2", fg: "#565A66", label: "Draft" };
+        return (
+          <div key={doc.key} style={{ border: "1px solid #ECEDF1", borderRadius: 10, padding: "14px 16px", marginBottom: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#1B2130" }}>{doc.label}</div>
+              <span style={{ fontSize: 11, fontWeight: 600, background: st.bg, color: st.fg, padding: "3px 10px", borderRadius: 999 }}>{st.label}</span>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: `repeat(${doc.fields.length}, 1fr)`, gap: 8, marginBottom: 10 }}>
+              {doc.fields.map(f => (
+                <div key={f.key}>
+                  <label style={{ fontSize: 10.5, color: "#8A8D98", display: "block", marginBottom: 3 }}>{f.label}</label>
+                  <input
+                    type={f.type || "text"}
+                    value={state.values[f.key] || ""}
+                    disabled={state.status === "approved"}
+                    onChange={e => onFieldChange(doc.key, f.key, e.target.value)}
+                    style={{ width: "100%", fontSize: 12, padding: "6px 8px", borderRadius: 6, border: "1px solid #E7E8ED" }}
+                  />
+                </div>
+              ))}
+            </div>
+            <div>
+              {state.status === "draft" && (
+                <button onClick={() => onSubmit(doc.key)} style={{ fontSize: 12, fontWeight: 600, color: "#fff", background: "#378ADD", border: "none", borderRadius: 7, padding: "6px 14px", cursor: "pointer" }}>Submit for approval</button>
+              )}
+              {state.status === "submitted" && canApprove && (
+                <button onClick={() => onApprove(doc.key)} style={{ fontSize: 12, fontWeight: 600, color: "#fff", background: "#1F9E8D", border: "none", borderRadius: 7, padding: "6px 14px", cursor: "pointer" }}>Approve</button>
+              )}
+              {state.status === "submitted" && !canApprove && (
+                <div style={{ fontSize: 11.5, color: "#8A8D98" }}>Waiting on manager approval</div>
+              )}
+              {state.status === "approved" && (
+                <div style={{ fontSize: 11.5, color: "#1F9E8D" }}>Approved by {state.approvedBy} · {state.approvedAt}</div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function CostingTab({ order, onSetTemplate, onUpdateRow, onAddRow }) {
+  const tmpl = COSTING_TEMPLATES[order.costingTemplate] || COSTING_TEMPLATES.fabric;
+  const rows = order.costingRows || [];
+  const grandTotal = rows.reduce((a, r) => a + (r.isHeader ? 0 : (Number(r.price) || 0) * (Number(r.qty) || 0)), 0);
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#1B2130" }}>Costing — {tmpl.label}</div>
+        <select
+          value={order.costingTemplate || "fabric"}
+          onChange={e => onSetTemplate(order.id, e.target.value)}
+          style={{ fontSize: 12, padding: "5px 8px", borderRadius: 7, border: "1px solid #E7E8ED" }}
+        >
+          <option value="fabric">Fabric to Garment</option>
+          <option value="yarn">Yarn to Garment</option>
+        </select>
+      </div>
+      <div style={{ fontSize: 11.5, color: "#8A8D98", marginBottom: 16 }}>
+        Matches the two costing sheets from your T&A workbook. Switching templates resets the entered values below. Use "Add other fabric / trim" for anything this style needs that isn't in the standard list.
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1.6fr 0.8fr 0.7fr 0.9fr", fontSize: 11, color: "#8A8D98", padding: "0 4px 8px", borderBottom: "1px solid #F0F0F2" }}>
+        <div>Particulars</div><div>Price</div><div>Qty</div><div>Total</div>
+      </div>
+      {rows.map((row, i) => (
+        row.isHeader ? (
+          <div key={i} style={{ fontSize: 12, fontWeight: 700, color: "#1B2130", padding: "12px 4px 6px" }}>{row.label}</div>
+        ) : (
+          <div key={i} style={{ display: "grid", gridTemplateColumns: "1.6fr 0.8fr 0.7fr 0.9fr", alignItems: "center", fontSize: 12.5, padding: "6px 4px", borderBottom: "1px solid #F7F7F9", background: row.custom ? "#FBFAFF" : "transparent" }}>
+            {row.custom ? (
+              <input
+                value={row.label}
+                placeholder="e.g. Recycled polyester tape"
+                onChange={e => onUpdateRow(order.id, i, "label", e.target.value)}
+                style={{ fontSize: 12.5, padding: "5px 8px", borderRadius: 6, border: "1px solid #E0DBF5", marginLeft: 8, marginRight: 8, color: "#1B2130" }}
+              />
+            ) : (
+              <div style={{ color: "#565A66", paddingLeft: 8 }}>{row.label}</div>
+            )}
+            <input type="number" value={row.price} onChange={e => onUpdateRow(order.id, i, "price", e.target.value)} style={{ width: 64, fontSize: 12, padding: "4px 6px", borderRadius: 6, border: "1px solid #E7E8ED" }} />
+            <input type="number" value={row.qty} onChange={e => onUpdateRow(order.id, i, "qty", e.target.value)} style={{ width: 54, fontSize: 12, padding: "4px 6px", borderRadius: 6, border: "1px solid #E7E8ED" }} />
+            <div style={{ fontWeight: 600 }}>{((Number(row.price) || 0) * (Number(row.qty) || 0)).toLocaleString()}</div>
+          </div>
+        )
+      ))}
+      <button
+        onClick={() => onAddRow(order.id)}
+        style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 12, background: "#F5F3FF", color: "#534AB7", border: "1px dashed #C9BFF0", borderRadius: 8, padding: "8px 14px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}
+      >
+        + Add other fabric / trim
+      </button>
+      <div style={{ display: "flex", justifyContent: "space-between", padding: "14px 4px 0", fontSize: 14, fontWeight: 700, color: "#1B2130", borderTop: "1px solid #F0F0F2", marginTop: 14 }}>
+        <div>TOTAL COST</div>
+        <div>{grandTotal.toLocaleString()}</div>
+      </div>
+    </div>
+  );
+}
+
+function OrderHighlightsCard({ order, role }) {
+  const [highlights, setHighlights] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [text, setText] = useState("");
+  const [tagDept, setTagDept] = useState("All");
+  const [showResolved, setShowResolved] = useState(false);
+  const [showManualAdd, setShowManualAdd] = useState(false);
+  const [pasteText, setPasteText] = useState("");
+  const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState("");
+  const personName = role.label.split(" (")[0];
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        if (window.storage && window.storage.get) {
+          const res = await window.storage.get(`highlights:${order.id}`, true);
+          if (!cancelled) setHighlights(res && res.value ? JSON.parse(res.value) : []);
+        } else {
+          const local = localStorage.getItem(`highlights:${order.id}`);
+          if (!cancelled) setHighlights(local ? JSON.parse(local) : []);
+        }
+      } catch (e) {
+        if (!cancelled) setHighlights([]);
+      }
+      if (!cancelled) setLoaded(true);
+    })();
+    return () => { cancelled = true; };
+  }, [order.id]);
+
+  async function persist(next) {
+    setHighlights(next);
+    try {
+      if (window.storage && window.storage.set) {
+        await window.storage.set(`highlights:${order.id}`, JSON.stringify(next), true);
+      } else {
+        localStorage.setItem(`highlights:${order.id}`, JSON.stringify(next));
+      }
+    } catch (e) {}
+  }
+
+  function addHighlight() {
+    const t = text.trim();
+    if (!t) return;
+    const item = { id: Date.now(), text: t, dept: tagDept, by: personName, ts: new Date().toLocaleString(), resolved: false, source: "manual" };
+    persist([item, ...highlights]);
+    setText("");
+    setTagDept("All");
+  }
+
+  async function extractFromTechPack() {
+    const source = pasteText.trim();
+    if (!source) return;
+    setExtracting(true);
+    setExtractError("");
+    try {
+      const response = await fetch("/api/gemini/extract-highlights", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          techPackNotes: source,
+          deptOptions: HIGHLIGHT_DEPT_OPTIONS,
+        }),
+      });
+      const data = await response.json();
+      const parsed = data.items || [];
+      if (!Array.isArray(parsed) || parsed.length === 0) {
+        setExtractError("No specific instructions found in that text — try pasting the full comments section.");
+      } else {
+        const validDepts = new Set(["All", ...HIGHLIGHT_DEPT_OPTIONS]);
+        const items = parsed.map(p => ({
+          id: Date.now() + Math.random(),
+          text: String(p.text || "").slice(0, 200),
+          dept: validDepts.has(p.dept) ? p.dept : "All",
+          by: `${personName} (auto-extracted)`,
+          ts: new Date().toLocaleString(),
+          resolved: false,
+          source: "auto",
+        })).filter(i => i.text);
+        persist([...items, ...highlights]);
+        setPasteText("");
+      }
+    } catch (e) {
+      setExtractError("Couldn't extract right now — you can still add a note manually below.");
+    } finally {
+      setExtracting(false);
+    }
+  }
+
+  function toggleResolved(id) {
+    persist(highlights.map(h => h.id === id ? { ...h, resolved: !h.resolved } : h));
+  }
+
+  if (!loaded) return null;
+  const unresolved = highlights.filter(h => !h.resolved);
+  const resolved = highlights.filter(h => h.resolved);
+
+  return (
+    <div style={{ background: "#FFFBF0", border: "1px solid #F5E3B8", borderRadius: 14, padding: "18px 20px", marginBottom: 20 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+        <div style={{ width: 28, height: 28, borderRadius: 8, background: "#FBEFD1", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <AlertTriangle size={14} color="#966B1E" />
+        </div>
+        <div style={{ fontSize: 14.5, fontWeight: 700, color: "#5A3E0E" }}>Order Highlights — Buyer Comments & Tech Pack Notes</div>
+      </div>
+      <div style={{ fontSize: 11.5, color: "#8A6E2E", margin: "4px 0 14px", marginLeft: 36 }}>
+        Paste the tech pack's comments section below and it's read automatically — no need to type each note out by hand.
+      </div>
+
+      <div style={{ background: "#fff", border: "1px solid #EBD9A0", borderRadius: 10, padding: "12px 14px", marginBottom: 14 }}>
+        <textarea
+          value={pasteText}
+          onChange={e => setPasteText(e.target.value)}
+          placeholder="Paste the tech pack's comments / buyer notes section here…"
+          rows={3}
+          style={{ width: "100%", fontSize: 12.5, padding: "8px 10px", borderRadius: 8, border: "1px solid #EBD9A0", resize: "vertical", fontFamily: "inherit" }}
+        />
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
+          <button
+            onClick={() => setShowManualAdd(!showManualAdd)}
+            style={{ fontSize: 11.5, color: "#8A6E2E", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
+          >
+            {showManualAdd ? "Hide manual add" : "Add a note manually instead"}
+          </button>
+          <button
+            onClick={extractFromTechPack}
+            disabled={extracting || !pasteText.trim()}
+            style={{ fontSize: 12.5, fontWeight: 600, color: "#fff", background: extracting ? "#C7A75A" : "#B0812E", border: "none", borderRadius: 8, padding: "8px 16px", cursor: extracting ? "default" : "pointer" }}
+          >
+            {extracting ? "Reading tech pack…" : "Auto-extract highlights"}
+          </button>
+        </div>
+        {extractError && <div style={{ fontSize: 11.5, color: "#A32D2D", marginTop: 8 }}>{extractError}</div>}
+      </div>
+
+      {showManualAdd && (
+        <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+          <input
+            value={text}
+            onChange={e => setText(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") addHighlight(); }}
+            placeholder="e.g. Buyer wants matte snap buttons, not shiny — confirmed on call"
+            style={{ flex: 1, fontSize: 12.5, padding: "8px 10px", borderRadius: 8, border: "1px solid #EBD9A0" }}
+          />
+          <select value={tagDept} onChange={e => setTagDept(e.target.value)} style={{ fontSize: 12, padding: "8px 8px", borderRadius: 8, border: "1px solid #EBD9A0" }}>
+            <option value="All">All departments</option>
+            {HIGHLIGHT_DEPT_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
+          </select>
+          <button onClick={addHighlight} style={{ fontSize: 12, fontWeight: 600, color: "#fff", background: "#B0812E", border: "none", borderRadius: 8, padding: "0 16px", cursor: "pointer" }}>Add</button>
+        </div>
+      )}
+
+      {unresolved.length === 0 ? (
+        <div style={{ fontSize: 12.5, color: "#8A6E2E" }}>No open highlights — nothing flagged from the buyer or tech pack right now.</div>
+      ) : unresolved.map(h => {
+        const relevant = h.dept !== "All" && h.dept === role.dept;
+        return (
+          <div
+            key={h.id}
+            style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, padding: "10px 12px", marginBottom: 8, borderRadius: 10, background: relevant ? "#FCEBEB" : "#fff", border: `1px solid ${relevant ? "#F0C4C4" : "#F0E4C0"}` }}
+          >
+            <div>
+              <div style={{ fontSize: 13, color: "#3D2E0E", fontWeight: relevant ? 700 : 500 }}>
+                {h.source === "auto" && <Zap size={11} color="#B0812E" style={{ marginRight: 4, verticalAlign: -1 }} />}
+                {h.text}
+              </div>
+              <div style={{ fontSize: 10.5, color: "#9C8659", marginTop: 3 }}>
+                {h.dept !== "All" && <span style={{ background: "#F0E4C0", color: "#6B5216", padding: "1px 7px", borderRadius: 999, marginRight: 6 }}>{h.dept}</span>}
+                {h.by} · {h.ts}
+              </div>
+            </div>
+            <button onClick={() => toggleResolved(h.id)} style={{ fontSize: 11, fontWeight: 600, color: "#6B5216", background: "#F0E4C0", border: "none", borderRadius: 999, padding: "4px 10px", cursor: "pointer", whiteSpace: "nowrap" }}>
+              Mark noted
+            </button>
+          </div>
+        );
+      })}
+
+      {resolved.length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          <div onClick={() => setShowResolved(!showResolved)} style={{ fontSize: 11.5, color: "#8A6E2E", cursor: "pointer", fontWeight: 600 }}>
+            {showResolved ? "Hide" : "Show"} noted ({resolved.length})
+          </div>
+          {showResolved && resolved.map(h => (
+            <div key={h.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, padding: "8px 12px", marginTop: 6, borderRadius: 10, background: "#F7F5EE" }}>
+              <div style={{ fontSize: 12.5, color: "#A79A78", textDecoration: "line-through" }}>{h.text}</div>
+              <button onClick={() => toggleResolved(h.id)} style={{ fontSize: 10.5, color: "#8A6E2E", background: "none", border: "none", cursor: "pointer" }}>Reopen</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DocumentsPanel({ order, role, costingContent, preProdContent, onUpdateShippedQty }) {
+  const [activeTab, setActiveTab] = useState("Files");
+  const [docs, setDocs] = useState({});
+  const [customTypes, setCustomTypes] = useState({});
+  const [addingCustom, setAddingCustom] = useState(false);
+  const [customLabel, setCustomLabel] = useState("");
+  const [messages, setMessages] = useState([]);
+  const [includeStages, setIncludeStages] = useState(() => Object.fromEntries(STAGE_CHAT_TABS.map(t => [t, true])));
+  const [draft, setDraft] = useState("");
+  const [mentionQuery, setMentionQuery] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        if (window.storage && window.storage.get) {
+          const res = await window.storage.get(`docs:${order.id}`, true);
+          if (!cancelled) setDocs(res && res.value ? JSON.parse(res.value) : {});
+        } else {
+          const local = localStorage.getItem(`docs:${order.id}`);
+          if (!cancelled) setDocs(local ? JSON.parse(local) : {});
+        }
+      } catch (e) { if (!cancelled) setDocs({}); }
+      try {
+        if (window.storage && window.storage.get) {
+          const res2 = await window.storage.get(`chat:${order.id}`, true);
+          if (!cancelled) setMessages(res2 && res2.value ? JSON.parse(res2.value) : []);
+        } else {
+          const local2 = localStorage.getItem(`chat:${order.id}`);
+          if (!cancelled) setMessages(local2 ? JSON.parse(local2) : []);
+        }
+      } catch (e) { if (!cancelled) setMessages([]); }
+      try {
+        if (window.storage && window.storage.get) {
+          const res3 = await window.storage.get(`customTypes:${order.id}`, true);
+          if (!cancelled) setCustomTypes(res3 && res3.value ? JSON.parse(res3.value) : {});
+        } else {
+          const local3 = localStorage.getItem(`customTypes:${order.id}`);
+          if (!cancelled) setCustomTypes(local3 ? JSON.parse(local3) : {});
+        }
+      } catch (e) { if (!cancelled) setCustomTypes({}); }
+    })();
+    return () => { cancelled = true; };
+  }, [order.id]);
+
+  const uploaderName = role.label.split(" (")[0];
+
+  async function upload(docType, file) {
+    const entry = { name: file.name, uploadedAt: new Date().toLocaleString(), by: uploaderName };
+    const next = { ...docs, [docType]: entry };
+    setDocs(next);
+    try {
+      if (window.storage && window.storage.set) {
+        await window.storage.set(`docs:${order.id}`, JSON.stringify(next), true);
+      } else {
+        localStorage.setItem(`docs:${order.id}`, JSON.stringify(next));
+      }
+    } catch (e) {}
+  }
+
+  async function addCustomType() {
+    const label = customLabel.trim();
+    if (!label) return;
+    const next = { ...customTypes, [activeTab]: [...(customTypes[activeTab] || []), label] };
+    setCustomTypes(next);
+    setCustomLabel("");
+    setAddingCustom(false);
+    try {
+      if (window.storage && window.storage.set) {
+        await window.storage.set(`customTypes:${order.id}`, JSON.stringify(next), true);
+      } else {
+        localStorage.setItem(`customTypes:${order.id}`, JSON.stringify(next));
+      }
+    } catch (e) {}
+  }
+
+  async function sendMessage() {
+    if (!draft.trim()) return;
+    const msg = { id: Date.now(), author: uploaderName, text: draft.trim(), ts: new Date().toLocaleString(), stage: STAGE_CHAT_TABS.includes(activeTab) ? activeTab : null };
+    const next = [...messages, msg];
+    setMessages(next);
+    setDraft("");
+    setMentionQuery(null);
+    try {
+      if (window.storage && window.storage.set) {
+        await window.storage.set(`chat:${order.id}`, JSON.stringify(next), true);
+      } else {
+        localStorage.setItem(`chat:${order.id}`, JSON.stringify(next));
+      }
+    } catch (e) {}
+  }
+
+  function handleDraftChange(e) {
+    const val = e.target.value;
+    setDraft(val);
+    const m = val.match(/@(\w*)$/);
+    setMentionQuery(m ? m[1] : null);
+  }
+
+  function insertMention(name) {
+    const first = name.split(" ")[0];
+    setDraft(d => d.replace(/@(\w*)$/, `@${first} `));
+    setMentionQuery(null);
+  }
+
+  const mentionSuggestions = mentionQuery !== null
+    ? ALL_PEOPLE.filter(n => n.split(" ")[0].toLowerCase().startsWith(mentionQuery.toLowerCase())).slice(0, 5)
+    : [];
+
+  const visibleMessages = messages.filter(m => !m.stage || includeStages[m.stage]);
+  const docTypes = [...(DOC_TABS_CONFIG[activeTab] || []), ...(customTypes[activeTab] || [])];
+  const ActiveIcon = DOC_TAB_ICONS[activeTab] || FileText;
+  const ACCENT = "#534AB7";
+  const allowedDepts = TAB_ALLOWED_DEPTS[activeTab] || [];
+  const canUploadHere = role.fullAccess || allowedDepts.includes(role.dept);
+
+  return (
+    <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+      {/* Vertical icon rail */}
+      <div style={{ width: 92, flexShrink: 0, display: "flex", flexDirection: "column", gap: 6 }}>
+        {DOC_TAB_NAMES.map(tab => {
+          const Icon = DOC_TAB_ICONS[tab] || FileText;
+          const active = activeTab === tab;
+          return (
+            <div
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              style={{
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 4, textAlign: "center",
+                padding: "10px 4px", borderRadius: 10, cursor: "pointer",
+                background: active ? "#F0EFFB" : "transparent",
+                border: active ? "1px solid #D9D6F5" : "1px solid transparent",
+              }}
+            >
+              <div style={{ width: 30, height: 30, borderRadius: 8, background: active ? ACCENT : "#F0F0F2", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Icon size={14} color={active ? "#fff" : "#8A8D98"} />
+              </div>
+              <div style={{ fontSize: 9.5, fontWeight: active ? 700 : 500, color: active ? "#39328F" : "#8A8D98", lineHeight: 1.2 }}>{tab}</div>
+            </div>
+          );
+        })}
+      </div>
+
+      <Card style={{ flex: 1, padding: 0, overflow: "hidden" }}>
+        <div style={{ height: 3, background: ACCENT }} />
+        <div style={{ padding: "18px 20px" }}>
+          {activeTab === "Costing" && costingContent ? costingContent : activeTab === "Pre-Production" && preProdContent ? preProdContent : (
+          <>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+            <div style={{ width: 26, height: 26, borderRadius: 7, background: "#F0EFFB", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <ActiveIcon size={13} color={ACCENT} />
+            </div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#1B2130" }}>{activeTab}</div>
+          </div>
+          <div style={{ fontSize: 11.5, color: "#8A8D98", marginBottom: 16, marginLeft: 34 }}>
+            {activeTab === "Files" ? "Source documents for this order" : "Upload proof once this T&A action is complete"}
+            {!canUploadHere && allowedDepts.length > 0 && (
+              <span style={{ color: "#B0812E", fontWeight: 600 }}> · Attaching here is owned by {allowedDepts.join(" / ")}</span>
+            )}
+          </div>
+          {activeTab === "Final OCR" && (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#F7F7F9", border: "1px solid #ECEDF1", borderRadius: 10, padding: "12px 14px", marginBottom: 14 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: "#1B2130" }}>Shipped quantity</div>
+                <div style={{ fontSize: 11, color: "#8A8D98", marginTop: 2 }}>Actual qty dispatched — this is what feeds the Buyer Qty Difference Per Season report, in place of an estimate.</div>
+              </div>
+              <input
+                type="number"
+                value={order.shippedQty || 0}
+                disabled={!canUploadHere}
+                onChange={e => onUpdateShippedQty(order.id, Number(e.target.value))}
+                style={{ width: 110, fontSize: 13, fontWeight: 600, padding: "7px 10px", borderRadius: 8, border: "1px solid #E7E8ED", textAlign: "right" }}
+              />
+              <span style={{ fontSize: 11.5, color: "#8A8D98" }}>/ {order.qty.toLocaleString()} pcs ordered</span>
+            </div>
+          )}
+          {docTypes.map((docType, i) => {
+            const entry = docs[docType];
+            const inputId = `upload-${order.id}-${activeTab}-${i}`;
+            return (
+              <div key={docType} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "13px 14px", marginBottom: 8, borderRadius: 10, background: entry ? "#F7FBF9" : "#FAFAFB", border: `1px solid ${entry ? "#DCEFE6" : "#EFEFF2"}` }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#1B2130" }}>{docType}</div>
+                  {entry ? (
+                    <div style={{ fontSize: 11, color: "#1F9E8D", marginTop: 3, display: "flex", alignItems: "center", gap: 5 }}>
+                      <CheckCircle2 size={12} /> {entry.name} · {entry.by} · {entry.uploadedAt}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 11, color: "#B0B2BA", marginTop: 3 }}>Not uploaded yet</div>
+                  )}
+                </div>
+                <div>
+                  {canUploadHere ? (
+                    <>
+                      <input
+                        type="file"
+                        id={inputId}
+                        style={{ display: "none" }}
+                        onChange={e => { const f = e.target.files[0]; if (f) upload(docType, f); }}
+                      />
+                      <label
+                        htmlFor={inputId}
+                        style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 600, color: entry ? "#1F9E8D" : ACCENT, border: `1px solid ${entry ? "#BFE4D6" : "#D9D6F5"}`, background: "#fff", borderRadius: 999, padding: "6px 12px", cursor: "pointer" }}
+                      >
+                        <Upload size={11} /> {entry ? "Replace" : "Upload"}
+                      </label>
+                    </>
+                  ) : (
+                    <span style={{ fontSize: 11, color: "#B0B2BA", fontWeight: 600, padding: "6px 12px" }}>View only</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          {CUSTOMIZABLE_TABS.has(activeTab) && canUploadHere && (
+            addingCustom ? (
+              <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                <input
+                  autoFocus
+                  value={customLabel}
+                  onChange={e => setCustomLabel(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") addCustomType(); }}
+                  placeholder="e.g. Other Trim — Elastic Tape"
+                  style={{ flex: 1, fontSize: 12.5, padding: "8px 10px", borderRadius: 8, border: "1px solid #E7E8ED" }}
+                />
+                <button onClick={addCustomType} style={{ fontSize: 12, fontWeight: 600, color: "#fff", background: ACCENT, border: "none", borderRadius: 8, padding: "0 14px", cursor: "pointer" }}>Add</button>
+                <button onClick={() => { setAddingCustom(false); setCustomLabel(""); }} style={{ fontSize: 12, color: "#8A8D98", background: "none", border: "none", cursor: "pointer" }}>Cancel</button>
+              </div>
+            ) : (
+              <div
+                onClick={() => setAddingCustom(true)}
+                style={{ display: "flex", alignItems: "center", gap: 6, padding: "12px 14px", borderRadius: 10, border: "1px dashed #D9D6F5", color: ACCENT, fontSize: 12.5, fontWeight: 600, cursor: "pointer", marginTop: 4 }}
+              >
+                + Add other {activeTab === "Sampling" ? "sample type" : activeTab === "Costing" ? "line item" : "material / trim / file"}
+              </div>
+            )
+          )}
+          </>
+          )}
+        </div>
+      </Card>
+
+      <Card style={{ width: 280, flexShrink: 0, padding: 0, display: "flex", flexDirection: "column", maxHeight: 560, overflow: "hidden" }}>
+        <div style={{ height: 3, background: "#378ADD" }} />
+        <div style={{ padding: "14px 16px", borderBottom: "1px solid #ECEDF1", display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ width: 24, height: 24, borderRadius: 7, background: "#EAF2FC", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Zap size={12} color="#378ADD" />
+          </div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#1B2130" }}>Activity & Chat</div>
+        </div>
+        <div style={{ padding: "10px 16px", borderBottom: "1px solid #ECEDF1" }}>
+          <div style={{ fontSize: 9.5, fontWeight: 700, color: "#8A8D98", letterSpacing: 0.4, marginBottom: 8 }}>INCLUDE STAGE CHATS</div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {STAGE_CHAT_TABS.map(tab => (
+              <div key={tab} onClick={() => setIncludeStages(s => ({ ...s, [tab]: !s[tab] }))} style={{ textAlign: "center", cursor: "pointer" }}>
+                <div style={{ padding: "5px 9px", border: `1.5px solid ${includeStages[tab] ? "#378ADD" : "#DADCE2"}`, background: includeStages[tab] ? "#EAF2FC" : "#fff", borderRadius: 999, fontSize: 9.5, color: includeStages[tab] ? "#255D9E" : "#8A8D98", fontWeight: 600 }}>
+                  {tab}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{ flex: 1, overflowY: "auto", padding: "12px 16px", minHeight: 140 }}>
+          {visibleMessages.length === 0 ? (
+            <div style={{ fontSize: 12, color: "#B0B2BA" }}>No messages yet. Tag a teammate with @ to loop them in.</div>
+          ) : visibleMessages.map(m => (
+            <div key={m.id} style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+              <div style={{ width: 22, height: 22, borderRadius: 999, background: "#7F77DD", color: "#fff", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                {m.author.slice(0, 1).toUpperCase()}
+              </div>
+              <div>
+                <div style={{ fontSize: 11.5 }}>
+                  <span style={{ fontWeight: 700, color: "#1B2130" }}>{m.author}</span>{" "}
+                  <span style={{ color: "#B0B2BA" }}>{m.ts}</span>
+                  {m.stage && <span style={{ color: "#B0B2BA" }}> · {m.stage}</span>}
+                </div>
+                <div style={{ fontSize: 12.5, color: "#1B2130", background: "#F5F6F8", borderRadius: 10, padding: "6px 10px", marginTop: 3, display: "inline-block" }}>
+                  {renderWithMentions(m.text)}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{ borderTop: "1px solid #ECEDF1", padding: "10px 16px", position: "relative" }}>
+          {mentionSuggestions.length > 0 && (
+            <div style={{ position: "absolute", bottom: "100%", left: 16, right: 16, background: "#fff", border: "1px solid #ECEDF1", borderRadius: 8, boxShadow: "0 -4px 16px rgba(0,0,0,0.08)", marginBottom: 4 }}>
+              {mentionSuggestions.map(n => (
+                <div key={n} onClick={() => insertMention(n)} style={{ padding: "7px 12px", fontSize: 12.5, cursor: "pointer" }} onMouseEnter={e => e.currentTarget.style.background = "#F7F7F9"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                  {n}
+                </div>
+              ))}
+            </div>
+          )}
+          <textarea
+            value={draft}
+            onChange={handleDraftChange}
+            placeholder="Type a message... Use @ to mention"
+            rows={2}
+            style={{ width: "100%", border: "1px solid #E7E8ED", borderRadius: 8, padding: "8px 10px", fontSize: 12.5, resize: "none", fontFamily: "inherit" }}
+          />
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
+            <button onClick={sendMessage} style={{ display: "flex", alignItems: "center", gap: 5, background: "#378ADD", color: "#fff", border: "none", borderRadius: 999, padding: "7px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+              <Send size={11} /> Send
+            </button>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+export function OrderWorkspace({
+  order, onBack, onUpdateStages, role, onSetTemplate, onSetCostingTemplate,
+  onUpdateCostingRow, onAddCostingRow, onUpdateShippedQty, onPreProdField,
+  onPreProdSubmit, onPreProdApprove
+}) {
+  const cuttingIdx = order.stages.findIndex(s => s.name === "Cutting");
+  const bulkGateOpen = allPreProdApproved(order);
+
+  const cycle = (idx) => {
+    if (gatingApproval(order.stages, idx)) return;
+    if (cuttingIdx !== -1 && idx >= cuttingIdx && !bulkGateOpen) return;
+    const stages = order.stages.map((s, i) => {
+      if (i !== idx) return s;
+      const next = s.status === "pending" ? "in_progress" : s.status === "in_progress" ? "done" : "pending";
+      return { ...s, status: next, reason: next === "done" ? null : s.reason };
+    });
+    onUpdateStages(order.id, stages);
+  };
+
+  const setReason = (idx, reason) => {
+    const stages = order.stages.map((s, i) => i === idx ? { ...s, reason } : s);
+    onUpdateStages(order.id, stages);
+  };
+
+  const setSupplier = (idx, supplier) => {
+    const stages = order.stages.map((s, i) => i === idx ? { ...s, supplier } : s);
+    onUpdateStages(order.id, stages);
+  };
+
+  const doneCount = (order.stages || []).filter(s => s.status === "done").length;
+  const flaggedReasons = (order.stages || []).filter(s => s.reason).map(s => `${s.name}: ${s.reason}`);
+
+  const trackerCard = (
+    <div style={{ background: "#fff", border: "1px solid #ECEDF1", borderRadius: 14, padding: "20px 22px", marginBottom: 20 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ width: 28, height: 28, borderRadius: 8, background: "#F0EFFB", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Calendar size={14} color="#534AB7" />
+          </div>
+          <div style={{ fontSize: 14.5, fontWeight: 700, color: "#1B2130" }}>T&A stage tracker</div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 11, color: "#8A8D98" }}>Template:</span>
+          <select
+            value={order.template || "90"}
+            onChange={e => onSetTemplate(order.id, e.target.value)}
+            style={{ fontSize: 12, padding: "5px 8px", borderRadius: 7, border: "1px solid #E7E8ED" }}
+          >
+            <option value="90">90-day (standard)</option>
+            <option value="120">120-day (dye / print, longer lead time)</option>
+          </select>
+        </div>
+      </div>
+      <div style={{ fontSize: 11, color: "#B0B2BA", margin: "6px 0 16px" }}>
+        {(order.stages || []).length} steps from the {order.template || "90"}-day T&A template — pick 120-day for styles with a longer delivery window that need garment dye or heavier print/embroidery. Switching templates resets stage progress on this order. Stages after an approval step stay locked until that approval is marked done, and bulk production stays locked until Pre-Production sign-off is complete.
+      </div>
+      <div style={{ display: "flex", gap: 2, overflowX: "auto", paddingBottom: 8 }}>
+        {(order.stages || []).map((s, i) => {
+          const gate = gatingApproval(order.stages, i);
+          const bulkLocked = !gate && cuttingIdx !== -1 && i >= cuttingIdx && !bulkGateOpen;
+          return <StageNode key={i} stage={s} idx={i} onCycle={cycle} onReason={setReason} onSupplierChange={setSupplier} lockedBy={gate ? gate.name : bulkLocked ? "Pre-Production sign-off" : null} />;
+        })}
+      </div>
+      {flaggedReasons.length > 0 && (
+        <div style={{ background: "#FCEBEB", border: "1px solid #F5CFCF", borderRadius: 10, padding: "12px 16px", display: "flex", gap: 8, alignItems: "flex-start", marginTop: 16 }}>
+          <AlertTriangle size={16} color="#A32D2D" style={{ marginTop: 2, flexShrink: 0 }} />
+          <div style={{ fontSize: 13, color: "#791F1F" }}>{flaggedReasons.join(" · ")}</div>
+        </div>
+      )}
+    </div>
+  );
+
+  const costingContent = (
+    <CostingTab order={order} onSetTemplate={onSetCostingTemplate} onUpdateRow={onUpdateCostingRow} onAddRow={onAddCostingRow} />
+  );
+
+  const preProdContent = (
+    <PreProductionTab
+      order={order}
+      role={role}
+      onFieldChange={(docKey, fieldKey, value) => onPreProdField(order.id, docKey, fieldKey, value)}
+      onSubmit={(docKey) => onPreProdSubmit(order.id, docKey)}
+      onApprove={(docKey) => onPreProdApprove(order.id, docKey, role.label.split(" (")[0])}
+    />
+  );
+
+  return (
+    <div>
+      <BackLink onClick={onBack} label="Back" />
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+        <div>
+          <div style={{ fontFamily: "monospace", fontSize: 13, color: "#8A8D98", marginBottom: 4 }}>PO #{order.id}</div>
+          <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0, color: "#1B2130" }}>{order.style}</h1>
+          <div style={{ fontSize: 13.5, color: "#565A66", marginTop: 4 }}>
+            {order.buyer} · {order.country} · {order.qty.toLocaleString()} pcs · Ship {order.ship}
+          </div>
+        </div>
+        {statusPill(order.status)}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
+        <div style={{ background: "#F7F7F9", borderRadius: 10, padding: "14px 16px" }}>
+          <div style={{ fontSize: 12, color: "#8A8D98" }}>Stage progress</div>
+          <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4 }}>{doneCount}/{(order.stages || []).length} done</div>
+        </div>
+        <div style={{ background: "#F7F7F9", borderRadius: 10, padding: "14px 16px" }}>
+          <div style={{ fontSize: 12, color: "#8A8D98" }}>Risk level</div>
+          <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4, textTransform: "capitalize", display: "flex", alignItems: "center" }}>{riskDot(order.risk)}{order.risk}</div>
+        </div>
+        <div style={{ background: "#F7F7F9", borderRadius: 10, padding: "14px 16px" }}>
+          <div style={{ fontSize: 12, color: "#8A8D98" }}>Open delay flags</div>
+          <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4 }}>{flaggedReasons.length}</div>
+        </div>
+      </div>
+
+      <OrderHighlightsCard order={order} role={role} />
+
+      {trackerCard}
+
+      <DocumentsPanel order={order} role={role} costingContent={costingContent} preProdContent={preProdContent} onUpdateShippedQty={onUpdateShippedQty} />
+    </div>
+  );
+}

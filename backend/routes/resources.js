@@ -141,16 +141,20 @@ router.put("/:resource/:id", async (req, res, next) => {
     const collection = getResourceCollection();
     if (collection) {
       const existing = await collection.findOne({ resource, id });
-      if (!existing) return res.status(404).json({ error: "Record not found" });
-      const record = { ...existing, ...req.body, id, resource };
+      const record = { ...(existing || {}), ...req.body, id, resource };
       delete record._id;
-      const result = await collection.replaceOne({ resource, id }, { resource, ...record });
-      if (!result.matchedCount) return res.status(404).json({ error: "Record not found" });
+      await collection.replaceOne({ resource, id }, { resource, ...record }, { upsert: true });
       return res.json(record);
     } else {
       const db = readDB();
-      const index = (db[resource] || []).findIndex(item => String(item.id) === id);
-      if (index < 0) return res.status(404).json({ error: "Record not found" });
+      if (!db[resource]) db[resource] = [];
+      const index = db[resource].findIndex(item => String(item.id) === id);
+      if (index < 0) {
+        const record = { ...req.body, id, resource };
+        db[resource].push(record);
+        writeDB(db);
+        return res.json(record);
+      }
       const record = { ...db[resource][index], ...req.body, id };
       db[resource][index] = record;
       writeDB(db);
@@ -166,15 +170,20 @@ router.patch("/:resource/:id", async (req, res, next) => {
     const collection = getResourceCollection();
     if (collection) {
       const existing = await collection.findOne({ resource, id });
-      if (!existing) return res.status(404).json({ error: "Record not found" });
-      const record = { ...existing, ...req.body, id, resource };
+      const record = { ...(existing || {}), ...req.body, id, resource };
       delete record._id;
-      await collection.replaceOne({ resource, id }, { resource, ...record });
+      await collection.replaceOne({ resource, id }, { resource, ...record }, { upsert: true });
       return res.json(record);
     } else {
       const db = readDB();
-      const index = (db[resource] || []).findIndex(item => String(item.id) === id);
-      if (index < 0) return res.status(404).json({ error: "Record not found" });
+      if (!db[resource]) db[resource] = [];
+      const index = db[resource].findIndex(item => String(item.id) === id);
+      if (index < 0) {
+        const record = { ...req.body, id, resource };
+        db[resource].push(record);
+        writeDB(db);
+        return res.json(record);
+      }
       const record = { ...db[resource][index], ...req.body, id };
       db[resource][index] = record;
       writeDB(db);
@@ -201,13 +210,14 @@ router.delete("/:resource/:id", async (req, res, next) => {
       return res.json({ id, deleted: true, isDeleted: true });
     }
     if (collection) {
-      const result = await collection.deleteOne({ resource, id });
-      if (!result.deletedCount) return res.status(404).json({ error: "Record not found" });
+      const result = await collection.deleteOne({ resource, $or: [{ id }, { name: id }] });
+      return res.json({ id, deleted: result.deletedCount > 0 });
     } else {
-      const db = readDB(); const before = db[resource]?.length || 0;
-      db[resource] = (db[resource] || []).filter(item => String(item.id) !== id);
-      if (db[resource].length === before) return res.status(404).json({ error: "Record not found" });
+      const db = readDB();
+      const before = db[resource]?.length || 0;
+      db[resource] = (db[resource] || []).filter(item => String(item.id) !== id && String(item.name) !== id);
       writeDB(db);
+      return res.json({ id, deleted: db[resource].length < before });
     }
     res.json({ id, deleted: true });
   } catch (error) { next(error); }
