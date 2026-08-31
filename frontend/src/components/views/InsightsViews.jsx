@@ -1,12 +1,14 @@
 import React, { useState, useMemo, useEffect } from "react";
 import {
-  TriangleAlert, Globe, Gauge, CheckCircle2, ClipboardList, Landmark, Clock, Truck, TrendingUp
+  TriangleAlert, Globe, Gauge, CheckCircle2, ClipboardList, Landmark, Clock, Truck, TrendingUp,
+  Bell, Package, Calendar, CheckSquare, ClipboardCheck, Award, ShieldCheck, CheckCircle, Search, Trash2, Check
 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer
 } from "recharts";
 import {
-  SHIPMENT_PERFORMANCE, ROLE_OPTIONS, SEASON_OPTIONS, CAPA_STATUS_STYLE
+  SHIPMENT_PERFORMANCE, ROLE_OPTIONS, SEASON_OPTIONS, CAPA_STATUS_STYLE,
+  NOTIFICATION_PRIORITY_STYLE, formatTimeAgo
 } from "../../constants/loomData.js";
 import {
   Card, CardHeader, PageHeader, DarkCard, DarkCardHeader, MiniDonut
@@ -251,24 +253,377 @@ export function SupplierPerformancePage({ orders, onOpenOrder }) {
   );
 }
 
-export function NotificationsPage({ orders }) {
-  const alerts = [];
-  orders.forEach(o => {
-    if (!o.stages) return;
-    o.stages.forEach(s => { if (s.reason) alerts.push({ text: `${s.reason} — ${o.style} PO #${o.id} (${s.dept})`, sev: o.risk }); });
-  });
+export function NotificationsPage({
+  notifications = [],
+  onMarkAsRead,
+  onMarkAllAsRead,
+  onDeleteNotification,
+  onOpenOrder,
+  onNavigate
+}) {
+  const [tabFilter, setTabFilter] = useState("all"); // all | unread | order | tna | task | approval | compliance | certification
+  const [priorityFilter, setPriorityFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [dateFilter, setDateFilter] = useState("all");
+
+  const unreadCount = useMemo(() => notifications.filter(n => !n.isRead && n.isDeleted !== true).length, [notifications]);
+
+  const filteredNotifications = useMemo(() => {
+    return notifications.filter(n => {
+      if (n.isDeleted === true) return false;
+      
+      // Tab filter
+      if (tabFilter === "unread" && n.isRead) return false;
+      if (["order", "tna", "task", "approval", "compliance", "certification"].includes(tabFilter) && n.type !== tabFilter) return false;
+
+      // Priority filter
+      if (priorityFilter !== "all" && n.priority !== priorityFilter) return false;
+
+      // Date filter
+      if (dateFilter !== "all") {
+        const date = new Date(n.createdAt);
+        const now = new Date();
+        const diffHours = (now - date) / (1000 * 60 * 60);
+        if (dateFilter === "today" && diffHours > 24) return false;
+        if (dateFilter === "week" && diffHours > 24 * 7) return false;
+      }
+
+      // Search query
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const titleMatch = (n.title || "").toLowerCase().includes(q);
+        const msgMatch = (n.message || "").toLowerCase().includes(q);
+        const idMatch = (n.relatedId || "").toLowerCase().includes(q);
+        if (!titleMatch && !msgMatch && !idMatch) return false;
+      }
+
+      return true;
+    });
+  }, [notifications, tabFilter, priorityFilter, searchQuery, dateFilter]);
+
+  const handleNotificationClick = (notif) => {
+    if (!notif.isRead && onMarkAsRead) {
+      onMarkAsRead(notif.id);
+    }
+    if (notif.relatedModule === "orders" || notif.type === "order" || notif.type === "tna") {
+      if (notif.relatedId && onOpenOrder) {
+        onOpenOrder(notif.relatedId);
+      } else if (onNavigate) {
+        onNavigate("orders");
+      }
+    } else if (notif.relatedModule === "tasks" || notif.type === "task") {
+      if (onNavigate) onNavigate("tasks");
+    } else if (notif.relatedModule === "approvals" || notif.type === "approval") {
+      if (onNavigate) onNavigate("approvals");
+    } else if (notif.relatedModule === "compliance" || notif.type === "compliance" || notif.type === "certification") {
+      if (onNavigate) onNavigate("compliance");
+    }
+  };
+
+  const getNotificationIcon = (notif) => {
+    const priority = notif.priority || "medium";
+    const prioColor = NOTIFICATION_PRIORITY_STYLE[priority]?.iconColor || "#3B82F6";
+    if (priority === "critical") return <TriangleAlert size={16} color="#DC2626" />;
+    if (notif.type === "order") return <Package size={16} color={prioColor} />;
+    if (notif.type === "tna") return <Calendar size={16} color={prioColor} />;
+    if (notif.type === "task") return <CheckSquare size={16} color={prioColor} />;
+    if (notif.type === "approval") return <ClipboardCheck size={16} color={prioColor} />;
+    if (notif.type === "certification") return <Award size={16} color={prioColor} />;
+    if (notif.type === "compliance") return <ShieldCheck size={16} color={prioColor} />;
+    return <Bell size={16} color={prioColor} />;
+  };
+
   return (
     <div>
-      <PageHeader title="Notifications" sub={`${alerts.length} active alerts`} />
-      <Card>
-        {alerts.length === 0 ? (
-          <div style={{ fontSize: 12.5, color: "#B0B2BA" }}>Nothing to flag right now.</div>
-        ) : alerts.map((a, i) => (
-          <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "10px 0", borderBottom: i < alerts.length - 1 ? "1px solid #F5F5F7" : "none" }}>
-            <TriangleAlert size={14} color={a.sev === "high" ? "#D64545" : "#E2A83B"} style={{ marginTop: 2, flexShrink: 0 }} />
-            <div style={{ fontSize: 13, color: "#1B2130" }}>{a.text}</div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+        <div>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: "#151B2E", margin: 0 }}>Notifications</h1>
+          <div style={{ fontSize: 13, color: "#8A8D98", marginTop: 4 }}>
+            Stay updated on live order delays, T&A stage milestones, assigned tasks, approvals, and buyer compliance deadlines
           </div>
-        ))}
+        </div>
+        <div style={{ display: "flex", gap: 10 }}>
+          {unreadCount > 0 && (
+            <button
+              onClick={() => onMarkAllAsRead && onMarkAllAsRead()}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                background: "#F0EFFB",
+                color: "#534AB7",
+                border: "1px solid #D9D6F5",
+                borderRadius: 8,
+                padding: "8px 14px",
+                fontSize: 12.5,
+                fontWeight: 600,
+                cursor: "pointer"
+              }}
+            >
+              <CheckCircle size={14} />
+              Mark all as read
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Filter Tabs Rail */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, overflowX: "auto", paddingBottom: 4 }}>
+        {[
+          { key: "all", label: "All", count: notifications.filter(n => n.isDeleted !== true).length },
+          { key: "unread", label: "Unread", count: unreadCount, highlight: unreadCount > 0 },
+          { key: "order", label: "Orders", count: notifications.filter(n => n.type === "order" && n.isDeleted !== true).length },
+          { key: "tna", label: "T&A", count: notifications.filter(n => n.type === "tna" && n.isDeleted !== true).length },
+          { key: "task", label: "My Tasks", count: notifications.filter(n => n.type === "task" && n.isDeleted !== true).length },
+          { key: "approval", label: "Approvals", count: notifications.filter(n => n.type === "approval" && n.isDeleted !== true).length },
+          { key: "compliance", label: "Compliance", count: notifications.filter(n => n.type === "compliance" && n.isDeleted !== true).length },
+          { key: "certification", label: "Certifications", count: notifications.filter(n => n.type === "certification" && n.isDeleted !== true).length },
+        ].map(tab => {
+          const active = tabFilter === tab.key;
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setTabFilter(tab.key)}
+              style={{
+                padding: "7px 14px",
+                borderRadius: 8,
+                border: active ? "1px solid #534AB7" : "1px solid #E5E7EB",
+                background: active ? "#534AB7" : "#FFFFFF",
+                color: active ? "#FFFFFF" : tab.highlight ? "#DC2626" : "#4B5563",
+                fontSize: 12.5,
+                fontWeight: active || tab.highlight ? 700 : 500,
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                whiteSpace: "nowrap"
+              }}
+            >
+              <span>{tab.label}</span>
+              <span
+                style={{
+                  fontSize: 11,
+                  padding: "1px 6px",
+                  borderRadius: 999,
+                  background: active ? "rgba(255,255,255,0.25)" : tab.highlight ? "#FEE2E2" : "#F3F4F6",
+                  color: active ? "#FFFFFF" : tab.highlight ? "#991B1B" : "#6B7280"
+                }}
+              >
+                {tab.count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Secondary Filters Bar */}
+      <Card style={{ marginBottom: 16, padding: "12px 16px" }}>
+        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 200, position: "relative" }}>
+            <Search size={14} color="#9CA3AF" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
+            <input
+              type="text"
+              placeholder="Search notifications, orders, keywords..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "6px 10px 6px 30px",
+                borderRadius: 6,
+                border: "1px solid #D1D5DB",
+                fontSize: 12.5
+              }}
+            />
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: 11.5, color: "#6B7280", fontWeight: 600 }}>Priority:</span>
+            <select
+              value={priorityFilter}
+              onChange={e => setPriorityFilter(e.target.value)}
+              style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #D1D5DB", fontSize: 12 }}
+            >
+              <option value="all">All Priorities</option>
+              <option value="critical">Critical</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: 11.5, color: "#6B7280", fontWeight: 600 }}>Timeframe:</span>
+            <select
+              value={dateFilter}
+              onChange={e => setDateFilter(e.target.value)}
+              style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #D1D5DB", fontSize: 12 }}
+            >
+              <option value="all">All Time</option>
+              <option value="today">Last 24 Hours</option>
+              <option value="week">Last 7 Days</option>
+            </select>
+          </div>
+
+          {(searchQuery || priorityFilter !== "all" || dateFilter !== "all" || tabFilter !== "all") && (
+            <button
+              onClick={() => {
+                setSearchQuery("");
+                setPriorityFilter("all");
+                setDateFilter("all");
+                setTabFilter("all");
+              }}
+              style={{ background: "none", border: "none", color: "#534AB7", fontSize: 12, cursor: "pointer", fontWeight: 600 }}
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+      </Card>
+
+      {/* Notifications List */}
+      <Card style={{ padding: 0, overflow: "hidden" }}>
+        {filteredNotifications.length === 0 ? (
+          <div style={{ padding: "48px 24px", textAlign: "center" }}>
+            <div style={{ width: 44, height: 44, borderRadius: 999, background: "#F0FDF4", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" }}>
+              <CheckCircle size={22} color="#16A34A" />
+            </div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: "#111827" }}>No new notifications</div>
+            <div style={{ fontSize: 13, color: "#6B7280", marginTop: 4 }}>
+              {searchQuery || priorityFilter !== "all" || dateFilter !== "all" || tabFilter !== "all"
+                ? "No notifications matching your filter criteria."
+                : "You're all caught up."}
+            </div>
+          </div>
+        ) : (
+          filteredNotifications.map((notif, idx) => {
+            const prioStyle = NOTIFICATION_PRIORITY_STYLE[notif.priority] || NOTIFICATION_PRIORITY_STYLE.medium;
+            const isUnread = !notif.isRead;
+            return (
+              <div
+                key={notif.id || idx}
+                onClick={() => handleNotificationClick(notif)}
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 14,
+                  padding: "14px 20px",
+                  borderBottom: idx < filteredNotifications.length - 1 ? "1px solid #F3F4F6" : "none",
+                  background: isUnread ? "#FAF8FE" : "#FFFFFF",
+                  cursor: "pointer",
+                  transition: "background 0.15s ease",
+                  position: "relative"
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = isUnread ? "#F3EFFF" : "#F9FAFB"}
+                onMouseLeave={e => e.currentTarget.style.background = isUnread ? "#FAF8FE" : "#FFFFFF"}
+              >
+                {/* Unread indicator bar */}
+                {isUnread && (
+                  <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3.5, background: "#534AB7" }} />
+                )}
+
+                {/* Icon */}
+                <div
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 8,
+                    background: isUnread ? "#F0EFFB" : "#F3F4F6",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                    marginTop: 2
+                  }}
+                >
+                  {getNotificationIcon(notif)}
+                </div>
+
+                {/* Main Content */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
+                    <span style={{ fontSize: 13.5, fontWeight: isUnread ? 700 : 600, color: "#111827" }}>
+                      {notif.title}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 10.5,
+                        fontWeight: 700,
+                        padding: "1.5px 7px",
+                        borderRadius: 999,
+                        background: prioStyle.bg,
+                        color: prioStyle.fg,
+                        textTransform: "capitalize"
+                      }}
+                    >
+                      {prioStyle.label}
+                    </span>
+                    {isUnread && (
+                      <span style={{ width: 7, height: 7, borderRadius: 999, background: "#534AB7" }} />
+                    )}
+                  </div>
+
+                  <div style={{ fontSize: 13, color: isUnread ? "#374151" : "#6B7280", lineHeight: 1.4 }}>
+                    {notif.message}
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 6, fontSize: 11.5, color: "#9CA3AF" }}>
+                    <span>{formatTimeAgo(notif.createdAt)}</span>
+                    <span>·</span>
+                    <span style={{ textTransform: "capitalize" }}>{notif.relatedModule || notif.type}</span>
+                    {notif.relatedId && (
+                      <>
+                        <span>·</span>
+                        <span style={{ fontFamily: "monospace", color: "#534AB7", fontWeight: 600 }}>{notif.relatedId}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Action buttons */}
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }} onClick={e => e.stopPropagation()}>
+                  {isUnread && (
+                    <button
+                      onClick={() => onMarkAsRead && onMarkAsRead(notif.id)}
+                      title="Mark as read"
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "#534AB7",
+                        cursor: "pointer",
+                        fontSize: 11.5,
+                        fontWeight: 600,
+                        padding: "4px 8px",
+                        borderRadius: 6
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = "#F0EFFB"}
+                      onMouseLeave={e => e.currentTarget.style.background = "none"}
+                    >
+                      Mark read
+                    </button>
+                  )}
+                  <button
+                    onClick={() => onDeleteNotification && onDeleteNotification(notif.id)}
+                    title="Delete notification"
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: "#9CA3AF",
+                      cursor: "pointer",
+                      padding: 4,
+                      borderRadius: 6,
+                      display: "flex",
+                      alignItems: "center"
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.color = "#DC2626"; e.currentTarget.style.background = "#FEE2E2"; }}
+                    onMouseLeave={e => { e.currentTarget.style.color = "#9CA3AF"; e.currentTarget.style.background = "none"; }}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              </div>
+            );
+          })
+        )}
       </Card>
     </div>
   );

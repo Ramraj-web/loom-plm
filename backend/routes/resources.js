@@ -92,8 +92,10 @@ const SOFT_DELETE_RESOURCES = [
   "leaveRequests",
   "financials",
   "certifications",
+  "compliances",
   "debitNotes",
   "capas",
+  "notifications",
 ];
 
 router.get("/:resource", async (req, res, next) => {

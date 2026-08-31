@@ -2,14 +2,15 @@ import React, { useState, useEffect } from "react";
 import {
   LayoutDashboard, Package, CheckSquare, BarChart3, Settings as SettingsIcon,
   ChevronDown, Search, Bell, Moon, ClipboardList,
-  Calendar, TriangleAlert, ArrowDownRight,
+  Calendar, TriangleAlert, ArrowDownRight, Award,
   Users, ShieldCheck, ClipboardCheck, Lightbulb, UserCheck, TrendingUp, Landmark, Factory, RefreshCw
 } from "lucide-react";
 import { resourcesApi } from "./api.js";
 import {
   ORG_STRUCTURE, ROLE_OPTIONS, STAFF_LIST, seedAttendance, INITIAL_LEAVE_REQUESTS,
-  INITIAL_FINANCIALS, INITIAL_CERTIFICATIONS, INITIAL_DEBIT_NOTES, INITIAL_CAPAS,
-  INITIAL_ORDERS, VAP_SUPPLIERS, buildCostingRows, makeStages, initPreProd
+  INITIAL_FINANCIALS, INITIAL_CERTIFICATIONS, INITIAL_COMPLIANCES, INITIAL_DEBIT_NOTES, INITIAL_CAPAS,
+  INITIAL_ORDERS, INITIAL_NOTIFICATIONS, VAP_SUPPLIERS, buildCostingRows, makeStages, initPreProd,
+  NOTIFICATION_PRIORITY_STYLE, formatTimeAgo
 } from "./constants/loomData.js";
 import { statusPill } from "./components/common/CommonUI.jsx";
 import { OrderWorkspace } from "./components/order/OrderWorkspace.jsx";
@@ -51,9 +52,11 @@ export default function LoomPLM() {
 
   const [financials, setFinancials] = useState(INITIAL_FINANCIALS);
   const [certifications, setCertifications] = useState(INITIAL_CERTIFICATIONS);
+  const [compliances, setCompliances] = useState(INITIAL_COMPLIANCES);
   const [debitNotes, setDebitNotes] = useState(INITIAL_DEBIT_NOTES);
   const [capas, setCapas] = useState(INITIAL_CAPAS);
   const [customTasks, setCustomTasks] = useState([]);
+  const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
 
   const [factoryMenuOpen, setFactoryMenuOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState("2026-05-12");
@@ -121,9 +124,34 @@ export default function LoomPLM() {
       } catch (e) {}
 
       try {
-        const dbFinancials = await resourcesApi.list("financials");
-        if (!cancelled && Array.isArray(dbFinancials) && dbFinancials.length > 0) {
-          setFinancials(prev => ({ ...prev, ...dbFinancials[0] }));
+        const dbCerts = await resourcesApi.list("certifications", "?all=true");
+        if (!cancelled && Array.isArray(dbCerts) && dbCerts.length > 0) {
+          setCertifications(dbCerts);
+        }
+      } catch (e) {}
+
+      try {
+        const dbCompliances = await resourcesApi.list("compliances", "?all=true");
+        if (!cancelled && Array.isArray(dbCompliances) && dbCompliances.length > 0) {
+          setCompliances(dbCompliances);
+        }
+      } catch (e) {}
+
+      try {
+        const dbNotifs = await resourcesApi.list("notifications", "?all=true");
+        if (!cancelled && Array.isArray(dbNotifs) && dbNotifs.length > 0) {
+          setNotifications(prev => {
+            const map = new Map();
+            dbNotifs.forEach(n => {
+              const key = n.id || n.eventKey;
+              if (key) map.set(key, n);
+            });
+            prev.forEach(n => {
+              const key = n.id || n.eventKey;
+              if (key && !map.has(key)) map.set(key, n);
+            });
+            return Array.from(map.values()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+          });
         }
       } catch (e) {}
 
@@ -168,7 +196,45 @@ export default function LoomPLM() {
           }
           const certRes = await window.storage.get("certifications", true);
           if (!cancelled && certRes && certRes.value) {
-            try { setCertifications(JSON.parse(certRes.value)); } catch (e) {}
+            try {
+              const parsed = JSON.parse(certRes.value);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                setCertifications(prev => {
+                  const map = new Map(prev.map(item => [item.id || item.key, item]));
+                  parsed.forEach(item => map.set(item.id || item.key, { ...map.get(item.id || item.key), ...item }));
+                  return Array.from(map.values());
+                });
+              }
+            } catch (e) {}
+          }
+          const compRes = await window.storage.get("compliances", true);
+          if (!cancelled && compRes && compRes.value) {
+            try {
+              const parsed = JSON.parse(compRes.value);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                setCompliances(prev => {
+                  const map = new Map(prev.map(item => [item.id, item]));
+                  parsed.forEach(item => map.set(item.id, { ...map.get(item.id), ...item }));
+                  return Array.from(map.values());
+                });
+              }
+            } catch (e) {}
+          }
+          const notifRes = await window.storage.get("notifications", true);
+          if (!cancelled && notifRes && notifRes.value) {
+            try {
+              const parsed = JSON.parse(notifRes.value);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                setNotifications(prev => {
+                  const map = new Map(prev.map(item => [item.id || item.eventKey, item]));
+                  parsed.forEach(item => {
+                    const key = item.id || item.eventKey;
+                    if (key) map.set(key, { ...map.get(key), ...item });
+                  });
+                  return Array.from(map.values()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+                });
+              }
+            } catch (e) {}
           }
           const leaveRes = await window.storage.get("leaveRequests", true);
           if (!cancelled && leaveRes && leaveRes.value) {
@@ -188,6 +254,77 @@ export default function LoomPLM() {
 
     return () => { cancelled = true; };
   }, []);
+
+  // Central Notification Dispatcher with Deduplication
+  const pushNotification = (notif) => {
+    const id = notif.id || `notif-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const eventKey = notif.eventKey || `${notif.type}-${notif.relatedId || id}`;
+    const newNotif = {
+      id,
+      eventKey,
+      type: notif.type || "order",
+      title: notif.title || "Notification",
+      message: notif.message || "",
+      relatedModule: notif.relatedModule || "orders",
+      relatedId: notif.relatedId || null,
+      priority: notif.priority || "medium",
+      isRead: false,
+      createdAt: notif.createdAt || new Date().toISOString(),
+      isDeleted: false,
+      ...notif
+    };
+
+    setNotifications(prev => {
+      // Prevent duplicate notification by eventKey or id
+      if (prev.some(n => (n.eventKey === eventKey || n.id === id) && n.isDeleted !== true)) {
+        return prev;
+      }
+      const updated = [newNotif, ...prev];
+      if (window.storage) window.storage.set("notifications", JSON.stringify(updated), true);
+      return updated;
+    });
+
+    try {
+      resourcesApi.create("notifications", newNotif).catch(() => {});
+    } catch (e) {}
+  };
+
+  const markNotificationAsRead = (id) => {
+    setNotifications(prev => {
+      const updated = prev.map(n => n.id === id ? { ...n, isRead: true } : n);
+      if (window.storage) window.storage.set("notifications", JSON.stringify(updated), true);
+      return updated;
+    });
+    try {
+      resourcesApi.patch("notifications", id, { isRead: true }).catch(() => {});
+    } catch (e) {}
+  };
+
+  const markAllNotificationsAsRead = () => {
+    setNotifications(prev => {
+      const updated = prev.map(n => ({ ...n, isRead: true }));
+      if (window.storage) window.storage.set("notifications", JSON.stringify(updated), true);
+      return updated;
+    });
+    try {
+      notifications.forEach(n => {
+        if (!n.isRead) {
+          resourcesApi.patch("notifications", n.id, { isRead: true }).catch(() => {});
+        }
+      });
+    } catch (e) {}
+  };
+
+  const deleteNotification = (id) => {
+    setNotifications(prev => {
+      const updated = prev.filter(n => n.id !== id);
+      if (window.storage) window.storage.set("notifications", JSON.stringify(updated), true);
+      return updated;
+    });
+    try {
+      resourcesApi.remove("notifications", id).catch(() => {});
+    } catch (e) {}
+  };
 
   const addStaff = (person) => {
     let nextRoster;
@@ -340,11 +477,232 @@ export default function LoomPLM() {
     });
   };
 
+  // Certification CRUD Operations
+  const addCertification = (cert) => {
+    const newCert = {
+      id: cert.id || `cert-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      key: cert.id || `cert-${Date.now()}`,
+      status: "Draft",
+      issueDate: new Date().toISOString().split("T")[0],
+      isDeleted: false,
+      createdAt: new Date().toISOString(),
+      ...cert
+    };
+    setCertifications(prev => {
+      const updated = [newCert, ...prev];
+      if (window.storage) window.storage.set("certifications", JSON.stringify(updated), true);
+      return updated;
+    });
+    try { resourcesApi.create("certifications", newCert); } catch (e) {}
+
+    // Check expiry logic for notification
+    if (newCert.expiryDate) {
+      const exp = new Date(newCert.expiryDate);
+      const daysUntil = Math.ceil((exp.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+      if (daysUntil < 0) {
+        pushNotification({
+          eventKey: `cert-expired-${newCert.id}`,
+          type: "certification",
+          title: "Certification Expired",
+          message: `${newCert.name} certification has expired.`,
+          relatedModule: "compliance",
+          relatedId: newCert.id,
+          priority: "critical"
+        });
+      } else if (daysUntil <= 30) {
+        pushNotification({
+          eventKey: `cert-expiring-${newCert.id}`,
+          type: "certification",
+          title: "Certification Expiring Soon",
+          message: `${newCert.name} certification expires in ${daysUntil} days.`,
+          relatedModule: "compliance",
+          relatedId: newCert.id,
+          priority: "high"
+        });
+      }
+    }
+  };
+
+  const updateCertification = (id, updates) => {
+    setCertifications(prev => {
+      const updated = prev.map(c => ((c.id === id || c.key === id) ? { ...c, ...updates } : c));
+      if (window.storage) window.storage.set("certifications", JSON.stringify(updated), true);
+      return updated;
+    });
+    try { resourcesApi.patch("certifications", id, updates); } catch (e) {}
+
+    if (updates.status === "Approved") {
+      const target = certifications.find(c => c.id === id || c.key === id);
+      pushNotification({
+        eventKey: `cert-approved-${id}`,
+        type: "certification",
+        title: "Certification Approved",
+        message: `${target?.name || "Certification"} has been approved.`,
+        relatedModule: "compliance",
+        relatedId: id,
+        priority: "low"
+      });
+    }
+  };
+
+  const deleteCertification = (id) => {
+    const deletedAt = new Date().toISOString();
+    setCertifications(prev => {
+      const updated = prev.map(c => ((c.id === id || c.key === id) ? { ...c, isDeleted: true, deletedAt } : c));
+      if (window.storage) window.storage.set("certifications", JSON.stringify(updated), true);
+      return updated;
+    });
+    try { resourcesApi.remove("certifications", id); } catch (e) {}
+  };
+
+  const restoreCertification = (id) => {
+    setCertifications(prev => {
+      const updated = prev.map(c => ((c.id === id || c.key === id) ? { ...c, isDeleted: false, deletedAt: null } : c));
+      if (window.storage) window.storage.set("certifications", JSON.stringify(updated), true);
+      return updated;
+    });
+    try { resourcesApi.patch("certifications", id, { isDeleted: false, deletedAt: null }); } catch (e) {}
+  };
+
+  // Compliance CRUD Operations & Task Synchronization
+  const addCompliance = (comp) => {
+    const newComp = {
+      id: comp.id || `comp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      status: "Pending",
+      priority: "Medium",
+      dueDate: "20 May",
+      isDeleted: false,
+      createdAt: new Date().toISOString(),
+      ...comp
+    };
+    setCompliances(prev => {
+      const updated = [newComp, ...prev];
+      if (window.storage) window.storage.set("compliances", JSON.stringify(updated), true);
+      return updated;
+    });
+    try { resourcesApi.create("compliances", newComp); } catch (e) {}
+
+    // Synchronize to My Tasks if a responsible person is assigned
+    if (newComp.responsiblePerson && newComp.responsiblePerson !== "—") {
+      const linkedTask = {
+        id: `task-comp-${newComp.id}`,
+        title: `Compliance Review: ${newComp.name}`,
+        orderId: newComp.orderId || null,
+        dept: newComp.department || "Compliance & Certification",
+        assignee: newComp.responsiblePerson,
+        dueDate: newComp.dueDate || "20 May",
+        priority: (newComp.priority || "medium").toLowerCase(),
+        notes: `Linked compliance requirement for ${newComp.buyer || "All Buyers"}. ${newComp.description || ""}`,
+        status: newComp.status === "Passed" ? "done" : "in_progress",
+        complianceId: newComp.id,
+        createdAt: new Date().toISOString()
+      };
+      setCustomTasks(prev => {
+        if (prev.some(t => t.id === linkedTask.id || t.complianceId === newComp.id)) {
+          return prev.map(t => (t.id === linkedTask.id || t.complianceId === newComp.id) ? { ...t, ...linkedTask } : t);
+        }
+        return [linkedTask, ...prev];
+      });
+      try { resourcesApi.create("tasks", linkedTask); } catch (e) {}
+    }
+
+    // Fire notification for compliance
+    pushNotification({
+      eventKey: `comp-created-${newComp.id}`,
+      type: "compliance",
+      title: "Compliance Review Pending",
+      message: `${newComp.name} compliance review is pending${newComp.orderId ? ` for ${newComp.orderId}` : ""}.`,
+      relatedModule: "compliance",
+      relatedId: newComp.id,
+      priority: (newComp.priority || "medium").toLowerCase()
+    });
+  };
+
+  const updateCompliance = (id, updates) => {
+    setCompliances(prev => {
+      const updated = prev.map(c => {
+        if (c.id !== id) return c;
+        const next = { ...c, ...updates };
+        if (updates.status === "Passed" && !next.completedAt) {
+          next.completedAt = new Date().toISOString();
+        }
+        return next;
+      });
+      if (window.storage) window.storage.set("compliances", JSON.stringify(updated), true);
+      return updated;
+    });
+    try { resourcesApi.patch("compliances", id, updates); } catch (e) {}
+
+    // Update synced task in My Tasks if status or details changed
+    setCustomTasks(prev => prev.map(t => {
+      if (t.complianceId === id || t.id === `task-comp-${id}`) {
+        const nextStatus = (updates.status === "Passed" || updates.status === "Waived") ? "done" : "in_progress";
+        const taskUpdates = {
+          status: nextStatus,
+          ...(updates.dueDate ? { dueDate: updates.dueDate } : {}),
+          ...(updates.priority ? { priority: updates.priority.toLowerCase() } : {}),
+          ...(updates.responsiblePerson ? { assignee: updates.responsiblePerson } : {}),
+          ...(updates.department ? { dept: updates.department } : {})
+        };
+        try { resourcesApi.patch("tasks", t.id, taskUpdates); } catch (e) {}
+        return { ...t, ...taskUpdates };
+      }
+      return t;
+    }));
+
+    // Fire notifications on status transitions
+    const targetComp = compliances.find(c => c.id === id);
+    if (updates.status === "Failed") {
+      pushNotification({
+        eventKey: `comp-failed-${id}-${Date.now()}`,
+        type: "compliance",
+        title: "Compliance Failed",
+        message: `Buyer compliance requirement '${targetComp?.name || id}' has failed. ${updates.notes ? `Reason: ${updates.notes}` : ""}`,
+        relatedModule: "compliance",
+        relatedId: id,
+        priority: "critical"
+      });
+    } else if (updates.status === "Passed") {
+      pushNotification({
+        eventKey: `comp-passed-${id}`,
+        type: "compliance",
+        title: "Compliance Requirement Passed",
+        message: `Compliance check '${targetComp?.name || id}' marked passed.`,
+        relatedModule: "compliance",
+        relatedId: id,
+        priority: "low"
+      });
+    }
+  };
+
+  const deleteCompliance = (id) => {
+    const deletedAt = new Date().toISOString();
+    setCompliances(prev => {
+      const updated = prev.map(c => (c.id === id ? { ...c, isDeleted: true, deletedAt } : c));
+      if (window.storage) window.storage.set("compliances", JSON.stringify(updated), true);
+      return updated;
+    });
+    try { resourcesApi.remove("compliances", id); } catch (e) {}
+
+    // Remove or complete related task
+    setCustomTasks(prev => prev.filter(t => t.complianceId !== id && t.id !== `task-comp-${id}`));
+    try { resourcesApi.remove("tasks", `task-comp-${id}`); } catch (e) {}
+  };
+
+  const restoreCompliance = (id) => {
+    setCompliances(prev => {
+      const updated = prev.map(c => (c.id === id ? { ...c, isDeleted: false, deletedAt: null } : c));
+      if (window.storage) window.storage.set("compliances", JSON.stringify(updated), true);
+      return updated;
+    });
+    try { resourcesApi.patch("compliances", id, { isDeleted: false, deletedAt: null }); } catch (e) {}
+  };
+
   const cycleCert = (key) => {
     setCertifications(prev => {
       const updated = prev.map(c => {
-        if (c.key !== key) return c;
-        const next = c.status === "not_applied" ? "applied" : c.status === "applied" ? "approved" : "not_applied";
+        if (c.key !== key && c.id !== key) return c;
+        const next = c.status === "not_applied" || c.status === "Draft" ? "Applied" : c.status === "applied" || c.status === "Applied" ? "Approved" : "Draft";
         return { ...c, status: next };
       });
       if (window.storage) window.storage.set("certifications", JSON.stringify(updated), true);
@@ -381,6 +739,17 @@ export default function LoomPLM() {
     };
     setCustomTasks(prev => [newTask, ...prev]);
     try { resourcesApi.create("tasks", newTask); } catch (e) {}
+
+    // Fire notification
+    pushNotification({
+      eventKey: `task-created-${newTask.id}`,
+      type: "task",
+      title: "New Task Assigned",
+      message: `'${newTask.title}' has been assigned to ${newTask.assignee || "you"}.`,
+      relatedModule: "tasks",
+      relatedId: newTask.id,
+      priority: newTask.priority || "medium"
+    });
   };
 
   const updateTask = (id, updates) => {
@@ -388,6 +757,24 @@ export default function LoomPLM() {
       if (t.id !== id) return t;
       const updated = { ...t, ...updates };
       try { resourcesApi.patch("tasks", id, updates); } catch (e) {}
+
+      // If this task was linked to a compliance record, update compliance status
+      if (t.complianceId && updates.status) {
+        const compStatus = updates.status === "done" ? "Passed" : "In Progress";
+        updateCompliance(t.complianceId, { status: compStatus });
+      }
+
+      if (updates.status === "done") {
+        pushNotification({
+          eventKey: `task-completed-${id}`,
+          type: "task",
+          title: "Task Completed",
+          message: `'${t.title}' has been completed.`,
+          relatedModule: "tasks",
+          relatedId: id,
+          priority: "low"
+        });
+      }
       return updated;
     }));
   };
@@ -425,6 +812,17 @@ export default function LoomPLM() {
         console.warn("Error creating order:", err.message);
       });
     } catch (e) {}
+
+    // Trigger Notification for New Order
+    pushNotification({
+      eventKey: `order-created-${fullOrder.id}`,
+      type: "order",
+      title: "New Order Added",
+      message: `Order ${fullOrder.id} (${fullOrder.style}) has been created for ${fullOrder.buyer}.`,
+      relatedModule: "orders",
+      relatedId: fullOrder.id,
+      priority: fullOrder.risk === "high" ? "high" : "medium"
+    });
   };
 
   const completeOrder = (id) => {
@@ -435,6 +833,16 @@ export default function LoomPLM() {
         console.warn("Error completing order:", err.message);
       });
     } catch (e) {}
+
+    pushNotification({
+      eventKey: `order-completed-${id}`,
+      type: "order",
+      title: "Order Completed",
+      message: `Order ${id} has been completed.`,
+      relatedModule: "orders",
+      relatedId: id,
+      priority: "low"
+    });
   };
 
   const uncompleteOrder = (id) => {
@@ -454,6 +862,16 @@ export default function LoomPLM() {
         console.warn("Error deleting order:", err.message);
       });
     } catch (e) {}
+
+    pushNotification({
+      eventKey: `order-deleted-${id}`,
+      type: "order",
+      title: "Order Deleted",
+      message: `Order ${id} was moved to Deleted History.`,
+      relatedModule: "orders",
+      relatedId: id,
+      priority: "medium"
+    });
   };
 
   const restoreOrder = (id) => {
@@ -475,6 +893,70 @@ export default function LoomPLM() {
       
       const isCompleted = allDone;
       const completedAt = isCompleted ? (o.completedAt || new Date().toISOString()) : null;
+
+      // Detect stage completions / delays
+      stages.forEach((s, idx) => {
+        const prevStage = o.stages?.[idx];
+        if (s.status === "done" && prevStage?.status !== "done") {
+          pushNotification({
+            eventKey: `tna-stage-done-${id}-${s.name}`,
+            type: "tna",
+            title: "T&A Stage Completed",
+            message: `${s.name} stage completed for ${id}.`,
+            relatedModule: "tna",
+            relatedId: id,
+            priority: "low"
+          });
+        }
+        if (s.reason && (!prevStage?.reason || prevStage.reason !== s.reason)) {
+          pushNotification({
+            eventKey: `tna-stage-delay-${id}-${s.name}-${s.reason}`,
+            type: "tna",
+            title: "T&A Stage Flagged",
+            message: `${s.name} delayed on order ${id}: ${s.reason}`,
+            relatedModule: "tna",
+            relatedId: id,
+            priority: o.risk === "high" ? "critical" : "high"
+          });
+        }
+      });
+
+      // Detect Order Status change
+      if (status !== o.status) {
+        if (status === "Delayed") {
+          pushNotification({
+            eventKey: `order-delayed-${id}`,
+            type: "order",
+            title: "Order Delayed",
+            message: `Order ${id} is delayed.`,
+            relatedModule: "orders",
+            relatedId: id,
+            priority: "critical"
+          });
+        } else {
+          pushNotification({
+            eventKey: `order-status-${id}-${status}`,
+            type: "order",
+            title: "Order Status Updated",
+            message: `${id} status changed to ${status}.`,
+            relatedModule: "orders",
+            relatedId: id,
+            priority: status === "At Risk" ? "high" : "medium"
+          });
+        }
+      }
+
+      if (isCompleted && !o.completed) {
+        pushNotification({
+          eventKey: `order-completed-${id}`,
+          type: "order",
+          title: "Order Completed",
+          message: `Order ${id} has been completed.`,
+          relatedModule: "orders",
+          relatedId: id,
+          priority: "low"
+        });
+      }
 
       const updated = {
         ...o,
@@ -573,6 +1055,16 @@ export default function LoomPLM() {
       try { resourcesApi.update("orders", o.id, updated); } catch (e) {}
       return updated;
     }));
+
+    pushNotification({
+      eventKey: `approval-submitted-${id}-${docKey}`,
+      type: "approval",
+      title: "Approval Required",
+      message: `${docKey.toUpperCase()} submitted for order ${id}. Needs review.`,
+      relatedModule: "approvals",
+      relatedId: id,
+      priority: "high"
+    });
   };
 
   const approvePreProdDoc = (id, docKey, approverName) => {
@@ -593,6 +1085,16 @@ export default function LoomPLM() {
       try { resourcesApi.update("orders", o.id, updated); } catch (e) {}
       return updated;
     }));
+
+    pushNotification({
+      eventKey: `approval-approved-${id}-${docKey}`,
+      type: "approval",
+      title: "Approval Completed",
+      message: `${docKey.toUpperCase()} approved by ${approverName || "Approver"} for order ${id}.`,
+      relatedModule: "approvals",
+      relatedId: id,
+      priority: "low"
+    });
   };
 
   const navigate = (key) => { setView(key); };
@@ -668,7 +1170,24 @@ export default function LoomPLM() {
 
   let content;
   if (view === "order" && selectedOrder) {
-    content = <OrderWorkspace order={selectedOrder} onBack={() => setView(previousView)} onUpdateStages={updateStages} role={role} onSetTemplate={setOrderTemplate} onSetCostingTemplate={setOrderCostingTemplate} onUpdateCostingRow={updateCostingRow} onAddCostingRow={addCostingRow} onUpdateShippedQty={updateShippedQty} onPreProdField={updatePreProdField} onPreProdSubmit={submitPreProdDoc} onPreProdApprove={approvePreProdDoc} />;
+    content = (
+      <OrderWorkspace
+        order={selectedOrder}
+        onBack={() => setView(previousView)}
+        onUpdateStages={updateStages}
+        role={role}
+        onSetTemplate={setOrderTemplate}
+        onSetCostingTemplate={setOrderCostingTemplate}
+        onUpdateCostingRow={updateCostingRow}
+        onAddCostingRow={addCostingRow}
+        onUpdateShippedQty={updateShippedQty}
+        onPreProdField={updatePreProdField}
+        onPreProdSubmit={submitPreProdDoc}
+        onPreProdApprove={approvePreProdDoc}
+        certifications={certifications}
+        compliances={compliances}
+      />
+    );
   } else if (view === "departmentDetail" && selectedDept) {
     content = <DepartmentDetail deptName={selectedDept} orders={orders} onBack={() => setView(previousView)} onOpenOrder={openOrder} orgStructure={orgStructure} />;
   } else if (view === "myDepartment") {
@@ -708,7 +1227,25 @@ export default function LoomPLM() {
   } else if (view === "quality" && (canSeeAll || role.dept === "Quality")) {
     content = <QualityPage orders={orders} onOpenOrder={openOrder} />;
   } else if (view === "compliance" && (canSeeAll || role.dept === "Compliance & Certification")) {
-    content = <CompliancePage certifications={certifications} onCycle={cycleCert} />;
+    content = (
+      <CompliancePage
+        certifications={certifications}
+        compliances={compliances}
+        orders={orders}
+        roster={roster}
+        role={role}
+        onAddCertification={addCertification}
+        onUpdateCertification={updateCertification}
+        onDeleteCertification={deleteCertification}
+        onRestoreCertification={restoreCertification}
+        onAddCompliance={addCompliance}
+        onUpdateCompliance={updateCompliance}
+        onDeleteCompliance={deleteCompliance}
+        onRestoreCompliance={restoreCompliance}
+        onCycleCert={cycleCert}
+        onOpenOrder={openOrder}
+      />
+    );
   } else if (view === "reports" && canSeeAll) {
     content = <ReportsPage orders={orders} />;
   } else if (view === "insights" && canSeeAll) {
@@ -716,7 +1253,16 @@ export default function LoomPLM() {
   } else if (view === "supplierPerformance" && canSeeAll) {
     content = <SupplierPerformancePage orders={orders} onOpenOrder={openOrder} />;
   } else if (view === "notifications" && canSeeAll) {
-    content = <NotificationsPage orders={orders} />;
+    content = (
+      <NotificationsPage
+        notifications={notifications}
+        onMarkAsRead={markNotificationAsRead}
+        onMarkAllAsRead={markAllNotificationsAsRead}
+        onDeleteNotification={deleteNotification}
+        onOpenOrder={openOrder}
+        onNavigate={navigate}
+      />
+    );
   } else if (view === "debitNotes" && canSeeAll) {
     content = <DebitNotesPage orders={orders} notes={debitNotes} onAdd={addDebitNote} />;
   } else if (view === "capas" && canSeeAll) {
@@ -734,6 +1280,40 @@ export default function LoomPLM() {
   } else {
     content = <MyDepartmentDashboard orders={orders} role={role} personName={personName} onOpenOrder={openOrder} onNavigate={navigate} />;
   }
+
+  const unreadNotifCount = notifications.filter(n => !n.isRead && n.isDeleted !== true).length;
+  const recentNotifications = notifications.filter(n => n.isDeleted !== true).slice(0, 8);
+
+  const handleNotificationClickFromDropdown = (notif) => {
+    markNotificationAsRead(notif.id);
+    setNotifOpen(false);
+    if (notif.relatedModule === "orders" || notif.type === "order" || notif.type === "tna") {
+      if (notif.relatedId) {
+        openOrder(notif.relatedId);
+      } else {
+        navigate("orders");
+      }
+    } else if (notif.relatedModule === "tasks" || notif.type === "task") {
+      navigate("tasks");
+    } else if (notif.relatedModule === "approvals" || notif.type === "approval") {
+      navigate("approvals");
+    } else if (notif.relatedModule === "compliance" || notif.type === "compliance" || notif.type === "certification") {
+      navigate("compliance");
+    }
+  };
+
+  const getDropdownIcon = (notif) => {
+    const priority = notif.priority || "medium";
+    const prioColor = NOTIFICATION_PRIORITY_STYLE[priority]?.iconColor || "#3B82F6";
+    if (priority === "critical") return <TriangleAlert size={14} color="#DC2626" />;
+    if (notif.type === "order") return <Package size={14} color={prioColor} />;
+    if (notif.type === "tna") return <Calendar size={14} color={prioColor} />;
+    if (notif.type === "task") return <CheckSquare size={14} color={prioColor} />;
+    if (notif.type === "approval") return <ClipboardCheck size={14} color={prioColor} />;
+    if (notif.type === "certification") return <Award size={14} color={prioColor} />;
+    if (notif.type === "compliance") return <ShieldCheck size={14} color={prioColor} />;
+    return <Bell size={14} color={prioColor} />;
+  };
 
   return (
     <div style={{ display: "flex", height: "100vh", maxWidth: 1440, margin: "0 auto", background: "#F5F6F8", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Rubik', sans-serif", overflow: "hidden", boxShadow: "0 0 0 1px #E7E8ED" }}>
@@ -838,40 +1418,164 @@ export default function LoomPLM() {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            {/* Notification Bell 🔔 */}
             <div style={{ position: "relative" }}>
-              <div style={{ position: "relative", cursor: "pointer" }} onClick={() => setNotifOpen(!notifOpen)}>
-                <Bell size={17} color={headerDark ? "#D6D9E8" : "#565A66"} />
-                {bellAlerts.length > 0 && (
-                  <span style={{ position: "absolute", top: -6, right: -6, background: "#D64545", color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 999, width: 14, height: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    {bellAlerts.length}
+              <div
+                style={{ position: "relative", cursor: "pointer", display: "flex", alignItems: "center" }}
+                onClick={() => setNotifOpen(!notifOpen)}
+                title="Notifications"
+              >
+                <Bell size={18} color={headerDark ? "#D6D9E8" : "#565A66"} />
+                {unreadNotifCount > 0 && (
+                  <span
+                    style={{
+                      position: "absolute",
+                      top: -6,
+                      right: -8,
+                      background: "#DC2626",
+                      color: "#FFFFFF",
+                      fontSize: 10,
+                      fontWeight: 700,
+                      borderRadius: 999,
+                      minWidth: 16,
+                      height: 16,
+                      padding: "0 4px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      boxShadow: "0 1px 3px rgba(0,0,0,0.2)"
+                    }}
+                  >
+                    {unreadNotifCount}
                   </span>
                 )}
               </div>
+
+              {/* Notification Dropdown Panel */}
               {notifOpen && (
-                <div style={{ position: "absolute", top: "140%", right: 0, background: "#fff", border: "1px solid #ECEDF1", borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.1)", zIndex: 30, width: 300, maxHeight: 320, overflowY: "auto" }}>
-                  <div style={{ padding: "10px 14px", fontSize: 12.5, fontWeight: 700, color: "#1B2130", borderBottom: "1px solid #F0F0F2" }}>Alerts</div>
-                  {bellAlerts.length === 0 ? (
-                    <div style={{ padding: "14px", fontSize: 12.5, color: "#B0B2BA" }}>Nothing to flag right now.</div>
-                  ) : bellAlerts.slice(0, 8).map((a, i) => (
-                    <div
-                      key={i}
-                      onClick={() => { openOrder(a.orderId); setNotifOpen(false); }}
-                      style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "10px 14px", cursor: "pointer", borderBottom: "1px solid #F5F5F7" }}
-                      onMouseEnter={e => e.currentTarget.style.background = "#FAFAFB"}
-                      onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-                    >
-                      <TriangleAlert size={13} color={a.sev === "high" ? "#D64545" : "#E2A83B"} style={{ marginTop: 2, flexShrink: 0 }} />
-                      <div style={{ fontSize: 12, color: "#1B2130" }}>{a.text}</div>
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "140%",
+                    right: 0,
+                    background: "#FFFFFF",
+                    border: "1px solid #ECEDF1",
+                    borderRadius: 12,
+                    boxShadow: "0 12px 30px rgba(0,0,0,0.12)",
+                    zIndex: 50,
+                    width: 360,
+                    maxHeight: 460,
+                    display: "flex",
+                    flexDirection: "column",
+                    overflow: "hidden"
+                  }}
+                >
+                  {/* Panel Header */}
+                  <div
+                    style={{
+                      padding: "12px 16px",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      borderBottom: "1px solid #F0F0F2",
+                      background: "#FAF8FE"
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 13.5, fontWeight: 700, color: "#111827" }}>Notifications</span>
+                      {unreadNotifCount > 0 && (
+                        <span style={{ fontSize: 11, fontWeight: 700, background: "#FEE2E2", color: "#991B1B", padding: "1px 6px", borderRadius: 999 }}>
+                          {unreadNotifCount} unread
+                        </span>
+                      )}
                     </div>
-                  ))}
-                  {canSeeAll && (
-                    <div onClick={() => { navigate("notifications"); setNotifOpen(false); }} style={{ padding: "10px 14px", fontSize: 12, fontWeight: 600, color: "#378ADD", cursor: "pointer" }}>
-                      View all in Notifications →
-                    </div>
-                  )}
+                    {unreadNotifCount > 0 && (
+                      <button
+                        onClick={markAllNotificationsAsRead}
+                        style={{ background: "none", border: "none", color: "#534AB7", fontSize: 11.5, fontWeight: 600, cursor: "pointer", padding: 0 }}
+                      >
+                        Mark all as read
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Panel Content */}
+                  <div style={{ overflowY: "auto", flex: 1 }}>
+                    {recentNotifications.length === 0 ? (
+                      <div style={{ padding: "32px 16px", textAlign: "center", color: "#8A8D98" }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>No new notifications</div>
+                        <div style={{ fontSize: 12, color: "#9CA3AF", marginTop: 2 }}>You're all caught up.</div>
+                      </div>
+                    ) : (
+                      recentNotifications.map(notif => {
+                        const isUnread = !notif.isRead;
+                        const prioStyle = NOTIFICATION_PRIORITY_STYLE[notif.priority] || NOTIFICATION_PRIORITY_STYLE.medium;
+                        return (
+                          <div
+                            key={notif.id}
+                            onClick={() => handleNotificationClickFromDropdown(notif)}
+                            style={{
+                              display: "flex",
+                              gap: 10,
+                              alignItems: "flex-start",
+                              padding: "11px 14px",
+                              cursor: "pointer",
+                              borderBottom: "1px solid #F5F5F7",
+                              background: isUnread ? "#FAF8FE" : "#FFFFFF",
+                              transition: "background 0.12s ease",
+                              position: "relative"
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.background = isUnread ? "#F3EFFF" : "#FAFAFB"}
+                            onMouseLeave={e => e.currentTarget.style.background = isUnread ? "#FAF8FE" : "#FFFFFF"}
+                          >
+                            {isUnread && (
+                              <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3, background: "#534AB7" }} />
+                            )}
+                            <div style={{ width: 28, height: 28, borderRadius: 6, background: isUnread ? "#F0EFFB" : "#F3F4F6", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 2 }}>
+                              {getDropdownIcon(notif)}
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}>
+                                <span style={{ fontSize: 12.5, fontWeight: isUnread ? 700 : 600, color: "#111827" }}>
+                                  {notif.title}
+                                </span>
+                                <span style={{ fontSize: 9.5, fontWeight: 700, padding: "1px 5px", borderRadius: 999, background: prioStyle.bg, color: prioStyle.fg }}>
+                                  {prioStyle.label}
+                                </span>
+                              </div>
+                              <div style={{ fontSize: 12, color: isUnread ? "#374151" : "#6B7280", marginTop: 2, lineHeight: 1.35, whiteSpace: "normal" }}>
+                                {notif.message}
+                              </div>
+                              <div style={{ fontSize: 10.5, color: "#9CA3AF", marginTop: 4 }}>
+                                {formatTimeAgo(notif.createdAt)}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* Panel Footer */}
+                  <div
+                    onClick={() => { navigate("notifications"); setNotifOpen(false); }}
+                    style={{
+                      padding: "10px 14px",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: "#534AB7",
+                      cursor: "pointer",
+                      textAlign: "center",
+                      borderTop: "1px solid #F0F0F2",
+                      background: "#FAF8FE"
+                    }}
+                  >
+                    View all in Notifications →
+                  </div>
                 </div>
               )}
             </div>
+
             <Moon size={16} color={headerDark ? "#D6D9E8" : "#565A66"} style={{ cursor: "pointer" }} onClick={() => setHeaderDark(!headerDark)} />
             <div style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }} onClick={() => navigate("settings")}>
               <div style={{ width: 30, height: 30, borderRadius: 999, background: "#7F77DD", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 11, fontWeight: 700 }}>

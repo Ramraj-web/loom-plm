@@ -249,6 +249,7 @@ export const DOC_TABS_CONFIG = {
   "RM Delivery": ["GRN / Delivery Challan", "Fabric Inspection Report"],
   "Sampling": ["Fit Sample Proof", "PP Sample Proof", "Size Set Proof", "TOP Sample Proof", "Testing Sample Proof"],
   "Pre-Production": [],
+  "Compliance & Certs": [],
   "Production": ["Cutting Report", "Sewing Output Report"],
   "Inspection": ["Inline Inspection Report", "Final Inspection Report"],
   "Final OCR": ["OCR Report", "Dispatch Proof"],
@@ -256,7 +257,7 @@ export const DOC_TABS_CONFIG = {
 export const DOC_TAB_NAMES = Object.keys(DOC_TABS_CONFIG);
 export const DOC_TAB_ICONS = {
   "Files": FileText, "Order Sheet": ClipboardList, "BOMs & POs": Package, "Costing": TrendingUp,
-  "RM Delivery": Truck, "Sampling": Layers, "Pre-Production": ClipboardCheck, "Production": Factory, "Inspection": ShieldCheck, "Final OCR": CheckCircle2,
+  "RM Delivery": Truck, "Sampling": Layers, "Pre-Production": ClipboardCheck, "Compliance & Certs": ShieldCheck, "Production": Factory, "Inspection": ShieldCheck, "Final OCR": CheckCircle2,
 };
 export const CUSTOMIZABLE_TABS = new Set(["BOMs & POs", "RM Delivery", "Sampling", "Files"]);
 export const STAGE_CHAT_TABS = ["RM Delivery", "Sampling", "Inspection", "Final OCR"];
@@ -268,6 +269,7 @@ export const TAB_ALLOWED_DEPTS = {
   "RM Delivery": ["Purchase – Fabric", "Purchase – Trims", "Warehouse", "Store"],
   "Sampling": ["Sample"],
   "Pre-Production": ["Merchandising", "Production Planning"],
+  "Compliance & Certs": ["Compliance & Certification", "Merchandising", "Quality"],
   "Production": ["Cutting", "Production", "VAP"],
   "Inspection": ["Quality"],
   "Final OCR": ["Logistics & Documentation", "Production"],
@@ -376,15 +378,239 @@ export const ATTENDANCE_STATUS_STYLE = {
 };
 
 export const CERT_STATUS_STYLE = {
+  Draft: { bg: "#F0F0F2", fg: "#565A66", label: "Draft" },
+  Applied: { bg: "#FAEEDA", fg: "#633806", label: "Applied" },
+  "Under Review": { bg: "#EAF2FC", fg: "#1D4ED8", label: "Under Review" },
+  Approved: { bg: "#E1F5EE", fg: "#085041", label: "Approved" },
+  Rejected: { bg: "#FCEBEB", fg: "#791F1F", label: "Rejected" },
+  Expired: { bg: "#FEE2E2", fg: "#991B1B", label: "Expired" },
+  // Backward compatibility keys
   not_applied: { bg: "#F0F0F2", fg: "#565A66", label: "Not applied" },
-  applied: { bg: "#FAEEDA", fg: "#633806", label: "Applied — pending" },
+  applied: { bg: "#FAEEDA", fg: "#633806", label: "Applied" },
   approved: { bg: "#E1F5EE", fg: "#085041", label: "Approved" },
 };
 
+export const COMPLIANCE_STATUS_STYLE = {
+  Pending: { bg: "#F0F0F2", fg: "#565A66", label: "Pending" },
+  "In Progress": { bg: "#FAEEDA", fg: "#633806", label: "In Progress" },
+  Passed: { bg: "#E1F5EE", fg: "#085041", label: "Passed" },
+  Failed: { bg: "#FCEBEB", fg: "#791F1F", label: "Failed" },
+  Waived: { bg: "#F3E8FF", fg: "#6B21A8", label: "Waived" },
+};
+
+export const COMPLIANCE_PRIORITY_STYLE = {
+  Low: { bg: "#F0FDF4", fg: "#166534" },
+  Medium: { bg: "#FFFBEB", fg: "#92400E" },
+  High: { bg: "#FEF2F2", fg: "#991B1B" },
+  Critical: { bg: "#7F1D1D", fg: "#FFFFFF" },
+};
+
+export const CERT_NAME_OPTIONS = [
+  "GOTS",
+  "OCS",
+  "OEKO-TEX",
+  "BCI",
+  "ISO",
+  "Transaction Certificate (TC)",
+  "GRS (Global Recycled Standard)",
+  "RCS (Recycled Claim Standard)",
+  "FSC",
+  "SEDEX / SMETA",
+  "WRAP",
+  "HIGG FEM / FSLM",
+];
+
+export const BUYER_LIST = [
+  "All Buyers",
+  "Zara",
+  "H&M",
+  "Uniqlo",
+  "M&S",
+  "Next",
+];
+
+export const COMPLIANCE_CATEGORIES = [
+  "Buyer Requirement",
+  "Factory Compliance",
+  "Social Compliance",
+  "Environmental",
+  "Quality",
+  "Documentation",
+  "Shipment",
+  "Certification",
+];
+
 export const INITIAL_CERTIFICATIONS = [
-  { key: "tc", name: "Transaction Certificate (TC)", note: "Per-shipment certificate under the GOTS/OCS chain of custody", status: "applied", file: null },
-  { key: "gots", name: "GOTS", note: "Global Organic Textile Standard — annual facility certification", status: "approved", file: null },
-  { key: "ocs", name: "OCS", note: "Organic Content Standard — annual facility certification", status: "not_applied", file: null },
+  {
+    id: "tc",
+    key: "tc",
+    name: "Transaction Certificate (TC)",
+    certNo: "TC-2026-8812",
+    certType: "Organic Textile / Transaction",
+    issuingOrg: "Control Union",
+    buyer: "Zara",
+    orderId: "GKT-1054",
+    issueDate: "2026-01-10",
+    expiryDate: "2026-12-31",
+    status: "Approved",
+    file: "TC_GKT1054_ControlUnion.pdf",
+    note: "Per-shipment chain of custody certificate for organic cotton hoodie batch.",
+    notes: "Per-shipment chain of custody certificate for organic cotton hoodie batch.",
+    isDeleted: false
+  },
+  {
+    id: "gots",
+    key: "gots",
+    name: "GOTS",
+    certNo: "GOTS-2026-001",
+    certType: "Organic Textile",
+    issuingOrg: "OneCert International",
+    buyer: "All Buyers",
+    orderId: "GKT-1054",
+    issueDate: "2026-01-01",
+    expiryDate: "2026-12-31",
+    status: "Approved",
+    file: "GOTS_Scope_Certificate_2026.pdf",
+    note: "Global Organic Textile Standard — annual facility certification",
+    notes: "Annual facility scope certificate for organic spinning and garmenting.",
+    isDeleted: false
+  },
+  {
+    id: "ocs",
+    key: "ocs",
+    name: "OCS",
+    certNo: "OCS-2025-449",
+    certType: "Organic Content Standard",
+    issuingOrg: "IDFL Laboratory & Institute",
+    buyer: "H&M",
+    orderId: "ST-7788",
+    issueDate: "2025-08-15",
+    expiryDate: "2026-09-15",
+    status: "Under Review",
+    file: null,
+    note: "Organic Content Standard — annual facility certification",
+    notes: "Organic content certification renewal in progress.",
+    isDeleted: false
+  },
+  {
+    id: "oeko-tex-100",
+    key: "oeko-tex-100",
+    name: "OEKO-TEX",
+    certNo: "OEKO-2026-7890",
+    certType: "Chemical & Safety",
+    issuingOrg: "Hohenstein Institute",
+    buyer: "Zara",
+    orderId: "PL-3321",
+    issueDate: "2025-06-01",
+    expiryDate: "2026-06-01",
+    status: "Expired",
+    file: "OEKO_TEX_Standard_100_Cert.pdf",
+    note: "OEKO-TEX Standard 100 Class I testing for direct skin contact",
+    notes: "Class I testing for direct skin contact garments.",
+    isDeleted: false
+  },
+  {
+    id: "bci-cert",
+    key: "bci-cert",
+    name: "BCI",
+    certNo: "BCI-IND-2026-90",
+    certType: "Better Cotton Initiative",
+    issuingOrg: "Better Cotton Council",
+    buyer: "M&S",
+    orderId: "TR-8899",
+    issueDate: "2026-02-15",
+    expiryDate: "2026-09-20",
+    status: "Approved",
+    file: "BCI_Trader_Certificate.pdf",
+    note: "Better Cotton Initiative mass balance credits allocated",
+    notes: "Mass balance chain of custody credits allocated.",
+    isDeleted: false
+  }
+];
+
+export const INITIAL_COMPLIANCES = [
+  {
+    id: "comp-1",
+    name: "GOTS Scope & TC Verification",
+    category: "Certification",
+    buyer: "Zara",
+    orderId: "GKT-1054",
+    department: "Compliance & Certification",
+    responsiblePerson: "Suresh",
+    dueDate: "2026-05-18",
+    linkedCert: "GOTS",
+    description: "Verify transaction certificate and mill TC for 100% organic cotton yarn lot.",
+    status: "Passed",
+    priority: "High",
+    completedAt: "2026-05-10T14:30:00.000Z",
+    notes: "Scope certificate matches lot numbers.",
+    isDeleted: false
+  },
+  {
+    id: "comp-2",
+    name: "Buyer Chemical Restriction (RSL/ZDHC)",
+    category: "Environmental",
+    buyer: "Zara",
+    orderId: "GKT-1054",
+    department: "Quality",
+    responsiblePerson: "Sezhiyan",
+    dueDate: "2026-05-19",
+    linkedCert: "OEKO-TEX",
+    description: "ZDHC MRSL level 3 compliance sign-off for dyeing chemicals and auxiliary recipe.",
+    status: "In Progress",
+    priority: "Critical",
+    notes: "Lab dip test report received, pending final bulk test.",
+    isDeleted: false
+  },
+  {
+    id: "comp-3",
+    name: "Social Compliance Audit (BSCI / SMETA)",
+    category: "Social Compliance",
+    buyer: "H&M",
+    orderId: "ST-7788",
+    department: "Compliance & Certification",
+    responsiblePerson: "Arasinth Raja",
+    dueDate: "2026-05-20",
+    linkedCert: "ISO",
+    description: "Annual SMETA 4-pillar audit renewal for sewing facility units.",
+    status: "Pending",
+    priority: "High",
+    notes: "Auditor visit scheduled for 15 May.",
+    isDeleted: false
+  },
+  {
+    id: "comp-4",
+    name: "Metal Detection & Needle Policy Audit",
+    category: "Factory Compliance",
+    buyer: "Uniqlo",
+    orderId: "JKT-2231",
+    department: "Quality",
+    responsiblePerson: "Kavitha",
+    dueDate: "2026-05-22",
+    linkedCert: "",
+    description: "9-point 100% calibration log verification for 9-head metal detector line.",
+    status: "Pending",
+    priority: "Medium",
+    notes: "Calibration logs updated daily.",
+    isDeleted: false
+  },
+  {
+    id: "comp-5",
+    name: "M&S Fabric Quality & Azo Free Check",
+    category: "Quality",
+    buyer: "M&S",
+    orderId: "TR-8899",
+    department: "Purchase – Fabric",
+    responsiblePerson: "Selva Kumar",
+    dueDate: "2026-05-24",
+    linkedCert: "BCI",
+    description: "Azo-dye test and formaldehyde level testing certification.",
+    status: "Passed",
+    priority: "High",
+    completedAt: "2026-05-08T11:00:00.000Z",
+    notes: "Zero AZO detected in lab report #TR-8899-AZO.",
+    isDeleted: false
+  }
 ];
 
 export const INITIAL_FINANCIALS = {
@@ -425,3 +651,105 @@ export const INITIAL_ORDERS = [
   { id: "DR-5566", buyer: "Next", country: "United Kingdom", season: "SS26", style: "Dress", qty: 5300, ship: "23 May", risk: "medium", status: "Delayed", activeUpto: 8, delayedAt: 8 },
   { id: "PL-3321", buyer: "Zara", country: "Spain", season: "SS26", style: "Polo", qty: 9100, ship: "28 May", risk: "low", status: "On Track", activeUpto: 15, delayedAt: null },
 ];
+
+export const NOTIFICATION_PRIORITY_STYLE = {
+  critical: { bg: "#FEE2E2", fg: "#991B1B", border: "#F87171", label: "Critical", iconColor: "#DC2626" },
+  high: { bg: "#FEF3C7", fg: "#92400E", border: "#FCD34D", label: "High", iconColor: "#D97706" },
+  medium: { bg: "#EFF6FF", fg: "#1E40AF", border: "#93C5FD", label: "Medium", iconColor: "#2563EB" },
+  low: { bg: "#F3F4F6", fg: "#374151", border: "#E5E7EB", label: "Low", iconColor: "#6B7280" },
+};
+
+export const NOTIFICATION_TYPE_CONFIG = {
+  order: { label: "Orders", defaultIcon: "Package", color: "#3B82F6", module: "orders" },
+  tna: { label: "T&A", defaultIcon: "Calendar", color: "#8B5CF6", module: "orders" },
+  task: { label: "My Tasks", defaultIcon: "CheckSquare", color: "#10B981", module: "tasks" },
+  approval: { label: "Approvals", defaultIcon: "ClipboardCheck", color: "#F59E0B", module: "approvals" },
+  compliance: { label: "Compliance", defaultIcon: "ShieldCheck", color: "#059669", module: "compliance" },
+  certification: { label: "Certification", defaultIcon: "Award", color: "#0D9488", module: "compliance" },
+};
+
+export const INITIAL_NOTIFICATIONS = [
+  {
+    id: "notif-seed-1",
+    eventKey: "order-delayed-ST-7788",
+    type: "order",
+    title: "Order Delayed",
+    message: "Order ST-7788 is delayed.",
+    relatedModule: "orders",
+    relatedId: "ST-7788",
+    priority: "critical",
+    isRead: false,
+    createdAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+    isDeleted: false
+  },
+  {
+    id: "notif-seed-2",
+    eventKey: "cert-expiring-gots",
+    type: "certification",
+    title: "Certification Expiring Soon",
+    message: "GOTS certification expires in 15 days.",
+    relatedModule: "compliance",
+    relatedId: "gots",
+    priority: "high",
+    isRead: false,
+    createdAt: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
+    isDeleted: false
+  },
+  {
+    id: "notif-seed-3",
+    eventKey: "task-assigned-pp-approval",
+    type: "task",
+    title: "New Task Assigned",
+    message: "A new task 'PP Approval' has been assigned to you.",
+    relatedModule: "tasks",
+    relatedId: "task-comp-comp-3",
+    priority: "medium",
+    isRead: false,
+    createdAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    isDeleted: false
+  },
+  {
+    id: "notif-seed-4",
+    eventKey: "approval-required-app-101",
+    type: "approval",
+    title: "Approval Required",
+    message: "Fit Sample Approval requires your review for order GKT-1054.",
+    relatedModule: "approvals",
+    relatedId: "GKT-1054",
+    priority: "high",
+    isRead: false,
+    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    isDeleted: false
+  },
+  {
+    id: "notif-seed-5",
+    eventKey: "tna-stage-completed-GKT-1054-fabric",
+    type: "tna",
+    title: "T&A Stage Completed",
+    message: "Fabric stage completed for GKT-1054.",
+    relatedModule: "tna",
+    relatedId: "GKT-1054",
+    priority: "low",
+    isRead: true,
+    createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+    isDeleted: false
+  }
+];
+
+export function formatTimeAgo(isoString) {
+  if (!isoString) return "Just now";
+  const date = new Date(isoString);
+  if (isNaN(date.getTime())) return isoString;
+  const now = new Date();
+  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+  if (seconds < 45) return "Just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return "Yesterday";
+  if (days < 7) return `${days} days ago`;
+  return date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
