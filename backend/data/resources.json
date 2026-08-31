@@ -1,6 +1,484 @@
 {
   "orders": [
     {
+      "template": "90",
+      "costingTemplate": "fabric",
+      "costingRows": [
+        {
+          "label": "Fabric",
+          "section": "Fabric",
+          "isHeader": true
+        },
+        {
+          "label": "Fabric 1",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Fabric 2",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Dyeing",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Finishing — peach/sueded/acid wash/bio wash",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Compacting",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Trims & Accessories",
+          "section": "Trims & Accessories",
+          "isHeader": true
+        },
+        {
+          "label": "Sewing Thread",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Zip / Buttons / Elastic",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Main Label",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Care Label",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Disclaimer Tag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Hang Tag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Oversize Tag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Tissue",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Fusing Sticker / Label",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Polybag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Carton",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "VAP",
+          "section": "VAP",
+          "isHeader": true
+        },
+        {
+          "label": "Print / Embroidery / Hot Fix Stone",
+          "section": "VAP",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "CMT",
+          "section": "CMT",
+          "isHeader": true
+        },
+        {
+          "label": "Cutting",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Power Table",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Singer",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Checking",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Ironing",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Packing",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Quality Inspection",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Overheads",
+          "section": "Overheads",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Rejection",
+          "section": "Rejection",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Commercial Costs",
+          "section": "Commercial Costs",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Profit",
+          "section": "Profit",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        }
+      ],
+      "vapCount": 1,
+      "shippedQty": 0,
+      "plannedCost": 39984,
+      "actualCost": 39984,
+      "stages": [
+        {
+          "name": "Order Confirmation & Enquiry",
+          "dept": "Merchandising",
+          "status": "done",
+          "assignee": "Arasinth Raja (Manager)",
+          "reason": null,
+          "planned": "Day 1"
+        },
+        {
+          "name": "Tech Pack Received",
+          "dept": "Merchandising",
+          "status": "done",
+          "assignee": "Arasinth Raja (Manager)",
+          "reason": null,
+          "planned": "Day 1"
+        },
+        {
+          "name": "Fabric Booking",
+          "dept": "Purchase – Fabric",
+          "status": "pending",
+          "assignee": "Selva Kumar (Senior)",
+          "reason": null,
+          "planned": "Day 1-3"
+        },
+        {
+          "name": "Trim Booking",
+          "dept": "Purchase – Trims",
+          "status": "pending",
+          "assignee": "Shankar (Senior)",
+          "reason": null,
+          "planned": "Day 3-4"
+        },
+        {
+          "name": "Fit Sample",
+          "dept": "Sample",
+          "status": "pending",
+          "assignee": "Raza (DGM)",
+          "reason": null,
+          "planned": "Day 2-6"
+        },
+        {
+          "name": "Fit Approval",
+          "dept": "Merchandising",
+          "status": "pending",
+          "assignee": "Arasinth Raja (Manager)",
+          "reason": null,
+          "planned": "Day 7-13"
+        },
+        {
+          "name": "Fabric In-House",
+          "dept": "Store",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 25"
+        },
+        {
+          "name": "Fabric Inspection",
+          "dept": "Quality",
+          "status": "pending",
+          "assignee": "Sezhiyan (DGM)",
+          "reason": null,
+          "planned": "Day 28"
+        },
+        {
+          "name": "Size Set Sample",
+          "dept": "Sample",
+          "status": "pending",
+          "assignee": "Raza (DGM)",
+          "reason": null,
+          "planned": "Day 26-28"
+        },
+        {
+          "name": "Size Set Approval",
+          "dept": "Merchandising",
+          "status": "pending",
+          "assignee": "Arasinth Raja (Manager)",
+          "reason": null,
+          "planned": "Day 31"
+        },
+        {
+          "name": "PP Sample",
+          "dept": "Production",
+          "status": "pending",
+          "assignee": "Praveen Kumar (FM)",
+          "reason": null,
+          "planned": "Day 27-32"
+        },
+        {
+          "name": "PP Approval",
+          "dept": "Merchandising",
+          "status": "pending",
+          "assignee": "Arasinth Raja (Manager)",
+          "reason": null,
+          "planned": "Day 33-36"
+        },
+        {
+          "name": "Cutting",
+          "dept": "Cutting",
+          "status": "pending",
+          "assignee": "Durai (Manager)",
+          "reason": null,
+          "planned": "Day 33-38"
+        },
+        {
+          "name": "Printing / Embroidery",
+          "dept": "VAP",
+          "status": "pending",
+          "assignee": "Srinivasan (VAP Merch)",
+          "reason": null,
+          "planned": "Day 39-55",
+          "supplier": "Elite Print & Embro"
+        },
+        {
+          "name": "Feeding",
+          "dept": "Production",
+          "status": "pending",
+          "assignee": "Praveen Kumar (FM)",
+          "reason": null,
+          "planned": "Day 56-61"
+        },
+        {
+          "name": "Sewing",
+          "dept": "Production",
+          "status": "pending",
+          "assignee": "Praveen Kumar (FM)",
+          "reason": null,
+          "planned": "Day 62-84"
+        },
+        {
+          "name": "Finishing",
+          "dept": "Finishing",
+          "status": "pending",
+          "assignee": "Gopal (Finishing Incharge)",
+          "reason": null,
+          "planned": "Day 84-86"
+        },
+        {
+          "name": "Packing",
+          "dept": "Finishing",
+          "status": "pending",
+          "assignee": "Gopal (Finishing Incharge)",
+          "reason": null,
+          "planned": "Day 86-88"
+        },
+        {
+          "name": "Final Inspection",
+          "dept": "Quality",
+          "status": "pending",
+          "assignee": "Sezhiyan (DGM)",
+          "reason": null,
+          "planned": "Day 88-90"
+        },
+        {
+          "name": "Shipment Documentation",
+          "dept": "Logistics & Documentation",
+          "status": "pending",
+          "assignee": "Srinivasan (Senior)",
+          "reason": null,
+          "planned": "Day 90"
+        },
+        {
+          "name": "Goods Ready / Shipment",
+          "dept": "Logistics & Documentation",
+          "status": "pending",
+          "assignee": "Srinivasan (Senior)",
+          "reason": null,
+          "planned": "Day 90"
+        }
+      ],
+      "preProd": {
+        "techPack": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "poSheet": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "programSheet": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "cmtPlanning": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "accPlanning": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "grading": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        }
+      },
+      "id": "344",
+      "style": "dfg",
+      "buyer": "Zara",
+      "country": "Spain",
+      "season": "AW26",
+      "qty": 9996,
+      "ship": "25 May",
+      "risk": "medium",
+      "status": "At Risk",
+      "completed": false,
+      "isDeleted": false,
+      "completedAt": null,
+      "deletedAt": null
+    },
+    {
+      "id": "TEST-AUTO-7637",
+      "buyer": "Test Buyer",
+      "country": "Test Country",
+      "season": "AW26",
+      "style": "Automated Test Jacket",
+      "qty": 5000,
+      "ship": "15 Jul",
+      "risk": "low",
+      "status": "On Track",
+      "completed": true,
+      "isDeleted": true,
+      "completedAt": "2026-08-31T08:48:47.651Z",
+      "deletedAt": "2026-08-31T08:48:47.683Z"
+    },
+    {
+      "id": "PO-TEST-999",
+      "style": "Technical Windbreaker",
+      "buyer": "Nike",
+      "country": "USA",
+      "season": "AW26",
+      "qty": 15000,
+      "ship": "30 Jun",
+      "risk": "medium",
+      "status": "On Track",
+      "completed": false,
+      "isDeleted": true,
+      "completedAt": "2026-08-31T08:46:58.900Z",
+      "deletedAt": "2026-08-31T08:46:58.975Z"
+    },
+    {
       "id": "GKT-1054",
       "buyer": "Zara",
       "country": "Spain",
@@ -9,7 +487,7 @@
       "qty": 12500,
       "ship": "20 May",
       "risk": "high",
-      "status": "At Risk",
+      "status": "On Track",
       "isDeleted": false,
       "activeUpto": 10,
       "delayedAt": 10,
@@ -257,7 +735,7 @@
         {
           "name": "Fabric Booking",
           "dept": "Purchase – Fabric",
-          "status": "in_progress",
+          "status": "done",
           "assignee": "Selva Kumar (Senior)",
           "reason": null,
           "planned": "Day 1-3"
@@ -265,7 +743,7 @@
         {
           "name": "Trim Booking",
           "dept": "Purchase – Trims",
-          "status": "in_progress",
+          "status": "done",
           "assignee": "Shankar (Senior)",
           "reason": null,
           "planned": "Day 3-4"
@@ -273,7 +751,7 @@
         {
           "name": "Fit Sample",
           "dept": "Sample",
-          "status": "in_progress",
+          "status": "done",
           "assignee": "Raza (DGM)",
           "reason": null,
           "planned": "Day 2-6"
@@ -281,7 +759,7 @@
         {
           "name": "Fit Approval",
           "dept": "Merchandising",
-          "status": "in_progress",
+          "status": "done",
           "assignee": "Arasinth Raja (Manager)",
           "reason": null,
           "planned": "Day 7-13"
@@ -289,7 +767,7 @@
         {
           "name": "Fabric In-House",
           "dept": "Store",
-          "status": "pending",
+          "status": "done",
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 25"
@@ -297,7 +775,7 @@
         {
           "name": "Fabric Inspection",
           "dept": "Quality",
-          "status": "pending",
+          "status": "done",
           "assignee": "Sezhiyan (DGM)",
           "reason": null,
           "planned": "Day 28"
@@ -305,7 +783,7 @@
         {
           "name": "Size Set Sample",
           "dept": "Sample",
-          "status": "pending",
+          "status": "done",
           "assignee": "Raza (DGM)",
           "reason": null,
           "planned": "Day 26-28"
@@ -313,7 +791,7 @@
         {
           "name": "Size Set Approval",
           "dept": "Merchandising",
-          "status": "pending",
+          "status": "done",
           "assignee": "Arasinth Raja (Manager)",
           "reason": null,
           "planned": "Day 31"
@@ -321,7 +799,7 @@
         {
           "name": "PP Sample",
           "dept": "Production",
-          "status": "pending",
+          "status": "done",
           "assignee": "Praveen Kumar (FM)",
           "reason": null,
           "planned": "Day 27-32"
@@ -329,7 +807,7 @@
         {
           "name": "PP Approval",
           "dept": "Merchandising",
-          "status": "pending",
+          "status": "done",
           "assignee": "Arasinth Raja (Manager)",
           "reason": null,
           "planned": "Day 33-36"
@@ -337,7 +815,7 @@
         {
           "name": "Cutting",
           "dept": "Cutting",
-          "status": "pending",
+          "status": "done",
           "assignee": "Durai (Manager)",
           "reason": null,
           "planned": "Day 33-38"
@@ -345,7 +823,7 @@
         {
           "name": "Printing / Embroidery",
           "dept": "VAP",
-          "status": "pending",
+          "status": "done",
           "assignee": "Srinivasan (VAP Merch)",
           "reason": null,
           "planned": "Day 39-55",
@@ -354,7 +832,7 @@
         {
           "name": "Feeding",
           "dept": "Production",
-          "status": "pending",
+          "status": "done",
           "assignee": "Praveen Kumar (FM)",
           "reason": null,
           "planned": "Day 56-61"
@@ -362,7 +840,7 @@
         {
           "name": "Sewing",
           "dept": "Production",
-          "status": "pending",
+          "status": "done",
           "assignee": "Praveen Kumar (FM)",
           "reason": null,
           "planned": "Day 62-84"
@@ -370,7 +848,7 @@
         {
           "name": "Finishing",
           "dept": "Finishing",
-          "status": "pending",
+          "status": "done",
           "assignee": "Gopal (Finishing Incharge)",
           "reason": null,
           "planned": "Day 84-86"
@@ -378,7 +856,7 @@
         {
           "name": "Packing",
           "dept": "Finishing",
-          "status": "pending",
+          "status": "done",
           "assignee": "Gopal (Finishing Incharge)",
           "reason": null,
           "planned": "Day 86-88"
@@ -386,7 +864,7 @@
         {
           "name": "Final Inspection",
           "dept": "Quality",
-          "status": "pending",
+          "status": "done",
           "assignee": "Sezhiyan (DGM)",
           "reason": null,
           "planned": "Day 88-90"
@@ -394,7 +872,7 @@
         {
           "name": "Shipment Documentation",
           "dept": "Logistics & Documentation",
-          "status": "pending",
+          "status": "done",
           "assignee": "Srinivasan (Senior)",
           "reason": null,
           "planned": "Day 90"
@@ -402,7 +880,7 @@
         {
           "name": "Goods Ready / Shipment",
           "dept": "Logistics & Documentation",
-          "status": "pending",
+          "status": "done",
           "assignee": "Srinivasan (Senior)",
           "reason": null,
           "planned": "Day 90"
@@ -410,42 +888,65 @@
       ],
       "preProd": {
         "techPack": {
-          "values": {},
-          "status": "draft",
-          "approvedBy": null,
-          "approvedAt": null
+          "values": {
+            "styleNo": "gkt/1054",
+            "revisionNo": "33334",
+            "constructionNotes": "ffff"
+          },
+          "status": "approved",
+          "approvedBy": "Merchandiser",
+          "approvedAt": "31/08/2026"
         },
         "poSheet": {
-          "values": {},
-          "status": "draft",
-          "approvedBy": null,
-          "approvedAt": null
+          "values": {
+            "poNumber": "gkt/1054",
+            "poQty": "12500",
+            "poDate": "18 may"
+          },
+          "status": "approved",
+          "approvedBy": "Merchandiser",
+          "approvedAt": "31/08/2026"
         },
         "programSheet": {
-          "values": {},
-          "status": "draft",
-          "approvedBy": null,
-          "approvedAt": null
+          "values": {
+            "cuttingStart": "21",
+            "targetShipWeek": "4"
+          },
+          "status": "approved",
+          "approvedBy": "Merchandiser",
+          "approvedAt": "31/08/2026"
         },
         "cmtPlanning": {
-          "values": {},
-          "status": "draft",
-          "approvedBy": null,
-          "approvedAt": null
+          "values": {
+            "cmtRate": "233",
+            "targetEfficiency": "16",
+            "lineAllocated": "33333333"
+          },
+          "status": "approved",
+          "approvedBy": "Merchandiser",
+          "approvedAt": "31/08/2026"
         },
         "accPlanning": {
-          "values": {},
-          "status": "draft",
-          "approvedBy": null,
-          "approvedAt": null
+          "values": {
+            "accessoriesList": "www",
+            "leadTimeDays": "9"
+          },
+          "status": "approved",
+          "approvedBy": "Merchandiser",
+          "approvedAt": "31/08/2026"
         },
         "grading": {
-          "values": {},
-          "status": "draft",
-          "approvedBy": null,
-          "approvedAt": null
+          "values": {
+            "gradedSizes": "wwew",
+            "gradeRuleRef": "ddf"
+          },
+          "status": "approved",
+          "approvedBy": "Merchandiser",
+          "approvedAt": "31/08/2026"
         }
-      }
+      },
+      "completed": false,
+      "completedAt": null
     },
     {
       "id": "ST-7788",
@@ -456,7 +957,7 @@
       "qty": 8000,
       "ship": "18 May",
       "risk": "high",
-      "status": "Delayed",
+      "status": "At Risk",
       "isDeleted": false,
       "activeUpto": 5,
       "delayedAt": 5,
@@ -744,15 +1245,15 @@
         {
           "name": "Fit Approval",
           "dept": "Merchandising",
-          "status": "in_progress",
+          "status": "done",
           "assignee": "Arasinth Raja (Manager)",
-          "reason": "Buyer approval delay",
+          "reason": null,
           "planned": "Day 7-13"
         },
         {
           "name": "Fabric In-House",
           "dept": "Store",
-          "status": "pending",
+          "status": "done",
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 25"
@@ -776,7 +1277,7 @@
         {
           "name": "Size Set Approval",
           "dept": "Merchandising",
-          "status": "pending",
+          "status": "done",
           "assignee": "Arasinth Raja (Manager)",
           "reason": null,
           "planned": "Day 31"
@@ -908,7 +1409,10 @@
           "approvedBy": null,
           "approvedAt": null
         }
-      }
+      },
+      "completed": false,
+      "completedAt": null,
+      "deletedAt": null
     },
     {
       "id": "JKT-2231",
@@ -1216,7 +1720,9 @@
           "approvedBy": null,
           "approvedAt": null
         }
-      }
+      },
+      "completed": true,
+      "completedAt": "2026-08-31T05:55:35.686Z"
     },
     {
       "id": "DR-5566",
@@ -1227,7 +1733,467 @@
       "qty": 5300,
       "ship": "23 May",
       "risk": "medium",
-      "status": "Delayed"
+      "status": "On Track",
+      "activeUpto": 8,
+      "delayedAt": 8,
+      "template": "90",
+      "costingTemplate": "fabric",
+      "costingRows": [
+        {
+          "label": "Fabric",
+          "section": "Fabric",
+          "isHeader": true
+        },
+        {
+          "label": "Fabric 1",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Fabric 2",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Dyeing",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Finishing — peach/sueded/acid wash/bio wash",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Compacting",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Trims & Accessories",
+          "section": "Trims & Accessories",
+          "isHeader": true
+        },
+        {
+          "label": "Sewing Thread",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Zip / Buttons / Elastic",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Main Label",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Care Label",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Disclaimer Tag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Hang Tag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Oversize Tag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Tissue",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Fusing Sticker / Label",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Polybag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Carton",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "VAP",
+          "section": "VAP",
+          "isHeader": true
+        },
+        {
+          "label": "Print / Embroidery / Hot Fix Stone",
+          "section": "VAP",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "CMT",
+          "section": "CMT",
+          "isHeader": true
+        },
+        {
+          "label": "Cutting",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Power Table",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Singer",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Checking",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Ironing",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Packing",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Quality Inspection",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Overheads",
+          "section": "Overheads",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Rejection",
+          "section": "Rejection",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Commercial Costs",
+          "section": "Commercial Costs",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Profit",
+          "section": "Profit",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        }
+      ],
+      "vapCount": 1,
+      "shippedQty": 3180,
+      "plannedCost": 28620,
+      "actualCost": 30108,
+      "stages": [
+        {
+          "name": "Order Confirmation & Enquiry",
+          "dept": "Merchandising",
+          "status": "done",
+          "assignee": "Arasinth Raja (Manager)",
+          "reason": null,
+          "planned": "Day 1"
+        },
+        {
+          "name": "Tech Pack Received",
+          "dept": "Merchandising",
+          "status": "done",
+          "assignee": "Arasinth Raja (Manager)",
+          "reason": null,
+          "planned": "Day 1"
+        },
+        {
+          "name": "Fabric Booking",
+          "dept": "Purchase – Fabric",
+          "status": "done",
+          "assignee": "Selva Kumar (Senior)",
+          "reason": null,
+          "planned": "Day 1-3"
+        },
+        {
+          "name": "Trim Booking",
+          "dept": "Purchase – Trims",
+          "status": "done",
+          "assignee": "Shankar (Senior)",
+          "reason": null,
+          "planned": "Day 3-4"
+        },
+        {
+          "name": "Fit Sample",
+          "dept": "Sample",
+          "status": "done",
+          "assignee": "Raza (DGM)",
+          "reason": null,
+          "planned": "Day 2-6"
+        },
+        {
+          "name": "Fit Approval",
+          "dept": "Merchandising",
+          "status": "done",
+          "assignee": "Arasinth Raja (Manager)",
+          "reason": null,
+          "planned": "Day 7-13"
+        },
+        {
+          "name": "Fabric In-House",
+          "dept": "Store",
+          "status": "done",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 25"
+        },
+        {
+          "name": "Fabric Inspection",
+          "dept": "Quality",
+          "status": "done",
+          "assignee": "Sezhiyan (DGM)",
+          "reason": null,
+          "planned": "Day 28"
+        },
+        {
+          "name": "Size Set Sample",
+          "dept": "Sample",
+          "status": "done",
+          "assignee": "Raza (DGM)",
+          "reason": null,
+          "planned": "Day 26-28"
+        },
+        {
+          "name": "Size Set Approval",
+          "dept": "Merchandising",
+          "status": "done",
+          "assignee": "Arasinth Raja (Manager)",
+          "reason": null,
+          "planned": "Day 31"
+        },
+        {
+          "name": "PP Sample",
+          "dept": "Production",
+          "status": "done",
+          "assignee": "Praveen Kumar (FM)",
+          "reason": null,
+          "planned": "Day 27-32"
+        },
+        {
+          "name": "PP Approval",
+          "dept": "Merchandising",
+          "status": "done",
+          "assignee": "Arasinth Raja (Manager)",
+          "reason": null,
+          "planned": "Day 33-36"
+        },
+        {
+          "name": "Cutting",
+          "dept": "Cutting",
+          "status": "done",
+          "assignee": "Durai (Manager)",
+          "reason": null,
+          "planned": "Day 33-38"
+        },
+        {
+          "name": "Printing / Embroidery",
+          "dept": "VAP",
+          "status": "done",
+          "assignee": "Srinivasan (VAP Merch)",
+          "reason": null,
+          "planned": "Day 39-55",
+          "supplier": "Elite Print & Embro"
+        },
+        {
+          "name": "Feeding",
+          "dept": "Production",
+          "status": "done",
+          "assignee": "Praveen Kumar (FM)",
+          "reason": null,
+          "planned": "Day 56-61"
+        },
+        {
+          "name": "Sewing",
+          "dept": "Production",
+          "status": "done",
+          "assignee": "Praveen Kumar (FM)",
+          "reason": null,
+          "planned": "Day 62-84"
+        },
+        {
+          "name": "Finishing",
+          "dept": "Finishing",
+          "status": "done",
+          "assignee": "Gopal (Finishing Incharge)",
+          "reason": null,
+          "planned": "Day 84-86"
+        },
+        {
+          "name": "Packing",
+          "dept": "Finishing",
+          "status": "done",
+          "assignee": "Gopal (Finishing Incharge)",
+          "reason": null,
+          "planned": "Day 86-88"
+        },
+        {
+          "name": "Final Inspection",
+          "dept": "Quality",
+          "status": "done",
+          "assignee": "Sezhiyan (DGM)",
+          "reason": null,
+          "planned": "Day 88-90"
+        },
+        {
+          "name": "Shipment Documentation",
+          "dept": "Logistics & Documentation",
+          "status": "done",
+          "assignee": "Srinivasan (Senior)",
+          "reason": null,
+          "planned": "Day 90"
+        },
+        {
+          "name": "Goods Ready / Shipment",
+          "dept": "Logistics & Documentation",
+          "status": "done",
+          "assignee": "Srinivasan (Senior)",
+          "reason": null,
+          "planned": "Day 90"
+        }
+      ],
+      "preProd": {
+        "techPack": {
+          "values": {
+            "styleNo": "DR-5566",
+            "revisionNo": "45555",
+            "constructionNotes": "DFGHJ"
+          },
+          "status": "approved",
+          "approvedBy": "Merchandiser",
+          "approvedAt": "31/08/2026"
+        },
+        "poSheet": {
+          "values": {
+            "poNumber": "5566",
+            "poQty": "5300",
+            "poDate": "23"
+          },
+          "status": "approved",
+          "approvedBy": "Merchandiser",
+          "approvedAt": "31/08/2026"
+        },
+        "programSheet": {
+          "values": {
+            "cuttingStart": "22",
+            "targetShipWeek": "2"
+          },
+          "status": "approved",
+          "approvedBy": "Merchandiser",
+          "approvedAt": "31/08/2026"
+        },
+        "cmtPlanning": {
+          "values": {
+            "cmtRate": "4444",
+            "targetEfficiency": "444",
+            "lineAllocated": "44"
+          },
+          "status": "approved",
+          "approvedBy": "Merchandiser",
+          "approvedAt": "31/08/2026"
+        },
+        "accPlanning": {
+          "values": {
+            "accessoriesList": "EEE",
+            "leadTimeDays": "33"
+          },
+          "status": "approved",
+          "approvedBy": "Merchandiser",
+          "approvedAt": "31/08/2026"
+        },
+        "grading": {
+          "values": {
+            "gradedSizes": "3",
+            "gradeRuleRef": "EEE"
+          },
+          "status": "approved",
+          "approvedBy": "Merchandiser",
+          "approvedAt": "31/08/2026"
+        }
+      },
+      "completed": true,
+      "isDeleted": false,
+      "completedAt": "2026-08-31T07:44:20.820Z",
+      "deletedAt": null
     },
     {
       "id": "PL-3321",
@@ -1673,7 +2639,11 @@
           "approvedBy": null,
           "approvedAt": null
         }
-      }
+      },
+      "completed": false,
+      "isDeleted": false,
+      "completedAt": null,
+      "deletedAt": null
     },
     {
       "ship": "qqqq",
@@ -1697,11 +2667,33 @@
       "ship": "www",
       "risk": "medium",
       "status": "On Track",
-      "isDeleted": true,
-      "deletedAt": "2026-08-28T08:43:28.752Z"
+      "isDeleted": false,
+      "deletedAt": null
+    },
+    {
+      "id": "DD/2233",
+      "style": "ffffff",
+      "buyer": "nn",
+      "country": "uk",
+      "season": "AW26",
+      "qty": 10000,
+      "ship": "25 May",
+      "risk": "low",
+      "status": "On Track",
+      "completed": false,
+      "isDeleted": false,
+      "completedAt": null,
+      "deletedAt": null
     }
   ],
   "staff": [
+    {
+      "name": "Test Staff 1788166127688",
+      "title": "Senior Tester",
+      "dept": "Quality",
+      "id": "staff-1788166127700-tluntl",
+      "isDeleted": false
+    },
     {
       "id": "staff-arasinth-raja",
       "name": "Arasinth Raja",
@@ -1801,6 +2793,20 @@
       "dept": "Program",
       "id": "staff-1788003198726-eqebzt",
       "isDeleted": false
+    },
+    {
+      "name": "Arasinth Raja",
+      "title": "Manager",
+      "dept": "Merchandising",
+      "id": "staff-1788152143016-o5vfuj",
+      "isDeleted": false
+    },
+    {
+      "name": "Karthik Raja",
+      "title": "Cutting Senior",
+      "dept": "Cutting",
+      "id": "staff-1788155339217-0avtlh",
+      "isDeleted": false
     }
   ],
   "leaveRequests": [
@@ -1821,13 +2827,23 @@
       "to": "31 May",
       "reason": "Family function",
       "status": "pending"
+    },
+    {
+      "id": "leave-1788152098654",
+      "name": "wwwww",
+      "dept": "Merchandising",
+      "from": "22",
+      "to": "24",
+      "reason": "persoal",
+      "status": "pending",
+      "isDeleted": false
     }
   ],
   "financials": [
     {
       "id": "current",
       "revenue": 4415000,
-      "cogs": 195025,
+      "cogs": 342025,
       "ebitda": 820000,
       "cashFlow": 1236000,
       "stockValue": 2548000,
@@ -1872,6 +2888,14 @@
   ],
   "debitNotes": [
     {
+      "buyer": "Test Buyer",
+      "po": "PO-101",
+      "amount": 999,
+      "reason": "Testing",
+      "id": "debitNotes-1788166127717-0akpbh",
+      "isDeleted": false
+    },
+    {
       "id": "debit-1",
       "season": "AW26",
       "buyer": "H&M",
@@ -1911,9 +2935,28 @@
       "reason": "ccccc",
       "date": "2 march",
       "isDeleted": false
+    },
+    {
+      "id": 1788152349679,
+      "season": "AW26",
+      "buyer": "ggg",
+      "po": "TR-8899",
+      "amount": 6666,
+      "reason": "hhhhhhhhhh",
+      "date": "12",
+      "isDeleted": false
     }
   ],
   "capas": [
+    {
+      "buyer": "Test Buyer",
+      "po": "PO-101",
+      "issue": "Test Issue",
+      "action": "Resolve",
+      "status": "open",
+      "id": "capas-1788166127730-yur8cd",
+      "isDeleted": false
+    },
     {
       "id": "capa-1",
       "season": "AW26",
@@ -1961,6 +3004,19 @@
   ],
   "tasks": [
     {
+      "id": "task-1788168873873",
+      "createdAt": "2026-08-31T09:34:33.873Z",
+      "status": "in_progress",
+      "title": "gopal",
+      "orderId": "GKT-1054",
+      "dept": "Purchase – Fabric",
+      "assignee": "Merchandiser",
+      "dueDate": "20 May",
+      "priority": "medium",
+      "notes": "vbnm",
+      "isDeleted": false
+    },
+    {
       "dueDate": "Tomorrow",
       "description": "update-check",
       "assignee": "Team",
@@ -1970,7 +3026,7 @@
       "id": "task-check-54ee8ea246704705b9560aff365d08c7"
     },
     {
-      "status": "open",
+      "status": "done",
       "title": "Route check",
       "description": "temporary",
       "assignee": "QA",
@@ -1993,8 +3049,10 @@
       "description": "sssssssss",
       "assignee": "rrrrr",
       "dueDate": "20/8/2026",
-      "status": "open",
-      "id": "tasks-1787907776266-2tg7t0"
+      "status": "done",
+      "id": "tasks-1787907776266-2tg7t0",
+      "isDeleted": true,
+      "deletedAt": "2026-08-31T09:33:10.691Z"
     }
   ],
   "approvals": [

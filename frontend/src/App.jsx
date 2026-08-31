@@ -53,6 +53,7 @@ export default function LoomPLM() {
   const [certifications, setCertifications] = useState(INITIAL_CERTIFICATIONS);
   const [debitNotes, setDebitNotes] = useState(INITIAL_DEBIT_NOTES);
   const [capas, setCapas] = useState(INITIAL_CAPAS);
+  const [customTasks, setCustomTasks] = useState([]);
 
   const [factoryMenuOpen, setFactoryMenuOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState("2026-05-12");
@@ -65,11 +66,10 @@ export default function LoomPLM() {
     let cancelled = false;
     (async () => {
       try {
-        const backendOrders = await resourcesApi.list("orders");
+        const backendOrders = await resourcesApi.list("orders", "?all=true");
         if (!cancelled && Array.isArray(backendOrders) && backendOrders.length > 0) {
-          const activeOrders = backendOrders.filter(o => o.isDeleted !== true);
           setOrders(prev => {
-            const merged = [...activeOrders];
+            const merged = [...backendOrders];
             prev.forEach(p => {
               if (!merged.some(m => m.id === p.id)) {
                 merged.push(p);
@@ -80,6 +80,10 @@ export default function LoomPLM() {
               return {
                 ...existing,
                 ...bo,
+                completed: bo.completed ?? existing?.completed ?? false,
+                isDeleted: bo.isDeleted ?? existing?.isDeleted ?? false,
+                completedAt: bo.completedAt || existing?.completedAt || null,
+                deletedAt: bo.deletedAt || existing?.deletedAt || null,
                 template: bo.template || existing?.template || "90",
                 costingTemplate: bo.costingTemplate || existing?.costingTemplate || "fabric",
                 costingRows: bo.costingRows || existing?.costingRows || buildCostingRows(bo.costingTemplate || existing?.costingTemplate || "fabric"),
@@ -106,6 +110,13 @@ export default function LoomPLM() {
         const dbCapas = await resourcesApi.list("capas");
         if (!cancelled && Array.isArray(dbCapas) && dbCapas.length > 0) {
           setCapas(dbCapas.filter(c => c.isDeleted !== true));
+        }
+      } catch (e) {}
+
+      try {
+        const dbTasks = await resourcesApi.list("tasks");
+        if (!cancelled && Array.isArray(dbTasks) && dbTasks.length > 0) {
+          setCustomTasks(dbTasks.filter(t => t.isDeleted !== true));
         }
       } catch (e) {}
 
@@ -361,14 +372,130 @@ export default function LoomPLM() {
     }));
   };
 
+  const addTask = (task) => {
+    const newTask = {
+      id: `task-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      status: "in_progress",
+      ...task
+    };
+    setCustomTasks(prev => [newTask, ...prev]);
+    try { resourcesApi.create("tasks", newTask); } catch (e) {}
+  };
+
+  const updateTask = (id, updates) => {
+    setCustomTasks(prev => prev.map(t => {
+      if (t.id !== id) return t;
+      const updated = { ...t, ...updates };
+      try { resourcesApi.patch("tasks", id, updates); } catch (e) {}
+      return updated;
+    }));
+  };
+
+  const deleteTask = (id) => {
+    setCustomTasks(prev => prev.filter(t => t.id !== id));
+    try { resourcesApi.remove("tasks", id); } catch (e) {}
+  };
+
+  const addOrder = (newOrder) => {
+    const fullOrder = {
+      template: "90",
+      costingTemplate: "fabric",
+      costingRows: buildCostingRows("fabric"),
+      vapCount: 1,
+      shippedQty: 0,
+      plannedCost: Math.round((newOrder.qty || 5000) * 4),
+      actualCost: Math.round((newOrder.qty || 5000) * 4),
+      stages: makeStages("90", 0, null),
+      preProd: initPreProd(),
+      ...newOrder,
+      completed: false,
+      isDeleted: false,
+      completedAt: null,
+      deletedAt: null,
+    };
+    setOrders(prev => {
+      if (prev.some(o => o.id === fullOrder.id)) {
+        return prev.map(o => o.id === fullOrder.id ? { ...o, ...fullOrder } : o);
+      }
+      return [fullOrder, ...prev];
+    });
+    try {
+      resourcesApi.create("orders", fullOrder).catch(err => {
+        console.warn("Error creating order:", err.message);
+      });
+    } catch (e) {}
+  };
+
+  const completeOrder = (id) => {
+    const completedAt = new Date().toISOString();
+    setOrders(prev => prev.map(o => o.id === id ? { ...o, completed: true, completedAt } : o));
+    try {
+      resourcesApi.patch("orders", id, { completed: true, completedAt }).catch(err => {
+        console.warn("Error completing order:", err.message);
+      });
+    } catch (e) {}
+  };
+
+  const uncompleteOrder = (id) => {
+    setOrders(prev => prev.map(o => o.id === id ? { ...o, completed: false, completedAt: null } : o));
+    try {
+      resourcesApi.patch("orders", id, { completed: false, completedAt: null }).catch(err => {
+        console.warn("Error reopening order:", err.message);
+      });
+    } catch (e) {}
+  };
+
+  const deleteOrder = (id) => {
+    const deletedAt = new Date().toISOString();
+    setOrders(prev => prev.map(o => o.id === id ? { ...o, isDeleted: true, deletedAt } : o));
+    try {
+      resourcesApi.remove("orders", id).catch(err => {
+        console.warn("Error deleting order:", err.message);
+      });
+    } catch (e) {}
+  };
+
+  const restoreOrder = (id) => {
+    setOrders(prev => prev.map(o => o.id === id ? { ...o, isDeleted: false, deletedAt: null } : o));
+    try {
+      resourcesApi.patch("orders", id, { isDeleted: false, deletedAt: null }).catch(err => {
+        console.warn("Error restoring order:", err.message);
+      });
+    } catch (e) {}
+  };
+
   const updateStages = (id, stages) => {
     setOrders(prev => prev.map(o => {
       if (o.id !== id) return o;
       const doneCount = stages.filter(s => s.status === "done").length;
+      const allDone = stages.length > 0 && doneCount === stages.length;
       const hasFlag = stages.some(s => s.reason);
-      const status = doneCount === stages.length ? "On Track" : hasFlag ? "Delayed" : "At Risk";
-      const updated = { ...o, stages, status };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) {}
+      const status = allDone ? "On Track" : hasFlag ? "Delayed" : "At Risk";
+      
+      const isCompleted = allDone;
+      const completedAt = isCompleted ? (o.completedAt || new Date().toISOString()) : null;
+
+      const updated = {
+        ...o,
+        stages,
+        status,
+        completed: isCompleted,
+        completedAt
+      };
+
+      try {
+        resourcesApi.update("orders", o.id, updated).catch(err => {
+          console.warn("Error updating order stages:", err.message);
+        });
+        resourcesApi.patch("orders", o.id, {
+          stages,
+          status,
+          completed: isCompleted,
+          completedAt
+        }).catch(() => {});
+      } catch (e) {}
+
       return updated;
     }));
   };
@@ -547,9 +674,29 @@ export default function LoomPLM() {
   } else if (view === "myDepartment") {
     content = <DepartmentDetail deptName={role.dept} orders={orders} onBack={() => setView("dashboard")} onOpenOrder={openOrder} orgStructure={orgStructure} />;
   } else if (view === "orders" && canSeeAll) {
-    content = <OrdersPage orders={orders} onOpenOrder={openOrder} />;
+    content = (
+      <OrdersPage
+        orders={orders}
+        onOpenOrder={openOrder}
+        onAddOrder={addOrder}
+        onCompleteOrder={completeOrder}
+        onUncompleteOrder={uncompleteOrder}
+        onDeleteOrder={deleteOrder}
+        onRestoreOrder={restoreOrder}
+      />
+    );
   } else if (view === "tasks") {
-    content = <MyTasksPage orders={orders} role={role} onOpenOrder={openOrder} />;
+    content = (
+      <MyTasksPage
+        orders={orders}
+        role={role}
+        tasks={customTasks}
+        onAddTask={addTask}
+        onUpdateTask={updateTask}
+        onDeleteTask={deleteTask}
+        onOpenOrder={openOrder}
+      />
+    );
   } else if (view === "calendar" && canSeeAll) {
     content = <CalendarPage orders={orders} onOpenOrder={openOrder} />;
   } else if (view === "approvals" && canSeeAll) {

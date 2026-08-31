@@ -13,7 +13,9 @@ const BASE = `${API_BASE_URL}/api/storage`;
 
 async function get(key, shared = false) {
   try {
-    const res = await fetch(`${BASE}/${encodeURIComponent(key)}?shared=${shared}`);
+    const res = await fetch(`${BASE}/${encodeURIComponent(key)}?shared=${shared}`, {
+      cache: "no-store",
+    });
     if (res.status === 404) {
       const local = localStorage.getItem(`storage:${key}`);
       return local ? { key, value: local, shared } : null;

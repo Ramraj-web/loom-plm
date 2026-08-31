@@ -131,8 +131,9 @@ export default async function handler(req, res) {
           if (!item) return res.status(404).json({ error: "Record not found" });
           return res.status(200).json(item);
         }
+        const showAll = url.searchParams.get("all") === "true";
         const items = memoryDB[resource].filter(r => {
-          if (!isSoftDelete) return true;
+          if (!isSoftDelete || showAll) return true;
           return isTrash ? r.isDeleted === true : r.isDeleted !== true;
         });
         return res.status(200).json(items);
@@ -214,6 +215,56 @@ export default async function handler(req, res) {
         const deleted = key in memoryStorage[bucket];
         delete memoryStorage[bucket][key];
         return res.status(200).json({ key, deleted, shared });
+      }
+    }
+
+    // 4. Gemini Highlights API
+    if (
+      pathname === "/api/gemini/extract-highlights" ||
+      pathname === "/api/claude/extract-highlights" ||
+      pathname === "/gemini/extract-highlights" ||
+      pathname === "/claude/extract-highlights"
+    ) {
+      const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
+      const { techPackNotes, deptOptions } = body;
+      if (!techPackNotes || !techPackNotes.trim()) {
+        return res.status(400).json({ error: "techPackNotes is required" });
+      }
+      const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({ error: "GEMINI_API_KEY is not set on the server" });
+      }
+      const deptList = Array.isArray(deptOptions) && deptOptions.length ? deptOptions : ["All"];
+      const prompt = `You are reviewing a garment tech pack's comments / notes section for a production team. Pull out only the distinct, important buyer instructions that a team could miss and cause rework — things like materials, trims, colors, construction details, measurements, approvals, or packing requirements. Ignore generic boilerplate.
+
+Return ONLY a JSON array, no markdown fences, no explanation. Each item must follow this format:
+{"text": "<concise instruction, under 20 words>", "dept": "<one of: ${deptList.join(", ")}, or All if it applies broadly>"}
+
+If nothing relevant is found, return [].
+
+Tech pack notes:
+"""
+${techPackNotes}
+"""`;
+
+      try {
+        const { GoogleGenerativeAI } = await import("@google/generative-ai");
+        const genAI = new GoogleGenerativeAI(apiKey);
+        let result;
+        try {
+          const model = genAI.getGenerativeModel({ model: "gemini-3.6-flash" });
+          result = await model.generateContent(prompt);
+        } catch (err) {
+          const fallbackModel = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+          result = await fallbackModel.generateContent(prompt);
+        }
+        const responseText = result.response.text();
+        const raw = responseText ? responseText.trim() : "";
+        const cleaned = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
+        const items = JSON.parse(cleaned);
+        return res.status(200).json({ items });
+      } catch (err) {
+        return res.status(500).json({ error: err.message || "Failed to process Gemini request" });
       }
     }
 

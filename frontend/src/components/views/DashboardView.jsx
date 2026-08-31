@@ -12,25 +12,29 @@ import {
   Card, CardHeader, PageHeader, statusPill, riskDot, collectTasks
 } from "../common/CommonUI.jsx";
 
-export function Dashboard({ orders, onOpenOrder, onNavigate, attendance, roster }) {
-  const stats = useMemo(() => {
-    const total = orders.length;
-    const onTrack = orders.filter(o => o.status === "On Track").length;
-    const atRisk = orders.filter(o => o.status === "At Risk").length;
-    const delayed = orders.filter(o => o.status === "Delayed").length;
-    const shipRisk = orders.filter(o => o.risk === "high" || o.risk === "medium").length;
-    const totalQtyYear = orders.reduce((a, o) => a + (Number(o.qty) || 0), 0);
-    return { total, onTrack, atRisk, delayed, shipRisk, totalQtyYear };
-  }, [orders]);
+export function Dashboard({ orders = [], onOpenOrder, onNavigate, attendance, roster }) {
+  const activeOrders = useMemo(() => orders.filter(o => o.isDeleted !== true && o.completed !== true), [orders]);
+  const completedOrders = useMemo(() => orders.filter(o => o.completed === true && o.isDeleted !== true), [orders]);
+  const deletedOrders = useMemo(() => orders.filter(o => o.isDeleted === true), [orders]);
 
-  const allStages = useMemo(() => orders.flatMap(o => o.stages || []), [orders]);
+  const stats = useMemo(() => {
+    const total = activeOrders.length;
+    const onTrack = activeOrders.filter(o => o.status === "On Track").length;
+    const atRisk = activeOrders.filter(o => o.status === "At Risk").length;
+    const delayed = activeOrders.filter(o => o.status === "Delayed").length;
+    const shipRisk = activeOrders.filter(o => o.risk === "high" || o.risk === "medium").length;
+    const totalQtyYear = activeOrders.reduce((a, o) => a + (Number(o.qty) || 0), 0);
+    return { total, onTrack, atRisk, delayed, shipRisk, totalQtyYear };
+  }, [activeOrders]);
+
+  const allStages = useMemo(() => activeOrders.flatMap(o => o.stages || []), [activeOrders]);
 
   const stageCounts = useMemo(() => {
     return TA_STAGES.map((s, i) => {
-      const count = orders.filter(o => o.stages && o.stages[i] && (o.stages[i].status === "done" || o.stages[i].status === "in_progress")).length;
+      const count = activeOrders.filter(o => o.stages && o.stages[i] && (o.stages[i].status === "done" || o.stages[i].status === "in_progress")).length;
       return { name: s.name, count };
     });
-  }, [orders]);
+  }, [activeOrders]);
 
   const summary = useMemo(() => {
     const completed = allStages.filter(s => s.status === "done").length;
@@ -57,27 +61,27 @@ export function Dashboard({ orders, onOpenOrder, onNavigate, attendance, roster 
   }, [allStages]);
 
   const productionPlan = useMemo(() => {
-    const totalQty = orders.reduce((a, o) => a + (Number(o.qty) || 0), 0);
-    const avgProgress = orders.length > 0
-      ? orders.reduce((a, o) => a + (o.stages ? o.stages.filter(s => s.status === "done").length / o.stages.length : 0), 0) / orders.length
+    const totalQty = activeOrders.reduce((a, o) => a + (Number(o.qty) || 0), 0);
+    const avgProgress = activeOrders.length > 0
+      ? activeOrders.reduce((a, o) => a + (o.stages ? o.stages.filter(s => s.status === "done").length / o.stages.length : 0), 0) / activeOrders.length
       : 0;
     const actual = Math.round(totalQty * avgProgress);
     return { totalQty, actual, balance: totalQty - actual, pct: Math.round(avgProgress * 100) };
-  }, [orders]);
+  }, [activeOrders]);
 
   const alerts = useMemo(() => {
     const items = [];
-    orders.forEach(o => {
+    activeOrders.forEach(o => {
       if (!o.stages) return;
       o.stages.forEach(s => {
         if (s.reason) items.push({ text: `${s.reason} — ${o.style} PO #${o.id} (${s.dept})`, sev: o.risk });
       });
     });
     return items.slice(0, 5);
-  }, [orders]);
+  }, [activeOrders]);
 
   const topAtRisk = useMemo(() => {
-    return orders
+    return activeOrders
       .filter(o => o.status !== "On Track")
       .sort((a, b) => (a.risk === "high" ? 0 : 1) - (b.risk === "high" ? 0 : 1))
       .slice(0, 5)
@@ -85,13 +89,13 @@ export function Dashboard({ orders, onOpenOrder, onNavigate, attendance, roster 
         const flagged = o.stages ? o.stages.find(s => s.reason) : null;
         return { ...o, predictedDelay: `${RISK_DELAY_DAYS[o.risk] || 1} Day${(RISK_DELAY_DAYS[o.risk] || 1) > 1 ? "s" : ""}`, primaryReason: flagged ? flagged.reason : "—" };
       });
-  }, [orders]);
+  }, [activeOrders]);
 
   const riskCounts = useMemo(() => ({
-    high: orders.filter(o => o.risk === "high").length,
-    medium: orders.filter(o => o.risk === "medium").length,
-    low: orders.filter(o => o.risk === "low").length,
-  }), [orders]);
+    high: activeOrders.filter(o => o.risk === "high").length,
+    medium: activeOrders.filter(o => o.risk === "medium").length,
+    low: activeOrders.filter(o => o.risk === "low").length,
+  }), [activeOrders]);
   const riskPieData = [
     { name: "High risk", value: riskCounts.high, color: "#D64545" },
     { name: "Medium risk", value: riskCounts.medium, color: "#E2A83B" },
@@ -117,14 +121,14 @@ export function Dashboard({ orders, onOpenOrder, onNavigate, attendance, roster 
 
   const myTasksPreview = useMemo(() => {
     const items = [];
-    orders.forEach(o => {
+    activeOrders.forEach(o => {
       if (!o.stages) return;
       o.stages.forEach(s => {
         if (s.status === "in_progress") items.push({ order: o, stage: s });
       });
     });
     return items.slice(0, 4);
-  }, [orders]);
+  }, [activeOrders]);
 
   const bottomStats = useMemo(() => {
     const approvalStages = allStages.filter(s => s.name.toLowerCase().includes("approval"));
@@ -139,12 +143,12 @@ export function Dashboard({ orders, onOpenOrder, onNavigate, attendance, roster 
   }, [allStages]);
 
   const cards = [
-    { label: "Total orders", value: stats.total, color: "#378ADD", Icon: Package, delta: "+12% vs last month" },
-    { label: "On track", value: stats.onTrack, color: "#1F9E8D", Icon: CheckCircle2, delta: `+8% vs last month · ${Math.round((stats.onTrack / (stats.total || 1)) * 100)}%` },
-    { label: "At risk", value: stats.atRisk, color: "#E2A83B", Icon: TriangleAlert, delta: `+5% vs last month · ${Math.round((stats.atRisk / (stats.total || 1)) * 100)}%` },
-    { label: "Delayed", value: stats.delayed, color: "#D64545", Icon: ArrowDownRight, delta: `-3% vs last month · ${Math.round((stats.delayed / (stats.total || 1)) * 100)}%` },
-    { label: "High risk items", value: stats.shipRisk, color: "#7F77DD", Icon: Zap, delta: "+4 vs last month" },
-    { label: "Total qty produced (yr)", value: `${stats.totalQtyYear.toLocaleString()} pcs`, color: "#0E9BB0", Icon: Factory, delta: "Sum of all PO / order sheet qty" },
+    { label: "Active orders", value: stats.total, color: "#378ADD", Icon: Package, delta: `${completedOrders.length} completed · ${deletedOrders.length} deleted` },
+    { label: "On track", value: stats.onTrack, color: "#1F9E8D", Icon: CheckCircle2, delta: `${Math.round((stats.onTrack / (stats.total || 1)) * 100)}% of active` },
+    { label: "At risk", value: stats.atRisk, color: "#E2A83B", Icon: TriangleAlert, delta: `${Math.round((stats.atRisk / (stats.total || 1)) * 100)}% of active` },
+    { label: "Delayed", value: stats.delayed, color: "#D64545", Icon: ArrowDownRight, delta: `${Math.round((stats.delayed / (stats.total || 1)) * 100)}% of active` },
+    { label: "Completed orders", value: completedOrders.length, color: "#085041", Icon: CheckCircle2, delta: `${deletedOrders.length} in history` },
+    { label: "Total qty active (pcs)", value: `${stats.totalQtyYear.toLocaleString()}`, color: "#0E9BB0", Icon: Factory, delta: "Sum of active order sheets" },
   ];
 
   return (
@@ -282,7 +286,7 @@ export function Dashboard({ orders, onOpenOrder, onNavigate, attendance, roster 
             <div></div>
             {["12 May", "13 May", "14 May", "15 May", "16 May", "17 May", "18 May"].map(d => <div key={d} style={{ textAlign: "center" }}>{d}</div>)}
           </div>
-          {orders.slice(0, 5).map((o, i) => {
+          {activeOrders.slice(0, 5).map((o, i) => {
             const startCol = (i % 4) + 1;
             const span = 2 + (i % 3);
             const color = ["#7F77DD", "#E2A83B", "#1F9E8D", "#D85A30", "#378ADD"][i % 5];
