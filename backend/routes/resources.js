@@ -102,12 +102,14 @@ router.get("/:resource", async (req, res, next) => {
   try {
     const collection = getResourceCollection();
     const isSoftDelete = SOFT_DELETE_RESOURCES.includes(resource);
-    const filter = isSoftDelete
-      ? { resource, isDeleted: req.query.trash === "true" ? true : { $ne: true } }
+    const showAll = req.query.all === "true";
+    const isTrash = req.query.trash === "true";
+    const filter = isSoftDelete && !showAll
+      ? { resource, isDeleted: isTrash ? true : { $ne: true } }
       : { resource };
     if (collection) return res.json(await collection.find(filter).project({ _id: 0 }).toArray());
     const db = readDB();
-    res.json((db[resource] || []).filter(record => !isSoftDelete || (req.query.trash === "true" ? record.isDeleted === true : record.isDeleted !== true)));
+    res.json((db[resource] || []).filter(record => !isSoftDelete || showAll || (isTrash ? record.isDeleted === true : record.isDeleted !== true)));
   } catch (error) { next(error); }
 });
 
@@ -125,11 +127,24 @@ router.get("/:resource/:id", async (req, res, next) => {
 router.post("/:resource", async (req, res, next) => {
   const { resource } = req.params;
   if (!validResource(resource)) return res.status(404).json({ error: "Unknown resource" });
-  const record = { ...req.body, id: makeId(resource, req.body), ...(SOFT_DELETE_RESOURCES.includes(resource) ? { isDeleted: false } : {}) };
+  const recordId = makeId(resource, req.body);
+  const record = { ...req.body, id: recordId, ...(SOFT_DELETE_RESOURCES.includes(resource) ? { isDeleted: false } : {}) };
   try {
     const collection = getResourceCollection();
-    if (collection) await collection.insertOne({ resource, ...record });
-    else { const db = readDB(); db[resource] = [...(db[resource] || []), record]; writeDB(db); }
+    if (collection) {
+      delete record._id;
+      await collection.replaceOne({ resource, id: recordId }, { resource, ...record }, { upsert: true });
+    } else {
+      const db = readDB();
+      if (!db[resource]) db[resource] = [];
+      const existingIdx = db[resource].findIndex(item => String(item.id) === String(recordId));
+      if (existingIdx >= 0) {
+        db[resource][existingIdx] = record;
+      } else {
+        db[resource] = [record, ...(db[resource] || [])];
+      }
+      writeDB(db);
+    }
     res.status(201).json(record);
   } catch (error) { next(error); }
 });

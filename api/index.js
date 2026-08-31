@@ -63,8 +63,43 @@ export const RESOURCE_SEEDS = {
   ],
 };
 
+import { MongoClient } from "mongodb";
+
 let memoryDB = JSON.parse(JSON.stringify(RESOURCE_SEEDS));
 let memoryStorage = { personal: {}, shared: {} };
+let mongoClient = null;
+let mongoDb = null;
+let mongoStorageCollection = null;
+let mongoResourceCollection = null;
+
+async function getMongoCollections() {
+  const uri = process.env.MONGODB_URI;
+  if (!uri) return null;
+  if (mongoResourceCollection && mongoStorageCollection) {
+    return { resources: mongoResourceCollection, storage: mongoStorageCollection };
+  }
+  try {
+    if (!mongoClient) {
+      mongoClient = new MongoClient(uri, { maxPoolSize: 10 });
+      await mongoClient.connect();
+    }
+    mongoDb = mongoClient.db(process.env.MONGODB_DB_NAME || "loom_plm");
+    mongoStorageCollection = mongoDb.collection("storage");
+    mongoResourceCollection = mongoDb.collection("resources");
+    
+    // Seed initial resources if empty
+    for (const [resource, records] of Object.entries(RESOURCE_SEEDS)) {
+      const count = await mongoResourceCollection.countDocuments({ resource });
+      if (count === 0 && records.length) {
+        await mongoResourceCollection.insertMany(records.map(record => ({ resource, ...record })));
+      }
+    }
+    return { resources: mongoResourceCollection, storage: mongoStorageCollection };
+  } catch (err) {
+    console.warn("MongoDB connection fallback to memory:", err.message);
+    return null;
+  }
+}
 
 const SOFT_DELETE_RESOURCES = [
   "orders",
@@ -119,21 +154,36 @@ export default async function handler(req, res) {
         return res.status(404).json({ error: "Unknown resource" });
       }
 
-      if (!Array.isArray(memoryDB[resource])) {
-        memoryDB[resource] = JSON.parse(JSON.stringify(RESOURCE_SEEDS[resource] || []));
-      }
-
+      const mongoCols = await getMongoCollections();
       const isSoftDelete = SOFT_DELETE_RESOURCES.includes(resource);
+      const showAll = url.searchParams.get("all") === "true";
 
       // GET /api/resources/:resource or /api/resources/:resource/:id
       if (req.method === "GET") {
+        if (mongoCols?.resources) {
+          if (id) {
+            const record = await mongoCols.resources.findOne({ resource, id }, { projection: { _id: 0 } });
+            if (!record) return res.status(404).json({ error: "Record not found" });
+            return res.status(200).json(record);
+          }
+          const filter = isSoftDelete && !showAll
+            ? { resource, isDeleted: isTrash ? true : { $ne: true } }
+            : { resource };
+          const items = await mongoCols.resources.find(filter).project({ _id: 0 }).toArray();
+          return res.status(200).json(items);
+        }
+
+        if (!Array.isArray(memoryDB[resource])) {
+          memoryDB[resource] = JSON.parse(JSON.stringify(RESOURCE_SEEDS[resource] || []));
+        }
+
         if (id) {
           const item = memoryDB[resource].find(r => String(r.id) === id);
           if (!item) return res.status(404).json({ error: "Record not found" });
           return res.status(200).json(item);
         }
         const items = memoryDB[resource].filter(r => {
-          if (!isSoftDelete) return true;
+          if (!isSoftDelete || showAll) return true;
           return isTrash ? r.isDeleted === true : r.isDeleted !== true;
         });
         return res.status(200).json(items);
@@ -142,12 +192,24 @@ export default async function handler(req, res) {
       // POST /api/resources/:resource
       if (req.method === "POST") {
         const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
+        const recordId = makeId(resource, body);
         const record = {
           ...body,
-          id: makeId(resource, body),
+          id: recordId,
+          resource,
           ...(isSoftDelete ? { isDeleted: false } : {}),
         };
-        memoryDB[resource] = [record, ...memoryDB[resource]];
+
+        if (mongoCols?.resources) {
+          delete record._id;
+          await mongoCols.resources.replaceOne({ resource, id: recordId }, { resource, ...record }, { upsert: true });
+          return res.status(201).json(record);
+        }
+
+        if (!Array.isArray(memoryDB[resource])) memoryDB[resource] = [];
+        const existingIdx = memoryDB[resource].findIndex(r => String(r.id) === String(recordId));
+        if (existingIdx >= 0) memoryDB[resource][existingIdx] = record;
+        else memoryDB[resource] = [record, ...memoryDB[resource]];
         return res.status(201).json(record);
       }
 
@@ -155,6 +217,16 @@ export default async function handler(req, res) {
       if (req.method === "PUT" || req.method === "PATCH") {
         if (!id) return res.status(400).json({ error: "Record ID required" });
         const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
+
+        if (mongoCols?.resources) {
+          const existing = await mongoCols.resources.findOne({ resource, id });
+          const updated = { ...(existing || {}), ...body, id, resource };
+          delete updated._id;
+          await mongoCols.resources.replaceOne({ resource, id }, { resource, ...updated }, { upsert: true });
+          return res.status(200).json(updated);
+        }
+
+        if (!Array.isArray(memoryDB[resource])) memoryDB[resource] = [];
         const index = memoryDB[resource].findIndex(r => String(r.id) === id);
         if (index < 0) return res.status(404).json({ error: "Record not found" });
 
@@ -170,6 +242,19 @@ export default async function handler(req, res) {
       // DELETE /api/resources/:resource/:id
       if (req.method === "DELETE") {
         if (!id) return res.status(400).json({ error: "Record ID required" });
+
+        if (mongoCols?.resources) {
+          if (isSoftDelete) {
+            const update = { $set: { isDeleted: true, deletedAt: new Date().toISOString() } };
+            const result = await mongoCols.resources.updateOne({ resource, id }, update);
+            if (!result.matchedCount) return res.status(404).json({ error: "Record not found" });
+            return res.status(200).json({ id, deleted: true, isDeleted: true });
+          }
+          const result = await mongoCols.resources.deleteOne({ resource, $or: [{ id }, { name: id }] });
+          return res.status(200).json({ id, deleted: result.deletedCount > 0 });
+        }
+
+        if (!Array.isArray(memoryDB[resource])) memoryDB[resource] = [];
         const index = memoryDB[resource].findIndex(r => String(r.id) === id);
         if (index < 0) return res.status(404).json({ error: "Record not found" });
 
@@ -193,8 +278,19 @@ export default async function handler(req, res) {
       const key = storageMatch[1] ? decodeURIComponent(storageMatch[1]) : null;
       const shared = url.searchParams.get("shared") === "true";
       const bucket = shared ? "shared" : "personal";
+      const mongoCols = await getMongoCollections();
 
       if (req.method === "GET") {
+        if (mongoCols?.storage) {
+          if (key) {
+            const record = await mongoCols.storage.findOne({ key, shared });
+            return res.status(200).json({ key, value: record ? record.value : null, shared });
+          }
+          const prefix = url.searchParams.get("prefix") || "";
+          const records = await mongoCols.storage.find({ shared, key: { $regex: `^${prefix}` } }).project({ _id: 0, key: 1 }).toArray();
+          return res.status(200).json({ keys: records.map(r => r.key), prefix, shared });
+        }
+
         if (key) {
           const val = memoryStorage[bucket][key];
           if (val === undefined) return res.status(200).json({ key, value: null, shared });
@@ -207,14 +303,76 @@ export default async function handler(req, res) {
 
       if (req.method === "POST" && key) {
         const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
+        if (mongoCols?.storage) {
+          await mongoCols.storage.updateOne(
+            { key, shared: !!body.shared },
+            { $set: { key, value: body.value, shared: !!body.shared } },
+            { upsert: true }
+          );
+          return res.status(200).json({ key, value: body.value, shared: !!body.shared });
+        }
         memoryStorage[bucket][key] = body.value;
         return res.status(200).json({ key, value: body.value, shared: !!body.shared });
       }
 
       if (req.method === "DELETE" && key) {
+        if (mongoCols?.storage) {
+          const resDel = await mongoCols.storage.deleteOne({ key, shared });
+          return res.status(200).json({ key, deleted: resDel.deletedCount > 0, shared });
+        }
         const deleted = key in memoryStorage[bucket];
         delete memoryStorage[bucket][key];
         return res.status(200).json({ key, deleted, shared });
+      }
+    }
+
+    // 4. Gemini Highlights API
+    if (
+      pathname === "/api/gemini/extract-highlights" ||
+      pathname === "/api/claude/extract-highlights" ||
+      pathname === "/gemini/extract-highlights" ||
+      pathname === "/claude/extract-highlights"
+    ) {
+      const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
+      const { techPackNotes, deptOptions } = body;
+      if (!techPackNotes || !techPackNotes.trim()) {
+        return res.status(400).json({ error: "techPackNotes is required" });
+      }
+      const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({ error: "GEMINI_API_KEY is not set on the server" });
+      }
+      const deptList = Array.isArray(deptOptions) && deptOptions.length ? deptOptions : ["All"];
+      const prompt = `You are reviewing a garment tech pack's comments / notes section for a production team. Pull out only the distinct, important buyer instructions that a team could miss and cause rework — things like materials, trims, colors, construction details, measurements, approvals, or packing requirements. Ignore generic boilerplate.
+
+Return ONLY a JSON array, no markdown fences, no explanation. Each item must follow this format:
+{"text": "<concise instruction, under 20 words>", "dept": "<one of: ${deptList.join(", ")}, or All if it applies broadly>"}
+
+If nothing relevant is found, return [].
+
+Tech pack notes:
+"""
+${techPackNotes}
+"""`;
+
+      try {
+        const { GoogleGenerativeAI } = await import("@google/generative-ai");
+        const genAI = new GoogleGenerativeAI(apiKey);
+        let result;
+        try {
+          const model = genAI.getGenerativeModel({ model: "gemini-3.6-flash" });
+          result = await model.generateContent(prompt);
+        } catch (err) {
+          const fallbackModel = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+          result = await fallbackModel.generateContent(prompt);
+        }
+        const responseText = result.response.text();
+        const raw = responseText ? responseText.trim() : "";
+        const cleaned = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
+        const items = JSON.parse(cleaned);
+        return res.status(200).json({ items });
+      } catch (err) {
+        return res.status(500).json({ error: err.message || "Failed to process Gemini request" });
       }
     }
 

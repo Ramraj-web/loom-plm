@@ -12,7 +12,7 @@ router.post("/extract-highlights", async (req, res) => {
     return res.status(400).json({ error: "techPackNotes is required" });
   }
 
-  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   if (!apiKey) {
     return res.status(500).json({ error: "GEMINI_API_KEY is not set on the server (.env)" });
   }
@@ -33,9 +33,15 @@ ${techPackNotes}
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    let result;
+    try {
+      const model = genAI.getGenerativeModel({ model: "gemini-3.6-flash" });
+      result = await model.generateContent(prompt);
+    } catch (err) {
+      const fallbackModel = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+      result = await fallbackModel.generateContent(prompt);
+    }
 
-    const result = await model.generateContent(prompt);
     const responseText = result.response.text();
 
     const raw = responseText ? responseText.trim() : "";
