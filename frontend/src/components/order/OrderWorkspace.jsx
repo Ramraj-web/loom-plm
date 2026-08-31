@@ -163,6 +163,113 @@ function PreProductionTab({ order, role, onFieldChange, onSubmit, onApprove }) {
   );
 }
 
+function OrderComplianceSection({ order, certifications = [], compliances = [] }) {
+  const linkedCerts = certifications.filter(c => c.isDeleted !== true && (c.orderId === order.id || (c.buyer === order.buyer && !c.orderId)));
+  const linkedComps = compliances.filter(c => c.isDeleted !== true && (c.orderId === order.id || (c.buyer === order.buyer && !c.orderId)));
+
+  const now = new Date();
+  const getDaysUntilExpiry = (expiryDateStr) => {
+    if (!expiryDateStr) return null;
+    const exp = new Date(expiryDateStr);
+    if (isNaN(exp.getTime())) return null;
+    return Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#1B2130" }}>Compliance & Certification Checkpoints</div>
+          <div style={{ fontSize: 11.5, color: "#8A8D98", marginTop: 2 }}>
+            Live buyer certifications, scope validity, and compliance testing requirements linked to PO #{order.id} ({order.buyer})
+          </div>
+        </div>
+        <span style={{ fontSize: 11.5, fontWeight: 700, padding: "4px 10px", borderRadius: 999, background: "#F0EFFB", color: "#534AB7" }}>
+          {linkedComps.filter(c => c.status === "Passed").length}/{linkedComps.length || 1} Checked
+        </span>
+      </div>
+
+      {/* Linked Certifications */}
+      <div style={{ marginBottom: 18 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "#4B5563", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
+          Certifications ({linkedCerts.length})
+        </div>
+        {linkedCerts.length === 0 ? (
+          <div style={{ padding: "12px 14px", borderRadius: 8, background: "#F9FAFB", border: "1px solid #E5E7EB", color: "#9CA3AF", fontSize: 12 }}>
+            No specific certifications linked to this order yet.
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {linkedCerts.map(c => {
+              const days = getDaysUntilExpiry(c.expiryDate);
+              const isExp = c.status === "Expired" || (days !== null && days < 0);
+              const isExpSoon = days !== null && days >= 0 && days <= 30 && c.status === "Approved";
+              return (
+                <div key={c.id || c.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", borderRadius: 8, background: isExp ? "#FEF2F2" : "#F7FBF9", border: `1px solid ${isExp ? "#FECACA" : "#DCEFE6"}` }}>
+                  <div>
+                    <div style={{ fontWeight: 700, color: "#111827", fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
+                      <CheckCircle2 size={13} color="#059669" />
+                      {c.name} <span style={{ fontFamily: "monospace", fontSize: 11, color: "#6B7280", fontWeight: 400 }}>({c.certNo || "No cert#"})</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: "#6B7280", marginTop: 2 }}>
+                      Issuing Body: {c.issuingOrg || "Accredited"} · Expiry: {c.expiryDate || "—"} {isExpSoon ? " (Expiring Soon)" : isExp ? " (Expired)" : ""}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: isExp ? "#FEE2E2" : "#DCFCE7", color: isExp ? "#991B1B" : "#065F46" }}>
+                      {isExp ? "Expired" : isExpSoon ? "Expiring Soon" : (c.status || "Approved")}
+                    </span>
+                    {c.file && <div style={{ fontSize: 10, color: "#059669", marginTop: 2 }}>✓ {c.file}</div>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Linked Compliance Requirements */}
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "#4B5563", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
+          Compliance & Quality Requirements ({linkedComps.length})
+        </div>
+        {linkedComps.length === 0 ? (
+          <div style={{ padding: "12px 14px", borderRadius: 8, background: "#F9FAFB", border: "1px solid #E5E7EB", color: "#9CA3AF", fontSize: 12 }}>
+            No compliance requirements linked to this PO.
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {linkedComps.map(comp => {
+              const isPassed = comp.status === "Passed";
+              const isFailed = comp.status === "Failed";
+              return (
+                <div key={comp.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", borderRadius: 8, background: isFailed ? "#FEF2F2" : isPassed ? "#F0FDF4" : "#F9FAFB", border: `1px solid ${isFailed ? "#FECACA" : isPassed ? "#BBF7D0" : "#E5E7EB"}` }}>
+                  <div>
+                    <div style={{ fontWeight: 700, color: "#111827", fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
+                      {isPassed ? <CheckCircle2 size={13} color="#059669" /> : isFailed ? <AlertTriangle size={13} color="#DC2626" /> : <Clock size={13} color="#D97706" />}
+                      {comp.name}
+                    </div>
+                    <div style={{ fontSize: 11, color: "#6B7280", marginTop: 2 }}>
+                      {comp.category} · Assigned: {comp.responsiblePerson || "Unassigned"} ({comp.department || "Compliance"}) · Due: {comp.dueDate || "—"}
+                    </div>
+                    {comp.description && <div style={{ fontSize: 11.5, color: "#4B5563", marginTop: 3 }}>{comp.description}</div>}
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 999, background: isPassed ? "#DCFCE7" : isFailed ? "#FEE2E2" : "#FEF3C7", color: isPassed ? "#065F46" : isFailed ? "#991B1B" : "#92400E" }}>
+                      {comp.status}
+                    </span>
+                    <div style={{ fontSize: 10, color: "#6B7280", marginTop: 3 }}>Priority: {comp.priority || "Medium"}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function CostingTab({ order, onSetTemplate, onUpdateRow, onAddRow }) {
   const tmpl = COSTING_TEMPLATES[order.costingTemplate] || COSTING_TEMPLATES.fabric;
   const rows = order.costingRows || [];
@@ -418,7 +525,7 @@ function OrderHighlightsCard({ order, role }) {
   );
 }
 
-function DocumentsPanel({ order, role, costingContent, preProdContent, onUpdateShippedQty }) {
+function DocumentsPanel({ order, role, costingContent, preProdContent, complianceContent, onUpdateShippedQty }) {
   const [activeTab, setActiveTab] = useState("Files");
   const [docs, setDocs] = useState({});
   const [customTypes, setCustomTypes] = useState({});
@@ -564,7 +671,7 @@ function DocumentsPanel({ order, role, costingContent, preProdContent, onUpdateS
       <Card style={{ flex: 1, padding: 0, overflow: "hidden" }}>
         <div style={{ height: 3, background: ACCENT }} />
         <div style={{ padding: "18px 20px" }}>
-          {activeTab === "Costing" && costingContent ? costingContent : activeTab === "Pre-Production" && preProdContent ? preProdContent : (
+          {activeTab === "Costing" && costingContent ? costingContent : activeTab === "Pre-Production" && preProdContent ? preProdContent : activeTab === "Compliance & Certs" && complianceContent ? complianceContent : (
           <>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
             <div style={{ width: 26, height: 26, borderRadius: 7, background: "#F0EFFB", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -732,7 +839,7 @@ function DocumentsPanel({ order, role, costingContent, preProdContent, onUpdateS
 export function OrderWorkspace({
   order, onBack, onUpdateStages, role, onSetTemplate, onSetCostingTemplate,
   onUpdateCostingRow, onAddCostingRow, onUpdateShippedQty, onPreProdField,
-  onPreProdSubmit, onPreProdApprove
+  onPreProdSubmit, onPreProdApprove, certifications = [], compliances = []
 }) {
   const cuttingIdx = order.stages.findIndex(s => s.name === "Cutting");
   const bulkGateOpen = allPreProdApproved(order);
@@ -815,6 +922,10 @@ export function OrderWorkspace({
     />
   );
 
+  const complianceContent = (
+    <OrderComplianceSection order={order} certifications={certifications} compliances={compliances} />
+  );
+
   return (
     <div>
       <BackLink onClick={onBack} label="Back" />
@@ -849,7 +960,14 @@ export function OrderWorkspace({
 
       {trackerCard}
 
-      <DocumentsPanel order={order} role={role} costingContent={costingContent} preProdContent={preProdContent} onUpdateShippedQty={onUpdateShippedQty} />
+      <DocumentsPanel
+        order={order}
+        role={role}
+        costingContent={costingContent}
+        preProdContent={preProdContent}
+        complianceContent={complianceContent}
+        onUpdateShippedQty={onUpdateShippedQty}
+      />
     </div>
   );
 }
