@@ -1,6 +1,7 @@
 {
   "version": 2,
-  "buildCommand": "npm install && cd frontend && npm install",
+  "buildCommand": "cd frontend && npm install && npm run build",
+  "outputDirectory": "frontend/dist",
   "rewrites": [
     {
       "source": "/api/:match*",
@@ -8,7 +9,7 @@
     },
     {
       "source": "/((?!api).*)",
-      "destination": "/frontend/dist/index.html"
+      "destination": "/index.html"
     }
   ],
   "functions": {
