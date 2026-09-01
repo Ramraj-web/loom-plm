@@ -96,6 +96,8 @@ const SOFT_DELETE_RESOURCES = [
   "debitNotes",
   "capas",
   "notifications",
+  "suppliers",
+  "supplierWork",
 ];
 
 router.get("/:resource", async (req, res, next) => {

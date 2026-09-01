@@ -21,6 +21,876 @@ export const VAP_SUPPLIERS = [
   "Elite Print & Embro", "ColorTex Dyeing", "Precision Embroidery Co.", "SunPrint Studio"
 ];
 
+export const SUPPLIER_TYPES = [
+  "Printing & Embroidery",
+  "Dyeing & Washing",
+  "Fabric Mill",
+  "Trims & Accessories",
+  "Knitting & Spinning",
+  "Embellishment",
+  "Others"
+];
+
+export const INITIAL_SUPPLIERS = [
+  {
+    id: "sup-elite-print",
+    name: "Elite Print & Embro",
+    code: "SUP-EPE-01",
+    type: "Printing & Embroidery",
+    contactPerson: "Manoj Kumar",
+    mobile: "+91 98421 88320",
+    email: "orders@eliteprint.com",
+    address: "42, Avinashi Road, Anupparpalayam",
+    city: "Tirupur",
+    country: "India",
+    onTimeTarget: 95,
+    qualityTarget: 98,
+    notes: "Specialized in reactive rotary printing, high-density embroidery, and silicone badge application.",
+    latestOrderDate: "2026-05-10T10:00:00.000Z",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    isDeleted: false
+  },
+  {
+    id: "sup-colortex",
+    name: "ColorTex Dyeing",
+    code: "SUP-CTX-02",
+    type: "Dyeing & Washing",
+    contactPerson: "R. Saravanan",
+    mobile: "+91 94432 19045",
+    email: "labdips@colortexdyeing.in",
+    address: "18, SIPCOT Industrial Park, Perundurai",
+    city: "Erode",
+    country: "India",
+    onTimeTarget: 92,
+    qualityTarget: 96,
+    notes: "OEKO-TEX Class 1 certified soft flow and garment dyeing facility.",
+    latestOrderDate: "2026-05-08T14:30:00.000Z",
+    createdAt: "2026-01-05T00:00:00.000Z",
+    isDeleted: false
+  },
+  {
+    id: "sup-precision-embro",
+    name: "Precision Embroidery Co.",
+    code: "SUP-PEC-03",
+    type: "Printing & Embroidery",
+    contactPerson: "Anand Venkatesh",
+    mobile: "+91 97890 55112",
+    email: "info@precisionembro.com",
+    address: "7/14, Angeripalayam Main Road",
+    city: "Tirupur",
+    country: "India",
+    onTimeTarget: 95,
+    qualityTarget: 99,
+    notes: "Multi-head Tajima embroidery machines with laser cutting and sequin attachment.",
+    latestOrderDate: "2026-05-05T09:15:00.000Z",
+    createdAt: "2026-01-10T00:00:00.000Z",
+    isDeleted: false
+  },
+  {
+    id: "sup-sunprint",
+    name: "SunPrint Studio",
+    code: "SUP-SPS-04",
+    type: "Printing & Embroidery",
+    contactPerson: "K. Murugan",
+    mobile: "+91 98944 67200",
+    email: "contact@sunprintstudio.com",
+    address: "115, Palladam Road, Veerapandi",
+    city: "Tirupur",
+    country: "India",
+    onTimeTarget: 90,
+    qualityTarget: 95,
+    notes: "Digital pigment printing, sublimation printing, and heat transfer labels.",
+    latestOrderDate: "2026-05-02T11:45:00.000Z",
+    createdAt: "2026-01-15T00:00:00.000Z",
+    isDeleted: false
+  }
+];
+
+export const WORK_PURPOSES = [
+  "Printing",
+  "Embroidery",
+  "Dyeing",
+  "Fabric Processing",
+  "Trims",
+  "Washing",
+  "Finishing",
+  "Packaging",
+  "Testing",
+  "Quality Inspection",
+  "Sample Development",
+  "CAD",
+  "Other"
+];
+
+export const INITIAL_SUPPLIER_WORK = [
+  {
+    id: "work-1",
+    orderId: "GKT-1054",
+    supplierId: "sup-elite-print",
+    supplierName: "Elite Print & Embro",
+    source: "order",
+    dept: "VAP",
+    taskName: "Printing / Embroidery",
+    stageIdx: 13,
+    purpose: "Printing",
+    description: "Front chest pigment printing and puff print for Zara Hoodie batch",
+    assignedDate: "2026-05-10",
+    expectedDate: "20 May",
+    completedDate: null,
+    status: "In Progress",
+    qualityStatus: "Pending",
+    qualityIssueDescription: "",
+    createdAt: "2026-05-10T10:00:00.000Z",
+    isDeleted: false
+  },
+  {
+    id: "work-2",
+    orderId: "ST-7788",
+    supplierId: "sup-precision-embro",
+    supplierName: "Precision Embroidery Co.",
+    source: "dept_task",
+    dept: "Production",
+    taskName: "Printing / Embroidery",
+    stageIdx: 13,
+    purpose: "Embroidery",
+    description: "Chest multi-head embroidery for H&M T-Shirt",
+    assignedDate: "2026-05-05",
+    expectedDate: "18 May",
+    completedDate: null,
+    status: "Delayed",
+    qualityStatus: "Issue",
+    qualityIssueDescription: "Embroidery thread tension and color mismatch",
+    createdAt: "2026-05-05T09:15:00.000Z",
+    isDeleted: false
+  },
+  {
+    id: "work-3",
+    orderId: "PL-3321",
+    supplierId: "sup-colortex",
+    supplierName: "ColorTex Dyeing",
+    source: "dept_task",
+    dept: "Purchase – Fabric",
+    taskName: "Fabric Booking",
+    stageIdx: 2,
+    purpose: "Dyeing",
+    description: "Reactive yarn dyeing and lab dip matching for Zara Polo pique fabric",
+    assignedDate: "2026-05-08",
+    expectedDate: "28 May",
+    completedDate: "2026-05-27",
+    status: "Completed",
+    qualityStatus: "Passed",
+    qualityIssueDescription: "",
+    createdAt: "2026-05-08T14:30:00.000Z",
+    isDeleted: false
+  },
+  {
+    id: "work-4",
+    orderId: "TR-8899",
+    supplierId: "sup-sunprint",
+    supplierName: "SunPrint Studio",
+    source: "order",
+    dept: "VAP",
+    taskName: "Printing / Embroidery",
+    stageIdx: 13,
+    purpose: "Printing",
+    description: "Heat transfer care labels and pocket branding for M&S Trouser",
+    assignedDate: "2026-05-02",
+    expectedDate: "25 May",
+    completedDate: "2026-05-24",
+    status: "Completed",
+    qualityStatus: "Passed",
+    qualityIssueDescription: "",
+    createdAt: "2026-05-02T11:45:00.000Z",
+    isDeleted: false
+  }
+];
+
+export function calculateSupplierMetrics(supplier, orders = [], supplierWork = []) {
+  const supplierName = supplier?.name || "";
+  const supplierId = supplier?.id || "";
+  const matchingItems = [];
+  const processedKeys = new Set();
+
+  // 1. Process explicit work assignments
+  const activeWork = (supplierWork.length > 0 ? supplierWork : INITIAL_SUPPLIER_WORK).filter(
+    w => !w.isDeleted && (w.supplierId === supplierId || w.supplierName === supplierName)
+  );
+
+  activeWork.forEach((w) => {
+    const parentOrder = orders.find(o => o.id === w.orderId) || {
+      id: w.orderId,
+      style: w.style || "Custom Style",
+      buyer: w.buyer || "Direct Buyer",
+      qty: w.qty || 0,
+      ship: w.expectedDate,
+      status: w.status === "Delayed" ? "Delayed" : "On Track"
+    };
+
+    const isDelayed = w.status === "Delayed";
+    const isQualityIssue = w.qualityStatus === "Issue" || Boolean(w.qualityIssueDescription);
+
+    const key = `${parentOrder.id}-${w.stageIdx !== undefined ? w.stageIdx : w.id}`;
+    processedKeys.add(key);
+
+    matchingItems.push({
+      id: w.id,
+      order: parentOrder,
+      orderId: parentOrder.id,
+      style: parentOrder.style,
+      buyer: parentOrder.buyer,
+      qty: parentOrder.qty,
+      dept: w.dept || "VAP",
+      taskName: w.taskName || "Custom Job",
+      purpose: w.purpose || "Work Assignment",
+      description: w.description || "",
+      assignedDate: w.assignedDate || w.createdAt || "2026-05-10",
+      expectedDate: w.expectedDate || parentOrder.ship || "—",
+      completedDate: w.completedDate || null,
+      status: w.status || "Pending",
+      qualityStatus: w.qualityStatus || "Pending",
+      qualityIssueDescription: w.qualityIssueDescription || "",
+      isDelayed,
+      isQualityIssue,
+      assignedAt: w.createdAt || w.assignedDate
+    });
+  });
+
+  // 2. Also check stage-level assignments from orders that haven't been captured in explicit work
+  orders.forEach(o => {
+    if (o.isDeleted) return;
+    if (o.stages && Array.isArray(o.stages)) {
+      o.stages.forEach((stage, idx) => {
+        if (stage.supplier === supplierName || (supplierName && o.supplier === supplierName)) {
+          const key = `${o.id}-${idx}`;
+          if (!processedKeys.has(key)) {
+            processedKeys.add(key);
+            const isDelayed = Boolean(stage.reason || o.status === "Delayed");
+            const isQualityIssue = Boolean(stage.reason === "Quality rework" || (stage.reason && stage.reason.toLowerCase().includes("quality")));
+            
+            matchingItems.push({
+              id: `stage-${o.id}-${idx}`,
+              order: o,
+              orderId: o.id,
+              style: o.style,
+              buyer: o.buyer,
+              qty: o.qty,
+              dept: stage.dept || "VAP",
+              taskName: stage.name,
+              purpose: stage.dept === "VAP" ? "Printing & Embroidery" : "Fabric Processing",
+              description: `${stage.name} for ${o.id} ${o.style}`,
+              assignedDate: o.createdAt ? new Date(o.createdAt).toISOString().split("T")[0] : "2026-05-01",
+              expectedDate: stage.planned || o.ship || "—",
+              completedDate: stage.status === "done" ? o.ship : null,
+              status: stage.status === "done" ? "Completed" : stage.status === "in_progress" ? (isDelayed ? "Delayed" : "In Progress") : "Pending",
+              qualityStatus: isQualityIssue ? "Issue" : stage.status === "done" ? "Passed" : "Pending",
+              qualityIssueDescription: isQualityIssue ? (stage.reason || "Quality inspection defect") : "",
+              isDelayed,
+              isQualityIssue,
+              assignedAt: o.createdAt
+            });
+          }
+        }
+      });
+    }
+  });
+
+  // Sort matching items latest first
+  matchingItems.sort((a, b) => {
+    const timeA = a.assignedAt ? new Date(a.assignedAt).getTime() : 0;
+    const timeB = b.assignedAt ? new Date(b.assignedAt).getTime() : 0;
+    return timeB - timeA;
+  });
+
+  const jobs = matchingItems.length;
+  const delayed = matchingItems.filter(item => item.isDelayed).length;
+  const qualityIssues = matchingItems.filter(item => item.isQualityIssue).length;
+  const onTime = Math.max(0, jobs - delayed);
+  const onTimeRate = jobs > 0 ? Math.round((onTime / jobs) * 100) : null;
+  const qualityPerformance = jobs > 0 ? Math.round((Math.max(0, jobs - qualityIssues) / jobs) * 100) : null;
+
+  // Unique associated orders (most recent first)
+  const uniqueOrdersMap = new Map();
+  matchingItems.forEach(item => {
+    if (!uniqueOrdersMap.has(item.order.id)) {
+      uniqueOrdersMap.set(item.order.id, item.order);
+    }
+  });
+  const associatedOrders = Array.from(uniqueOrdersMap.values());
+
+  // Determine latest order
+  let latestOrder = null;
+  if (associatedOrders.length > 0) {
+    latestOrder = associatedOrders[0];
+  }
+
+  // Performance status
+  let status = "New";
+  if (jobs > 0) {
+    if (onTimeRate >= 95 && qualityIssues === 0) status = "Excellent";
+    else if (onTimeRate >= 85) status = "Good";
+    else if (onTimeRate >= 70) status = "Needs Attention";
+    else status = "Poor";
+  }
+
+  return {
+    jobs,
+    onTime,
+    delayed,
+    qualityIssues,
+    onTimeRate,
+    qualityPerformance,
+    status,
+    associatedOrders,
+    matchingItems,
+    latestOrder
+  };
+}
+
+/**
+ * Robust date comparison helper that matches targetDate with checkDate.
+ * Handles ISO timestamps, YYYY-MM-DD, DD-MM-YYYY, and "12 May" formats across full 24-hour day.
+ */
+export function isSameDay(targetDate, checkDate) {
+  if (!targetDate || !checkDate) return false;
+  
+  let tYear, tMonth, tDay;
+  if (typeof targetDate === "string") {
+    const trimmedT = targetDate.trim();
+    if (trimmedT.includes("-")) {
+      const parts = trimmedT.split("T")[0].split("-");
+      if (parts[0].length === 4) {
+        // YYYY-MM-DD
+        tYear = parseInt(parts[0], 10);
+        tMonth = parseInt(parts[1], 10) - 1;
+        tDay = parseInt(parts[2], 10);
+      } else {
+        // DD-MM-YYYY
+        tDay = parseInt(parts[0], 10);
+        tMonth = parseInt(parts[1], 10) - 1;
+        tYear = parseInt(parts[2], 10);
+      }
+    } else if (trimmedT.includes("/")) {
+      const parts = trimmedT.split("/");
+      if (parts[2]?.length === 4) {
+        // DD/MM/YYYY
+        tDay = parseInt(parts[0], 10);
+        tMonth = parseInt(parts[1], 10) - 1;
+        tYear = parseInt(parts[2], 10);
+      }
+    } else {
+      const parsedT = new Date(trimmedT);
+      if (!isNaN(parsedT.getTime())) {
+        tYear = parsedT.getFullYear();
+        tMonth = parsedT.getMonth();
+        tDay = parsedT.getDate();
+      }
+    }
+  } else if (targetDate instanceof Date && !isNaN(targetDate.getTime())) {
+    tYear = targetDate.getFullYear();
+    tMonth = targetDate.getMonth();
+    tDay = targetDate.getDate();
+  }
+
+  if (tYear === undefined || isNaN(tYear) || tMonth === undefined || isNaN(tMonth) || tDay === undefined || isNaN(tDay)) return false;
+
+  // Compare against checkDate
+  if (typeof checkDate === "string") {
+    const trimmed = checkDate.trim();
+    const monthNames = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+    const lower = trimmed.toLowerCase();
+    
+    // Check "12 May" or "12 May 2026" or "12-May-2026"
+    const textMatch = lower.match(/^(\d{1,2})[\s\-]+([a-z]{3})(?:[\s\-]+(\d{4}))?$/);
+    if (textMatch) {
+      const day = parseInt(textMatch[1], 10);
+      const monthIdx = monthNames.indexOf(textMatch[2]);
+      const year = textMatch[3] ? parseInt(textMatch[3], 10) : tYear;
+      if (day === tDay && monthIdx === tMonth && (textMatch[3] ? year === tYear : true)) {
+        return true;
+      }
+    }
+
+    // Check "YYYY-MM-DD" or "YYYY-MM-DDTHH:mm:ss"
+    if (trimmed.includes("-")) {
+      const parts = trimmed.split("T")[0].split("-");
+      if (parts[0].length === 4) {
+        const cYear = parseInt(parts[0], 10);
+        const cMonth = parseInt(parts[1], 10) - 1;
+        const cDay = parseInt(parts[2], 10);
+        if (cYear === tYear && cMonth === tMonth && cDay === tDay) {
+          return true;
+        }
+      } else if (parts[2]?.length === 4) {
+        // DD-MM-YYYY
+        const cDay = parseInt(parts[0], 10);
+        const cMonth = parseInt(parts[1], 10) - 1;
+        const cYear = parseInt(parts[2], 10);
+        if (cYear === tYear && cMonth === tMonth && cDay === tDay) {
+          return true;
+        }
+      }
+    }
+
+    // Check "DD/MM/YYYY"
+    if (trimmed.includes("/")) {
+      const parts = trimmed.split("/");
+      if (parts[2]?.length === 4) {
+        const cDay = parseInt(parts[0], 10);
+        const cMonth = parseInt(parts[1], 10) - 1;
+        const cYear = parseInt(parts[2], 10);
+        if (cYear === tYear && cMonth === tMonth && cDay === tDay) {
+          return true;
+        }
+      }
+    }
+
+    const d = new Date(trimmed);
+    if (!isNaN(d.getTime())) {
+      return (
+        d.getFullYear() === tYear &&
+        d.getMonth() === tMonth &&
+        d.getDate() === tDay
+      );
+    }
+  } else if (checkDate instanceof Date && !isNaN(checkDate.getTime())) {
+    return (
+      checkDate.getFullYear() === tYear &&
+      checkDate.getMonth() === tMonth &&
+      checkDate.getDate() === tDay
+    );
+  }
+
+  return false;
+}
+
+export function formatDisplayDate(dateStr) {
+  if (!dateStr) return "Today";
+  if (typeof dateStr === "string" && dateStr.includes("-")) {
+    const parts = dateStr.split("T")[0].split("-");
+    if (parts[0].length === 4) {
+      const year = parts[0];
+      const month = parseInt(parts[1], 10) - 1;
+      const day = parseInt(parts[2], 10);
+      const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+      return `${day} ${monthNames[month]} ${year}`;
+    }
+  }
+  const d = new Date(dateStr);
+  if (!isNaN(d.getTime())) {
+    return d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+  }
+  return dateStr;
+}
+
+export function formatActivityTime(isoString) {
+  if (!isoString) return "10:00 AM";
+  const date = new Date(isoString);
+  if (isNaN(date.getTime())) return "10:00 AM";
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+/**
+ * Aggregates all real activities and work history across the application for the given date.
+ */
+export function collectActivitiesForDate(targetDate, {
+  orders = [],
+  tasks = [],
+  compliances = [],
+  certifications = [],
+  supplierWork = [],
+  notifications = [],
+  leaveRequests = [],
+  debitNotes = [],
+  capas = [],
+  attendance = {}
+} = {}) {
+  const activities = [];
+
+  // 1. Orders & T&A Stages
+  orders.forEach(o => {
+    if (o.isDeleted) return;
+
+    if (isSameDay(targetDate, o.createdAt)) {
+      activities.push({
+        id: `order-create-${o.id}`,
+        timestamp: o.createdAt || new Date(targetDate).toISOString(),
+        time: formatActivityTime(o.createdAt),
+        type: "order",
+        category: "Orders",
+        title: `Order Created: #${o.id} · ${o.style}`,
+        description: `New buyer order created for ${o.buyer} (${Number(o.qty || 0).toLocaleString()} pcs, Ship ${o.ship})`,
+        dept: "Merchandising",
+        actor: "Merchandising Team",
+        status: o.status,
+        orderId: o.id,
+        targetModule: "orders"
+      });
+    }
+
+    if (o.completed && isSameDay(targetDate, o.completedAt)) {
+      activities.push({
+        id: `order-complete-${o.id}`,
+        timestamp: o.completedAt,
+        time: formatActivityTime(o.completedAt),
+        type: "order",
+        category: "Orders",
+        title: `Order Completed: #${o.id} · ${o.style}`,
+        description: `Order successfully completed and ready for dispatch for ${o.buyer}`,
+        dept: "Logistics & Documentation",
+        actor: "Production & Shipping",
+        status: "Completed",
+        orderId: o.id,
+        targetModule: "orders"
+      });
+    }
+
+    // Stages
+    if (o.stages && Array.isArray(o.stages)) {
+      o.stages.forEach((stage, idx) => {
+        if (stage.completedAt && isSameDay(targetDate, stage.completedAt)) {
+          activities.push({
+            id: `stage-done-${o.id}-${idx}`,
+            timestamp: stage.completedAt,
+            time: formatActivityTime(stage.completedAt),
+            type: "tna",
+            category: "Tasks & T&A",
+            title: `T&A Stage Completed: ${stage.name}`,
+            description: `Stage finished for order #${o.id} (${o.style} · ${o.buyer})`,
+            dept: stage.dept || "Merchandising",
+            actor: stage.assignee || "Assigned Team",
+            status: "Done",
+            orderId: o.id,
+            targetModule: "orders"
+          });
+        } else if (stage.flaggedAt && isSameDay(targetDate, stage.flaggedAt)) {
+          activities.push({
+            id: `stage-flag-${o.id}-${idx}`,
+            timestamp: stage.flaggedAt,
+            time: formatActivityTime(stage.flaggedAt),
+            type: "tna",
+            category: "Tasks & T&A",
+            title: `Delay Flagged on ${stage.name}`,
+            description: `Issue flagged: "${stage.reason || 'Delay'}" on order #${o.id} (${o.style})`,
+            dept: stage.dept || "Production",
+            actor: stage.assignee || "Department Lead",
+            status: "Delayed",
+            orderId: o.id,
+            targetModule: "orders"
+          });
+        } else if (stage.updatedAt && isSameDay(targetDate, stage.updatedAt)) {
+          activities.push({
+            id: `stage-progress-${o.id}-${idx}`,
+            timestamp: stage.updatedAt,
+            time: formatActivityTime(stage.updatedAt),
+            type: "tna",
+            category: "Tasks & T&A",
+            title: `T&A Stage In Progress: ${stage.name}`,
+            description: `Work commenced on stage for order #${o.id} (${o.style})`,
+            dept: stage.dept || "Production",
+            actor: stage.assignee || "Production Floor",
+            status: "In Progress",
+            orderId: o.id,
+            targetModule: "orders"
+          });
+        }
+      });
+    }
+
+    // Pre-Prod documents
+    if (o.preProd) {
+      Object.entries(o.preProd).forEach(([key, doc]) => {
+        if (doc.approvedAt && isSameDay(targetDate, doc.approvedAt)) {
+          activities.push({
+            id: `preprod-app-${o.id}-${key}`,
+            timestamp: doc.approvedAt,
+            time: formatActivityTime(doc.approvedAt),
+            type: "approval",
+            category: "Tasks & T&A",
+            title: `Pre-Production Document Approved: ${key}`,
+            description: `Approved for order #${o.id} (${o.style}) by ${doc.approvedBy || "Merchandiser"}`,
+            dept: "Merchandising",
+            actor: doc.approvedBy || "Merchandiser",
+            status: "Approved",
+            orderId: o.id,
+            targetModule: "orders"
+          });
+        }
+      });
+    }
+  });
+
+  // 2. Custom Tasks
+  tasks.forEach(t => {
+    if (t.createdAt && isSameDay(targetDate, t.createdAt)) {
+      activities.push({
+        id: `custom-task-create-${t.id}`,
+        timestamp: t.createdAt,
+        time: formatActivityTime(t.createdAt),
+        type: "task",
+        category: "Tasks & T&A",
+        title: `Task Assigned: ${t.title}`,
+        description: `Action item assigned to ${t.assignee || 'Team'} (${t.dept || 'General'}) · Due: ${t.dueDate || '—'}${t.orderId ? ` · Related PO #${t.orderId}` : ''}`,
+        dept: t.dept || "Merchandising",
+        actor: t.assignee || "Task Lead",
+        status: t.status === "done" ? "Done" : "In Progress",
+        orderId: t.orderId,
+        targetModule: "tasks"
+      });
+    }
+    if (t.completedAt && isSameDay(targetDate, t.completedAt)) {
+      activities.push({
+        id: `custom-task-done-${t.id}`,
+        timestamp: t.completedAt,
+        time: formatActivityTime(t.completedAt),
+        type: "task",
+        category: "Tasks & T&A",
+        title: `Task Completed: ${t.title}`,
+        description: `Completed by ${t.assignee || 'Assignee'}`,
+        dept: t.dept || "Merchandising",
+        actor: t.assignee || "Assignee",
+        status: "Done",
+        orderId: t.orderId,
+        targetModule: "tasks"
+      });
+    }
+  });
+
+  // 3. Supplier Work
+  supplierWork.forEach(w => {
+    if (w.isDeleted) return;
+    if (isSameDay(targetDate, w.assignedDate || w.createdAt)) {
+      activities.push({
+        id: `supp-work-assign-${w.id}`,
+        timestamp: w.createdAt || w.assignedDate,
+        time: formatActivityTime(w.createdAt),
+        type: "supplier",
+        category: "Supplier Work",
+        title: `Work Assigned to Supplier: ${w.supplierName}`,
+        description: `Purpose: ${w.purpose || 'Processing'} · Order #${w.orderId} (${w.description || 'Production Batch'}) · Expected: ${w.expectedDate || '—'}`,
+        dept: w.dept || "VAP",
+        actor: "Sourcing & Merchandising",
+        status: w.status || "In Progress",
+        orderId: w.orderId,
+        targetModule: "supplierPerformance"
+      });
+    }
+    if (w.completedDate && isSameDay(targetDate, w.completedDate)) {
+      activities.push({
+        id: `supp-work-done-${w.id}`,
+        timestamp: w.completedDate,
+        time: formatActivityTime(w.completedDate),
+        type: "supplier",
+        category: "Supplier Work",
+        title: `Supplier Completed Work: ${w.supplierName}`,
+        description: `Completed ${w.purpose || 'work'} for order #${w.orderId} · Quality: ${w.qualityStatus || 'Passed'}`,
+        dept: w.dept || "VAP",
+        actor: w.supplierName,
+        status: "Completed",
+        orderId: w.orderId,
+        targetModule: "supplierPerformance"
+      });
+    }
+  });
+
+  // 4. Compliances & Certifications
+  compliances.forEach(c => {
+    if (c.isDeleted) return;
+    if (c.completedAt && isSameDay(targetDate, c.completedAt)) {
+      activities.push({
+        id: `comp-done-${c.id}`,
+        timestamp: c.completedAt,
+        time: formatActivityTime(c.completedAt),
+        type: "compliance",
+        category: "Quality & Compliance",
+        title: `Compliance Audit Passed: ${c.name}`,
+        description: `Verified for buyer ${c.buyer} (${c.department}) · ${c.notes || c.description}`,
+        dept: c.department || "Compliance & Certification",
+        actor: c.responsiblePerson || "Compliance Officer",
+        status: "Passed",
+        orderId: c.orderId,
+        targetModule: "compliance"
+      });
+    } else if (c.createdAt && isSameDay(targetDate, c.createdAt)) {
+      activities.push({
+        id: `comp-create-${c.id}`,
+        timestamp: c.createdAt,
+        time: formatActivityTime(c.createdAt),
+        type: "compliance",
+        category: "Quality & Compliance",
+        title: `Compliance Requirement Logged: ${c.name}`,
+        description: `Initiated for order #${c.orderId} (${c.buyer}) · Due: ${c.dueDate}`,
+        dept: c.department || "Compliance & Certification",
+        actor: c.responsiblePerson || "Compliance Team",
+        status: c.status || "In Progress",
+        orderId: c.orderId,
+        targetModule: "compliance"
+      });
+    }
+  });
+
+  certifications.forEach(cert => {
+    if (cert.isDeleted) return;
+    if (cert.issueDate && isSameDay(targetDate, cert.issueDate)) {
+      activities.push({
+        id: `cert-issue-${cert.id}`,
+        timestamp: cert.issueDate,
+        time: formatActivityTime(cert.issueDate),
+        type: "certification",
+        category: "Quality & Compliance",
+        title: `Certificate Issued: ${cert.name}`,
+        description: `Cert #${cert.certNo || '—'} issued by ${cert.issuingOrg || 'Agency'} for ${cert.buyer} · Valid until ${cert.expiryDate}`,
+        dept: "Compliance & Certification",
+        actor: cert.issuingOrg || "Compliance Officer",
+        status: cert.status || "Approved",
+        orderId: cert.orderId,
+        targetModule: "compliance"
+      });
+    }
+  });
+
+  // 5. Notifications
+  notifications.forEach(n => {
+    if (n.isDeleted) return;
+    if (n.createdAt && isSameDay(targetDate, n.createdAt)) {
+      activities.push({
+        id: `notif-act-${n.id}`,
+        timestamp: n.createdAt,
+        time: formatActivityTime(n.createdAt),
+        type: "notification",
+        category: "Notifications",
+        title: `System Alert: ${n.title}`,
+        description: n.message,
+        dept: n.relatedModule || "System",
+        actor: "Loom PLM Engine",
+        status: n.priority,
+        orderId: n.relatedId,
+        targetModule: n.relatedModule || "notifications"
+      });
+    }
+  });
+
+  // 6. Debit Notes & CAPAs
+  debitNotes.forEach(dn => {
+    if (isSameDay(targetDate, dn.date || dn.createdAt)) {
+      activities.push({
+        id: `debit-note-${dn.id}`,
+        timestamp: dn.createdAt || new Date(targetDate).toISOString(),
+        time: formatActivityTime(dn.createdAt),
+        type: "financial",
+        category: "Orders",
+        title: `Debit Note Issued: #${dn.id} (${dn.buyer})`,
+        description: `Amount: $${Number(dn.amount).toLocaleString()} · PO #${dn.po} · Reason: ${dn.reason}`,
+        dept: "Finance",
+        actor: "Finance Team",
+        status: "Debit Note",
+        orderId: dn.po,
+        targetModule: "debitNotes"
+      });
+    }
+  });
+
+  capas.forEach(capa => {
+    if (isSameDay(targetDate, capa.date || capa.createdAt)) {
+      activities.push({
+        id: `capa-${capa.id}`,
+        timestamp: capa.createdAt || new Date(targetDate).toISOString(),
+        time: formatActivityTime(capa.createdAt),
+        type: "quality",
+        category: "Quality & Compliance",
+        title: `CAPA Action Logged: #${capa.id} (${capa.buyer})`,
+        description: `Issue: ${capa.issue} · Action: ${capa.action}`,
+        dept: "Quality",
+        actor: "Quality Assurance",
+        status: capa.status,
+        orderId: capa.po,
+        targetModule: "capas"
+      });
+    }
+  });
+
+  // 7. Leave Requests
+  if (Array.isArray(leaveRequests)) {
+    leaveRequests.forEach(lr => {
+      if (isSameDay(targetDate, lr.from) || isSameDay(targetDate, lr.to) || isSameDay(targetDate, lr.createdAt)) {
+        activities.push({
+          id: `leave-req-${lr.id}`,
+          timestamp: lr.createdAt || new Date(targetDate).toISOString(),
+          time: formatActivityTime(lr.createdAt),
+          type: "task",
+          category: "Tasks & T&A",
+          title: `Staff Leave ${lr.status === 'approved' ? 'Approved' : lr.status === 'rejected' ? 'Rejected' : 'Requested'}: ${lr.name}`,
+          description: `Department: ${lr.dept || 'Staff'} · Duration: ${lr.from} to ${lr.to} · Reason: ${lr.reason || 'Personal'}`,
+          dept: lr.dept || "Merchandising",
+          actor: lr.name,
+          status: lr.status === "approved" ? "Approved" : lr.status === "rejected" ? "Rejected" : "Pending",
+          targetModule: "attendance"
+        });
+      }
+    });
+  }
+
+  // Sort newest first
+  activities.sort((a, b) => {
+    const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+    const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+    return timeB - timeA;
+  });
+
+  return activities;
+}
+
+export const INITIAL_CUSTOM_TASKS = [
+  {
+    id: "task-seed-1",
+    title: "Review and approve lab dip test report for GKT-1054",
+    orderId: "GKT-1054",
+    dept: "Purchase – Fabric",
+    assignee: "Selva Kumar",
+    dueDate: "20 May",
+    priority: "high",
+    notes: "Reactive dye shade approval required before bulk fabric dyeing.",
+    status: "in_progress",
+    createdAt: "2026-05-12T08:00:00.000Z"
+  },
+  {
+    id: "task-seed-2",
+    title: "Finalize pattern grading marker with CAD team",
+    orderId: "ST-7788",
+    dept: "CAD",
+    assignee: "Senthil",
+    dueDate: "18 May",
+    priority: "medium",
+    notes: "Grading rules updated for EU size specs.",
+    status: "in_progress",
+    createdAt: "2026-05-12T11:20:00.000Z"
+  },
+  {
+    id: "task-seed-3",
+    title: "Quality inline audit for Zara Hoodie sewing line #2",
+    orderId: "GKT-1054",
+    dept: "Quality",
+    assignee: "Sezhiyan",
+    dueDate: "14 May",
+    priority: "high",
+    notes: "Hoodie pocket bar tack and double needle seam inspection.",
+    status: "done",
+    createdAt: "2026-05-11T09:00:00.000Z",
+    completedAt: "2026-05-12T15:30:00.000Z"
+  },
+  {
+    id: "task-seed-4",
+    title: "Verify export packing list & customs carton count",
+    orderId: "PL-3321",
+    dept: "Logistics & Documentation",
+    assignee: "Srinivasan",
+    dueDate: "28 May",
+    priority: "medium",
+    notes: "Commercial invoice draft ready.",
+    status: "in_progress",
+    createdAt: "2026-05-10T14:00:00.000Z"
+  }
+];
+
 export const TA_STAGES_90 = [
   { name: "Order Confirmation & Enquiry", day: "Day 1", dept: "Merchandising" },
   { name: "Tech Pack Received", day: "Day 1", dept: "Merchandising" },
@@ -233,6 +1103,27 @@ export const ORG_STRUCTURE = {
   ],
 };
 
+export const DEFAULT_DEPT_DESCRIPTIONS = {
+  "Merchandising": "Owns T&A steps: Order Confirmation & Enquiry, Tech Pack Received, Fit Approval, Size Set Approval, PP Approval. Responsible for buyer communications, approvals, and order tracking.",
+  "Program": "Manages work orders, internal order entry, program sheets, fabric programming, and merchandiser approvals.",
+  "Planning": "Responsible for line planning, capacity planning, cut plan, shipment planning, and PPM coordination.",
+  "Purchase – Fabric": "Owns T&A step: Fabric Booking. Responsible for fabric requirement planning, yarn planning, supplier rate closure, and lab dips acquisition.",
+  "Purchase – Trims": "Owns T&A step: Trim Booking. Responsible for BOM verification, trims & accessories planning, supplier rate closure, and PO generation.",
+  "Warehouse": "Responsible for fabric in-house receipt, inspection, CSV checking, lot cards, and stock delivery.",
+  "Testing": "Responsible for fabric testing, shrinkage checks, CSV verification, and test report approvals.",
+  "Store": "Owns T&A step: Fabric In-House. Responsible for raw material storage, inventory tracking, and material issuance.",
+  "Cutting": "Owns T&A step: Cutting. Responsible for fabric cutting, pattern execution, markers, and cut bundle generation.",
+  "Production": "Owns T&A steps: PP Sample, Feeding, Sewing. Responsible for line execution, OB chart implementation, sewing quality, and daily output.",
+  "IoT": "Responsible for smart factory IoT sensors, real-time machine monitoring, and production tracking devices.",
+  "Finishing": "Owns T&A steps: Finishing, Packing. Responsible for thread trimming, ironing, packing list generation, box auditing, and dispatch readiness.",
+  "Quality": "Owns T&A steps: Fabric Inspection, Final Inspection. Responsible for tech pack adherence, sample inspection, inline QC, bulk auditing, and final quality sign-off.",
+  "Sample": "Owns T&A steps: Fit Sample, Size Set Sample. Responsible for prototype development, fit sample creation, pattern verification, and sample submissions.",
+  "CAD": "Responsible for digital pattern making, grading, marker making, and fabric consumption optimization.",
+  "Logistics & Documentation": "Owns T&A steps: Shipment Documentation, Goods Ready / Shipment. Responsible for export documentation, customs clearance, shipping line coordination, and dispatch.",
+  "VAP": "Owns T&A step: Printing / Embroidery. Responsible for value-added processes including printing, embroidery, dyeing, washing, and embellishment closure.",
+  "Compliance & Certification": "Responsible for factory social compliance, buyer audits (BSCI, SMETA), certifications (GOTS, OCS, TC, OEKO-TEX), and sustainability standards.",
+};
+
 export const DEPT_ICONS = {
   "Merchandising": Users, "Program": ClipboardList, "Planning": Calendar, "Purchase – Fabric": Package,
   "Purchase – Trims": Package, "Warehouse": Warehouse, "Testing": ShieldCheck, "Store": Warehouse,
@@ -316,15 +1207,34 @@ export function firstNamedAssignee(dept) {
 
 export function makeStages(template, activeUpto = 0, delayedAt = null) {
   const list = TA_TEMPLATES[template] || TA_STAGES_90;
-  return list.map((s, i) => ({
-    name: s.name,
-    dept: s.dept,
-    status: i < activeUpto ? "done" : i === activeUpto ? "in_progress" : "pending",
-    assignee: firstNamedAssignee(s.dept),
-    reason: delayedAt === i ? REASONS[0] : null,
-    planned: s.day,
-    supplier: s.dept === "VAP" ? VAP_SUPPLIERS[0] : undefined,
-  }));
+  return list.map((s, i) => {
+    let completedAt = null;
+    let updatedAt = null;
+    let flaggedAt = null;
+
+    if (i < activeUpto) {
+      completedAt = i === activeUpto - 1 ? "2026-05-12T14:30:00.000Z" : "2026-05-10T12:00:00.000Z";
+    } else if (i === activeUpto) {
+      updatedAt = "2026-05-12T09:00:00.000Z";
+      if (delayedAt === i) {
+        flaggedAt = "2026-05-12T11:45:00.000Z";
+      }
+    }
+
+    return {
+      name: s.name,
+      dept: s.dept,
+      status: i < activeUpto ? "done" : i === activeUpto ? "in_progress" : "pending",
+      assignee: firstNamedAssignee(s.dept),
+      reason: delayedAt === i ? REASONS[0] : null,
+      planned: s.day,
+      supplier: s.dept === "VAP" ? VAP_SUPPLIERS[0] : undefined,
+      completedAt,
+      completedOn: completedAt ? new Date(completedAt).toLocaleDateString() : null,
+      updatedAt,
+      flaggedAt
+    };
+  });
 }
 
 export const ROLE_OPTIONS = [
@@ -644,12 +1554,12 @@ export const CAPA_STATUS_STYLE = {
 export const RISK_DELAY_DAYS = { high: 3, medium: 2, low: 1 };
 
 export const INITIAL_ORDERS = [
-  { id: "GKT-1054", buyer: "Zara", country: "Spain", season: "AW26", style: "Hoodie", qty: 12500, ship: "20 May", risk: "high", status: "At Risk", activeUpto: 10, delayedAt: 10 },
-  { id: "ST-7788", buyer: "H&M", country: "Sweden", season: "AW26", style: "T-Shirt", qty: 8000, ship: "18 May", risk: "high", status: "Delayed", activeUpto: 5, delayedAt: 5 },
-  { id: "JKT-2231", buyer: "Uniqlo", country: "Japan", season: "AW26", style: "Jacket", qty: 6200, ship: "22 May", risk: "medium", status: "At Risk", activeUpto: 7, delayedAt: null },
-  { id: "TR-8899", buyer: "M&S", country: "United Kingdom", season: "SS26", style: "Trouser", qty: 4500, ship: "25 May", risk: "medium", status: "On Track", activeUpto: 13, delayedAt: null },
-  { id: "DR-5566", buyer: "Next", country: "United Kingdom", season: "SS26", style: "Dress", qty: 5300, ship: "23 May", risk: "medium", status: "Delayed", activeUpto: 8, delayedAt: 8 },
-  { id: "PL-3321", buyer: "Zara", country: "Spain", season: "SS26", style: "Polo", qty: 9100, ship: "28 May", risk: "low", status: "On Track", activeUpto: 15, delayedAt: null },
+  { id: "GKT-1054", buyer: "Zara", country: "Spain", season: "AW26", style: "Hoodie", qty: 12500, ship: "20 May", risk: "high", status: "At Risk", activeUpto: 10, delayedAt: 10, createdAt: "2026-05-12T08:30:00.000Z" },
+  { id: "ST-7788", buyer: "H&M", country: "Sweden", season: "AW26", style: "T-Shirt", qty: 8000, ship: "18 May", risk: "high", status: "Delayed", activeUpto: 5, delayedAt: 5, createdAt: "2026-05-10T09:15:00.000Z" },
+  { id: "JKT-2231", buyer: "Uniqlo", country: "Japan", season: "AW26", style: "Jacket", qty: 6200, ship: "22 May", risk: "medium", status: "At Risk", activeUpto: 7, delayedAt: null, createdAt: "2026-05-11T14:00:00.000Z" },
+  { id: "TR-8899", buyer: "M&S", country: "United Kingdom", season: "SS26", style: "Trouser", qty: 4500, ship: "25 May", risk: "medium", status: "On Track", activeUpto: 13, delayedAt: null, createdAt: "2026-05-08T10:00:00.000Z" },
+  { id: "DR-5566", buyer: "Next", country: "United Kingdom", season: "SS26", style: "Dress", qty: 5300, ship: "23 May", risk: "medium", status: "Delayed", activeUpto: 8, delayedAt: 8, createdAt: "2026-05-09T11:30:00.000Z" },
+  { id: "PL-3321", buyer: "Zara", country: "Spain", season: "SS26", style: "Polo", qty: 9100, ship: "28 May", risk: "low", status: "On Track", activeUpto: 15, delayedAt: null, createdAt: "2026-05-06T15:00:00.000Z" },
 ];
 
 export const NOTIFICATION_PRIORITY_STYLE = {
@@ -674,12 +1584,12 @@ export const INITIAL_NOTIFICATIONS = [
     eventKey: "order-delayed-ST-7788",
     type: "order",
     title: "Order Delayed",
-    message: "Order ST-7788 is delayed.",
+    message: "Order ST-7788 is delayed due to PP sample approval bottleneck.",
     relatedModule: "orders",
     relatedId: "ST-7788",
     priority: "critical",
     isRead: false,
-    createdAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+    createdAt: "2026-05-12T11:45:00.000Z",
     isDeleted: false
   },
   {
@@ -692,7 +1602,7 @@ export const INITIAL_NOTIFICATIONS = [
     relatedId: "gots",
     priority: "high",
     isRead: false,
-    createdAt: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
+    createdAt: "2026-05-12T09:10:00.000Z",
     isDeleted: false
   },
   {
@@ -700,12 +1610,12 @@ export const INITIAL_NOTIFICATIONS = [
     eventKey: "task-assigned-pp-approval",
     type: "task",
     title: "New Task Assigned",
-    message: "A new task 'PP Approval' has been assigned to you.",
+    message: "A new task 'Review and approve lab dip test report' has been assigned to you.",
     relatedModule: "tasks",
-    relatedId: "task-comp-comp-3",
+    relatedId: "task-seed-1",
     priority: "medium",
     isRead: false,
-    createdAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    createdAt: "2026-05-12T08:00:00.000Z",
     isDeleted: false
   },
   {
@@ -718,7 +1628,7 @@ export const INITIAL_NOTIFICATIONS = [
     relatedId: "GKT-1054",
     priority: "high",
     isRead: false,
-    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    createdAt: "2026-05-11T16:00:00.000Z",
     isDeleted: false
   },
   {
@@ -731,7 +1641,7 @@ export const INITIAL_NOTIFICATIONS = [
     relatedId: "GKT-1054",
     priority: "low",
     isRead: true,
-    createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+    createdAt: "2026-05-10T10:00:00.000Z",
     isDeleted: false
   }
 ];

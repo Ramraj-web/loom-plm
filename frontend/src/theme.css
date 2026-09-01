@@ -1,0 +1,375 @@
+/* ==========================================================================
+   Loom PLM Global Theme System (Light & Dark Mode)
+   ========================================================================== */
+
+:root {
+  --bg-app: #F5F6F8;
+  --bg-sidebar: #151B2E;
+  --bg-header: #FFFFFF;
+  --bg-card: #FFFFFF;
+  --bg-card-subtle: #F8FAFC;
+  --bg-card-hover: #FAFAFB;
+  --bg-input: #FFFFFF;
+  --bg-input-subtle: #F5F6F8;
+  --bg-modal: #FFFFFF;
+  --bg-modal-header: #FFFFFF;
+  --bg-modal-footer: #FAFAFB;
+  
+  --border-color: #ECEDF1;
+  --border-subtle: #F0F0F2;
+  --border-input: #D1D5DB;
+  
+  --text-main: #1B2130;
+  --text-title: #151B2E;
+  --text-muted: #8A8D98;
+  --text-body: #4B5563;
+  --text-subtle: #565A66;
+  
+  --accent-primary: #1F9E8D;
+  --accent-indigo: #534AB7;
+  --accent-blue: #378ADD;
+}
+
+[data-theme="dark"],
+.dark-theme {
+  --bg-app: #0B0F19;
+  --bg-sidebar: #060911;
+  --bg-header: #0F172A;
+  --bg-card: #131D31;
+  --bg-card-subtle: #18233C;
+  --bg-card-hover: #1C2B47;
+  --bg-input: #0F172A;
+  --bg-input-subtle: #18233C;
+  --bg-modal: #131D31;
+  --bg-modal-header: #0F172A;
+  --bg-modal-footer: #0F172A;
+  
+  --border-color: #1E293B;
+  --border-subtle: #1E2D4A;
+  --border-input: #334155;
+  
+  --text-main: #F8FAFC;
+  --text-title: #FFFFFF;
+  --text-muted: #94A3B8;
+  --text-body: #CBD5E1;
+  --text-subtle: #94A3B8;
+}
+
+/* Global resets & typography */
+html, body {
+  background-color: var(--bg-app);
+  color: var(--text-main);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* ==========================================================================
+   Dark Theme Component & Hierarchy Overrides
+   ========================================================================== */
+
+[data-theme="dark"] body,
+.dark-theme body {
+  background-color: #0B0F19 !important;
+  color: #F8FAFC !important;
+}
+
+/* App Container & Main Viewport */
+[data-theme="dark"] .app-shell,
+.dark-theme .app-shell {
+  background: #0B0F19 !important;
+  color: #F8FAFC !important;
+  box-shadow: 0 0 0 1px #1E293B !important;
+}
+
+/* Sidebar */
+[data-theme="dark"] .app-sidebar,
+.dark-theme .app-sidebar {
+  background: #060911 !important;
+  border-right: 1px solid #1E293B !important;
+}
+
+/* Top Header */
+[data-theme="dark"] .app-header,
+.dark-theme .app-header {
+  background: #0F172A !important;
+  border-bottom: 1px solid #1E293B !important;
+}
+
+/* Cards & Panels */
+[data-theme="dark"] .loom-card,
+[data-theme="dark"] div[style*="background: #fff"],
+[data-theme="dark"] div[style*="background:#fff"],
+[data-theme="dark"] div[style*="background: rgb(255, 255, 255)"],
+[data-theme="dark"] div[style*="background-color: #fff"],
+[data-theme="dark"] div[style*="background-color:#fff"],
+[data-theme="dark"] div[style*="background-color: rgb(255, 255, 255)"],
+.dark-theme .loom-card,
+.dark-theme div[style*="background: #fff"],
+.dark-theme div[style*="background:#fff"],
+.dark-theme div[style*="background: rgb(255, 255, 255)"],
+.dark-theme div[style*="background-color: #fff"],
+.dark-theme div[style*="background-color:#fff"],
+.dark-theme div[style*="background-color: rgb(255, 255, 255)"] {
+  background-color: #131D31 !important;
+  border-color: #1E2D4A !important;
+  color: #F8FAFC !important;
+}
+
+/* Subtle Cards & Nested Boxes */
+[data-theme="dark"] div[style*="background: #F8FAFC"],
+[data-theme="dark"] div[style*="background:#F8FAFC"],
+[data-theme="dark"] div[style*="background: #F7F7F9"],
+[data-theme="dark"] div[style*="background:#F7F7F9"],
+[data-theme="dark"] div[style*="background: #FAFAFB"],
+[data-theme="dark"] div[style*="background:#FAFAFB"],
+[data-theme="dark"] div[style*="background: #FAFDFB"],
+[data-theme="dark"] div[style*="background:#FAFDFB"],
+[data-theme="dark"] div[style*="background: #F9FAFB"],
+[data-theme="dark"] div[style*="background:#F9FAFB"],
+.dark-theme div[style*="background: #F8FAFC"],
+.dark-theme div[style*="background:#F8FAFC"],
+.dark-theme div[style*="background: #F7F7F9"],
+.dark-theme div[style*="background:#F7F7F9"],
+.dark-theme div[style*="background: #FAFAFB"],
+.dark-theme div[style*="background:#FAFAFB"],
+.dark-theme div[style*="background: #FAFDFB"],
+.dark-theme div[style*="background:#FAFDFB"],
+.dark-theme div[style*="background: #F9FAFB"],
+.dark-theme div[style*="background:#F9FAFB"] {
+  background-color: #18233C !important;
+  border-color: #1E2D4A !important;
+  color: #F8FAFC !important;
+}
+
+/* Text Color Adjustments in Dark Mode */
+[data-theme="dark"] h1,
+[data-theme="dark"] h2,
+[data-theme="dark"] h3,
+[data-theme="dark"] h4,
+[data-theme="dark"] strong,
+[data-theme="dark"] b,
+[data-theme="dark"] div[style*="color: #1B2130"],
+[data-theme="dark"] div[style*="color:#1B2130"],
+[data-theme="dark"] div[style*="color: #151B2E"],
+[data-theme="dark"] div[style*="color:#151B2E"],
+[data-theme="dark"] div[style*="color: #111827"],
+[data-theme="dark"] div[style*="color:#111827"],
+[data-theme="dark"] div[style*="color: #0F172A"],
+[data-theme="dark"] div[style*="color:#0F172A"],
+[data-theme="dark"] span[style*="color: #1B2130"],
+[data-theme="dark"] span[style*="color: #151B2E"],
+[data-theme="dark"] span[style*="color: #111827"],
+.dark-theme h1,
+.dark-theme h2,
+.dark-theme h3,
+.dark-theme h4,
+.dark-theme strong,
+.dark-theme b,
+.dark-theme div[style*="color: #1B2130"],
+.dark-theme div[style*="color:#1B2130"],
+.dark-theme div[style*="color: #151B2E"],
+.dark-theme div[style*="color:#151B2E"],
+.dark-theme div[style*="color: #111827"],
+.dark-theme div[style*="color:#111827"],
+.dark-theme div[style*="color: #0F172A"],
+.dark-theme div[style*="color:#0F172A"],
+.dark-theme span[style*="color: #1B2130"],
+.dark-theme span[style*="color: #151B2E"],
+.dark-theme span[style*="color: #111827"] {
+  color: #F8FAFC !important;
+}
+
+[data-theme="dark"] div[style*="color: #4B5563"],
+[data-theme="dark"] div[style*="color: #565A66"],
+[data-theme="dark"] div[style*="color: #374151"],
+[data-theme="dark"] span[style*="color: #4B5563"],
+[data-theme="dark"] span[style*="color: #565A66"],
+[data-theme="dark"] span[style*="color: #374151"],
+[data-theme="dark"] p,
+.dark-theme div[style*="color: #4B5563"],
+.dark-theme div[style*="color: #565A66"],
+.dark-theme div[style*="color: #374151"],
+.dark-theme span[style*="color: #4B5563"],
+.dark-theme span[style*="color: #565A66"],
+.dark-theme span[style*="color: #374151"],
+.dark-theme p {
+  color: #CBD5E1 !important;
+}
+
+[data-theme="dark"] div[style*="color: #8A8D98"],
+[data-theme="dark"] div[style*="color: #9CA3AF"],
+[data-theme="dark"] div[style*="color: #64748B"],
+[data-theme="dark"] span[style*="color: #8A8D98"],
+[data-theme="dark"] span[style*="color: #9CA3AF"],
+[data-theme="dark"] span[style*="color: #64748B"],
+.dark-theme div[style*="color: #8A8D98"],
+.dark-theme div[style*="color: #9CA3AF"],
+.dark-theme div[style*="color: #64748B"],
+.dark-theme span[style*="color: #8A8D98"],
+.dark-theme span[style*="color: #9CA3AF"],
+.dark-theme span[style*="color: #64748B"] {
+  color: #94A3B8 !important;
+}
+
+/* Border color overrides in dark mode */
+[data-theme="dark"] div[style*="borderBottom: \"1px solid #F0F0F2\""],
+[data-theme="dark"] div[style*="borderBottom: \"1px solid #F5F5F7\""],
+[data-theme="dark"] div[style*="border-bottom: 1px solid #F0F0F2"],
+[data-theme="dark"] div[style*="border-bottom: 1px solid #F5F5F7"],
+[data-theme="dark"] div[style*="borderTop: \"1px solid #F0F0F2\""],
+[data-theme="dark"] div[style*="border-top: 1px solid #F0F0F2"],
+.dark-theme div[style*="borderBottom: \"1px solid #F0F0F2\""],
+.dark-theme div[style*="borderBottom: \"1px solid #F5F5F7\""],
+.dark-theme div[style*="border-bottom: 1px solid #F0F0F2"],
+.dark-theme div[style*="border-bottom: 1px solid #F5F5F7"],
+.dark-theme div[style*="borderTop: \"1px solid #F0F0F2\""],
+.dark-theme div[style*="border-top: 1px solid #F0F0F2"] {
+  border-color: #1E2D4A !important;
+}
+
+/* Form Inputs, Selects, and Textareas */
+[data-theme="dark"] input,
+[data-theme="dark"] select,
+[data-theme="dark"] textarea,
+.dark-theme input,
+.dark-theme select,
+.dark-theme textarea {
+  background-color: #0F172A !important;
+  color: #F8FAFC !important;
+  border-color: #334155 !important;
+}
+
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder,
+.dark-theme input::placeholder,
+.dark-theme textarea::placeholder {
+  color: #64748B !important;
+}
+
+/* Table Hover Effects */
+[data-theme="dark"] .table-row:hover,
+[data-theme="dark"] div[style*="borderBottom: \"1px solid"]:hover,
+[data-theme="dark"] div[style*="border-bottom: 1px solid"]:hover,
+.dark-theme .table-row:hover,
+.dark-theme div[style*="borderBottom: \"1px solid"]:hover,
+.dark-theme div[style*="border-bottom: 1px solid"]:hover {
+  background-color: #1A2843 !important;
+}
+
+/* Modals in Dark Mode */
+[data-theme="dark"] div[style*="background: \"#FFFFFF\""],
+[data-theme="dark"] div[style*="background: \"#fff\""],
+[data-theme="dark"] div[style*="borderRadius: 14"],
+.dark-theme div[style*="background: \"#FFFFFF\""],
+.dark-theme div[style*="background: \"#fff\""],
+.dark-theme div[style*="borderRadius: 14"] {
+  background-color: #131D31 !important;
+  color: #F8FAFC !important;
+  border-color: #1E2D4A !important;
+}
+
+/* Dropdown & Popover Menus */
+[data-theme="dark"] .dropdown-menu,
+.dark-theme .dropdown-menu {
+  background-color: #131D31 !important;
+  border-color: #1E2D4A !important;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4) !important;
+}
+
+/* Scrollbars */
+[data-theme="dark"] ::-webkit-scrollbar,
+.dark-theme ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-track,
+.dark-theme ::-webkit-scrollbar-track {
+  background: #0B0F19;
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb,
+.dark-theme ::-webkit-scrollbar-thumb {
+  background: #1E2D4A;
+  border-radius: 4px;
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover,
+.dark-theme ::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+/* Status Badges & Pills in Dark Mode */
+[data-theme="dark"] span[style*="background: #E1F5EE"],
+[data-theme="dark"] span[style*="background:#E1F5EE"],
+.dark-theme span[style*="background: #E1F5EE"],
+.dark-theme span[style*="background:#E1F5EE"] {
+  background-color: #064E3B !important;
+  color: #6EE7B7 !important;
+}
+
+[data-theme="dark"] span[style*="background: #FAEEDA"],
+[data-theme="dark"] span[style*="background:#FAEEDA"],
+.dark-theme span[style*="background: #FAEEDA"],
+.dark-theme span[style*="background:#FAEEDA"] {
+  background-color: #78350F !important;
+  color: #FDE68A !important;
+}
+
+[data-theme="dark"] span[style*="background: #FCEBEB"],
+[data-theme="dark"] span[style*="background:#FCEBEB"],
+.dark-theme span[style*="background: #FCEBEB"],
+.dark-theme span[style*="background:#FCEBEB"] {
+  background-color: #881337 !important;
+  color: #FECDD3 !important;
+}
+
+[data-theme="dark"] span[style*="background: #F0F0F2"],
+[data-theme="dark"] span[style*="background:#F0F0F2"],
+.dark-theme span[style*="background: #F0F0F2"],
+.dark-theme span[style*="background:#F0F0F2"] {
+  background-color: #1E293B !important;
+  color: #CBD5E1 !important;
+}
+
+[data-theme="dark"] span[style*="background: #F0EFFB"],
+[data-theme="dark"] span[style*="background:#F0EFFB"],
+.dark-theme span[style*="background: #F0EFFB"],
+.dark-theme span[style*="background:#F0EFFB"] {
+  background-color: #312E81 !important;
+  color: #C7D2FE !important;
+}
+
+/* Filter & Tab Buttons in Dark Mode */
+[data-theme="dark"] button[style*="background: #FFFFFF"],
+[data-theme="dark"] button[style*="background:#FFFFFF"],
+[data-theme="dark"] button[style*="background: #fff"],
+[data-theme="dark"] button[style*="background:#fff"],
+.dark-theme button[style*="background: #FFFFFF"],
+.dark-theme button[style*="background:#FFFFFF"],
+.dark-theme button[style*="background: #fff"],
+.dark-theme button[style*="background:#fff"] {
+  background-color: #18233C !important;
+  color: #F8FAFC !important;
+  border-color: #1E2D4A !important;
+}
+
+/* Charts SVG & Labels in Dark Mode */
+[data-theme="dark"] text,
+.dark-theme text {
+  fill: #94A3B8 !important;
+}
+
+[data-theme="dark"] .recharts-cartesian-grid-horizontal line,
+[data-theme="dark"] .recharts-cartesian-grid-vertical line,
+.dark-theme .recharts-cartesian-grid-horizontal line,
+.dark-theme .recharts-cartesian-grid-vertical line {
+  stroke: #1E2D4A !important;
+}
+
+[data-theme="dark"] .recharts-default-tooltip,
+.dark-theme .recharts-default-tooltip {
+  background-color: #0F172A !important;
+  border-color: #1E2D4A !important;
+  color: #F8FAFC !important;
+}
+

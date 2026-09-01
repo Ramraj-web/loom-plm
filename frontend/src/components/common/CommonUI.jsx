@@ -26,9 +26,9 @@ export function statusPill(status) {
   );
 }
 
-export function Card({ children, style }) {
+export function Card({ children, style, className = "" }) {
   return (
-    <div style={{ background: "#fff", border: "1px solid #ECEDF1", borderRadius: 12, padding: "18px 20px", ...style }}>
+    <div className={`loom-card ${className}`} style={{ background: "#fff", border: "1px solid #ECEDF1", borderRadius: 12, padding: "18px 20px", ...style }}>
       {children}
     </div>
   );
@@ -36,7 +36,7 @@ export function Card({ children, style }) {
 
 export function CardHeader({ title, sub, action, onAction }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+    <div className="loom-card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
       <div>
         <div style={{ fontSize: 14, fontWeight: 700, color: "#1B2130" }}>{title}</div>
         {sub && <div style={{ fontSize: 11.5, color: "#8A8D98", marginTop: 2 }}>{sub}</div>}
@@ -52,7 +52,7 @@ export function CardHeader({ title, sub, action, onAction }) {
 
 export function PageHeader({ title, sub }) {
   return (
-    <div style={{ marginBottom: 22 }}>
+    <div className="loom-page-header" style={{ marginBottom: 22 }}>
       <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, color: "#1B2130" }}>{title}</h1>
       {sub && <div style={{ fontSize: 13.5, color: "#8A8D98", marginTop: 4 }}>{sub}</div>}
     </div>
@@ -63,6 +63,7 @@ export function BackLink({ onClick, label }) {
   return (
     <button
       onClick={onClick}
+      className="loom-back-link"
       style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: "#565A66", fontSize: 13, cursor: "pointer", marginBottom: 20, padding: 0 }}
     >
       <ChevronLeft size={16} /> {label}

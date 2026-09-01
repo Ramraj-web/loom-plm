@@ -11,10 +11,15 @@ import {
 import {
   Card, CardHeader, BackLink, statusPill, riskDot, gatingApproval, renderWithMentions
 } from "../common/CommonUI.jsx";
+import { AssignWorkModal } from "../views/InsightsViews.jsx";
 
-function StageNode({ stage, idx, onCycle, onReason, onSupplierChange, lockedBy }) {
+function StageNode({ stage, idx, onCycle, onReason, onSupplierChange, lockedBy, suppliers = [] }) {
   const [open, setOpen] = useState(false);
   const locked = !!lockedBy;
+  const supplierOptions = suppliers.length > 0
+    ? suppliers.filter(s => !s.isDeleted).map(s => s.name || s)
+    : VAP_SUPPLIERS;
+
   const icon =
     stage.status === "done" ? <CheckCircle2 size={17} color="#1F9E8D" /> :
     locked ? <Lock size={14} color="#B0B2BA" /> :
@@ -25,7 +30,7 @@ function StageNode({ stage, idx, onCycle, onReason, onSupplierChange, lockedBy }
     <div style={{ flex: "0 0 128px", minWidth: 128, position: "relative", opacity: locked ? 0.6 : 1 }}>
       <div style={{ display: "flex", alignItems: "center" }}>
         <div
-          onClick={() => { if (!locked) onCycle(idx); }}
+          onClick={locked ? undefined : () => onCycle(idx)}
           title={locked ? `Locked until ${lockedBy} is approved` : "Click to change status"}
           style={{
             width: 30, height: 30, borderRadius: 999, background: "#fff",
@@ -48,7 +53,7 @@ function StageNode({ stage, idx, onCycle, onReason, onSupplierChange, lockedBy }
           style={{ marginTop: 4, width: "100%", fontSize: 9.5, padding: "2px 4px", borderRadius: 5, border: "1px solid #E0DBF5", color: "#534AB7", background: "#F8F7FD" }}
         >
           <option value="">No supplier set</option>
-          {VAP_SUPPLIERS.map(s => <option key={s} value={s}>{s}</option>)}
+          {supplierOptions.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
       )}
       {locked && (
@@ -839,8 +844,10 @@ function DocumentsPanel({ order, role, costingContent, preProdContent, complianc
 export function OrderWorkspace({
   order, onBack, onUpdateStages, role, onSetTemplate, onSetCostingTemplate,
   onUpdateCostingRow, onAddCostingRow, onUpdateShippedQty, onPreProdField,
-  onPreProdSubmit, onPreProdApprove, certifications = [], compliances = []
+  onPreProdSubmit, onPreProdApprove, certifications = [], compliances = [],
+  suppliers = [], onAssignSupplier, onAssignWork, allOrders = []
 }) {
+  const [showAssignModal, setShowAssignModal] = useState(false);
   const cuttingIdx = order.stages.findIndex(s => s.name === "Cutting");
   const bulkGateOpen = allPreProdApproved(order);
 
@@ -862,6 +869,9 @@ export function OrderWorkspace({
 
   const setSupplier = (idx, supplier) => {
     const stages = order.stages.map((s, i) => i === idx ? { ...s, supplier } : s);
+    if (onAssignSupplier) {
+      onAssignSupplier(order.id, idx, supplier);
+    }
     onUpdateStages(order.id, stages);
   };
 
@@ -896,7 +906,7 @@ export function OrderWorkspace({
         {(order.stages || []).map((s, i) => {
           const gate = gatingApproval(order.stages, i);
           const bulkLocked = !gate && cuttingIdx !== -1 && i >= cuttingIdx && !bulkGateOpen;
-          return <StageNode key={i} stage={s} idx={i} onCycle={cycle} onReason={setReason} onSupplierChange={setSupplier} lockedBy={gate ? gate.name : bulkLocked ? "Pre-Production sign-off" : null} />;
+          return <StageNode key={i} stage={s} idx={i} onCycle={cycle} onReason={setReason} onSupplierChange={setSupplier} lockedBy={gate ? gate.name : bulkLocked ? "Pre-Production sign-off" : null} suppliers={suppliers} />;
         })}
       </div>
       {flaggedReasons.length > 0 && (
@@ -938,7 +948,29 @@ export function OrderWorkspace({
             {order.buyer} · {order.country} · {order.qty.toLocaleString()} pcs · Ship {order.ship}
           </div>
         </div>
-        {statusPill(order.status)}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <button
+            onClick={() => setShowAssignModal(true)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              background: "#534AB7",
+              color: "#FFFFFF",
+              border: "none",
+              borderRadius: 8,
+              padding: "7px 14px",
+              fontSize: 12.5,
+              fontWeight: 600,
+              cursor: "pointer",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.05)"
+            }}
+          >
+            <Layers size={14} />
+            Assign to Supplier
+          </button>
+          {statusPill(order.status)}
+        </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
@@ -968,6 +1000,16 @@ export function OrderWorkspace({
         complianceContent={complianceContent}
         onUpdateShippedQty={onUpdateShippedQty}
       />
+
+      {showAssignModal && (
+        <AssignWorkModal
+          orders={allOrders.length > 0 ? allOrders : [order]}
+          suppliers={suppliers}
+          prefillOrderId={order.id}
+          onClose={() => setShowAssignModal(false)}
+          onAssign={onAssignWork}
+        />
+      )}
     </div>
   );
 }

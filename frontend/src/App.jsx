@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import {
   LayoutDashboard, Package, CheckSquare, BarChart3, Settings as SettingsIcon,
-  ChevronDown, Search, Bell, Moon, ClipboardList,
+  ChevronDown, Search, Bell, Moon, Sun, ClipboardList,
   Calendar, TriangleAlert, ArrowDownRight, Award,
   Users, ShieldCheck, ClipboardCheck, Lightbulb, UserCheck, TrendingUp, Landmark, Factory, RefreshCw
 } from "lucide-react";
@@ -10,7 +10,8 @@ import {
   ORG_STRUCTURE, ROLE_OPTIONS, STAFF_LIST, seedAttendance, INITIAL_LEAVE_REQUESTS,
   INITIAL_FINANCIALS, INITIAL_CERTIFICATIONS, INITIAL_COMPLIANCES, INITIAL_DEBIT_NOTES, INITIAL_CAPAS,
   INITIAL_ORDERS, INITIAL_NOTIFICATIONS, VAP_SUPPLIERS, buildCostingRows, makeStages, initPreProd,
-  NOTIFICATION_PRIORITY_STYLE, formatTimeAgo
+  NOTIFICATION_PRIORITY_STYLE, formatTimeAgo, DEFAULT_DEPT_DESCRIPTIONS, INITIAL_SUPPLIERS, INITIAL_SUPPLIER_WORK,
+  INITIAL_CUSTOM_TASKS
 } from "./constants/loomData.js";
 import { statusPill } from "./components/common/CommonUI.jsx";
 import { OrderWorkspace } from "./components/order/OrderWorkspace.jsx";
@@ -49,20 +50,42 @@ export default function LoomPLM() {
   const [leaveRequests, setLeaveRequests] = useState(INITIAL_LEAVE_REQUESTS);
   const [roster, setRoster] = useState(STAFF_LIST);
   const [orgStructure, setOrgStructure] = useState(() => JSON.parse(JSON.stringify(ORG_STRUCTURE)));
+  const [deptDescriptions, setDeptDescriptions] = useState(() => ({ ...DEFAULT_DEPT_DESCRIPTIONS }));
+  const [suppliers, setSuppliers] = useState(() => JSON.parse(JSON.stringify(INITIAL_SUPPLIERS)));
+  const [supplierWork, setSupplierWork] = useState(() => JSON.parse(JSON.stringify(INITIAL_SUPPLIER_WORK)));
 
   const [financials, setFinancials] = useState(INITIAL_FINANCIALS);
   const [certifications, setCertifications] = useState(INITIAL_CERTIFICATIONS);
   const [compliances, setCompliances] = useState(INITIAL_COMPLIANCES);
   const [debitNotes, setDebitNotes] = useState(INITIAL_DEBIT_NOTES);
   const [capas, setCapas] = useState(INITIAL_CAPAS);
-  const [customTasks, setCustomTasks] = useState([]);
+  const [customTasks, setCustomTasks] = useState(() => JSON.parse(JSON.stringify(INITIAL_CUSTOM_TASKS)));
   const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
 
-  const [factoryMenuOpen, setFactoryMenuOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState("2026-05-12");
   const [searchQuery, setSearchQuery] = useState("");
   const [notifOpen, setNotifOpen] = useState(false);
-  const [headerDark, setHeaderDark] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    try {
+      return localStorage.getItem("loom_plm_theme") === "dark";
+    } catch (e) {
+      return false;
+    }
+  });
+
+  // Global Theme Effect
+  useEffect(() => {
+    try {
+      localStorage.setItem("loom_plm_theme", isDarkMode ? "dark" : "light");
+    } catch (e) {}
+    if (isDarkMode) {
+      document.documentElement.setAttribute("data-theme", "dark");
+      document.body.classList.add("dark-theme");
+    } else {
+      document.documentElement.removeAttribute("data-theme");
+      document.body.classList.remove("dark-theme");
+    }
+  }, [isDarkMode]);
 
   // Sync data with backend on load if available
   useEffect(() => {
@@ -190,6 +213,17 @@ export default function LoomPLM() {
             try { setOrgStructure(JSON.parse(orgRes.value)); } catch (e) {}
           }
 
+          // Load dept descriptions
+          const descRes = await window.storage.get("dept_descriptions", true);
+          if (!cancelled && descRes && descRes.value) {
+            try {
+              const parsed = JSON.parse(descRes.value);
+              if (parsed && typeof parsed === "object") {
+                setDeptDescriptions(prev => ({ ...prev, ...parsed }));
+              }
+            } catch (e) {}
+          }
+
           const attRes = await window.storage.get("attendance", true);
           if (!cancelled && attRes && attRes.value) {
             try { setAttendance(JSON.parse(attRes.value)); } catch (e) {}
@@ -239,6 +273,32 @@ export default function LoomPLM() {
           const leaveRes = await window.storage.get("leaveRequests", true);
           if (!cancelled && leaveRes && leaveRes.value) {
             try { setLeaveRequests(JSON.parse(leaveRes.value)); } catch (e) {}
+          }
+          const supRes = await window.storage.get("suppliers", true);
+          if (!cancelled && supRes && supRes.value) {
+            try {
+              const parsed = JSON.parse(supRes.value);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                setSuppliers(prev => {
+                  const map = new Map(prev.map(item => [item.id || item.name, item]));
+                  parsed.forEach(item => map.set(item.id || item.name, { ...map.get(item.id || item.name), ...item }));
+                  return Array.from(map.values());
+                });
+              }
+            } catch (e) {}
+          }
+          const workRes = await window.storage.get("supplierWork", true);
+          if (!cancelled && workRes && workRes.value) {
+            try {
+              const parsed = JSON.parse(workRes.value);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                setSupplierWork(prev => {
+                  const map = new Map(prev.map(item => [item.id, item]));
+                  parsed.forEach(item => map.set(item.id, { ...map.get(item.id), ...item }));
+                  return Array.from(map.values());
+                });
+              }
+            } catch (e) {}
           }
           const roleRes = await window.storage.get("currentRole", true);
           if (!cancelled && roleRes && roleRes.value) {
@@ -894,8 +954,24 @@ export default function LoomPLM() {
       const isCompleted = allDone;
       const completedAt = isCompleted ? (o.completedAt || new Date().toISOString()) : null;
 
-      // Detect stage completions / delays
-      stages.forEach((s, idx) => {
+      // Detect stage completions / delays and attach timestamps
+      const nowIso = new Date().toISOString();
+      const updatedStages = stages.map((s, idx) => {
+        const prevStage = o.stages?.[idx];
+        const res = { ...s };
+        if (s.status === "done" && (!prevStage || prevStage.status !== "done")) {
+          res.completedAt = s.completedAt || nowIso;
+        }
+        if (s.reason && (!prevStage || prevStage.reason !== s.reason)) {
+          res.flaggedAt = s.flaggedAt || nowIso;
+        }
+        if (s.status === "in_progress" && (!prevStage || prevStage.status !== "in_progress")) {
+          res.updatedAt = s.updatedAt || nowIso;
+        }
+        return res;
+      });
+
+      updatedStages.forEach((s, idx) => {
         const prevStage = o.stages?.[idx];
         if (s.status === "done" && prevStage?.status !== "done") {
           pushNotification({
@@ -960,7 +1036,7 @@ export default function LoomPLM() {
 
       const updated = {
         ...o,
-        stages,
+        stages: updatedStages,
         status,
         completed: isCompleted,
         completedAt
@@ -1168,6 +1244,223 @@ export default function LoomPLM() {
     ]},
   ];
 
+  const handleUpdateDepartment = async (oldDeptName, updatedData) => {
+    const newDeptName = updatedData.name ? updatedData.name.trim() : oldDeptName;
+    const newRoles = updatedData.roles || [];
+    const newDesc = updatedData.description !== undefined ? updatedData.description : (deptDescriptions[oldDeptName] || "");
+
+    let updatedOrg = { ...orgStructure };
+    if (newDeptName !== oldDeptName) {
+      const keys = Object.keys(orgStructure);
+      const remapped = {};
+      keys.forEach(k => {
+        if (k === oldDeptName) {
+          remapped[newDeptName] = newRoles;
+        } else {
+          remapped[k] = orgStructure[k];
+        }
+      });
+      if (!remapped[newDeptName]) {
+        remapped[newDeptName] = newRoles;
+      }
+      updatedOrg = remapped;
+    } else {
+      updatedOrg[newDeptName] = newRoles;
+    }
+    setOrgStructure(updatedOrg);
+
+    let updatedDescs = { ...deptDescriptions };
+    if (newDeptName !== oldDeptName) {
+      delete updatedDescs[oldDeptName];
+    }
+    updatedDescs[newDeptName] = newDesc;
+    setDeptDescriptions(updatedDescs);
+
+    if (selectedDept === oldDeptName) {
+      setSelectedDept(newDeptName);
+    }
+
+    const existingStaffNames = new Set(roster.map(r => r.name));
+    const newRoster = [...roster];
+    newRoles.forEach(r => {
+      if (r.name && r.name !== "—") {
+        r.name.split(/&|,/).map(n => n.trim()).forEach(name => {
+          if (name && !existingStaffNames.has(name)) {
+            existingStaffNames.add(name);
+            newRoster.push({ name, title: r.title || "Staff", dept: newDeptName });
+          }
+        });
+      }
+    });
+    if (newRoster.length !== roster.length) {
+      setRoster(newRoster);
+      try {
+        if (window.storage?.set) {
+          window.storage.set("staff_roster", JSON.stringify(newRoster), true);
+        }
+      } catch (e) {}
+    }
+
+    try {
+      if (window.storage && window.storage.set) {
+        await window.storage.set("org_structure", JSON.stringify(updatedOrg), true);
+        await window.storage.set("dept_descriptions", JSON.stringify(updatedDescs), true);
+      }
+    } catch (err) {
+      console.warn("Failed to persist department update:", err);
+    }
+  };
+
+  const handleAddSupplier = async (newSup) => {
+    const updated = [newSup, ...suppliers];
+    setSuppliers(updated);
+    try {
+      if (window.storage?.set) {
+        await window.storage.set("suppliers", JSON.stringify(updated), true);
+      }
+      if (resourcesApi?.create) {
+        await resourcesApi.create("suppliers", newSup).catch(() => {});
+      }
+    } catch (err) {
+      console.warn("Failed to persist new supplier:", err);
+    }
+  };
+
+  const handleUpdateSupplier = async (updatedSup) => {
+    const updated = suppliers.map(s => s.id === updatedSup.id ? updatedSup : s);
+    setSuppliers(updated);
+    try {
+      if (window.storage?.set) {
+        await window.storage.set("suppliers", JSON.stringify(updated), true);
+      }
+      if (resourcesApi?.update) {
+        await resourcesApi.update("suppliers", updatedSup.id, updatedSup).catch(() => {});
+      }
+    } catch (err) {
+      console.warn("Failed to persist updated supplier:", err);
+    }
+  };
+
+  const handleDeleteSupplier = async (supId) => {
+    const updated = suppliers.map(s => s.id === supId ? { ...s, isDeleted: true } : s);
+    setSuppliers(updated);
+    try {
+      if (window.storage?.set) {
+        await window.storage.set("suppliers", JSON.stringify(updated), true);
+      }
+      if (resourcesApi?.delete) {
+        await resourcesApi.delete("suppliers", supId).catch(() => {});
+      }
+    } catch (err) {
+      console.warn("Failed to persist deleted supplier:", err);
+    }
+  };
+
+  const handleAssignSupplier = async (orderId, stageIdx, supplierName) => {
+    if (!supplierName) return;
+    const now = new Date().toISOString();
+    const updated = suppliers.map(s => {
+      if (s.name === supplierName || s.id === supplierName) {
+        return { ...s, latestOrderDate: now };
+      }
+      return s;
+    });
+    setSuppliers(updated);
+    try {
+      if (window.storage?.set) {
+        await window.storage.set("suppliers", JSON.stringify(updated), true);
+      }
+    } catch (e) {}
+  };
+
+  const handleAssignWork = async (newWork) => {
+    const updatedWork = [newWork, ...supplierWork];
+    setSupplierWork(updatedWork);
+
+    // Update supplier's latestOrderDate to move them to the top
+    const now = new Date().toISOString();
+    const updatedSuppliers = suppliers.map(s => {
+      if (s.id === newWork.supplierId || s.name === newWork.supplierName) {
+        return { ...s, latestOrderDate: now };
+      }
+      return s;
+    });
+    setSuppliers(updatedSuppliers);
+
+    // If linked to an order stage, update the stage supplier
+    if (newWork.orderId && newWork.stageIdx !== undefined) {
+      setOrders(prev => prev.map(o => {
+        if (o.id === newWork.orderId && o.stages && o.stages[newWork.stageIdx]) {
+          const stages = o.stages.map((st, i) => i === newWork.stageIdx ? { ...st, supplier: newWork.supplierName } : st);
+          return { ...o, stages };
+        }
+        return o;
+      }));
+    }
+
+    try {
+      if (window.storage?.set) {
+        await window.storage.set("supplierWork", JSON.stringify(updatedWork), true);
+        await window.storage.set("suppliers", JSON.stringify(updatedSuppliers), true);
+      }
+      if (resourcesApi?.create) {
+        await resourcesApi.create("supplierWork", newWork).catch(() => {});
+      }
+    } catch (err) {
+      console.warn("Failed to persist supplier work:", err);
+    }
+  };
+
+  const handleUpdateWorkStatus = async (workId, newStatus, completedDate) => {
+    const updatedWork = supplierWork.map(w => {
+      if (w.id === workId) {
+        return {
+          ...w,
+          status: newStatus,
+          completedDate: completedDate !== undefined ? completedDate : w.completedDate
+        };
+      }
+      return w;
+    });
+    setSupplierWork(updatedWork);
+    try {
+      if (window.storage?.set) {
+        await window.storage.set("supplierWork", JSON.stringify(updatedWork), true);
+      }
+      if (resourcesApi?.update) {
+        const target = updatedWork.find(w => w.id === workId);
+        if (target) await resourcesApi.update("supplierWork", workId, target).catch(() => {});
+      }
+    } catch (err) {
+      console.warn("Failed to persist work status update:", err);
+    }
+  };
+
+  const handleUpdateWorkQuality = async (workId, qualityStatus, issueDesc) => {
+    const updatedWork = supplierWork.map(w => {
+      if (w.id === workId) {
+        return {
+          ...w,
+          qualityStatus,
+          qualityIssueDescription: issueDesc || ""
+        };
+      }
+      return w;
+    });
+    setSupplierWork(updatedWork);
+    try {
+      if (window.storage?.set) {
+        await window.storage.set("supplierWork", JSON.stringify(updatedWork), true);
+      }
+      if (resourcesApi?.update) {
+        const target = updatedWork.find(w => w.id === workId);
+        if (target) await resourcesApi.update("supplierWork", workId, target).catch(() => {});
+      }
+    } catch (err) {
+      console.warn("Failed to persist work quality update:", err);
+    }
+  };
+
   let content;
   if (view === "order" && selectedOrder) {
     content = (
@@ -1186,12 +1479,40 @@ export default function LoomPLM() {
         onPreProdApprove={approvePreProdDoc}
         certifications={certifications}
         compliances={compliances}
+        suppliers={suppliers}
+        onAssignSupplier={handleAssignSupplier}
+        onAssignWork={handleAssignWork}
+        allOrders={orders}
       />
     );
   } else if (view === "departmentDetail" && selectedDept) {
-    content = <DepartmentDetail deptName={selectedDept} orders={orders} onBack={() => setView(previousView)} onOpenOrder={openOrder} orgStructure={orgStructure} />;
+    content = (
+      <DepartmentDetail 
+        deptName={selectedDept} 
+        orders={orders} 
+        onBack={() => setView(previousView)} 
+        onOpenOrder={openOrder} 
+        orgStructure={orgStructure} 
+        deptDescriptions={deptDescriptions}
+        onUpdateDepartment={handleUpdateDepartment}
+        suppliers={suppliers}
+        onAssignWork={handleAssignWork}
+      />
+    );
   } else if (view === "myDepartment") {
-    content = <DepartmentDetail deptName={role.dept} orders={orders} onBack={() => setView("dashboard")} onOpenOrder={openOrder} orgStructure={orgStructure} />;
+    content = (
+      <DepartmentDetail 
+        deptName={role.dept} 
+        orders={orders} 
+        onBack={() => setView("dashboard")} 
+        onOpenOrder={openOrder} 
+        orgStructure={orgStructure} 
+        deptDescriptions={deptDescriptions}
+        onUpdateDepartment={handleUpdateDepartment}
+        suppliers={suppliers}
+        onAssignWork={handleAssignWork}
+      />
+    );
   } else if (view === "orders" && canSeeAll) {
     content = (
       <OrdersPage
@@ -1210,9 +1531,11 @@ export default function LoomPLM() {
         orders={orders}
         role={role}
         tasks={customTasks}
+        suppliers={suppliers}
         onAddTask={addTask}
         onUpdateTask={updateTask}
         onDeleteTask={deleteTask}
+        onAssignWork={handleAssignWork}
         onOpenOrder={openOrder}
       />
     );
@@ -1221,7 +1544,14 @@ export default function LoomPLM() {
   } else if (view === "approvals" && canSeeAll) {
     content = <ApprovalsPage orders={orders} onOpenOrder={openOrder} />;
   } else if (view === "departments" && canSeeAll) {
-    content = <DepartmentsPage orders={orders} onOpenDept={openDept} orgStructure={orgStructure} />;
+    content = (
+      <DepartmentsPage 
+        orders={orders} 
+        onOpenDept={openDept} 
+        orgStructure={orgStructure} 
+        deptDescriptions={deptDescriptions}
+      />
+    );
   } else if (view === "production" && (canSeeAll || ["Cutting", "Production"].includes(role.dept))) {
     content = <ProductionPage orders={orders} onOpenOrder={openOrder} />;
   } else if (view === "quality" && (canSeeAll || role.dept === "Quality")) {
@@ -1251,7 +1581,21 @@ export default function LoomPLM() {
   } else if (view === "insights" && canSeeAll) {
     content = <InsightsPage orders={orders} />;
   } else if (view === "supplierPerformance" && canSeeAll) {
-    content = <SupplierPerformancePage orders={orders} onOpenOrder={openOrder} />;
+    content = (
+      <SupplierPerformancePage
+        orders={orders}
+        suppliers={suppliers}
+        supplierWork={supplierWork}
+        tasks={customTasks}
+        onAddSupplier={handleAddSupplier}
+        onUpdateSupplier={handleUpdateSupplier}
+        onDeleteSupplier={handleDeleteSupplier}
+        onAssignWork={handleAssignWork}
+        onUpdateWorkStatus={handleUpdateWorkStatus}
+        onUpdateWorkQuality={handleUpdateWorkQuality}
+        onOpenOrder={openOrder}
+      />
+    );
   } else if (view === "notifications" && canSeeAll) {
     content = (
       <NotificationsPage
@@ -1276,9 +1620,44 @@ export default function LoomPLM() {
   } else if (view === "settings") {
     content = <SettingsPage role={role} setRole={handleSetRole} />;
   } else if (canSeeAll) {
-    content = <Dashboard orders={orders} onOpenOrder={openOrder} onNavigate={navigate} attendance={attendance} roster={roster} />;
+    content = (
+      <Dashboard
+        orders={orders}
+        onOpenOrder={openOrder}
+        onNavigate={navigate}
+        attendance={attendance}
+        roster={roster}
+        selectedDate={selectedDate}
+        customTasks={customTasks}
+        compliances={compliances}
+        certifications={certifications}
+        supplierWork={supplierWork}
+        notifications={notifications}
+        leaveRequests={leaveRequests}
+        debitNotes={debitNotes}
+        capas={capas}
+      />
+    );
   } else {
-    content = <MyDepartmentDashboard orders={orders} role={role} personName={personName} onOpenOrder={openOrder} onNavigate={navigate} />;
+    content = (
+      <MyDepartmentDashboard
+        orders={orders}
+        role={role}
+        personName={personName}
+        onOpenOrder={openOrder}
+        onNavigate={navigate}
+        selectedDate={selectedDate}
+        customTasks={customTasks}
+        compliances={compliances}
+        certifications={certifications}
+        supplierWork={supplierWork}
+        notifications={notifications}
+        leaveRequests={leaveRequests}
+        debitNotes={debitNotes}
+        capas={capas}
+        attendance={attendance}
+      />
+    );
   }
 
   const unreadNotifCount = notifications.filter(n => !n.isRead && n.isDeleted !== true).length;
@@ -1316,9 +1695,33 @@ export default function LoomPLM() {
   };
 
   return (
-    <div style={{ display: "flex", height: "100vh", margin: "0 auto", background: "#F5F6F8", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Rubik', sans-serif", overflow: "hidden", boxShadow: "0 0 0 1px #E7E8ED" }}>
+    <div
+      className={`app-shell ${isDarkMode ? "dark-theme" : ""}`}
+      style={{
+        display: "flex",
+        height: "100vh",
+        maxWidth: 1440,
+        margin: "0 auto",
+        background: isDarkMode ? "#0B0F19" : "#F5F6F8",
+        color: isDarkMode ? "#F8FAFC" : "#1B2130",
+        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Rubik', sans-serif",
+        overflow: "hidden",
+        boxShadow: isDarkMode ? "0 0 0 1px #1E293B" : "0 0 0 1px #E7E8ED"
+      }}
+    >
       {/* Sidebar */}
-      <div style={{ width: 208, background: "#151B2E", padding: "20px 14px", flexShrink: 0, overflowY: "auto", height: "100%" }}>
+      <div
+        className="app-sidebar"
+        style={{
+          width: 208,
+          background: isDarkMode ? "#060911" : "#151B2E",
+          borderRight: `1px solid ${isDarkMode ? "#1E293B" : "transparent"}`,
+          padding: "20px 14px",
+          flexShrink: 0,
+          overflowY: "auto",
+          height: "100%"
+        }}
+      >
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 8px 20px", color: "#fff" }}>
           <div style={{ width: 26, height: 26, borderRadius: 7, background: "#1F9E8D", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 13 }}>L</div>
           <span style={{ fontWeight: 700, fontSize: 15 }}>Loom PLM</span>
@@ -1326,7 +1729,7 @@ export default function LoomPLM() {
         {navSections.map((group, gi) => (
           <div key={gi} style={{ marginBottom: 10 }}>
             {group.section && (
-              <div style={{ fontSize: 10, fontWeight: 700, color: "#5C6178", textTransform: "uppercase", letterSpacing: 0.5, padding: "10px 10px 4px" }}>{group.section}</div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: isDarkMode ? "#64748B" : "#5C6178", textTransform: "uppercase", letterSpacing: 0.5, padding: "10px 10px 4px" }}>{group.section}</div>
             )}
             {group.items.map(item => {
               const active = view === item.key || (item.key === "orders" && (view === "order")) || (item.key === "departments" && view === "departmentDetail");
@@ -1336,7 +1739,7 @@ export default function LoomPLM() {
                   onClick={() => navigate(item.key)}
                   style={{
                     display: "flex", alignItems: "center", gap: 10, padding: "9px 10px", borderRadius: 8,
-                    color: active ? "#fff" : "#9498A8", background: active ? "#1F9E8D22" : "transparent",
+                    color: active ? "#fff" : isDarkMode ? "#94A3B8" : "#9498A8", background: active ? (isDarkMode ? "#1F9E8D33" : "#1F9E8D22") : "transparent",
                     fontSize: 13.5, fontWeight: active ? 600 : 500, cursor: "pointer", marginBottom: 2
                   }}
                 >
@@ -1351,81 +1754,167 @@ export default function LoomPLM() {
 
       {/* Main Content Area */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
-        {/* Top Header */}
-        <div style={{ height: 56, background: headerDark ? "#1B2340" : "#fff", borderBottom: `1px solid ${headerDark ? "#2A3358" : "#ECEDF1"}`, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 24px", flexShrink: 0, position: "relative" }}>
+        {/* Top Header: Search Box → Date Picker → Notification → Dark Mode → User Profile */}
+        <div
+          className="app-header"
+          style={{
+            height: 56,
+            background: isDarkMode ? "#0F172A" : "#FFFFFF",
+            borderBottom: `1px solid ${isDarkMode ? "#1E293B" : "#ECEDF1"}`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "0 24px",
+            flexShrink: 0,
+            position: "relative"
+          }}
+        >
+          {/* Left Controls: 1. Search Box → 2. Date Picker */}
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            {/* 1. Search Box */}
             <div style={{ position: "relative" }}>
               <div
-                onClick={() => setFactoryMenuOpen(!factoryMenuOpen)}
-                style={{ display: "flex", alignItems: "center", gap: 6, background: headerDark ? "#2A3358" : "#F5F6F8", borderRadius: 8, padding: "6px 10px", fontSize: 12.5, color: headerDark ? "#D6D9E8" : "#565A66", cursor: "pointer" }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  background: isDarkMode ? "#18233C" : "#F5F6F8",
+                  borderRadius: 8,
+                  padding: "6px 12px",
+                  width: 270,
+                  border: `1px solid ${isDarkMode ? "#1E2D4A" : "transparent"}`
+                }}
               >
-                All factories <ChevronDown size={12} />
+                <Search size={14} color={isDarkMode ? "#94A3B8" : "#8A8D98"} />
+                <input
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Search orders, styles, PO..."
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    fontSize: 13,
+                    color: isDarkMode ? "#F8FAFC" : "#1B2130",
+                    width: "100%",
+                    outline: "none"
+                  }}
+                />
               </div>
-              {factoryMenuOpen && (
-                <div style={{ position: "absolute", top: "110%", left: 0, background: "#fff", border: "1px solid #ECEDF1", borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,0.1)", zIndex: 30, minWidth: 160, padding: 6 }}>
-                  <div
-                    onClick={() => setFactoryMenuOpen(false)}
-                    style={{ padding: "7px 10px", fontSize: 12.5, borderRadius: 6, background: "#F0EFFB", color: "#534AB7", fontWeight: 600, display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}
-                  >
-                    <CheckCircle2 size={13} /> All factories
-                  </div>
+              {searchQuery.trim().length > 0 && (
+                <div
+                  className="dropdown-menu"
+                  style={{
+                    position: "absolute",
+                    top: "110%",
+                    left: 0,
+                    right: 0,
+                    background: isDarkMode ? "#131D31" : "#FFFFFF",
+                    border: `1px solid ${isDarkMode ? "#1E2D4A" : "#ECEDF1"}`,
+                    borderRadius: 10,
+                    boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
+                    zIndex: 30,
+                    maxHeight: 260,
+                    overflowY: "auto"
+                  }}
+                >
+                  {searchResults.length === 0 ? (
+                    <div style={{ padding: "12px 14px", fontSize: 12.5, color: isDarkMode ? "#64748B" : "#B0B2BA" }}>
+                      No matching orders.
+                    </div>
+                  ) : (
+                    searchResults.map(o => (
+                      <div
+                        key={o.id}
+                        onClick={() => { openOrder(o.id); setSearchQuery(""); }}
+                        style={{
+                          padding: "9px 14px",
+                          cursor: "pointer",
+                          borderBottom: `1px solid ${isDarkMode ? "#1E2D4A" : "#F5F5F7"}`,
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center"
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = isDarkMode ? "#1C2B47" : "#FAFAFB"}
+                        onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                      >
+                        <div>
+                          <span style={{ fontFamily: "monospace", fontSize: 11, color: isDarkMode ? "#94A3B8" : "#8A8D98", marginRight: 8 }}>{o.id}</span>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: isDarkMode ? "#F8FAFC" : "#1B2130" }}>{o.style}</span>
+                          <span style={{ fontSize: 12, color: isDarkMode ? "#94A3B8" : "#8A8D98" }}> · {o.buyer}</span>
+                        </div>
+                        {statusPill(o.status)}
+                      </div>
+                    ))
+                  )}
                 </div>
               )}
             </div>
-            <label style={{ display: "flex", alignItems: "center", gap: 6, background: headerDark ? "#2A3358" : "#F5F6F8", borderRadius: 8, padding: "6px 10px", fontSize: 12.5, color: headerDark ? "#D6D9E8" : "#565A66", cursor: "pointer" }}>
-              <Calendar size={13} />
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={e => setSelectedDate(e.target.value)}
-                style={{ border: "none", background: "transparent", fontSize: 12.5, color: "inherit", cursor: "pointer", fontFamily: "inherit" }}
-              />
-            </label>
-          </div>
 
-          <div style={{ position: "relative" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, background: headerDark ? "#2A3358" : "#F5F6F8", borderRadius: 8, padding: "6px 12px", width: 240 }}>
-              <Search size={14} color={headerDark ? "#9AA0C0" : "#8A8D98"} />
-              <input
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Search orders, styles, PO..."
-                style={{ border: "none", background: "transparent", fontSize: 13, color: headerDark ? "#E4E6F2" : "#1B2130", width: "100%", outline: "none" }}
-              />
+            {/* 2. Date Picker */}
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  background: isDarkMode ? "#18233C" : "#F5F6F8",
+                  borderRadius: 8,
+                  padding: "6px 12px",
+                  fontSize: 12.5,
+                  color: isDarkMode ? "#CBD5E1" : "#565A66",
+                  cursor: "pointer",
+                  border: `1px solid ${isDarkMode ? "#1E2D4A" : "#E5E7EB"}`
+                }}
+                title="Filter Loom PLM activity & history by specific date"
+              >
+                <Calendar size={13} color={isDarkMode ? "#94A3B8" : "#565A66"} />
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={e => setSelectedDate(e.target.value)}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    fontSize: 12.5,
+                    color: isDarkMode ? "#F8FAFC" : "inherit",
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    outline: "none"
+                  }}
+                />
+              </label>
+              {selectedDate !== "2026-05-12" && (
+                <button
+                  onClick={() => setSelectedDate("2026-05-12")}
+                  title="Reset to 12 May 2026"
+                  style={{
+                    background: isDarkMode ? "#1E293B" : "#F3F4F6",
+                    border: `1px solid ${isDarkMode ? "#334155" : "#E5E7EB"}`,
+                    borderRadius: 6,
+                    padding: "5px 8px",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: isDarkMode ? "#94A3B8" : "#6B7280",
+                    cursor: "pointer",
+                    whiteSpace: "nowrap"
+                  }}
+                >
+                  12 May
+                </button>
+              )}
             </div>
-            {searchQuery.trim().length > 0 && (
-              <div style={{ position: "absolute", top: "110%", left: 0, right: 0, background: "#fff", border: "1px solid #ECEDF1", borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.1)", zIndex: 30, maxHeight: 260, overflowY: "auto" }}>
-                {searchResults.length === 0 ? (
-                  <div style={{ padding: "12px 14px", fontSize: 12.5, color: "#B0B2BA" }}>No matching orders.</div>
-                ) : searchResults.map(o => (
-                  <div
-                    key={o.id}
-                    onClick={() => { openOrder(o.id); setSearchQuery(""); }}
-                    style={{ padding: "9px 14px", cursor: "pointer", borderBottom: "1px solid #F5F5F7", display: "flex", justifyContent: "space-between", alignItems: "center" }}
-                    onMouseEnter={e => e.currentTarget.style.background = "#FAFAFB"}
-                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-                  >
-                    <div>
-                      <span style={{ fontFamily: "monospace", fontSize: 11, color: "#8A8D98", marginRight: 8 }}>{o.id}</span>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: "#1B2130" }}>{o.style}</span>
-                      <span style={{ fontSize: 12, color: "#8A8D98" }}> · {o.buyer}</span>
-                    </div>
-                    {statusPill(o.status)}
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
 
+          {/* Right Controls: 3. Notification → 4. Dark Mode (Moon/Sun) → 5. User Profile */}
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            {/* Notification Bell 🔔 */}
+            {/* 3. Notification */}
             <div style={{ position: "relative" }}>
               <div
                 style={{ position: "relative", cursor: "pointer", display: "flex", alignItems: "center" }}
                 onClick={() => setNotifOpen(!notifOpen)}
                 title="Notifications"
               >
-                <Bell size={18} color={headerDark ? "#D6D9E8" : "#565A66"} />
+                <Bell size={18} color={isDarkMode ? "#CBD5E1" : "#565A66"} />
                 {unreadNotifCount > 0 && (
                   <span
                     style={{
@@ -1454,14 +1943,15 @@ export default function LoomPLM() {
               {/* Notification Dropdown Panel */}
               {notifOpen && (
                 <div
+                  className="dropdown-menu"
                   style={{
                     position: "absolute",
                     top: "140%",
                     right: 0,
-                    background: "#FFFFFF",
-                    border: "1px solid #ECEDF1",
+                    background: isDarkMode ? "#131D31" : "#FFFFFF",
+                    border: `1px solid ${isDarkMode ? "#1E2D4A" : "#ECEDF1"}`,
                     borderRadius: 12,
-                    boxShadow: "0 12px 30px rgba(0,0,0,0.12)",
+                    boxShadow: "0 12px 30px rgba(0,0,0,0.2)",
                     zIndex: 50,
                     width: 360,
                     maxHeight: 460,
@@ -1477,12 +1967,12 @@ export default function LoomPLM() {
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "center",
-                      borderBottom: "1px solid #F0F0F2",
-                      background: "#FAF8FE"
+                      borderBottom: `1px solid ${isDarkMode ? "#1E2D4A" : "#F0F0F2"}`,
+                      background: isDarkMode ? "#0F172A" : "#FAF8FE"
                     }}
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ fontSize: 13.5, fontWeight: 700, color: "#111827" }}>Notifications</span>
+                      <span style={{ fontSize: 13.5, fontWeight: 700, color: isDarkMode ? "#F8FAFC" : "#111827" }}>Notifications</span>
                       {unreadNotifCount > 0 && (
                         <span style={{ fontSize: 11, fontWeight: 700, background: "#FEE2E2", color: "#991B1B", padding: "1px 6px", borderRadius: 999 }}>
                           {unreadNotifCount} unread
@@ -1492,7 +1982,7 @@ export default function LoomPLM() {
                     {unreadNotifCount > 0 && (
                       <button
                         onClick={markAllNotificationsAsRead}
-                        style={{ background: "none", border: "none", color: "#534AB7", fontSize: 11.5, fontWeight: 600, cursor: "pointer", padding: 0 }}
+                        style={{ background: "none", border: "none", color: isDarkMode ? "#A5B4FC" : "#534AB7", fontSize: 11.5, fontWeight: 600, cursor: "pointer", padding: 0 }}
                       >
                         Mark all as read
                       </button>
@@ -1502,9 +1992,9 @@ export default function LoomPLM() {
                   {/* Panel Content */}
                   <div style={{ overflowY: "auto", flex: 1 }}>
                     {recentNotifications.length === 0 ? (
-                      <div style={{ padding: "32px 16px", textAlign: "center", color: "#8A8D98" }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>No new notifications</div>
-                        <div style={{ fontSize: 12, color: "#9CA3AF", marginTop: 2 }}>You're all caught up.</div>
+                      <div style={{ padding: "32px 16px", textAlign: "center", color: isDarkMode ? "#64748B" : "#8A8D98" }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: isDarkMode ? "#F8FAFC" : "#111827" }}>No new notifications</div>
+                        <div style={{ fontSize: 12, color: isDarkMode ? "#64748B" : "#9CA3AF", marginTop: 2 }}>You're all caught up.</div>
                       </div>
                     ) : (
                       recentNotifications.map(notif => {
@@ -1520,33 +2010,33 @@ export default function LoomPLM() {
                               alignItems: "flex-start",
                               padding: "11px 14px",
                               cursor: "pointer",
-                              borderBottom: "1px solid #F5F5F7",
-                              background: isUnread ? "#FAF8FE" : "#FFFFFF",
+                              borderBottom: `1px solid ${isDarkMode ? "#1E2D4A" : "#F5F5F7"}`,
+                              background: isUnread ? (isDarkMode ? "#18233C" : "#FAF8FE") : (isDarkMode ? "#131D31" : "#FFFFFF"),
                               transition: "background 0.12s ease",
                               position: "relative"
                             }}
-                            onMouseEnter={e => e.currentTarget.style.background = isUnread ? "#F3EFFF" : "#FAFAFB"}
-                            onMouseLeave={e => e.currentTarget.style.background = isUnread ? "#FAF8FE" : "#FFFFFF"}
+                            onMouseEnter={e => e.currentTarget.style.background = isUnread ? (isDarkMode ? "#1C2B47" : "#F3EFFF") : (isDarkMode ? "#18233C" : "#FAFAFB")}
+                            onMouseLeave={e => e.currentTarget.style.background = isUnread ? (isDarkMode ? "#18233C" : "#FAF8FE") : (isDarkMode ? "#131D31" : "#FFFFFF")}
                           >
                             {isUnread && (
                               <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3, background: "#534AB7" }} />
                             )}
-                            <div style={{ width: 28, height: 28, borderRadius: 6, background: isUnread ? "#F0EFFB" : "#F3F4F6", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 2 }}>
+                            <div style={{ width: 28, height: 28, borderRadius: 6, background: isUnread ? (isDarkMode ? "#1E2D4A" : "#F0EFFB") : (isDarkMode ? "#0F172A" : "#F3F4F6"), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 2 }}>
                               {getDropdownIcon(notif)}
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}>
-                                <span style={{ fontSize: 12.5, fontWeight: isUnread ? 700 : 600, color: "#111827" }}>
+                                <span style={{ fontSize: 12.5, fontWeight: isUnread ? 700 : 600, color: isDarkMode ? "#F8FAFC" : "#111827" }}>
                                   {notif.title}
                                 </span>
                                 <span style={{ fontSize: 9.5, fontWeight: 700, padding: "1px 5px", borderRadius: 999, background: prioStyle.bg, color: prioStyle.fg }}>
                                   {prioStyle.label}
                                 </span>
                               </div>
-                              <div style={{ fontSize: 12, color: isUnread ? "#374151" : "#6B7280", marginTop: 2, lineHeight: 1.35, whiteSpace: "normal" }}>
+                              <div style={{ fontSize: 12, color: isUnread ? (isDarkMode ? "#CBD5E1" : "#374151") : (isDarkMode ? "#94A3B8" : "#6B7280"), marginTop: 2, lineHeight: 1.35, whiteSpace: "normal" }}>
                                 {notif.message}
                               </div>
-                              <div style={{ fontSize: 10.5, color: "#9CA3AF", marginTop: 4 }}>
+                              <div style={{ fontSize: 10.5, color: isDarkMode ? "#64748B" : "#9CA3AF", marginTop: 4 }}>
                                 {formatTimeAgo(notif.createdAt)}
                               </div>
                             </div>
@@ -1563,11 +2053,11 @@ export default function LoomPLM() {
                       padding: "10px 14px",
                       fontSize: 12,
                       fontWeight: 600,
-                      color: "#534AB7",
+                      color: isDarkMode ? "#A5B4FC" : "#534AB7",
                       cursor: "pointer",
                       textAlign: "center",
-                      borderTop: "1px solid #F0F0F2",
-                      background: "#FAF8FE"
+                      borderTop: `1px solid ${isDarkMode ? "#1E2D4A" : "#F0F0F2"}`,
+                      background: isDarkMode ? "#0F172A" : "#FAF8FE"
                     }}
                   >
                     View all in Notifications →
@@ -1576,14 +2066,40 @@ export default function LoomPLM() {
               )}
             </div>
 
-            <Moon size={16} color={headerDark ? "#D6D9E8" : "#565A66"} style={{ cursor: "pointer" }} onClick={() => setHeaderDark(!headerDark)} />
+            {/* 4. Dark Mode Toggle (Moon in Light Mode / Sun in Dark Mode) */}
+            <div
+              onClick={() => setIsDarkMode(!isDarkMode)}
+              title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+              style={{
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 32,
+                height: 32,
+                borderRadius: 8,
+                background: isDarkMode ? "#18233C" : "#F5F6F8",
+                border: `1px solid ${isDarkMode ? "#1E2D4A" : "transparent"}`,
+                transition: "all 0.15s ease"
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = isDarkMode ? "#1C2B47" : "#ECEEF2"}
+              onMouseLeave={e => e.currentTarget.style.background = isDarkMode ? "#18233C" : "#F5F6F8"}
+            >
+              {isDarkMode ? (
+                <Sun size={16} color="#FBBF24" />
+              ) : (
+                <Moon size={16} color="#565A66" />
+              )}
+            </div>
+
+            {/* 5. User Profile */}
             <div style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }} onClick={() => navigate("settings")}>
               <div style={{ width: 30, height: 30, borderRadius: 999, background: "#7F77DD", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 11, fontWeight: 700 }}>
                 {role.label.split(" ")[0].slice(0, 2).toUpperCase()}
               </div>
               <div>
-                <div style={{ fontSize: 12.5, fontWeight: 600, color: headerDark ? "#fff" : "#1B2130" }}>{role.label.split(" (")[0]}</div>
-                <div style={{ fontSize: 10.5, color: headerDark ? "#9AA0C0" : "#8A8D98" }}>{role.dept}</div>
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: isDarkMode ? "#F8FAFC" : "#1B2130" }}>{role.label.split(" (")[0]}</div>
+                <div style={{ fontSize: 10.5, color: isDarkMode ? "#94A3B8" : "#8A8D98" }}>{role.dept}</div>
               </div>
             </div>
           </div>

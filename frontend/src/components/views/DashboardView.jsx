@@ -1,18 +1,326 @@
-import React, { useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import {
-  Package, CheckCircle2, TriangleAlert, ArrowDownRight, Zap, Factory, Clock, CircleAlert
+  Package, CheckCircle2, TriangleAlert, ArrowDownRight, Zap, Factory, Clock, CircleAlert,
+  Calendar, CheckSquare, Layers, ShieldCheck, Bell, DollarSign, ChevronRight
 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Legend, PieChart, Pie, Cell
 } from "recharts";
 import {
-  SHIPMENT_PERFORMANCE, TA_STAGES, STAGE_ICON_SET_BASE, ORG_STRUCTURE, RISK_DELAY_DAYS
+  SHIPMENT_PERFORMANCE, TA_STAGES, STAGE_ICON_SET_BASE, ORG_STRUCTURE, RISK_DELAY_DAYS,
+  collectActivitiesForDate, formatDisplayDate, isSameDay
 } from "../../constants/loomData.js";
 import {
   Card, CardHeader, PageHeader, statusPill, riskDot, collectTasks
 } from "../common/CommonUI.jsx";
 
-export function Dashboard({ orders = [], onOpenOrder, onNavigate, attendance, roster }) {
+export function DateWiseActivityFeed({
+  selectedDate,
+  orders = [],
+  customTasks = [],
+  compliances = [],
+  certifications = [],
+  supplierWork = [],
+  notifications = [],
+  leaveRequests = [],
+  debitNotes = [],
+  capas = [],
+  attendance = {},
+  onOpenOrder,
+  onNavigate
+}) {
+  const [activeTab, setActiveTab] = useState("All");
+
+  const allActivities = useMemo(() => {
+    return collectActivitiesForDate(selectedDate, {
+      orders,
+      tasks: customTasks,
+      compliances,
+      certifications,
+      supplierWork,
+      notifications,
+      leaveRequests,
+      debitNotes,
+      capas,
+      attendance
+    });
+  }, [selectedDate, orders, customTasks, compliances, certifications, supplierWork, notifications, leaveRequests, debitNotes, capas, attendance]);
+
+  const [activitySearch, setActivitySearch] = useState("");
+
+  const filteredActivities = useMemo(() => {
+    let list = allActivities;
+    if (activeTab !== "All") {
+      list = list.filter(a => a.category === activeTab);
+    }
+    if (activitySearch.trim()) {
+      const q = activitySearch.toLowerCase();
+      list = list.filter(a => 
+        (a.title && a.title.toLowerCase().includes(q)) ||
+        (a.description && a.description.toLowerCase().includes(q)) ||
+        (a.dept && a.dept.toLowerCase().includes(q)) ||
+        (a.actor && a.actor.toLowerCase().includes(q)) ||
+        (a.orderId && a.orderId.toLowerCase().includes(q))
+      );
+    }
+    return list;
+  }, [allActivities, activeTab, activitySearch]);
+
+  const counts = useMemo(() => {
+    const res = { All: allActivities.length, Orders: 0, "Tasks & T&A": 0, "Supplier Work": 0, "Quality & Compliance": 0, Notifications: 0 };
+    allActivities.forEach(a => {
+      if (res[a.category] !== undefined) res[a.category]++;
+    });
+    return res;
+  }, [allActivities]);
+
+  const formattedDate = formatDisplayDate(selectedDate);
+
+  const getActivityIcon = (type) => {
+    if (type === "order") return <Package size={13} color="#378ADD" />;
+    if (type === "tna") return <Calendar size={13} color="#534AB7" />;
+    if (type === "task") return <CheckSquare size={13} color="#1F9E8D" />;
+    if (type === "supplier") return <Layers size={13} color="#8B5CF6" />;
+    if (type === "compliance" || type === "certification") return <ShieldCheck size={13} color="#059669" />;
+    if (type === "notification") return <Bell size={13} color="#DC2626" />;
+    if (type === "financial") return <DollarSign size={13} color="#D97706" />;
+    return <Clock size={13} color="#8A8D98" />;
+  };
+
+  const getStatusBadge = (act) => {
+    if (!act.status) return null;
+    if (typeof act.status === "object") return act.status;
+    const s = String(act.status).toLowerCase();
+    if (s.includes("done") || s.includes("passed") || s.includes("completed") || s.includes("approved")) {
+      return <span style={{ background: "#E1F5EE", color: "#085041", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999 }}>{act.status}</span>;
+    }
+    if (s.includes("delayed") || s.includes("critical") || s.includes("fail") || s.includes("issue")) {
+      return <span style={{ background: "#FCEBEB", color: "#791F1F", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999 }}>{act.status}</span>;
+    }
+    if (s.includes("progress") || s.includes("high") || s.includes("risk")) {
+      return <span style={{ background: "#FAEEDA", color: "#633806", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999 }}>{act.status}</span>;
+    }
+    return <span style={{ background: "#F0F0F2", color: "#565A66", fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 999 }}>{act.status}</span>;
+  };
+
+  return (
+    <Card style={{ marginBottom: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 14.5, fontWeight: 700, color: "#1B2130" }}>Date-Wise Work & Activity History</span>
+            <span style={{ fontSize: 11.5, fontWeight: 700, background: "#F0EFFB", color: "#534AB7", padding: "3px 10px", borderRadius: 999, display: "flex", alignItems: "center", gap: 5 }}>
+              <Calendar size={12} /> {formattedDate}
+            </span>
+          </div>
+          <div style={{ fontSize: 12, color: "#8A8D98", marginTop: 3 }}>
+            Showing complete work, orders, tasks, stage completions, quality audits, and supplier activities recorded on {formattedDate}
+          </div>
+        </div>
+
+        <div style={{ fontSize: 12, fontWeight: 600, color: allActivities.length > 0 ? "#1F9E8D" : "#8A8D98" }}>
+          {allActivities.length} {allActivities.length === 1 ? "activity" : "activities"} logged
+        </div>
+      </div>
+
+      {/* Category Tabs & Search */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {[
+            { key: "All", label: `All (${counts.All})` },
+            { key: "Orders", label: `Orders (${counts.Orders})` },
+            { key: "Tasks & T&A", label: `Tasks & T&A (${counts["Tasks & T&A"]})` },
+            { key: "Supplier Work", label: `Supplier Work (${counts["Supplier Work"]})` },
+            { key: "Quality & Compliance", label: `Quality & Compliance (${counts["Quality & Compliance"]})` },
+            { key: "Notifications", label: `Notifications (${counts.Notifications})` },
+          ].map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              style={{
+                padding: "4px 10px",
+                borderRadius: 20,
+                fontSize: 11.5,
+                fontWeight: 600,
+                cursor: "pointer",
+                border: "1px solid",
+                borderColor: activeTab === tab.key ? "#534AB7" : "#E5E7EB",
+                background: activeTab === tab.key ? "#F0EFFB" : "transparent",
+                color: activeTab === tab.key ? "#534AB7" : "#565A66",
+                transition: "all 0.12s ease"
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {allActivities.length > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <input
+              type="text"
+              placeholder="Search day's history..."
+              value={activitySearch}
+              onChange={e => setActivitySearch(e.target.value)}
+              style={{
+                padding: "4px 10px",
+                fontSize: 11.5,
+                border: "1px solid #E5E7EB",
+                borderRadius: 6,
+                background: "transparent",
+                color: "inherit",
+                width: 170,
+                outline: "none"
+              }}
+            />
+            {activitySearch && (
+              <button
+                onClick={() => setActivitySearch("")}
+                style={{
+                  border: "none",
+                  background: "transparent",
+                  fontSize: 11,
+                  color: "#8A8D98",
+                  cursor: "pointer"
+                }}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Activity Table / Empty State */}
+      {filteredActivities.length === 0 ? (
+        <div style={{ padding: "36px 16px", textAlign: "center" }}>
+          <div style={{ width: 42, height: 42, borderRadius: 999, background: "rgba(148, 163, 184, 0.12)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 10px" }}>
+            <Calendar size={18} color="#8A8D98" />
+          </div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#1B2130" }}>
+            No activity found for {formattedDate}.
+          </div>
+          <div style={{ fontSize: 12, color: "#8A8D98", marginTop: 4, maxWidth: 440, margin: "4px auto 0" }}>
+            No orders, tasks, stage progress, quality audits, or supplier assignments were recorded on this date. Select another date from the top header date picker or record activities today.
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "85px 1.4fr 1.6fr 1.1fr 1fr 1fr", fontSize: 11, color: "#8A8D98", padding: "0 6px 8px", borderBottom: "1px solid #F0F0F2" }}>
+            <div>Time</div>
+            <div>Activity / Title</div>
+            <div>Details & Scope</div>
+            <div>Department</div>
+            <div>Status</div>
+            <div style={{ textAlign: "right" }}>Action</div>
+          </div>
+
+          {filteredActivities.map((act) => (
+            <div
+              key={act.id}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "85px 1.4fr 1.6fr 1.1fr 1fr 1fr",
+                alignItems: "center",
+                fontSize: 12,
+                padding: "9px 6px",
+                borderBottom: "1px solid #F5F5F7",
+                transition: "background 0.12s ease"
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = "#FAFAFB"}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 5, color: "#8A8D98", fontSize: 11, fontFamily: "monospace" }}>
+                <Clock size={11} color="#94A3B8" />
+                {act.time}
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 7, paddingRight: 8 }}>
+                <div style={{ width: 22, height: 22, borderRadius: 6, background: "#F0EFFB", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  {getActivityIcon(act.type)}
+                </div>
+                <div style={{ fontWeight: 600, color: "#1B2130", lineHeight: 1.3 }}>
+                  {act.title}
+                </div>
+              </div>
+
+              <div style={{ fontSize: 11.5, color: "#565A66", paddingRight: 8, lineHeight: 1.35 }}>
+                {act.description}
+              </div>
+
+              <div>
+                <span style={{ fontSize: 11, color: "#534AB7", fontWeight: 600, background: "#F0EFFB", padding: "2px 7px", borderRadius: 6 }}>
+                  {act.dept || "General"}
+                </span>
+              </div>
+
+              <div>
+                {getStatusBadge(act)}
+              </div>
+
+              <div style={{ textAlign: "right" }}>
+                {act.orderId ? (
+                  <button
+                    onClick={() => onOpenOrder && onOpenOrder(act.orderId)}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: "#378ADD",
+                      fontWeight: 600,
+                      fontSize: 11.5,
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 2
+                    }}
+                  >
+                    View Order →
+                  </button>
+                ) : act.targetModule ? (
+                  <button
+                    onClick={() => onNavigate && onNavigate(act.targetModule)}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: "#1F9E8D",
+                      fontWeight: 600,
+                      fontSize: 11.5,
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 2
+                    }}
+                  >
+                    Open View →
+                  </button>
+                ) : (
+                  <span style={{ color: "#B0B2BA", fontSize: 11 }}>—</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+export function Dashboard({
+  orders = [],
+  onOpenOrder,
+  onNavigate,
+  attendance,
+  roster,
+  selectedDate = "2026-05-12",
+  customTasks = [],
+  compliances = [],
+  certifications = [],
+  supplierWork = [],
+  notifications = [],
+  leaveRequests = [],
+  debitNotes = [],
+  capas = []
+}) {
   const activeOrders = useMemo(() => orders.filter(o => o.isDeleted !== true && o.completed !== true), [orders]);
   const completedOrders = useMemo(() => orders.filter(o => o.completed === true && o.isDeleted !== true), [orders]);
   const deletedOrders = useMemo(() => orders.filter(o => o.isDeleted === true), [orders]);
@@ -362,6 +670,22 @@ export function Dashboard({ orders = [], onOpenOrder, onNavigate, attendance, ro
         </div>
       </div>
 
+      <DateWiseActivityFeed
+        selectedDate={selectedDate}
+        orders={orders}
+        customTasks={customTasks}
+        compliances={compliances}
+        certifications={certifications}
+        supplierWork={supplierWork}
+        notifications={notifications}
+        leaveRequests={leaveRequests}
+        debitNotes={debitNotes}
+        capas={capas}
+        attendance={attendance}
+        onOpenOrder={onOpenOrder}
+        onNavigate={onNavigate}
+      />
+
       <Card style={{ marginBottom: 16 }}>
         <CardHeader title="Critical alerts" action="Notifications" onAction={() => onNavigate("notifications")} />
         {alerts.length === 0 ? (
@@ -425,7 +749,23 @@ export function Dashboard({ orders = [], onOpenOrder, onNavigate, attendance, ro
   );
 }
 
-export function MyDepartmentDashboard({ orders, role, personName, onOpenOrder, onNavigate }) {
+export function MyDepartmentDashboard({
+  orders = [],
+  role,
+  personName,
+  onOpenOrder,
+  onNavigate,
+  selectedDate = "2026-05-12",
+  customTasks = [],
+  compliances = [],
+  certifications = [],
+  supplierWork = [],
+  notifications = [],
+  leaveRequests = [],
+  debitNotes = [],
+  capas = [],
+  attendance = {}
+}) {
   const rows = collectTasks(orders, role.dept);
   const openRows = rows.filter(r => r.stage.status !== "done");
   const delayedRows = rows.filter(r => r.stage.reason);
@@ -493,6 +833,22 @@ export function MyDepartmentDashboard({ orders, role, personName, onOpenOrder, o
           ))}
         </Card>
       </div>
+
+      <DateWiseActivityFeed
+        selectedDate={selectedDate}
+        orders={orders}
+        customTasks={customTasks}
+        compliances={compliances}
+        certifications={certifications}
+        supplierWork={supplierWork}
+        notifications={notifications}
+        leaveRequests={leaveRequests}
+        debitNotes={debitNotes}
+        capas={capas}
+        attendance={attendance}
+        onOpenOrder={onOpenOrder}
+        onNavigate={onNavigate}
+      />
     </div>
   );
 }

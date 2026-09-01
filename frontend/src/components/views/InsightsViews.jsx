@@ -1,17 +1,19 @@
 import React, { useState, useMemo, useEffect } from "react";
 import {
   TriangleAlert, Globe, Gauge, CheckCircle2, ClipboardList, Landmark, Clock, Truck, TrendingUp,
-  Bell, Package, Calendar, CheckSquare, ClipboardCheck, Award, ShieldCheck, CheckCircle, Search, Trash2, Check
+  Bell, Package, Calendar, CheckSquare, ClipboardCheck, Award, ShieldCheck, CheckCircle, Search, Trash2, Check,
+  Plus, Edit, X, ChevronLeft, ChevronRight, Building2, Phone, Mail, MapPin, ExternalLink, AlertCircle, Layers
 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer
 } from "recharts";
 import {
   SHIPMENT_PERFORMANCE, ROLE_OPTIONS, SEASON_OPTIONS, CAPA_STATUS_STYLE,
-  NOTIFICATION_PRIORITY_STYLE, formatTimeAgo
+  NOTIFICATION_PRIORITY_STYLE, formatTimeAgo, SUPPLIER_TYPES, WORK_PURPOSES,
+  calculateSupplierMetrics, INITIAL_SUPPLIER_WORK, INITIAL_SUPPLIERS
 } from "../../constants/loomData.js";
 import {
-  Card, CardHeader, PageHeader, DarkCard, DarkCardHeader, MiniDonut
+  Card, CardHeader, PageHeader, DarkCard, DarkCardHeader, MiniDonut, BackLink, statusPill
 } from "../common/CommonUI.jsx";
 
 export function FinanceEntryPage({ orders, financials, onUpdate, onUpdateOrderCost }) {
@@ -182,76 +184,1570 @@ export function InsightsPage({ orders }) {
   );
 }
 
-export function SupplierPerformancePage({ orders, onOpenOrder }) {
-  const vapStages = [];
-  orders.forEach(o => {
-    if (!o.stages) return;
-    o.stages.forEach((s, idx) => {
-      if (s.dept === "VAP" && s.supplier) vapStages.push({ order: o, stage: s, idx });
-    });
-  });
+export function AssignWorkModal({
+  orders = [],
+  tasks = [],
+  suppliers = [],
+  prefillSupplierId = null,
+  prefillOrderId = null,
+  prefillStageIdx = null,
+  prefillDept = null,
+  prefillTaskName = null,
+  onClose,
+  onAssign
+}) {
+  const activeSuppliers = suppliers.filter(s => !s.isDeleted);
+  const [supplierId, setSupplierId] = useState(prefillSupplierId || activeSuppliers[0]?.id || "");
+  const [source, setSource] = useState("order"); // "order" | "my_task" | "dept_task"
+  const [selectedOrderId, setSelectedOrderId] = useState(prefillOrderId || orders[0]?.id || "");
+  const [selectedStageIdx, setSelectedStageIdx] = useState(prefillStageIdx !== null ? prefillStageIdx : 0);
+  const [selectedDept, setSelectedDept] = useState(prefillDept || "VAP");
+  const [selectedTaskName, setSelectedTaskName] = useState(prefillTaskName || "");
+  const [purpose, setPurpose] = useState("Printing");
+  const [description, setDescription] = useState("");
+  const [expectedDate, setExpectedDate] = useState("");
+  const [status, setStatus] = useState("Pending");
 
-  const bySupplier = {};
-  vapStages.forEach(({ order, stage }) => {
-    if (!bySupplier[stage.supplier]) bySupplier[stage.supplier] = { jobs: 0, onTime: 0, delayed: 0, qualityIssues: 0, orders: [] };
-    const b = bySupplier[stage.supplier];
-    b.jobs += 1;
-    if (stage.reason) {
-      b.delayed += 1;
-      if (stage.reason === "Quality rework") b.qualityIssues += 1;
-    } else {
-      b.onTime += 1;
+  // Get currently selected order
+  const currentOrder = useMemo(() => {
+    return orders.find(o => o.id === selectedOrderId) || orders[0] || null;
+  }, [orders, selectedOrderId]);
+
+  // Available stages for selected order
+  const availableStages = useMemo(() => {
+    if (!currentOrder || !currentOrder.stages) return [];
+    return currentOrder.stages;
+  }, [currentOrder]);
+
+  // Sync stage/department when order or stage selection changes
+  useEffect(() => {
+    if (availableStages.length > 0) {
+      const stage = availableStages[selectedStageIdx] || availableStages[0];
+      if (stage) {
+        setSelectedDept(stage.dept || "VAP");
+        setSelectedTaskName(stage.name || "Workflow Task");
+        if (!expectedDate) {
+          setExpectedDate(stage.planned || currentOrder?.ship || "20 May");
+        }
+      }
     }
-    b.orders.push(order);
+  }, [availableStages, selectedStageIdx, currentOrder]);
+
+  // Auto-generate suggested description
+  useEffect(() => {
+    if (currentOrder) {
+      const task = selectedTaskName || (availableStages[selectedStageIdx]?.name) || "Production";
+      setDescription(`${purpose} for ${currentOrder.id} (${currentOrder.style}) - ${task}`);
+    }
+  }, [purpose, selectedOrderId, selectedStageIdx, selectedTaskName]);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const sup = activeSuppliers.find(s => s.id === supplierId);
+    if (!sup) {
+      alert("Please select a supplier.");
+      return;
+    }
+    if (!currentOrder) {
+      alert("Please select an existing order.");
+      return;
+    }
+
+    const newAssignment = {
+      id: `work-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      orderId: currentOrder.id,
+      style: currentOrder.style,
+      buyer: currentOrder.buyer,
+      qty: currentOrder.qty,
+      supplierId: sup.id,
+      supplierName: sup.name,
+      source,
+      dept: selectedDept,
+      taskName: selectedTaskName || availableStages[selectedStageIdx]?.name || "Custom Job",
+      stageIdx: selectedStageIdx,
+      purpose,
+      description: description.trim() || `${purpose} work for ${currentOrder.id}`,
+      assignedDate: new Date().toISOString().split("T")[0],
+      expectedDate: expectedDate || currentOrder.ship || "20 May",
+      completedDate: null,
+      status,
+      qualityStatus: "Pending",
+      qualityIssueDescription: "",
+      createdAt: new Date().toISOString(),
+      isDeleted: false
+    };
+
+    if (onAssign) {
+      onAssign(newAssignment);
+    }
+    if (onClose) onClose();
+  };
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(15, 23, 42, 0.55)",
+        backdropFilter: "blur(3px)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 9999,
+        padding: 16
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          background: "#FFFFFF",
+          borderRadius: 14,
+          width: "100%",
+          maxWidth: 660,
+          maxHeight: "90vh",
+          display: "flex",
+          flexDirection: "column",
+          boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+          position: "relative"
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div style={{ padding: "20px 24px 16px", borderBottom: "1px solid #F0F0F2", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <h3 style={{ fontSize: 18, fontWeight: 700, color: "#151B2E", margin: 0 }}>Assign Work to Supplier</h3>
+            <p style={{ fontSize: 12.5, color: "#8A8D98", margin: "4px 0 0" }}>
+              Link specific work from existing orders, tasks, or departments to a vendor
+            </p>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: "#8A8D98", cursor: "pointer", padding: 6 }}>
+            <X size={20} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
+          <div style={{ padding: "20px 24px", overflowY: "auto", flex: 1 }}>
+
+            {/* Supplier Selector */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", fontSize: 11.5, fontWeight: 700, color: "#374151", marginBottom: 5 }}>
+                Select Supplier *
+              </label>
+              <select
+                value={supplierId}
+                onChange={e => setSupplierId(e.target.value)}
+                required
+                style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "1px solid #D1D5DB", fontSize: 13, fontWeight: 600, color: "#111827", background: "#F9FAFB" }}
+              >
+                {activeSuppliers.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s.code} · {s.type})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+
+
+            {/* Order / Task Selectors based on source */}
+            <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 12, marginBottom: 14 }}>
+              <div>
+                <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#374151", marginBottom: 4 }}>
+                  Select Existing Order *
+                </label>
+                <select
+                  value={selectedOrderId}
+                  onChange={e => {
+                    setSelectedOrderId(e.target.value);
+                    setSelectedStageIdx(0);
+                  }}
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 12.5 }}
+                >
+                  {orders.filter(o => !o.isDeleted).map(o => (
+                    <option key={o.id} value={o.id}>
+                      {o.id} · {o.style} ({o.buyer})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#374151", marginBottom: 4 }}>
+                  Task / Stage to Assign *
+                </label>
+                <select
+                  value={selectedStageIdx}
+                  onChange={e => {
+                    const idx = Number(e.target.value);
+                    setSelectedStageIdx(idx);
+                    const s = availableStages[idx];
+                    if (s) {
+                      setSelectedDept(s.dept || "VAP");
+                      setSelectedTaskName(s.name);
+                    }
+                  }}
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 12.5 }}
+                >
+                  {availableStages.map((s, idx) => (
+                    <option key={idx} value={idx}>
+                      {s.name} ({s.dept})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Auto-Populated Order / Task Summary Card */}
+            {currentOrder && (
+              <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 9, padding: "12px 14px", marginBottom: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
+                  Linked Order & Task Information (Single Source of Truth)
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, fontSize: 12.5 }}>
+                  <div>
+                    <span style={{ color: "#8A8D98", fontSize: 11, display: "block" }}>PO / Order ID</span>
+                    <strong style={{ fontFamily: "monospace", color: "#378ADD" }}>{currentOrder.id}</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: "#8A8D98", fontSize: 11, display: "block" }}>Style</span>
+                    <strong style={{ color: "#1B2130" }}>{currentOrder.style}</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: "#8A8D98", fontSize: 11, display: "block" }}>Buyer</span>
+                    <span style={{ color: "#4B5563" }}>{currentOrder.buyer}</span>
+                  </div>
+                  <div>
+                    <span style={{ color: "#8A8D98", fontSize: 11, display: "block" }}>Quantity</span>
+                    <span style={{ color: "#4B5563", fontWeight: 600 }}>{Number(currentOrder.qty).toLocaleString()} pcs</span>
+                  </div>
+                  <div>
+                    <span style={{ color: "#8A8D98", fontSize: 11, display: "block" }}>Department</span>
+                    <span style={{ color: "#534AB7", fontWeight: 600 }}>{selectedDept}</span>
+                  </div>
+                  <div>
+                    <span style={{ color: "#8A8D98", fontSize: 11, display: "block" }}>Current Stage / Task</span>
+                    <span style={{ color: "#166534", fontWeight: 600 }}>{selectedTaskName || availableStages[selectedStageIdx]?.name}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Purpose of Supplier Work & Expected Date */}
+            <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: 12, marginBottom: 14 }}>
+              <div>
+                <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#374151", marginBottom: 4 }}>
+                  Purpose of Supplier Work *
+                </label>
+                <select
+                  value={purpose}
+                  onChange={e => setPurpose(e.target.value)}
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 12.5 }}
+                >
+                  {WORK_PURPOSES.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#374151", marginBottom: 4 }}>
+                  Expected Completion Date
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. 25 May"
+                  value={expectedDate}
+                  onChange={e => setExpectedDate(e.target.value)}
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 12.5 }}
+                />
+              </div>
+            </div>
+
+            {/* Work Description */}
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#374151", marginBottom: 4 }}>
+                Work Description & Instructions *
+              </label>
+              <textarea
+                rows={2}
+                required
+                placeholder="e.g. Print front logo for PO GKT-1054 Hoodie"
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 12.5 }}
+              />
+            </div>
+
+            {/* Initial Status */}
+            <div>
+              <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#374151", marginBottom: 4 }}>
+                Initial Status
+              </label>
+              <select
+                value={status}
+                onChange={e => setStatus(e.target.value)}
+                style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 12.5 }}
+              >
+                <option value="Pending">Pending (Waiting to start)</option>
+                <option value="In Progress">In Progress (Work started)</option>
+              </select>
+            </div>
+
+          </div>
+
+          <div style={{ padding: "14px 24px", borderTop: "1px solid #F0F0F2", background: "#FAFAFB", display: "flex", justifyContent: "flex-end", gap: 10, borderBottomLeftRadius: 14, borderBottomRightRadius: 14 }}>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{ padding: "8px 16px", borderRadius: 7, border: "1px solid #D1D5DB", background: "#FFFFFF", fontSize: 13, fontWeight: 600, color: "#4B5563", cursor: "pointer" }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              style={{ padding: "8px 20px", borderRadius: 7, border: "none", background: "#534AB7", fontSize: 13, fontWeight: 600, color: "#FFFFFF", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+            >
+              <Layers size={14} />
+              Assign Work
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+export function AddSupplierModal({ onClose, onAdd }) {
+  const [form, setForm] = useState({
+    name: "",
+    code: "",
+    type: SUPPLIER_TYPES[0] || "Printing & Embroidery",
+    contactPerson: "",
+    mobile: "",
+    email: "",
+    address: "",
+    city: "Tirupur",
+    country: "India",
+    onTimeTarget: 95,
+    qualityTarget: 98,
+    notes: ""
   });
 
-  const rows = Object.entries(bySupplier).map(([name, b]) => ({
-    name, ...b, onTimePct: b.jobs > 0 ? Math.round((b.onTime / b.jobs) * 100) : 0,
-  })).sort((a, b) => b.onTimePct - a.onTimePct);
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!form.name.trim()) {
+      alert("Supplier name is required.");
+      return;
+    }
+    const newSup = {
+      id: `sup-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      name: form.name.trim(),
+      code: form.code.trim() || `SUP-${Date.now().toString().slice(-4)}`,
+      type: form.type,
+      contactPerson: form.contactPerson.trim(),
+      mobile: form.mobile.trim(),
+      email: form.email.trim(),
+      address: form.address.trim(),
+      city: form.city.trim(),
+      country: form.country.trim(),
+      onTimeTarget: Number(form.onTimeTarget) || 95,
+      qualityTarget: Number(form.qualityTarget) || 98,
+      notes: form.notes.trim(),
+      latestOrderDate: null,
+      createdAt: new Date().toISOString(),
+      isDeleted: false
+    };
 
-  const scoreColor = (pct) => pct >= 90 ? "#1F9E8D" : pct >= 75 ? "#E2A83B" : "#D64545";
+    if (onAdd) onAdd(newSup);
+    if (onClose) onClose();
+  };
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(15, 23, 42, 0.55)",
+        backdropFilter: "blur(3px)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 9999,
+        padding: 16
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          background: "#FFFFFF",
+          borderRadius: 14,
+          width: "100%",
+          maxWidth: 640,
+          maxHeight: "90vh",
+          display: "flex",
+          flexDirection: "column",
+          boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+          position: "relative"
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div style={{ padding: "20px 24px 16px", borderBottom: "1px solid #F0F0F2", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <h3 style={{ fontSize: 18, fontWeight: 700, color: "#151B2E", margin: 0 }}>Add New Supplier</h3>
+            <p style={{ fontSize: 12.5, color: "#8A8D98", margin: "4px 0 0" }}>Register a vendor for printing, dyeing, embroidery, fabric, or accessories</p>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: "#8A8D98", cursor: "pointer", padding: 6 }}>
+            <X size={20} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
+          <div style={{ padding: "20px 24px", overflowY: "auto", flex: 1 }}>
+            
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: "#1F9E8D", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>
+              Supplier Information
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: 12, marginBottom: 12 }}>
+              <div>
+                <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#374151", marginBottom: 4 }}>Supplier Name *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Apex Dyeing & Printing"
+                  value={form.name}
+                  onChange={e => setForm({ ...form, name: e.target.value })}
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13, boxSizing: "border-box" }}
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#374151", marginBottom: 4 }}>Supplier Code / ID</label>
+                <input
+                  type="text"
+                  placeholder="e.g. SUP-APX-05"
+                  value={form.code}
+                  onChange={e => setForm({ ...form, code: e.target.value })}
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13, boxSizing: "border-box" }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+              <div>
+                <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#374151", marginBottom: 4 }}>Supplier Type</label>
+                <select
+                  value={form.type}
+                  onChange={e => setForm({ ...form, type: e.target.value })}
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13, boxSizing: "border-box" }}
+                >
+                  {SUPPLIER_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#374151", marginBottom: 4 }}>Contact Person</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Ramesh Kumar"
+                  value={form.contactPerson}
+                  onChange={e => setForm({ ...form, contactPerson: e.target.value })}
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13, boxSizing: "border-box" }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+              <div>
+                <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#374151", marginBottom: 4 }}>Mobile / Phone</label>
+                <input
+                  type="text"
+                  placeholder="e.g. +91 98420 12345"
+                  value={form.mobile}
+                  onChange={e => setForm({ ...form, mobile: e.target.value })}
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13, boxSizing: "border-box" }}
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#374151", marginBottom: 4 }}>Email Address</label>
+                <input
+                  type="email"
+                  placeholder="e.g. orders@apexdyeing.com"
+                  value={form.email}
+                  onChange={e => setForm({ ...form, email: e.target.value })}
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13, boxSizing: "border-box" }}
+                />
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#374151", marginBottom: 4 }}>Address</label>
+              <input
+                type="text"
+                placeholder="e.g. 54, Industrial Estate, Angeripalayam Main Road"
+                value={form.address}
+                onChange={e => setForm({ ...form, address: e.target.value })}
+                style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13, boxSizing: "border-box" }}
+              />
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 18 }}>
+              <div>
+                <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#374151", marginBottom: 4 }}>City</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Tirupur"
+                  value={form.city}
+                  onChange={e => setForm({ ...form, city: e.target.value })}
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13, boxSizing: "border-box" }}
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#374151", marginBottom: 4 }}>Country</label>
+                <input
+                  type="text"
+                  placeholder="e.g. India"
+                  value={form.country}
+                  onChange={e => setForm({ ...form, country: e.target.value })}
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13, boxSizing: "border-box" }}
+                />
+              </div>
+            </div>
+
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: "#1F9E8D", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5, borderTop: "1px solid #F0F0F2", paddingTop: 14 }}>
+              Performance & Business Information
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+              <div>
+                <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#374151", marginBottom: 4 }}>On-time Delivery Target %</label>
+                <input
+                  type="number"
+                  min="50"
+                  max="100"
+                  value={form.onTimeTarget}
+                  onChange={e => setForm({ ...form, onTimeTarget: e.target.value })}
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13, boxSizing: "border-box" }}
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#374151", marginBottom: 4 }}>Quality Target %</label>
+                <input
+                  type="number"
+                  min="50"
+                  max="100"
+                  value={form.qualityTarget}
+                  onChange={e => setForm({ ...form, qualityTarget: e.target.value })}
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13, boxSizing: "border-box" }}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#374151", marginBottom: 4 }}>Notes / Capabilities</label>
+              <textarea
+                rows={2}
+                placeholder="Specializations, machinery specs, certifications, capacity..."
+                value={form.notes}
+                onChange={e => setForm({ ...form, notes: e.target.value })}
+                style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13, boxSizing: "border-box" }}
+              />
+            </div>
+          </div>
+
+          <div style={{ padding: "14px 24px", borderTop: "1px solid #F0F0F2", background: "#FAFAFB", display: "flex", justifyContent: "flex-end", gap: 10, borderBottomLeftRadius: 14, borderBottomRightRadius: 14 }}>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{ padding: "8px 16px", borderRadius: 7, border: "1px solid #D1D5DB", background: "#FFFFFF", fontSize: 13, fontWeight: 600, color: "#4B5563", cursor: "pointer" }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              style={{ padding: "8px 18px", borderRadius: 7, border: "none", background: "#1F9E8D", fontSize: 13, fontWeight: 600, color: "#FFFFFF", cursor: "pointer" }}
+            >
+              Add Supplier
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+export function EditSupplierModal({ supplier, onClose, onSave }) {
+  const [form, setForm] = useState({
+    name: supplier?.name || "",
+    code: supplier?.code || "",
+    type: supplier?.type || SUPPLIER_TYPES[0] || "Printing & Embroidery",
+    contactPerson: supplier?.contactPerson || "",
+    mobile: supplier?.mobile || "",
+    email: supplier?.email || "",
+    address: supplier?.address || "",
+    city: supplier?.city || "Tirupur",
+    country: supplier?.country || "India",
+    onTimeTarget: supplier?.onTimeTarget || 95,
+    qualityTarget: supplier?.qualityTarget || 98,
+    notes: supplier?.notes || ""
+  });
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!form.name.trim()) {
+      alert("Supplier name is required.");
+      return;
+    }
+    const updated = {
+      ...supplier,
+      name: form.name.trim(),
+      code: form.code.trim() || supplier.code,
+      type: form.type,
+      contactPerson: form.contactPerson.trim(),
+      mobile: form.mobile.trim(),
+      email: form.email.trim(),
+      address: form.address.trim(),
+      city: form.city.trim(),
+      country: form.country.trim(),
+      onTimeTarget: Number(form.onTimeTarget) || 95,
+      qualityTarget: Number(form.qualityTarget) || 98,
+      notes: form.notes.trim()
+    };
+
+    if (onSave) onSave(updated);
+    if (onClose) onClose();
+  };
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(15, 23, 42, 0.55)",
+        backdropFilter: "blur(3px)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 9999,
+        padding: 16
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          background: "#FFFFFF",
+          borderRadius: 14,
+          width: "100%",
+          maxWidth: 640,
+          maxHeight: "90vh",
+          display: "flex",
+          flexDirection: "column",
+          boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+          position: "relative"
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div style={{ padding: "20px 24px 16px", borderBottom: "1px solid #F0F0F2", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <h3 style={{ fontSize: 18, fontWeight: 700, color: "#151B2E", margin: 0 }}>Edit Supplier: {supplier?.name}</h3>
+            <p style={{ fontSize: 12.5, color: "#8A8D98", margin: "4px 0 0" }}>Update supplier contact, location, and performance targets</p>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: "#8A8D98", cursor: "pointer", padding: 6 }}>
+            <X size={20} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
+          <div style={{ padding: "20px 24px", overflowY: "auto", flex: 1 }}>
+            
+            <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: 12, marginBottom: 12 }}>
+              <div>
+                <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#374151", marginBottom: 4 }}>Supplier Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={form.name}
+                  onChange={e => setForm({ ...form, name: e.target.value })}
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13, boxSizing: "border-box" }}
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#374151", marginBottom: 4 }}>Supplier Code / ID</label>
+                <input
+                  type="text"
+                  value={form.code}
+                  onChange={e => setForm({ ...form, code: e.target.value })}
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13, boxSizing: "border-box" }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+              <div>
+                <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#374151", marginBottom: 4 }}>Supplier Type</label>
+                <select
+                  value={form.type}
+                  onChange={e => setForm({ ...form, type: e.target.value })}
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13, boxSizing: "border-box" }}
+                >
+                  {SUPPLIER_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#374151", marginBottom: 4 }}>Contact Person</label>
+                <input
+                  type="text"
+                  value={form.contactPerson}
+                  onChange={e => setForm({ ...form, contactPerson: e.target.value })}
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13, boxSizing: "border-box" }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+              <div>
+                <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#374151", marginBottom: 4 }}>Mobile / Phone</label>
+                <input
+                  type="text"
+                  value={form.mobile}
+                  onChange={e => setForm({ ...form, mobile: e.target.value })}
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13, boxSizing: "border-box" }}
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#374151", marginBottom: 4 }}>Email Address</label>
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={e => setForm({ ...form, email: e.target.value })}
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13, boxSizing: "border-box" }}
+                />
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#374151", marginBottom: 4 }}>Address</label>
+              <input
+                type="text"
+                value={form.address}
+                onChange={e => setForm({ ...form, address: e.target.value })}
+                style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13, boxSizing: "border-box" }}
+              />
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 18 }}>
+              <div>
+                <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#374151", marginBottom: 4 }}>City</label>
+                <input
+                  type="text"
+                  value={form.city}
+                  onChange={e => setForm({ ...form, city: e.target.value })}
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13, boxSizing: "border-box" }}
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#374151", marginBottom: 4 }}>Country</label>
+                <input
+                  type="text"
+                  value={form.country}
+                  onChange={e => setForm({ ...form, country: e.target.value })}
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13, boxSizing: "border-box" }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+              <div>
+                <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#374151", marginBottom: 4 }}>On-time Delivery Target %</label>
+                <input
+                  type="number"
+                  min="50"
+                  max="100"
+                  value={form.onTimeTarget}
+                  onChange={e => setForm({ ...form, onTimeTarget: e.target.value })}
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13, boxSizing: "border-box" }}
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#374151", marginBottom: 4 }}>Quality Target %</label>
+                <input
+                  type="number"
+                  min="50"
+                  max="100"
+                  value={form.qualityTarget}
+                  onChange={e => setForm({ ...form, qualityTarget: e.target.value })}
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13, boxSizing: "border-box" }}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#374151", marginBottom: 4 }}>Notes</label>
+              <textarea
+                rows={2}
+                value={form.notes}
+                onChange={e => setForm({ ...form, notes: e.target.value })}
+                style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13, boxSizing: "border-box" }}
+              />
+            </div>
+          </div>
+
+          <div style={{ padding: "14px 24px", borderTop: "1px solid #F0F0F2", background: "#FAFAFB", display: "flex", justifyContent: "flex-end", gap: 10, borderBottomLeftRadius: 14, borderBottomRightRadius: 14 }}>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{ padding: "8px 16px", borderRadius: 7, border: "1px solid #D1D5DB", background: "#FFFFFF", fontSize: 13, fontWeight: 600, color: "#4B5563", cursor: "pointer" }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              style={{ padding: "8px 18px", borderRadius: 7, border: "none", background: "#1F9E8D", fontSize: 13, fontWeight: 600, color: "#FFFFFF", cursor: "pointer" }}
+            >
+              Save Changes
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function supplierStatusPill(status) {
+  const styles = {
+    Excellent: { bg: "#E1F5EE", fg: "#085041" },
+    Good: { bg: "#EFF6FF", fg: "#1D4ED8" },
+    "Needs Attention": { bg: "#FEF3C7", fg: "#92400E" },
+    Poor: { bg: "#FEE2E2", fg: "#991B1B" },
+    New: { bg: "#F3F4F6", fg: "#4B5563" }
+  };
+  const s = styles[status] || styles.Good;
+  return (
+    <span style={{ background: s.bg, color: s.fg, fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999 }}>
+      {status}
+    </span>
+  );
+}
+
+export function SupplierDetailView({
+  supplier,
+  orders = [],
+  supplierWork = [],
+  onBack,
+  onOpenOrder,
+  onUpdateSupplier,
+  onDeleteSupplier,
+  onAssignWork,
+  onUpdateWorkStatus,
+  onUpdateWorkQuality
+}) {
+  const [showEdit, setShowEdit] = useState(false);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const metrics = useMemo(() => calculateSupplierMetrics(supplier, orders, supplierWork), [supplier, orders, supplierWork]);
+
+  const handleDelete = () => {
+    if (window.confirm(`Are you sure you want to delete supplier "${supplier.name}"? Historical order data will remain preserved.`)) {
+      if (onDeleteSupplier) onDeleteSupplier(supplier.id);
+      if (onBack) onBack();
+    }
+  };
+
+  const handleStatusChange = (item, newStatus) => {
+    if (onUpdateWorkStatus) {
+      const isDone = newStatus === "Completed";
+      const completedDate = isDone ? new Date().toISOString().split("T")[0] : null;
+      onUpdateWorkStatus(item.id, newStatus, completedDate);
+    }
+  };
+
+  const handleQualityChange = (item, newQualityStatus) => {
+    let issueDesc = item.qualityIssueDescription || "";
+    if (newQualityStatus === "Issue") {
+      const entered = window.prompt("Enter quality issue description (e.g. Color mismatch, Embroidery thread tension):", issueDesc || "Quality rework required");
+      if (entered === null) return;
+      issueDesc = entered;
+    }
+    if (onUpdateWorkQuality) {
+      onUpdateWorkQuality(item.id, newQualityStatus, issueDesc);
+    }
+  };
 
   return (
     <div>
-      <PageHeader title="Supplier performance" sub="Printing, embroidery, and dye jobs — tracked per supplier since orders can go to different vendors" />
-      {rows.length === 0 ? (
-        <Card><div style={{ fontSize: 12.5, color: "#B0B2BA" }}>No VAP jobs have a supplier assigned yet — set one on the T&A tracker's Printing/Embroidery or Garment Dye stage.</div></Card>
-      ) : (
-        <>
-          <div style={{ display: "grid", gridTemplateColumns: `repeat(${rows.length}, 1fr)`, gap: 12, marginBottom: 16 }}>
-            {rows.map(r => (
-              <Card key={r.name} style={{ padding: "16px 18px" }}>
-                <div style={{ fontSize: 12.5, fontWeight: 700, color: "#1B2130", marginBottom: 8 }}>{r.name}</div>
-                <div style={{ fontSize: 26, fontWeight: 700, color: scoreColor(r.onTimePct) }}>{r.onTimePct}%</div>
-                <div style={{ fontSize: 10.5, color: "#8A8D98", marginTop: 2 }}>on-time rate</div>
-              </Card>
-            ))}
-          </div>
+      <BackLink onClick={onBack} label="Back to Supplier performance" />
 
-          <Card>
-            <div style={{ display: "grid", gridTemplateColumns: "1.3fr 0.7fr 0.7fr 0.7fr 0.8fr 1fr", fontSize: 11, color: "#8A8D98", padding: "0 4px 8px", borderBottom: "1px solid #F0F0F2" }}>
-              <div>Supplier</div><div>Jobs</div><div>On-time</div><div>Delayed</div><div>Quality issues</div><div>Orders</div>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, color: "#1B2130" }}>{supplier.name}</h1>
+            {supplierStatusPill(metrics.status)}
+          </div>
+          <div style={{ fontSize: 13, color: "#8A8D98", marginTop: 4, display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontFamily: "monospace", color: "#534AB7", fontWeight: 600 }}>{supplier.code}</span>
+            <span>·</span>
+            <span>{supplier.type}</span>
+            <span>·</span>
+            <span>{supplier.city}, {supplier.country}</span>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={() => setShowAssignModal(true)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              background: "#534AB7",
+              color: "#FFFFFF",
+              border: "none",
+              borderRadius: 8,
+              padding: "8px 16px",
+              fontSize: 12.5,
+              fontWeight: 600,
+              cursor: "pointer",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.05)"
+            }}
+          >
+            <Layers size={14} />
+            Assign Work
+          </button>
+          <button
+            onClick={() => setShowEdit(true)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              background: "#FFFFFF",
+              color: "#374151",
+              border: "1px solid #D1D5DB",
+              borderRadius: 8,
+              padding: "7px 14px",
+              fontSize: 12.5,
+              fontWeight: 600,
+              cursor: "pointer"
+            }}
+          >
+            <Edit size={14} />
+            Edit Supplier
+          </button>
+          <button
+            onClick={handleDelete}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              background: "#FEE2E2",
+              color: "#991B1B",
+              border: "1px solid #FCA5A5",
+              borderRadius: 8,
+              padding: "7px 14px",
+              fontSize: 12.5,
+              fontWeight: 600,
+              cursor: "pointer"
+            }}
+          >
+            <Trash2 size={14} />
+            Delete Supplier
+          </button>
+        </div>
+      </div>
+
+      {/* Overview Grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1.9fr", gap: 16, marginBottom: 20 }}>
+        {/* Supplier Information Card */}
+        <Card>
+          <CardHeader title="Supplier Information" sub="Contact and facility profile" />
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: 13 }}>
+            <div>
+              <div style={{ fontSize: 11, color: "#8A8D98" }}>Contact Person</div>
+              <div style={{ fontWeight: 600, color: "#1B2130", marginTop: 1 }}>{supplier.contactPerson || "—"}</div>
             </div>
-            {rows.map(r => (
-              <div key={r.name} style={{ display: "grid", gridTemplateColumns: "1.3fr 0.7fr 0.7fr 0.7fr 0.8fr 1fr", alignItems: "center", fontSize: 12.5, padding: "10px 4px", borderBottom: "1px solid #F5F5F7" }}>
-                <div style={{ fontWeight: 600, color: "#1B2130" }}>{r.name}</div>
-                <div>{r.jobs}</div>
-                <div style={{ color: "#1F9E8D", fontWeight: 600 }}>{r.onTime}</div>
-                <div style={{ color: r.delayed > 0 ? "#D64545" : "#8A8D98", fontWeight: r.delayed > 0 ? 600 : 400 }}>{r.delayed}</div>
-                <div style={{ color: r.qualityIssues > 0 ? "#D64545" : "#8A8D98" }}>{r.qualityIssues}</div>
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  {r.orders.map(o => (
-                    <span key={o.id} onClick={() => onOpenOrder(o.id)} style={{ fontFamily: "monospace", fontSize: 10.5, color: "#378ADD", cursor: "pointer" }}>{o.id}</span>
-                  ))}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <div>
+                <div style={{ fontSize: 11, color: "#8A8D98" }}>Mobile Number</div>
+                <div style={{ fontWeight: 600, color: "#1B2130", marginTop: 1 }}>{supplier.mobile || "—"}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: "#8A8D98" }}>Email Address</div>
+                <div style={{ fontWeight: 600, color: "#378ADD", marginTop: 1, wordBreak: "break-all" }}>{supplier.email || "—"}</div>
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: "#8A8D98" }}>Full Address</div>
+              <div style={{ color: "#4B5563", marginTop: 1 }}>{supplier.address || "—"}, {supplier.city}, {supplier.country}</div>
+            </div>
+            {supplier.notes && (
+              <div>
+                <div style={{ fontSize: 11, color: "#8A8D98" }}>Capabilities & Notes</div>
+                <div style={{ fontSize: 12, color: "#565A66", marginTop: 2, background: "#F9FAFB", padding: "8px 10px", borderRadius: 6, border: "1px solid #E5E7EB" }}>
+                  {supplier.notes}
                 </div>
               </div>
-            ))}
-          </Card>
-        </>
+            )}
+          </div>
+        </Card>
+
+        {/* Performance KPI Cards */}
+        <Card>
+          <CardHeader title="Performance Summary" sub="Calculated dynamically from actual assigned supplier jobs" />
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+            <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 8, padding: "12px 14px" }}>
+              <div style={{ fontSize: 11, color: "#64748B", fontWeight: 600 }}>Total Jobs / Orders</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: "#0F172A", marginTop: 4 }}>{metrics.jobs}</div>
+              <div style={{ fontSize: 11, color: "#8A8D98", marginTop: 2 }}>Assigned workflow jobs</div>
+            </div>
+
+            <div style={{ background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 8, padding: "12px 14px" }}>
+              <div style={{ fontSize: 11, color: "#166534", fontWeight: 600 }}>On-time Rate</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: "#15803D", marginTop: 4 }}>
+                {metrics.onTimeRate !== null ? `${metrics.onTimeRate}%` : "—"}
+              </div>
+              <div style={{ fontSize: 11, color: "#166534", marginTop: 2 }}>{metrics.onTime} on-time of {metrics.jobs}</div>
+            </div>
+
+            <div style={{ background: metrics.delayed > 0 ? "#FEF2F2" : "#F8FAFC", border: metrics.delayed > 0 ? "1px solid #FECACA" : "1px solid #E2E8F0", borderRadius: 8, padding: "12px 14px" }}>
+              <div style={{ fontSize: 11, color: metrics.delayed > 0 ? "#991B1B" : "#64748B", fontWeight: 600 }}>Delayed Orders</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: metrics.delayed > 0 ? "#DC2626" : "#475569", marginTop: 4 }}>{metrics.delayed}</div>
+              <div style={{ fontSize: 11, color: metrics.delayed > 0 ? "#991B1B" : "#8A8D98", marginTop: 2 }}>Delayed or past due</div>
+            </div>
+
+            <div style={{ background: metrics.qualityIssues > 0 ? "#FEF2F2" : "#F8FAFC", border: metrics.qualityIssues > 0 ? "1px solid #FECACA" : "1px solid #E2E8F0", borderRadius: 8, padding: "12px 14px" }}>
+              <div style={{ fontSize: 11, color: metrics.qualityIssues > 0 ? "#991B1B" : "#64748B", fontWeight: 600 }}>Quality Issues</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: metrics.qualityIssues > 0 ? "#DC2626" : "#475569", marginTop: 4 }}>{metrics.qualityIssues}</div>
+              <div style={{ fontSize: 11, color: metrics.qualityIssues > 0 ? "#991B1B" : "#8A8D98", marginTop: 2 }}>Quality rework flags</div>
+            </div>
+
+            <div style={{ background: "#F0F9FF", border: "1px solid #BAE6FD", borderRadius: 8, padding: "12px 14px" }}>
+              <div style={{ fontSize: 11, color: "#0369A1", fontWeight: 600 }}>Quality Performance</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: "#0284C7", marginTop: 4 }}>
+                {metrics.qualityPerformance !== null ? `${metrics.qualityPerformance}%` : "—"}
+              </div>
+              <div style={{ fontSize: 11, color: "#0369A1", marginTop: 2 }}>Target: {supplier.qualityTarget || 98}%</div>
+            </div>
+
+            <div style={{ background: "#FAF5FF", border: "1px solid #E9D5FF", borderRadius: 8, padding: "12px 14px" }}>
+              <div style={{ fontSize: 11, color: "#7E22CE", fontWeight: 600 }}>Delivery Target</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: "#9333EA", marginTop: 4 }}>{supplier.onTimeTarget || 95}%</div>
+              <div style={{ fontSize: 11, color: "#7E22CE", marginTop: 2 }}>Agreed SLA target</div>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Supplier Work & Orders Table */}
+      <Card>
+        <div style={{ padding: "0 0 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "#1B2130" }}>Supplier Work & Assigned Orders</span>
+            <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, background: "#F0EFFB", color: "#534AB7", padding: "2px 8px", borderRadius: 999 }}>
+              {metrics.matchingItems.length} jobs
+            </span>
+          </div>
+          <span style={{ fontSize: 12, color: "#8A8D98" }}>All assignments derived from existing orders and department tasks</span>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1.1fr 0.9fr 0.8fr 1fr 1fr 0.9fr 1.3fr 0.8fr 0.8fr 0.9fr 1fr", fontSize: 11, color: "#8A8D98", padding: "0 6px 8px", borderBottom: "1px solid #F0F0F2" }}>
+          <div>Order / PO</div>
+          <div>Style Number</div>
+          <div>Buyer</div>
+          <div>Department</div>
+          <div>Task / Stage</div>
+          <div>Purpose</div>
+          <div>Work Description</div>
+          <div>Assigned Date</div>
+          <div>Expected Date</div>
+          <div>Status</div>
+          <div>Quality Status</div>
+        </div>
+
+        {metrics.matchingItems.length === 0 ? (
+          <div style={{ padding: "32px 0", textAlign: "center", color: "#8A8D98", fontSize: 13 }}>
+            No work currently assigned to this supplier. Click <strong>+ Assign Work</strong> above to allocate work from an existing order or task.
+          </div>
+        ) : (
+          metrics.matchingItems.map((item, idx) => (
+            <div
+              key={item.id || idx}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1.1fr 0.9fr 0.8fr 1fr 1fr 0.9fr 1.3fr 0.8fr 0.8fr 0.9fr 1fr",
+                alignItems: "center",
+                fontSize: 12,
+                padding: "12px 6px",
+                borderBottom: "1px solid #F5F5F7"
+              }}
+            >
+              <div>
+                <span
+                  onClick={() => onOpenOrder && onOpenOrder(item.orderId)}
+                  style={{ fontFamily: "monospace", fontSize: 12, color: "#378ADD", fontWeight: 700, cursor: "pointer" }}
+                >
+                  {item.orderId}
+                </span>
+                <div style={{ fontSize: 10.5, color: "#8A8D98" }}>{Number(item.qty || 0).toLocaleString()} pcs</div>
+              </div>
+
+              <div style={{ fontWeight: 600, color: "#1B2130" }}>{item.style}</div>
+              <div style={{ color: "#4B5563" }}>{item.buyer}</div>
+              <div>
+                <span style={{ fontSize: 11, background: "#F0EFFB", color: "#534AB7", padding: "2px 6px", borderRadius: 4, fontWeight: 600 }}>
+                  {item.dept}
+                </span>
+              </div>
+              <div style={{ color: "#1B2130", fontWeight: 500 }}>{item.taskName}</div>
+              <div>
+                <span style={{ fontSize: 11, background: "#E0F2FE", color: "#0369A1", padding: "2px 6px", borderRadius: 4, fontWeight: 600 }}>
+                  {item.purpose}
+                </span>
+              </div>
+              <div style={{ color: "#4B5563", fontSize: 11.5, paddingRight: 8 }} title={item.description}>
+                {item.description}
+              </div>
+              <div style={{ color: "#8A8D98", fontSize: 11 }}>{item.assignedDate}</div>
+              <div style={{ color: "#1B2130", fontSize: 11.5, fontWeight: 500 }}>{item.expectedDate}</div>
+
+              <div>
+                <select
+                  value={item.status}
+                  onChange={e => handleStatusChange(item, e.target.value)}
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    padding: "3px 6px",
+                    borderRadius: 6,
+                    border: "1px solid #D1D5DB",
+                    background:
+                      item.status === "Completed" ? "#E1F5EE" :
+                      item.status === "Delayed" ? "#FEE2E2" :
+                      item.status === "In Progress" ? "#FEF3C7" : "#F3F4F6",
+                    color:
+                      item.status === "Completed" ? "#085041" :
+                      item.status === "Delayed" ? "#991B1B" :
+                      item.status === "In Progress" ? "#92400E" : "#4B5563",
+                    cursor: "pointer"
+                  }}
+                >
+                  <option value="Pending">Pending</option>
+                  <option value="In Progress">In Progress</option>
+                  <option value="Completed">Completed</option>
+                  <option value="Delayed">Delayed</option>
+                </select>
+              </div>
+
+              <div>
+                <select
+                  value={item.qualityStatus}
+                  onChange={e => handleQualityChange(item, e.target.value)}
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    padding: "3px 6px",
+                    borderRadius: 6,
+                    border: "1px solid #D1D5DB",
+                    background:
+                      item.qualityStatus === "Passed" ? "#E1F5EE" :
+                      item.qualityStatus === "Issue" ? "#FEE2E2" : "#F3F4F6",
+                    color:
+                      item.qualityStatus === "Passed" ? "#085041" :
+                      item.qualityStatus === "Issue" ? "#991B1B" : "#4B5563",
+                    cursor: "pointer"
+                  }}
+                >
+                  <option value="Pending">Pending</option>
+                  <option value="Passed">Passed</option>
+                  <option value="Issue">Issue</option>
+                </select>
+                {item.qualityIssueDescription && (
+                  <div style={{ fontSize: 10, color: "#DC2626", marginTop: 2, lineHeight: 1.2 }}>
+                    {item.qualityIssueDescription}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))
+        )}
+      </Card>
+
+      {/* Edit Supplier Modal */}
+      {showEdit && (
+        <EditSupplierModal
+          supplier={supplier}
+          onClose={() => setShowEdit(false)}
+          onSave={onUpdateSupplier}
+        />
+      )}
+
+      {/* Assign Work Modal */}
+      {showAssignModal && (
+        <AssignWorkModal
+          orders={orders}
+          suppliers={[supplier]}
+          prefillSupplierId={supplier.id}
+          onClose={() => setShowAssignModal(false)}
+          onAssign={onAssignWork}
+        />
       )}
     </div>
   );
 }
+
+export function SupplierPerformancePage({
+  orders = [],
+  suppliers = INITIAL_SUPPLIERS,
+  supplierWork = INITIAL_SUPPLIER_WORK,
+  tasks = [],
+  onAddSupplier,
+  onUpdateSupplier,
+  onDeleteSupplier,
+  onAssignWork,
+  onUpdateWorkStatus,
+  onUpdateWorkQuality,
+  onOpenOrder
+}) {
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [selectedSupplierId, setSelectedSupplierId] = useState(null);
+
+  const activeSuppliers = useMemo(() => {
+    return suppliers.filter(s => !s.isDeleted);
+  }, [suppliers]);
+
+  // Priority sorting: most recent assigned order timestamp DESC
+  const sortedSuppliers = useMemo(() => {
+    return [...activeSuppliers].sort((a, b) => {
+      const metricsA = calculateSupplierMetrics(a, orders, supplierWork);
+      const metricsB = calculateSupplierMetrics(b, orders, supplierWork);
+
+      let timeA = 0;
+      if (a.latestOrderDate) timeA = new Date(a.latestOrderDate).getTime();
+      if (metricsA.matchingItems.length > 0) {
+        const itemA = metricsA.matchingItems[0];
+        const t = itemA.assignedAt ? new Date(itemA.assignedAt).getTime() : 0;
+        if (t > timeA) timeA = t;
+      }
+
+      let timeB = 0;
+      if (b.latestOrderDate) timeB = new Date(b.latestOrderDate).getTime();
+      if (metricsB.matchingItems.length > 0) {
+        const itemB = metricsB.matchingItems[0];
+        const t = itemB.assignedAt ? new Date(itemB.assignedAt).getTime() : 0;
+        if (t > timeB) timeB = t;
+      }
+
+      // Suppliers with recent orders appear above suppliers with older or no orders
+      if (timeA !== timeB) {
+        return timeB - timeA;
+      }
+
+      // If neither has orders, sort by createdAt DESC
+      const createdA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const createdB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return createdB - createdA;
+    });
+  }, [activeSuppliers, orders, supplierWork]);
+
+  // Overall aggregate stats
+  const overallStats = useMemo(() => {
+    let totalJobs = 0;
+    let totalOnTime = 0;
+    let totalDelayed = 0;
+    let totalQualityIssues = 0;
+
+    activeSuppliers.forEach(sup => {
+      const m = calculateSupplierMetrics(sup, orders, supplierWork);
+      totalJobs += m.jobs;
+      totalOnTime += m.onTime;
+      totalDelayed += m.delayed;
+      totalQualityIssues += m.qualityIssues;
+    });
+
+    const avgOnTime = totalJobs > 0 ? Math.round((totalOnTime / totalJobs) * 100) : 100;
+    const qualityCompliance = totalJobs > 0 ? Math.round(((totalJobs - totalQualityIssues) / totalJobs) * 100) : 100;
+
+    return {
+      activeCount: activeSuppliers.length,
+      totalJobs,
+      totalOnTime,
+      totalDelayed,
+      avgOnTime,
+      qualityCompliance
+    };
+  }, [activeSuppliers, orders, supplierWork]);
+
+  const selectedSupplier = useMemo(() => {
+    return activeSuppliers.find(s => s.id === selectedSupplierId);
+  }, [activeSuppliers, selectedSupplierId]);
+
+  if (selectedSupplier) {
+    return (
+      <SupplierDetailView
+        supplier={selectedSupplier}
+        orders={orders}
+        supplierWork={supplierWork}
+        onBack={() => setSelectedSupplierId(null)}
+        onOpenOrder={onOpenOrder}
+        onUpdateSupplier={onUpdateSupplier}
+        onDeleteSupplier={onDeleteSupplier}
+        onAssignWork={onAssignWork}
+        onUpdateWorkStatus={onUpdateWorkStatus}
+        onUpdateWorkQuality={onUpdateWorkQuality}
+      />
+    );
+  }
+
+  const scoreColor = (pct) => {
+    if (pct === null) return "#8A8D98";
+    if (pct >= 95) return "#1F9E8D";
+    if (pct >= 85) return "#2563EB";
+    if (pct >= 70) return "#D97706";
+    return "#DC2626";
+  };
+
+  return (
+    <div>
+      {/* Header with Title & Action Buttons */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
+        <div>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: "#151B2E", margin: 0 }}>Supplier performance</h1>
+          <div style={{ fontSize: 13, color: "#8A8D98", marginTop: 4 }}>
+            Vendor management and performance tracking — assign work from existing orders & tasks, track on-time delivery and quality
+          </div>
+        </div>
+        
+        <div style={{ display: "flex", gap: 10 }}>
+          <button
+            onClick={() => setShowAssignModal(true)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              background: "#534AB7",
+              color: "#FFFFFF",
+              border: "none",
+              borderRadius: 8,
+              padding: "8px 16px",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.05)"
+            }}
+          >
+            <Layers size={16} />
+            Assign Work
+          </button>
+
+          <button
+            onClick={() => setShowAddModal(true)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              background: "#1F9E8D",
+              color: "#FFFFFF",
+              border: "none",
+              borderRadius: 8,
+              padding: "8px 16px",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.05)"
+            }}
+          >
+            <Plus size={16} />
+            Add Supplier
+          </button>
+        </div>
+      </div>
+
+      {/* Top Aggregate Summary Cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 20 }}>
+        <Card style={{ padding: "16px 18px" }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#64748B" }}>Active Suppliers</div>
+          <div style={{ fontSize: 24, fontWeight: 700, color: "#0F172A", marginTop: 4 }}>{overallStats.activeCount}</div>
+          <div style={{ fontSize: 11, color: "#8A8D98", marginTop: 2 }}>Registered partner vendors</div>
+        </Card>
+
+        <Card style={{ padding: "16px 18px" }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#64748B" }}>Total Supplier Jobs</div>
+          <div style={{ fontSize: 24, fontWeight: 700, color: "#534AB7", marginTop: 4 }}>{overallStats.totalJobs}</div>
+          <div style={{ fontSize: 11, color: "#8A8D98", marginTop: 2 }}>Work assignments allocated</div>
+        </Card>
+
+        <Card style={{ padding: "16px 18px" }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#166534" }}>Avg. On-Time Rate</div>
+          <div style={{ fontSize: 24, fontWeight: 700, color: scoreColor(overallStats.avgOnTime), marginTop: 4 }}>
+            {overallStats.avgOnTime}%
+          </div>
+          <div style={{ fontSize: 11, color: "#166534", marginTop: 2 }}>{overallStats.totalOnTime} on-time of {overallStats.totalJobs}</div>
+        </Card>
+
+        <Card style={{ padding: "16px 18px" }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#0369A1" }}>Quality Compliance</div>
+          <div style={{ fontSize: 24, fontWeight: 700, color: "#0284C7", marginTop: 4 }}>
+            {overallStats.qualityCompliance}%
+          </div>
+          <div style={{ fontSize: 11, color: "#0369A1", marginTop: 2 }}>Zero quality defect rate</div>
+        </Card>
+      </div>
+
+      {/* Main Supplier Performance Table */}
+      <Card>
+        <div style={{ padding: "0 0 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "#1B2130" }}>Suppliers & Vendor Performance</span>
+            <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, background: "#E1F5EE", color: "#085041", padding: "2px 8px", borderRadius: 999 }}>
+              {sortedSuppliers.length} suppliers
+            </span>
+          </div>
+          <span style={{ fontSize: 12, color: "#8A8D98" }}>Sorted by most recently assigned order / work</span>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1.4fr 0.6fr 0.6fr 0.6fr 0.8fr 0.9fr 1.1fr 1.2fr", fontSize: 11.5, color: "#8A8D98", padding: "0 6px 8px", borderBottom: "1px solid #F0F0F2" }}>
+          <div>Supplier</div>
+          <div>Jobs</div>
+          <div>On-time</div>
+          <div>Delayed</div>
+          <div>Quality Issues</div>
+          <div>On-time Rate</div>
+          <div>Latest Order</div>
+          <div>Orders</div>
+        </div>
+
+        {sortedSuppliers.length === 0 ? (
+          <div style={{ padding: "32px 0", textAlign: "center", color: "#8A8D98", fontSize: 13 }}>
+            No suppliers registered yet. Click <strong>+ Add Supplier</strong> above to create your first vendor.
+          </div>
+        ) : (
+          sortedSuppliers.map(supplier => {
+            const metrics = calculateSupplierMetrics(supplier, orders, supplierWork);
+            return (
+              <div
+                key={supplier.id}
+                onClick={() => setSelectedSupplierId(supplier.id)}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1.4fr 0.6fr 0.6fr 0.6fr 0.8fr 0.9fr 1.1fr 1.2fr",
+                  alignItems: "center",
+                  fontSize: 12.5,
+                  padding: "12px 6px",
+                  borderBottom: "1px solid #F5F5F7",
+                  cursor: "pointer"
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = "#FAFAFB"}
+                onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+              >
+                <div>
+                  <div style={{ fontWeight: 700, color: "#1B2130", display: "flex", alignItems: "center", gap: 6 }}>
+                    {supplier.name}
+                  </div>
+                  <div style={{ fontSize: 11, color: "#8A8D98", marginTop: 2, display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontFamily: "monospace", color: "#534AB7" }}>{supplier.code}</span>
+                    <span>·</span>
+                    <span>{supplier.type}</span>
+                  </div>
+                </div>
+
+                <div style={{ fontWeight: 600, color: "#1B2130" }}>{metrics.jobs}</div>
+
+                <div style={{ color: "#1F9E8D", fontWeight: 700 }}>{metrics.onTime}</div>
+
+                <div style={{ color: metrics.delayed > 0 ? "#DC2626" : "#8A8D98", fontWeight: metrics.delayed > 0 ? 700 : 400 }}>
+                  {metrics.delayed}
+                </div>
+
+                <div style={{ color: metrics.qualityIssues > 0 ? "#DC2626" : "#8A8D98", fontWeight: metrics.qualityIssues > 0 ? 700 : 400 }}>
+                  {metrics.qualityIssues}
+                </div>
+
+                <div>
+                  {metrics.onTimeRate !== null ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontWeight: 700, color: scoreColor(metrics.onTimeRate) }}>{metrics.onTimeRate}%</span>
+                      {supplierStatusPill(metrics.status)}
+                    </div>
+                  ) : (
+                    <span style={{ color: "#9CA3AF" }}>—</span>
+                  )}
+                </div>
+
+                <div>
+                  {metrics.latestOrder ? (
+                    <div>
+                      <span
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (onOpenOrder) onOpenOrder(metrics.latestOrder.id);
+                        }}
+                        style={{ fontFamily: "monospace", fontSize: 11.5, color: "#378ADD", fontWeight: 700, cursor: "pointer" }}
+                      >
+                        {metrics.latestOrder.id}
+                      </span>
+                      <div style={{ fontSize: 10.5, color: "#8A8D98" }}>{metrics.latestOrder.ship || "In workflow"}</div>
+                    </div>
+                  ) : (
+                    <span style={{ fontSize: 11.5, color: "#9CA3AF" }}>No orders yet</span>
+                  )}
+                </div>
+
+                <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
+                  {metrics.associatedOrders.length === 0 ? (
+                    <span style={{ fontSize: 11.5, color: "#9CA3AF" }}>No orders yet</span>
+                  ) : (
+                    <>
+                      {metrics.associatedOrders.slice(0, 3).map(o => (
+                        <span
+                          key={o.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (onOpenOrder) onOpenOrder(o.id);
+                          }}
+                          style={{
+                            fontFamily: "monospace",
+                            fontSize: 10.5,
+                            color: "#378ADD",
+                            background: "#F0F7FF",
+                            padding: "2px 6px",
+                            borderRadius: 4,
+                            border: "1px solid #D0E1FD",
+                            cursor: "pointer"
+                          }}
+                        >
+                          {o.id}
+                        </span>
+                      ))}
+                      {metrics.associatedOrders.length > 3 && (
+                        <span style={{ fontSize: 10, color: "#6B7280", background: "#F3F4F6", padding: "2px 5px", borderRadius: 4 }}>
+                          +{metrics.associatedOrders.length - 3} more
+                        </span>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </Card>
+
+      {/* Add Supplier Modal */}
+      {showAddModal && (
+        <AddSupplierModal
+          onClose={() => setShowAddModal(false)}
+          onAdd={onAddSupplier}
+        />
+      )}
+
+      {/* Assign Work Modal */}
+      {showAssignModal && (
+        <AssignWorkModal
+          orders={orders}
+          tasks={tasks}
+          suppliers={activeSuppliers}
+          onClose={() => setShowAssignModal(false)}
+          onAssign={onAssignWork}
+        />
+      )}
+    </div>
+  );
+}
+
 
 export function NotificationsPage({
   notifications = [],

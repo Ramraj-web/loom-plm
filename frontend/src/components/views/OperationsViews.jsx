@@ -3,15 +3,17 @@ import {
   CheckCircle2, Upload, Plus, Trash2, Check, RotateCcw, Archive, X,
   ShieldCheck, Award, FileText, AlertTriangle, Clock, Eye, Edit,
   Search, Filter, ExternalLink, ChevronRight, CheckCircle, AlertCircle,
-  HelpCircle, Calendar, RefreshCw
+  HelpCircle, Calendar, RefreshCw, ArrowUp, ArrowDown, Layers
 } from "lucide-react";
 import {
   TA_STAGES, DEPT_ICONS, ORG_STRUCTURE, ATTENDANCE_STATUS_STYLE, CERT_STATUS_STYLE,
-  COMPLIANCE_STATUS_STYLE, COMPLIANCE_PRIORITY_STYLE, CERT_NAME_OPTIONS, BUYER_LIST, COMPLIANCE_CATEGORIES
+  COMPLIANCE_STATUS_STYLE, COMPLIANCE_PRIORITY_STYLE, CERT_NAME_OPTIONS, BUYER_LIST, COMPLIANCE_CATEGORIES,
+  DEFAULT_DEPT_DESCRIPTIONS, firstNamedAssignee
 } from "../../constants/loomData.js";
 import {
   Card, CardHeader, PageHeader, BackLink, statusPill, riskDot, collectTasks, GroupedTaskList, OrgChain, TaskTable
 } from "../common/CommonUI.jsx";
+import { AssignWorkModal } from "./InsightsViews.jsx";
 
 export function OrdersPage({
   orders = [],
@@ -533,12 +535,16 @@ export function MyTasksPage({
   orders = [],
   role,
   tasks = [],
+  suppliers = [],
   onAddTask,
   onUpdateTask,
   onDeleteTask,
+  onAssignWork,
   onOpenOrder
 }) {
   const [showModal, setShowModal] = useState(false);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [assignPrefill, setAssignPrefill] = useState(null);
   const [taskTab, setTaskTab] = useState("all"); // "all" | "custom" | "tna"
   const [form, setForm] = useState({
     title: "",
@@ -737,6 +743,33 @@ export function MyTasksPage({
                   </div>
 
                   <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
+                    <button
+                      onClick={() => {
+                        setAssignPrefill({
+                          orderId: t.orderId || "",
+                          dept: t.dept || "Merchandising",
+                          taskName: t.title
+                        });
+                        setShowAssignModal(true);
+                      }}
+                      title="Assign work to external supplier"
+                      style={{
+                        background: "#F0EFFB",
+                        color: "#534AB7",
+                        border: "1px solid #D6D2F3",
+                        borderRadius: 6,
+                        padding: "4px 8px",
+                        fontSize: 11.5,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 3
+                      }}
+                    >
+                      <Layers size={12} />
+                      Assign Supplier
+                    </button>
                     <button
                       onClick={() => onDeleteTask && onDeleteTask(t.id)}
                       title="Delete task"
@@ -948,6 +981,23 @@ export function MyTasksPage({
             </form>
           </div>
         </div>
+      )}
+
+      {/* Assign Work to Supplier Modal */}
+      {showAssignModal && (
+        <AssignWorkModal
+          orders={orders}
+          tasks={tasks}
+          suppliers={suppliers}
+          prefillOrderId={assignPrefill?.orderId}
+          prefillDept={assignPrefill?.dept}
+          prefillTaskName={assignPrefill?.taskName}
+          onClose={() => {
+            setShowAssignModal(false);
+            setAssignPrefill(null);
+          }}
+          onAssign={onAssignWork}
+        />
       )}
     </div>
   );
@@ -3114,7 +3164,595 @@ export function AttendancePage({ roster, attendance, onCycle, leaveRequests, onA
   );
 }
 
-export function DepartmentsPage({ orders, onOpenDept, orgStructure }) {
+export function EditDepartmentModal({
+  deptName,
+  description = "",
+  roles = [],
+  onClose,
+  onSave
+}) {
+  const [name, setName] = useState(deptName || "");
+  const [desc, setDesc] = useState(description || "");
+  const [roleList, setRoleList] = useState(() => {
+    if (!Array.isArray(roles) || roles.length === 0) {
+      return [{ title: "Manager", name: "", bullets: [] }];
+    }
+    return roles.map(r => ({
+      title: r.title || "",
+      name: r.name || "",
+      bullets: Array.isArray(r.bullets) ? [...r.bullets] : []
+    }));
+  });
+
+  const handleRoleChange = (index, field, value) => {
+    setRoleList(prev => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
+  };
+
+  const handleAddRole = () => {
+    setRoleList(prev => [...prev, { title: "", name: "", bullets: [""] }]);
+  };
+
+  const handleDeleteRole = (index) => {
+    const roleTitle = roleList[index]?.title || "this role";
+    if (window.confirm(`Are you sure you want to remove ${roleTitle}?`)) {
+      setRoleList(prev => prev.filter((_, i) => i !== index));
+    }
+  };
+
+  const handleMoveRole = (index, direction) => {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= roleList.length) return;
+    setRoleList(prev => {
+      const updated = [...prev];
+      const temp = updated[index];
+      updated[index] = updated[targetIndex];
+      updated[targetIndex] = temp;
+      return updated;
+    });
+  };
+
+  const handleAddResponsibility = (roleIndex) => {
+    setRoleList(prev => {
+      const updated = [...prev];
+      const currentBullets = Array.isArray(updated[roleIndex].bullets) ? [...updated[roleIndex].bullets] : [];
+      updated[roleIndex] = {
+        ...updated[roleIndex],
+        bullets: [...currentBullets, ""]
+      };
+      return updated;
+    });
+  };
+
+  const handleResponsibilityChange = (roleIndex, bulletIndex, value) => {
+    setRoleList(prev => {
+      const updated = [...prev];
+      const currentBullets = Array.isArray(updated[roleIndex].bullets) ? [...updated[roleIndex].bullets] : [];
+      currentBullets[bulletIndex] = value;
+      updated[roleIndex] = {
+        ...updated[roleIndex],
+        bullets: currentBullets
+      };
+      return updated;
+    });
+  };
+
+  const handleDeleteResponsibility = (roleIndex, bulletIndex) => {
+    setRoleList(prev => {
+      const updated = [...prev];
+      const currentBullets = Array.isArray(updated[roleIndex].bullets) ? [...updated[roleIndex].bullets] : [];
+      updated[roleIndex] = {
+        ...updated[roleIndex],
+        bullets: currentBullets.filter((_, i) => i !== bulletIndex)
+      };
+      return updated;
+    });
+  };
+
+  const handleMoveResponsibility = (roleIndex, bulletIndex, direction) => {
+    setRoleList(prev => {
+      const updated = [...prev];
+      const currentBullets = Array.isArray(updated[roleIndex].bullets) ? [...updated[roleIndex].bullets] : [];
+      const targetIndex = bulletIndex + direction;
+      if (targetIndex < 0 || targetIndex >= currentBullets.length) return prev;
+      const temp = currentBullets[bulletIndex];
+      currentBullets[bulletIndex] = currentBullets[targetIndex];
+      currentBullets[targetIndex] = temp;
+      updated[roleIndex] = {
+        ...updated[roleIndex],
+        bullets: currentBullets
+      };
+      return updated;
+    });
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const finalName = name.trim();
+    if (!finalName) {
+      alert("Department name cannot be empty.");
+      return;
+    }
+
+    const cleanedRoles = roleList.map(r => ({
+      title: r.title.trim() || "Role",
+      name: r.name.trim() || "—",
+      bullets: (r.bullets || []).map(b => b.trim()).filter(Boolean)
+    }));
+
+    if (onSave) {
+      onSave({
+        name: finalName,
+        description: desc.trim(),
+        roles: cleanedRoles
+      });
+    }
+    if (onClose) onClose();
+  };
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(15, 23, 42, 0.55)",
+        backdropFilter: "blur(3px)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 9999,
+        padding: 16
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          background: "#FFFFFF",
+          borderRadius: 14,
+          width: "100%",
+          maxWidth: 720,
+          maxHeight: "90vh",
+          display: "flex",
+          flexDirection: "column",
+          boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+          position: "relative"
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Modal Header */}
+        <div style={{ padding: "20px 24px 16px", borderBottom: "1px solid #F0F0F2", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <h3 style={{ fontSize: 18, fontWeight: 700, color: "#151B2E", margin: 0 }}>
+              Edit Department: <span style={{ color: "#1F9E8D" }}>{deptName}</span>
+            </h3>
+            <p style={{ fontSize: 12.5, color: "#8A8D98", margin: "4px 0 0" }}>
+              Update department details, reporting hierarchy, personnel, and assigned responsibilities.
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            style={{ background: "none", border: "none", color: "#8A8D98", cursor: "pointer", padding: 6, borderRadius: 6 }}
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Modal Scrollable Body */}
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
+          <div style={{ padding: "20px 24px", overflowY: "auto", flex: 1 }}>
+            
+            {/* Department Name & Description */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16, marginBottom: 22 }}>
+              <div>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 6 }}>
+                  Department Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  placeholder="e.g. Merchandising"
+                  style={{
+                    width: "100%",
+                    padding: "9px 12px",
+                    borderRadius: 8,
+                    border: "1px solid #D1D5DB",
+                    fontSize: 13.5,
+                    fontWeight: 600,
+                    color: "#111827",
+                    outline: "none",
+                    boxSizing: "border-box"
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 6 }}>
+                  Department Description
+                </label>
+                <textarea
+                  rows={3}
+                  value={desc}
+                  onChange={e => setDesc(e.target.value)}
+                  placeholder="Describe the department's core focus, owning T&A stages, and key workflows..."
+                  style={{
+                    width: "100%",
+                    padding: "9px 12px",
+                    borderRadius: 8,
+                    border: "1px solid #D1D5DB",
+                    fontSize: 13,
+                    color: "#1F2937",
+                    lineHeight: 1.5,
+                    resize: "vertical",
+                    outline: "none",
+                    boxSizing: "border-box"
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Reporting Structure Section */}
+            <div style={{ borderTop: "1px solid #F0F0F2", paddingTop: 18 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                <div>
+                  <h4 style={{ fontSize: 14, fontWeight: 700, color: "#151B2E", margin: 0 }}>
+                    Reporting Structure & Responsibilities
+                  </h4>
+                  <div style={{ fontSize: 11.5, color: "#8A8D98", marginTop: 2 }}>
+                    Define the roles, assign individuals, and maintain specific responsibilities.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAddRole}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    background: "#E1F5EE",
+                    color: "#085041",
+                    border: "1px solid #A2E2CD",
+                    borderRadius: 7,
+                    padding: "6px 12px",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: "pointer"
+                  }}
+                >
+                  <Plus size={14} />
+                  Add Role
+                </button>
+              </div>
+
+              {/* Roles List */}
+              {roleList.length === 0 ? (
+                <div style={{ padding: "24px 0", textAlign: "center", color: "#8A8D98", fontSize: 13, background: "#FAFAFB", borderRadius: 8, border: "1px dashed #D1D5DB" }}>
+                  No roles configured for this department. Click <strong>+ Add Role</strong> above to create one.
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  {roleList.map((role, rIdx) => (
+                    <div
+                      key={rIdx}
+                      style={{
+                        background: "#F9FAFB",
+                        border: "1px solid #E5E7EB",
+                        borderRadius: 10,
+                        padding: "14px 16px",
+                        position: "relative"
+                      }}
+                    >
+                      {/* Role Card Header Row */}
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, background: "#EDE9FE", color: "#5B21B6", padding: "2px 8px", borderRadius: 999 }}>
+                            Role #{rIdx + 1}
+                          </span>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: "#1F2937" }}>
+                            {role.title ? role.title : "Untitled Role"}
+                          </span>
+                        </div>
+
+                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                          <button
+                            type="button"
+                            onClick={() => handleMoveRole(rIdx, -1)}
+                            disabled={rIdx === 0}
+                            title="Move role up"
+                            style={{
+                              background: "#FFFFFF",
+                              border: "1px solid #D1D5DB",
+                              borderRadius: 5,
+                              padding: 4,
+                              cursor: rIdx === 0 ? "not-allowed" : "pointer",
+                              opacity: rIdx === 0 ? 0.4 : 1,
+                              display: "inline-flex",
+                              alignItems: "center"
+                            }}
+                          >
+                            <ArrowUp size={13} color="#4B5563" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleMoveRole(rIdx, 1)}
+                            disabled={rIdx === roleList.length - 1}
+                            title="Move role down"
+                            style={{
+                              background: "#FFFFFF",
+                              border: "1px solid #D1D5DB",
+                              borderRadius: 5,
+                              padding: 4,
+                              cursor: rIdx === roleList.length - 1 ? "not-allowed" : "pointer",
+                              opacity: rIdx === roleList.length - 1 ? 0.4 : 1,
+                              display: "inline-flex",
+                              alignItems: "center"
+                            }}
+                          >
+                            <ArrowDown size={13} color="#4B5563" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteRole(rIdx)}
+                            title="Delete role"
+                            style={{
+                              background: "#FEE2E2",
+                              border: "1px solid #FCA5A5",
+                              color: "#991B1B",
+                              borderRadius: 5,
+                              padding: "4px 8px",
+                              fontSize: 11.5,
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 4,
+                              marginLeft: 6
+                            }}
+                          >
+                            <Trash2 size={13} />
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Role Inputs (Role Title & Person Name) */}
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                        <div>
+                          <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#4B5563", marginBottom: 4 }}>
+                            Role / Designation *
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={role.title}
+                            onChange={e => handleRoleChange(rIdx, "title", e.target.value)}
+                            placeholder="e.g. Manager, Senior, Incharge"
+                            style={{
+                              width: "100%",
+                              padding: "7px 10px",
+                              borderRadius: 6,
+                              border: "1px solid #D1D5DB",
+                              fontSize: 12.5,
+                              boxSizing: "border-box"
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#4B5563", marginBottom: 4 }}>
+                            Person / Employee Name
+                          </label>
+                          <input
+                            type="text"
+                            value={role.name}
+                            onChange={e => handleRoleChange(rIdx, "name", e.target.value)}
+                            placeholder="e.g. Raj, Suresh, —"
+                            style={{
+                              width: "100%",
+                              padding: "7px 10px",
+                              borderRadius: 6,
+                              border: "1px solid #D1D5DB",
+                              fontSize: 12.5,
+                              boxSizing: "border-box"
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Responsibilities Sub-List */}
+                      <div style={{ background: "#FFFFFF", border: "1px solid #E5E7EB", borderRadius: 8, padding: "10px 12px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                          <span style={{ fontSize: 11.5, fontWeight: 700, color: "#374151" }}>
+                            Responsibilities ({role.bullets?.length || 0})
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleAddResponsibility(rIdx)}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: "#1F9E8D",
+                              fontSize: 11.5,
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 3,
+                              padding: 0
+                            }}
+                          >
+                            <Plus size={13} />
+                            Add Responsibility
+                          </button>
+                        </div>
+
+                        {(!role.bullets || role.bullets.length === 0) ? (
+                          <div style={{ fontSize: 11.5, color: "#9CA3AF", fontStyle: "italic", padding: "6px 0" }}>
+                            No responsibilities listed. Click <strong>+ Add Responsibility</strong> to assign tasks to this role.
+                          </div>
+                        ) : (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                            {role.bullets.map((bullet, bIdx) => (
+                              <div key={bIdx} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                <span style={{ width: 5, height: 5, borderRadius: 999, background: "#9CA3AF", flexShrink: 0 }} />
+                                <input
+                                  type="text"
+                                  value={bullet}
+                                  onChange={e => handleResponsibilityChange(rIdx, bIdx, e.target.value)}
+                                  placeholder="e.g. PO receiving, Fabric plan approval..."
+                                  style={{
+                                    flex: 1,
+                                    padding: "5px 8px",
+                                    borderRadius: 5,
+                                    border: "1px solid #E5E7EB",
+                                    fontSize: 12,
+                                    color: "#1F2937",
+                                    boxSizing: "border-box"
+                                  }}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleMoveResponsibility(rIdx, bIdx, -1)}
+                                  disabled={bIdx === 0}
+                                  title="Move up"
+                                  style={{
+                                    background: "none",
+                                    border: "none",
+                                    cursor: bIdx === 0 ? "not-allowed" : "pointer",
+                                    opacity: bIdx === 0 ? 0.3 : 0.7,
+                                    padding: 2,
+                                    display: "inline-flex"
+                                  }}
+                                >
+                                  <ArrowUp size={12} color="#4B5563" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleMoveResponsibility(rIdx, bIdx, 1)}
+                                  disabled={bIdx === role.bullets.length - 1}
+                                  title="Move down"
+                                  style={{
+                                    background: "none",
+                                    border: "none",
+                                    cursor: bIdx === role.bullets.length - 1 ? "not-allowed" : "pointer",
+                                    opacity: bIdx === role.bullets.length - 1 ? 0.3 : 0.7,
+                                    padding: 2,
+                                    display: "inline-flex"
+                                  }}
+                                >
+                                  <ArrowDown size={12} color="#4B5563" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteResponsibility(rIdx, bIdx)}
+                                  title="Remove responsibility"
+                                  style={{
+                                    background: "#FEE2E2",
+                                    border: "none",
+                                    color: "#DC2626",
+                                    borderRadius: 4,
+                                    padding: "3px 6px",
+                                    cursor: "pointer",
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    display: "inline-flex",
+                                    alignItems: "center"
+                                  }}
+                                >
+                                  <X size={12} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Add Role Button at the bottom */}
+                  <button
+                    type="button"
+                    onClick={handleAddRole}
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      borderRadius: 8,
+                      border: "1px dashed #A2E2CD",
+                      background: "#F0FDF4",
+                      color: "#085041",
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 6
+                    }}
+                  >
+                    <Plus size={15} />
+                    Add Role
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Modal Footer */}
+          <div
+            style={{
+              padding: "14px 24px",
+              borderTop: "1px solid #F0F0F2",
+              background: "#FAFAFB",
+              display: "flex",
+              justifyContent: "flex-end",
+              gap: 12,
+              borderBottomLeftRadius: 14,
+              borderBottomRightRadius: 14
+            }}
+          >
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                padding: "8px 18px",
+                borderRadius: 7,
+                border: "1px solid #D1D5DB",
+                background: "#FFFFFF",
+                fontSize: 13,
+                fontWeight: 600,
+                color: "#4B5563",
+                cursor: "pointer"
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              style={{
+                padding: "8px 20px",
+                borderRadius: 7,
+                border: "none",
+                background: "#1F9E8D",
+                fontSize: 13,
+                fontWeight: 600,
+                color: "#FFFFFF",
+                cursor: "pointer",
+                boxShadow: "0 1px 2px rgba(0,0,0,0.05)"
+              }}
+            >
+              Save Changes
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+export function DepartmentsPage({ orders, onOpenDept, orgStructure, deptDescriptions }) {
   const stageLinkedDepts = useMemo(() => new Set(TA_STAGES.map(s => s.dept)), []);
   const coveredCount = stageLinkedDepts.size;
   const deptNames = Object.keys(orgStructure);
@@ -3136,6 +3774,7 @@ export function DepartmentsPage({ orders, onOpenDept, orgStructure }) {
           const taskCount = stageLinkedDepts.has(deptName) ? collectTasks(orders, deptName).filter(r => r.stage.status !== "done").length : null;
           const Icon = DEPT_ICONS[deptName] || CheckCircle2;
           const linkedStages = TA_STAGES.filter(s => s.dept === deptName).map(s => s.name);
+          const description = deptDescriptions?.[deptName] || DEFAULT_DEPT_DESCRIPTIONS[deptName] || "";
           return (
             <Card key={deptName} style={{ cursor: "pointer" }}>
               <div onClick={() => onOpenDept(deptName)}>
@@ -3149,6 +3788,11 @@ export function DepartmentsPage({ orders, onOpenDept, orgStructure }) {
                   {taskCount !== null && <span style={{ fontSize: 11, color: "#8A8D98" }}>{taskCount} open tasks</span>}
                 </div>
                 <div style={{ fontSize: 11, color: "#8A8D98", marginBottom: 6 }}>{roles.length} roles · {linkedStages.length > 0 ? `owns: ${linkedStages.join(", ")}` : "support function"}</div>
+                {description && (
+                  <div style={{ fontSize: 12, color: "#565A66", lineHeight: 1.4, marginTop: 4, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                    {description}
+                  </div>
+                )}
               </div>
             </Card>
           );
@@ -3158,26 +3802,323 @@ export function DepartmentsPage({ orders, onOpenDept, orgStructure }) {
   );
 }
 
-export function DepartmentDetail({ deptName, orders, onBack, onOpenOrder, orgStructure }) {
+export function DepartmentDetail({
+  deptName,
+  orders,
+  onBack,
+  onOpenOrder,
+  orgStructure,
+  deptDescriptions,
+  onUpdateDepartment,
+  suppliers = [],
+  onAssignWork
+}) {
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showAssignModal, setShowAssignModal] = useState(false);
   const roles = orgStructure[deptName] || [];
-  const rows = collectTasks(orders, deptName);
+  const allDeptTasks = useMemo(() => collectTasks(orders, deptName), [orders, deptName]);
   const linkedStages = TA_STAGES.filter(s => s.dept === deptName);
+  const description = deptDescriptions?.[deptName] || DEFAULT_DEPT_DESCRIPTIONS[deptName] || (linkedStages.length > 0 ? `Owns T&A step${linkedStages.length > 1 ? "s" : ""}: ${linkedStages.map(s => s.name).join(", ")}` : "Support department — not yet a T&A step owner");
+
+  // Separate tasks into Process, Pending, and Done without duplicates
+  const processTasks = useMemo(() => {
+    return allDeptTasks.filter(({ stage }) => {
+      const s = (stage?.status || "").toLowerCase();
+      return s === "in_progress" || s === "in progress";
+    });
+  }, [allDeptTasks]);
+
+  const pendingTasks = useMemo(() => {
+    return allDeptTasks.filter(({ stage }) => {
+      const s = (stage?.status || "").toLowerCase();
+      return s === "pending" || s === "not_started" || s === "not started";
+    });
+  }, [allDeptTasks]);
+
+  const doneTasks = useMemo(() => {
+    return allDeptTasks.filter(({ stage }) => {
+      const s = (stage?.status || "").toLowerCase();
+      return s === "done" || s === "completed";
+    });
+  }, [allDeptTasks]);
+
+  const handleSaveDepartment = (updatedData) => {
+    if (onUpdateDepartment) {
+      onUpdateDepartment(deptName, updatedData);
+    }
+  };
+
   return (
     <div>
       <BackLink onClick={onBack} label="Back to departments" />
-      <PageHeader title={deptName} sub={linkedStages.length > 0 ? `Owns T&A step${linkedStages.length > 1 ? "s" : ""}: ${linkedStages.map(s => s.name).join(", ")}` : "Support department — not yet a T&A step owner"} />
-      <Card style={{ marginBottom: 16 }}>
+      
+      {/* Department Heading with Edit Button */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
+        <div>
+          <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, color: "#1B2130" }}>{deptName}</h1>
+          <div style={{ fontSize: 13.5, color: "#565A66", marginTop: 4, maxWidth: 850, lineHeight: 1.5 }}>
+            {description}
+          </div>
+          {linkedStages.length > 0 && (
+            <div style={{ fontSize: 12, color: "#1F9E8D", fontWeight: 600, marginTop: 6, display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ width: 6, height: 6, borderRadius: 999, background: "#1F9E8D", display: "inline-block" }} />
+              Owns T&A step{linkedStages.length > 1 ? "s" : ""}: {linkedStages.map(s => s.name).join(", ")}
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={() => setShowAssignModal(true)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              background: "#534AB7",
+              color: "#FFFFFF",
+              border: "none",
+              borderRadius: 8,
+              padding: "8px 16px",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+              whiteSpace: "nowrap"
+            }}
+          >
+            <Layers size={15} />
+            Assign Supplier Work
+          </button>
+          <button
+            onClick={() => setShowEditModal(true)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              background: "#1F9E8D",
+              color: "#FFFFFF",
+              border: "none",
+              borderRadius: 8,
+              padding: "8px 16px",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+              whiteSpace: "nowrap"
+            }}
+          >
+            <Edit size={15} />
+            Edit Department
+          </button>
+        </div>
+      </div>
+
+      {/* Reporting Structure Card */}
+      <Card style={{ marginBottom: 20 }}>
         <CardHeader title="Reporting structure & responsibilities" />
         <OrgChain roles={roles} />
       </Card>
-      <Card>
-        <CardHeader title="Linked tasks" />
-        {linkedStages.length > 0 ? (
-          <TaskTable rows={rows} onOpenOrder={onOpenOrder} emptyText="No tasks tracked for this department yet." />
+
+      {/* Linked Tasks: 1. Process Tasks */}
+      <Card style={{ marginBottom: 18 }}>
+        <div style={{ padding: "0 0 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "#1B2130" }}>Process Tasks</span>
+            <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, background: "#FAEEDA", color: "#633806", padding: "2px 8px", borderRadius: 999 }}>
+              {processTasks.length}
+            </span>
+          </div>
+          <span style={{ fontSize: 12, color: "#8A8D98" }}>Currently in progress</span>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1.4fr 0.9fr 1.1fr 0.9fr 1fr", fontSize: 11.5, color: "#8A8D98", padding: "0 6px 8px", borderBottom: "1px solid #F0F0F2" }}>
+          <div>Order / Style</div>
+          <div>Task / Stage</div>
+          <div>Due</div>
+          <div>Assigned To</div>
+          <div>Status</div>
+          <div>Flag</div>
+        </div>
+
+        {processTasks.length === 0 ? (
+          <div style={{ padding: "20px 0", textAlign: "center", color: "#8A8D98", fontSize: 12.5 }}>
+            No process tasks
+          </div>
         ) : (
-          <div style={{ fontSize: 12.5, color: "#B0B2BA" }}>This department isn't a T&A stage owner in the current template, so no live tasks show here yet.</div>
+          processTasks.map(({ order, stage, stageIdx }) => (
+            <div
+              key={order.id + "-proc-" + stageIdx}
+              onClick={() => onOpenOrder && onOpenOrder(order.id)}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1.2fr 1.4fr 0.9fr 1.1fr 0.9fr 1fr",
+                alignItems: "center",
+                fontSize: 12.5,
+                padding: "11px 6px",
+                borderBottom: "1px solid #F5F5F7",
+                cursor: "pointer"
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = "#FAFAFB"}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+            >
+              <div>
+                <div style={{ fontFamily: "monospace", fontSize: 11.5, color: "#8A8D98" }}>{order.id}</div>
+                <div style={{ fontWeight: 600, color: "#1B2130" }}>{order.style}</div>
+              </div>
+              <div style={{ color: "#1B2130" }}>{stage.name}</div>
+              <div style={{ color: "#565A66" }}>{stage.planned || order.ship || "—"}</div>
+              <div style={{ color: "#565A66" }}>{stage.assignee || firstNamedAssignee(deptName) || "Unassigned"}</div>
+              <div>{statusPill(stage.status)}</div>
+              <div style={{ color: stage.reason ? "#D64545" : "#B0B2BA", fontWeight: stage.reason ? 600 : 400 }}>
+                {stage.reason || "—"}
+              </div>
+            </div>
+          ))
         )}
       </Card>
+
+      {/* Linked Tasks: 2. Pending Tasks */}
+      <Card style={{ marginBottom: 18 }}>
+        <div style={{ padding: "0 0 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "#1B2130" }}>Pending Tasks</span>
+            <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, background: "#F0F0F2", color: "#565A66", padding: "2px 8px", borderRadius: 999 }}>
+              {pendingTasks.length}
+            </span>
+          </div>
+          <span style={{ fontSize: 12, color: "#8A8D98" }}>Waiting to be started</span>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1.4fr 0.9fr 1.1fr 0.9fr 1fr", fontSize: 11.5, color: "#8A8D98", padding: "0 6px 8px", borderBottom: "1px solid #F0F0F2" }}>
+          <div>Order / Style</div>
+          <div>Task / Stage</div>
+          <div>Due</div>
+          <div>Assigned To</div>
+          <div>Status</div>
+          <div>Flag</div>
+        </div>
+
+        {pendingTasks.length === 0 ? (
+          <div style={{ padding: "20px 0", textAlign: "center", color: "#8A8D98", fontSize: 12.5 }}>
+            No pending tasks
+          </div>
+        ) : (
+          pendingTasks.map(({ order, stage, stageIdx }) => (
+            <div
+              key={order.id + "-pend-" + stageIdx}
+              onClick={() => onOpenOrder && onOpenOrder(order.id)}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1.2fr 1.4fr 0.9fr 1.1fr 0.9fr 1fr",
+                alignItems: "center",
+                fontSize: 12.5,
+                padding: "11px 6px",
+                borderBottom: "1px solid #F5F5F7",
+                cursor: "pointer"
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = "#FAFAFB"}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+            >
+              <div>
+                <div style={{ fontFamily: "monospace", fontSize: 11.5, color: "#8A8D98" }}>{order.id}</div>
+                <div style={{ fontWeight: 600, color: "#1B2130" }}>{order.style}</div>
+              </div>
+              <div style={{ color: "#1B2130" }}>{stage.name}</div>
+              <div style={{ color: "#565A66" }}>{stage.planned || order.ship || "—"}</div>
+              <div style={{ color: "#565A66" }}>{stage.assignee || firstNamedAssignee(deptName) || "Unassigned"}</div>
+              <div>{statusPill(stage.status)}</div>
+              <div style={{ color: stage.reason ? "#D64545" : "#B0B2BA", fontWeight: stage.reason ? 600 : 400 }}>
+                {stage.reason || "—"}
+              </div>
+            </div>
+          ))
+        )}
+      </Card>
+
+      {/* Linked Tasks: 3. Done Tasks */}
+      <Card>
+        <div style={{ padding: "0 0 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "#1B2130" }}>Done Tasks</span>
+            <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, background: "#E1F5EE", color: "#085041", padding: "2px 8px", borderRadius: 999 }}>
+              {doneTasks.length}
+            </span>
+          </div>
+          <span style={{ fontSize: 12, color: "#8A8D98" }}>Completed tasks</span>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1.4fr 0.9fr 1.1fr 0.9fr 1fr", fontSize: 11.5, color: "#8A8D98", padding: "0 6px 8px", borderBottom: "1px solid #F0F0F2" }}>
+          <div>Order / Style</div>
+          <div>Task / Stage</div>
+          <div>Completed On</div>
+          <div>Assigned To</div>
+          <div>Status</div>
+          <div>Flag</div>
+        </div>
+
+        {doneTasks.length === 0 ? (
+          <div style={{ padding: "20px 0", textAlign: "center", color: "#8A8D98", fontSize: 12.5 }}>
+            No completed tasks
+          </div>
+        ) : (
+          doneTasks.map(({ order, stage, stageIdx }) => (
+            <div
+              key={order.id + "-done-" + stageIdx}
+              onClick={() => onOpenOrder && onOpenOrder(order.id)}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1.2fr 1.4fr 0.9fr 1.1fr 0.9fr 1fr",
+                alignItems: "center",
+                fontSize: 12.5,
+                padding: "11px 6px",
+                borderBottom: "1px solid #F5F5F7",
+                cursor: "pointer",
+                background: "#FAFDFB"
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = "#F0F9F5"}
+              onMouseLeave={e => e.currentTarget.style.background = "#FAFDFB"}
+            >
+              <div>
+                <div style={{ fontFamily: "monospace", fontSize: 11.5, color: "#8A8D98" }}>{order.id}</div>
+                <div style={{ fontWeight: 600, color: "#1B2130" }}>{order.style}</div>
+              </div>
+              <div style={{ color: "#1B2130" }}>{stage.name}</div>
+              <div style={{ color: "#085041", fontWeight: 500 }}>
+                {stage.completedOn || stage.completedAt || (order.completed && order.completedAt ? new Date(order.completedAt).toLocaleDateString() : null) || stage.planned || "Completed"}
+              </div>
+              <div style={{ color: "#565A66" }}>{stage.assignee || firstNamedAssignee(deptName) || "Unassigned"}</div>
+              <div>{statusPill(stage.status)}</div>
+              <div style={{ color: stage.reason ? "#D64545" : "#B0B2BA", fontWeight: stage.reason ? 600 : 400 }}>
+                {stage.reason || "—"}
+              </div>
+            </div>
+          ))
+        )}
+      </Card>
+
+      {/* Edit Department Modal */}
+      {showEditModal && (
+        <EditDepartmentModal
+          deptName={deptName}
+          description={deptDescriptions?.[deptName] || DEFAULT_DEPT_DESCRIPTIONS[deptName] || ""}
+          roles={roles}
+          onClose={() => setShowEditModal(false)}
+          onSave={handleSaveDepartment}
+        />
+      )}
+
+      {/* Assign Work to Supplier Modal */}
+      {showAssignModal && (
+        <AssignWorkModal
+          orders={orders}
+          suppliers={suppliers}
+          prefillDept={deptName}
+          onClose={() => setShowAssignModal(false)}
+          onAssign={onAssignWork}
+        />
+      )}
     </div>
   );
 }
+
+
