@@ -1316,7 +1316,7 @@ export default function LoomPLM() {
   };
 
   return (
-    <div style={{ display: "flex", height: "100vh", maxWidth: 1440, margin: "0 auto", background: "#F5F6F8", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Rubik', sans-serif", overflow: "hidden", boxShadow: "0 0 0 1px #E7E8ED" }}>
+    <div style={{ display: "flex", height: "100vh", margin: "0 auto", background: "#F5F6F8", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Rubik', sans-serif", overflow: "hidden", boxShadow: "0 0 0 1px #E7E8ED" }}>
       {/* Sidebar */}
       <div style={{ width: 208, background: "#151B2E", padding: "20px 14px", flexShrink: 0, overflowY: "auto", height: "100%" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 8px 20px", color: "#fff" }}>
