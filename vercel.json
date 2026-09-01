@@ -1,7 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "npm install --legacy-peer-deps && cd frontend && npm install",
-  "installCommand": "npm install --legacy-peer-deps",
+  "buildCommand": "npm install && cd frontend && npm install",
   "rewrites": [
     {
       "source": "/api/:match*",
@@ -17,10 +16,5 @@
       "maxDuration": 60,
       "memory": 512
     }
-  },
-  "env": {
-    "MONGODB_URI": "@mongodb_uri",
-    "MONGODB_DB_NAME": "loom_plm",
-    "ANTHROPIC_API_KEY": "@anthropic_api_key"
   }
 }
