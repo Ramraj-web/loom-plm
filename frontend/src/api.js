@@ -1,4 +1,4 @@
-export const API_BASE_URL = (import.meta.env?.VITE_API_URL || "").replace(/\/$/, "");
+export const API_BASE_URL = (import.meta.env?.VITE_API_URL || "https://loom-plm.vercel.app").replace(/\/$/, "");
 
 async function request(path, options = {}) {
   const response = await fetch(`${API_BASE_URL}${path}`, {
@@ -29,4 +29,4 @@ export const aiApi = {
       method: "POST",
       body: JSON.stringify({ techPackNotes, deptOptions }),
     }),
-};
+};
