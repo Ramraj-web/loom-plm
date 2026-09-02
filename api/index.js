@@ -637,13 +637,17 @@ export default async function handler(req, res) {
             await mongoCols.resources.replaceOne({ resource, id }, { resource, ...updated }, { upsert: true });
             return res.status(200).json(updated);
           } catch (e) {
-            console.error("Mongo resource PUT error:", e.message);
+            console.error("Mongo resource PUT/PATCH error:", e.message);
           }
         }
 
         if (!Array.isArray(memoryDB[resource])) memoryDB[resource] = [];
         const index = memoryDB[resource].findIndex(r => String(r.id) === id);
-        if (index < 0) return res.status(404).json({ error: "Record not found" });
+        if (index < 0) {
+          const newRecord = { ...body, id, resource };
+          memoryDB[resource].push(newRecord);
+          return res.status(200).json(newRecord);
+        }
 
         const updated = {
           ...memoryDB[resource][index],

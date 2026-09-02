@@ -101,8 +101,9 @@ export default function LoomPLM() {
                 merged.push(p);
               }
             });
-            return merged.map((bo, i) => {
+            return merged.map((bo) => {
               const existing = prev.find(p => p.id === bo.id);
+              const isDefaultSeed = ["GKT-1054", "ST-7788", "JKT-2231", "TR-8899", "DR-5566", "PL-3321"].includes(bo.id);
               return {
                 ...existing,
                 ...bo,
@@ -114,10 +115,10 @@ export default function LoomPLM() {
                 costingTemplate: bo.costingTemplate || existing?.costingTemplate || "fabric",
                 costingRows: bo.costingRows || existing?.costingRows || buildCostingRows(bo.costingTemplate || existing?.costingTemplate || "fabric"),
                 vapCount: bo.vapCount ?? existing?.vapCount ?? 1,
-                shippedQty: bo.shippedQty ?? existing?.shippedQty ?? Math.round((bo.qty || 5000) * 0.75),
+                shippedQty: bo.shippedQty ?? existing?.shippedQty ?? (isDefaultSeed ? Math.round((bo.qty || 5000) * 0.75) : 0),
                 plannedCost: bo.plannedCost ?? existing?.plannedCost ?? Math.round((bo.qty || 5000) * 4),
                 actualCost: bo.actualCost ?? existing?.actualCost ?? Math.round((bo.qty || 5000) * 4.2),
-                stages: bo.stages || existing?.stages || makeStages(bo.template || existing?.template || "90", 5, null),
+                stages: bo.stages || existing?.stages || (isDefaultSeed ? makeStages(bo.template || existing?.template || "90", 5, null) : makeStages("90", 0, null)),
                 preProd: bo.preProd || existing?.preProd || initPreProd(),
               };
             });
