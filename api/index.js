@@ -446,36 +446,42 @@ import { MongoClient } from "mongodb";
 
 let memoryDB = JSON.parse(JSON.stringify(RESOURCE_SEEDS));
 let memoryStorage = { personal: {}, shared: {} };
-let mongoClient = null;
-let mongoDb = null;
-let mongoStorageCollection = null;
-let mongoResourceCollection = null;
+
+// Global cached connection for Vercel Serverless
+let cachedClient = global._mongoClient;
+let cachedDb = global._mongoDb;
 
 async function getMongoCollections() {
   const uri = process.env.MONGODB_URI;
   if (!uri) return null;
-  if (mongoResourceCollection && mongoStorageCollection) {
-    return { resources: mongoResourceCollection, storage: mongoStorageCollection };
-  }
+
   try {
-    if (!mongoClient) {
-      mongoClient = new MongoClient(uri, { maxPoolSize: 10 });
-      await mongoClient.connect();
+    if (!cachedClient) {
+      cachedClient = new MongoClient(uri, {
+        maxPoolSize: 10,
+        serverSelectionTimeoutMS: 5000,
+        socketTimeoutMS: 45000,
+      });
+      await cachedClient.connect();
+      global._mongoClient = cachedClient;
     }
-    mongoDb = mongoClient.db(process.env.MONGODB_DB_NAME || "loom_plm");
-    mongoStorageCollection = mongoDb.collection("storage");
-    mongoResourceCollection = mongoDb.collection("resources");
     
-    // Seed initial resources if empty
-    for (const [resource, records] of Object.entries(RESOURCE_SEEDS)) {
-      const count = await mongoResourceCollection.countDocuments({ resource });
-      if (count === 0 && records.length) {
-        await mongoResourceCollection.insertMany(records.map(record => ({ resource, ...record })));
-      }
+    if (!cachedDb) {
+      cachedDb = cachedClient.db(process.env.MONGODB_DB_NAME || "loom_plm");
+      global._mongoDb = cachedDb;
     }
-    return { resources: mongoResourceCollection, storage: mongoStorageCollection };
+
+    const storage = cachedDb.collection("storage");
+    const resources = cachedDb.collection("resources");
+    
+    return { resources, storage };
   } catch (err) {
-    console.warn("MongoDB connection fallback to memory:", err.message);
+    console.error("MongoDB connection error:", err.message);
+    // Reset cache on error to force reconnect next request
+    cachedClient = null;
+    cachedDb = null;
+    global._mongoClient = null;
+    global._mongoDb = null;
     return null;
   }
 }

@@ -1133,7 +1133,7 @@ export const DEPT_ICONS = {
 };
 
 export const DOC_TABS_CONFIG = {
-  "Files": ["Techpacks", "Operational Breakdown (OB)", "Points of measure", "Pattern Files", "CAD markers", "Stage Uploaded Files"],
+  "Files": ["Techpacks", "Operational Breakdown (OB)", "Updated guidelines", "Pattern Files", "CAD markers", "Stage Uploaded Files"],
   "Order Sheet": ["Order Sheet"],
   "BOMs & POs": ["Fabric BOM", "Trims BOM", "Fabric PO", "Trims PO"],
   "Costing": ["Costing Sheet"],
