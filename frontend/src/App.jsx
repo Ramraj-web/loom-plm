@@ -1657,7 +1657,14 @@ export default function LoomPLM() {
       />
     );
   } else if (view === "settings") {
-    content = <SettingsPage role={role} setRole={handleSetRole} />;
+    content = (
+      <SettingsPage
+        role={role}
+        setRole={handleSetRole}
+        orgStructure={orgStructure}
+        onUpdateDepartment={handleUpdateDepartment}
+      />
+    );
   } else if (canSeeAll) {
     content = (
       <Dashboard

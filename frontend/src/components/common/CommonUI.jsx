@@ -228,7 +228,7 @@ export function GroupedTaskList({ rows, onOpenOrder, emptyText }) {
   );
 }
 
-export function MiniDonut({ data, size = 96, centerLabel, centerSub }) {
+export function MiniDonut({ data, size = 96, centerLabel, centerSub, labelColor }) {
   return (
     <div style={{ position: "relative", width: size, height: size }}>
       <ResponsiveContainer width={size} height={size}>
@@ -240,8 +240,8 @@ export function MiniDonut({ data, size = 96, centerLabel, centerSub }) {
       </ResponsiveContainer>
       {centerLabel && (
         <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
-          <div style={{ fontSize: size > 90 ? 18 : 14, fontWeight: 700, color: "#fff" }}>{centerLabel}</div>
-          {centerSub && <div style={{ fontSize: 9, color: "#9498A8" }}>{centerSub}</div>}
+          <div style={{ fontSize: size > 90 ? 18 : 14, fontWeight: 700, color: labelColor || "#fff" }}>{centerLabel}</div>
+          {centerSub && <div style={{ fontSize: 9, color: labelColor ? "#64748B" : "#9498A8" }}>{centerSub}</div>}
         </div>
       )}
     </div>

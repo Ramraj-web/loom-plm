@@ -2293,54 +2293,63 @@ export function CapasPage({ orders, capas, onAdd, onCycleStatus }) {
   );
 }
 
-export function ExecutiveOverviewPage({ orders, attendance, financials, roster }) {
-  const allStages = orders.flatMap(o => o.stages || []);
+export function ExecutiveOverviewPage({ orders, attendance, financials, roster, onOpenOrder, onNavigate }) {
+  const allStages = orders.flatMap(o => (o.stages || []).map(s => ({ ...s, orderId: o.id, style: o.style, buyer: o.buyer })));
   const totalOrders = orders.length;
   const totalQty = orders.reduce((a, o) => a + (Number(o.qty) || 0), 0);
 
+  // 1. Order Health Calculation
   const health = orders.map(o => {
     const flags = (o.stages || []).filter(s => s.reason).length;
     let score = 100 - flags * 15 - (o.status === "Delayed" ? 20 : 0);
     score = Math.max(0, Math.min(100, score));
     return { order: o, score };
   });
+
   const healthBuckets = [
     { name: "Healthy (80-100)", color: "#1F9E8D", value: health.filter(h => h.score >= 80).length },
     { name: "At Risk (60-79)", color: "#E2A83B", value: health.filter(h => h.score >= 60 && h.score < 80).length },
     { name: "Critical (40-59)", color: "#D85A30", value: health.filter(h => h.score >= 40 && h.score < 60).length },
     { name: "Severe (0-39)", color: "#D64545", value: health.filter(h => h.score < 40).length },
   ].filter(b => b.value > 0);
-  const overallHealth = Math.round(health.reduce((a, h) => a + h.score, 0) / (health.length || 1));
 
-  const onTrack = orders.filter(o => o.status === "On Track").length;
-  const onTimePct = Math.round((onTrack / (totalOrders || 1)) * 100);
+  const overallHealth = Math.round(health.reduce((a, h) => a + h.score, 0) / (health.length || 1));
+  const onTrackCount = orders.filter(o => o.status === "On Track").length;
+  const onTimePct = Math.round((onTrackCount / (totalOrders || 1)) * 100);
 
   const avgProgress = totalOrders > 0
     ? orders.reduce((a, o) => a + (o.stages ? o.stages.filter(s => s.status === "done").length / o.stages.length : 0), 0) / totalOrders
     : 0;
   const shippedPcs = Math.round(totalQty * avgProgress);
-  const grossProfit = financials.revenue - financials.cogs;
-  const grossMargin = financials.revenue > 0 ? Math.round((grossProfit / financials.revenue) * 1000) / 10 : 0;
+  const grossProfit = (financials?.revenue || 0) - (financials?.cogs || 0);
+  const grossMargin = financials?.revenue > 0 ? Math.round((grossProfit / financials.revenue) * 1000) / 10 : 0;
 
+  // 2. Delay reasons
   const reasonCounts = {};
   allStages.forEach(s => { if (s.reason) reasonCounts[s.reason] = (reasonCounts[s.reason] || 0) + 1; });
   const reasonArr = Object.entries(reasonCounts).sort((a, b) => b[1] - a[1]);
   const reasonTotal = reasonArr.reduce((a, [, c]) => a + c, 0) || 1;
 
-  const alerts = [];
-  orders.forEach(o => {
-    if (!o.stages) return;
-    o.stages.forEach(s => { if (s.reason) alerts.push({ text: `${s.reason} — ${o.style} PO #${o.id} (${s.dept})`, sev: o.risk }); });
-  });
-
+  // 3. Order & Production Performance
   const inProduction = allStages.filter(s => ["Cutting", "Production"].includes(s.dept) && s.status === "in_progress").length;
   const ordersAtRisk = orders.filter(o => o.status === "At Risk").length;
   const ordersDelayed = orders.filter(o => o.status === "Delayed").length;
   const ordersCompleted = orders.filter(o => o.status === "On Track" && o.stages && o.stages.every(s => s.status === "done")).length;
-
   const presentCount = roster.filter(s => (attendance[s.name] || "present") === "present").length;
   const capacityUtilization = Math.round((presentCount / (roster.length || 1)) * 100);
 
+  // 4. Department Performance (replacing Critical Alerts per user instruction)
+  const depts = ["Merchandising", "Program", "Planning", "Purchase – Fabric", "Purchase – Trims", "Quality", "Cutting", "Production", "Finishing", "Logistics & Documentation"];
+  const deptStats = depts.map(d => {
+    const dStages = allStages.filter(s => s.dept === d);
+    const total = dStages.length;
+    const completed = dStages.filter(s => s.status === "done").length;
+    const delayed = dStages.filter(s => s.reason).length;
+    const rate = total > 0 ? Math.round((completed / total) * 100) : 100;
+    return { name: d, total, completed, delayed, rate };
+  });
+
+  // 5. Demographics & Risk
   const buyerCounts = {};
   orders.forEach(o => { buyerCounts[o.buyer] = (buyerCounts[o.buyer] || 0) + 1; });
   const buyerColors = ["#7F77DD", "#378ADD", "#1F9E8D", "#E2A83B", "#D64545", "#8A8D98"];
@@ -2351,20 +2360,18 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster }
   const countryArr = Object.entries(countryCounts).sort((a, b) => b[1] - a[1]);
   const countryMax = Math.max(...countryArr.map(c => c[1]), 1);
 
-  const riskCounts = { high: orders.filter(o => o.risk === "high").length, medium: orders.filter(o => o.risk === "medium").length, low: orders.filter(o => o.risk === "low").length };
+  const riskCounts = {
+    high: orders.filter(o => o.risk === "high").length,
+    medium: orders.filter(o => o.risk === "medium").length,
+    low: orders.filter(o => o.risk === "low").length
+  };
   const riskData = [
     { name: "High risk", value: riskCounts.high, color: "#D64545" },
     { name: "Medium risk", value: riskCounts.medium, color: "#E2A83B" },
     { name: "Low risk", value: riskCounts.low, color: "#1F9E8D" },
   ].filter(r => r.value > 0);
 
-  const openPOStages = allStages.filter(s => (s.name === "Fabric Booking" || s.name === "Trim Booking") && s.status !== "done");
-  const latePOStages = openPOStages.filter(s => s.reason);
-
-  const openTasksRows = allStages.filter(s => s.status !== "done");
-  const overdueRows = allStages.filter(s => s.status === "in_progress" && s.reason);
-  const pendingApprovals = allStages.filter(s => s.name.toLowerCase().includes("approval") && s.status !== "done");
-
+  // 6. Activity feed & bottom counters
   const activityFeed = orders.map(o => {
     if (!o.stages) return null;
     const lastDoneIdx = [...o.stages].reverse().findIndex(s => s.status === "done");
@@ -2374,9 +2381,15 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster }
     return { text: `${s.name} completed`, sub: `PO #${o.id} · ${s.dept}` };
   }).filter(Boolean).slice(0, 6);
 
+  const openTasksRows = allStages.filter(s => s.status !== "done");
+  const overdueRows = allStages.filter(s => s.status === "in_progress" && s.reason);
+  const pendingApprovals = allStages.filter(s => s.name.toLowerCase().includes("approval") && s.status !== "done");
+  const openPOStages = allStages.filter(s => (s.name === "Fabric Booking" || s.name === "Trim Booking") && s.status !== "done");
+  const latePOStages = openPOStages.filter(s => s.reason);
+
   const kpis = [
     { label: "Total Orders", value: totalOrders, sub: `${totalQty.toLocaleString()} pcs`, icon: ClipboardList, color: "#378ADD" },
-    { label: "Total Value (USD)", value: `$${(financials.revenue / 1e6).toFixed(2)}M`, icon: Landmark, color: "#1F9E8D" },
+    { label: "Total Value (USD)", value: `$${((financials?.revenue || 0) / 1e6).toFixed(2)}M`, icon: Landmark, color: "#1F9E8D" },
     { label: "On-Time Shipment %", value: `${onTimePct}%`, icon: Clock, color: "#378ADD" },
     { label: "Overall Order Health", value: `${overallHealth} /100`, icon: Gauge, color: "#E2A83B" },
     { label: "Total Shipped (PCS)", value: shippedPcs.toLocaleString(), icon: Truck, color: "#7F77DD" },
@@ -2384,241 +2397,453 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster }
   ];
 
   return (
-    <div style={{ background: "#0E1424", margin: "-24px -28px", padding: 24, minHeight: "100%" }}>
-      <div style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 20, fontWeight: 700, color: "#fff" }}>MD Executive Dashboard</div>
-        <div style={{ fontSize: 12.5, color: "#8489A0", marginTop: 2 }}>Real-time overview of entire organization performance</div>
+    <div style={{ padding: "0 0 40px 0" }}>
+      {/* Title */}
+      <div style={{ marginBottom: 18 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0F172A", margin: 0 }}>MD Executive Dashboard</h1>
+        <div style={{ fontSize: 12.5, color: "#64748B", marginTop: 3 }}>Real-time overview of entire organization performance</div>
       </div>
 
+      {/* Row 1: Top 6 KPI Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 12, marginBottom: 16 }}>
         {kpis.map(k => (
-          <DarkCard key={k.label} style={{ padding: "14px 16px" }}>
+          <Card key={k.label} style={{ padding: "14px 16px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-              <div style={{ width: 26, height: 26, borderRadius: 8, background: k.color + "33", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div style={{ width: 26, height: 26, borderRadius: 8, background: k.color + "1A", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <k.icon size={13} color={k.color} />
               </div>
-              <div style={{ fontSize: 10, color: "#8489A0", textTransform: "uppercase" }}>{k.label}</div>
+              <div style={{ fontSize: 10, color: "#64748B", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.3 }}>{k.label}</div>
             </div>
-            <div style={{ fontSize: 19, fontWeight: 700, color: "#fff" }}>{k.value}</div>
-            {k.sub && <div style={{ fontSize: 10.5, color: "#8489A0", marginTop: 2 }}>{k.sub}</div>}
-          </DarkCard>
+            <div style={{ fontSize: 20, fontWeight: 800, color: "#0F172A" }}>{k.value}</div>
+            {k.sub && <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>{k.sub}</div>}
+          </Card>
         ))}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.1fr 0.9fr", gap: 12, marginBottom: 12 }}>
-        <DarkCard>
-          <DarkCardHeader title="Order Health Distribution" />
+      {/* Row 2: Order Health Distribution, Shipment Performance Trend, Top Delay Reasons */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr 0.95fr", gap: 12, marginBottom: 16 }}>
+        {/* Order Health Distribution */}
+        <Card>
+          <CardHeader title="ORDER HEALTH DISTRIBUTION" />
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <MiniDonut data={healthBuckets} size={100} centerLabel={totalOrders} centerSub="Orders" />
+            <MiniDonut data={healthBuckets} size={104} centerLabel={totalOrders} centerSub="Orders" labelColor="#0F172A" />
             <div style={{ flex: 1 }}>
               {healthBuckets.map(b => (
-                <div key={b.name} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, fontSize: 11 }}>
+                <div key={b.name} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, fontSize: 11.5 }}>
                   <span style={{ width: 8, height: 8, borderRadius: 999, background: b.color }} />
-                  <span style={{ color: "#C7CADA", flex: 1 }}>{b.name}</span>
-                  <span style={{ color: "#fff", fontWeight: 700 }}>{b.value}</span>
+                  <span style={{ color: "#475569", flex: 1 }}>{b.name}</span>
+                  <span style={{ color: "#0F172A", fontWeight: 700 }}>{b.value}</span>
                 </div>
               ))}
             </div>
           </div>
-        </DarkCard>
+        </Card>
 
-        <DarkCard>
-          <DarkCardHeader title="Shipment Performance Trend" sub="Last 6 months" />
-          <div style={{ width: "100%", height: 150 }}>
+        {/* Shipment Performance Trend */}
+        <Card>
+          <CardHeader title="SHIPMENT PERFORMANCE TREND" sub="Last 6 months" />
+          <div style={{ width: "100%", height: 140 }}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={SHIPMENT_PERFORMANCE} margin={{ top: 4, right: 8, left: -24, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#262E48" vertical={false} />
-                <XAxis dataKey="month" tick={{ fontSize: 10, fill: "#8489A0" }} axisLine={{ stroke: "#262E48" }} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: "#8489A0" }} axisLine={false} tickLine={false} domain={[0, 100]} />
-                <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, background: "#171E33", border: "1px solid #262E48", color: "#fff" }} />
-                <Line type="monotone" dataKey="onTime" name="On-time %" stroke="#7C8BFF" strokeWidth={2} dot={{ r: 3 }} />
-                <Line type="monotone" dataKey="target" name="Target %" stroke="#4B5270" strokeWidth={1.5} strokeDasharray="4 4" dot={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
+                <XAxis dataKey="month" tick={{ fontSize: 10, fill: "#64748B" }} axisLine={{ stroke: "#E2E8F0" }} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: "#64748B" }} axisLine={false} tickLine={false} domain={[0, 100]} />
+                <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, background: "#FFFFFF", border: "1px solid #E2E8F0", color: "#0F172A" }} />
+                <Line type="monotone" dataKey="onTime" name="On-time %" stroke="#4F46E5" strokeWidth={2.2} dot={{ r: 3, fill: "#4F46E5" }} />
+                <Line type="monotone" dataKey="target" name="Target %" stroke="#94A3B8" strokeWidth={1.5} strokeDasharray="4 4" dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
-        </DarkCard>
+        </Card>
 
-        <DarkCard>
-          <DarkCardHeader title="Top Delay Reasons" sub="All orders" />
+        {/* Top Delay Reasons */}
+        <Card>
+          <CardHeader title="TOP DELAY REASONS" sub="All orders" />
           {reasonArr.length === 0 ? (
-            <div style={{ fontSize: 11.5, color: "#8489A0" }}>No delays flagged.</div>
+            <div style={{ fontSize: 12, color: "#94A3B8" }}>No delays flagged.</div>
           ) : reasonArr.map(([reason, count]) => (
-            <div key={reason} style={{ marginBottom: 9 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 3 }}>
-                <span style={{ color: "#C7CADA" }}>{reason}</span>
-                <span style={{ color: "#8489A0" }}>{Math.round(count / reasonTotal * 100)}%</span>
+            <div key={reason} style={{ marginBottom: 10 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, marginBottom: 4 }}>
+                <span style={{ color: "#334155", fontWeight: 500 }}>{reason}</span>
+                <span style={{ color: "#64748B" }}>{Math.round(count / reasonTotal * 100)}%</span>
               </div>
-              <div style={{ height: 5, background: "#262E48", borderRadius: 999 }}>
-                <div style={{ height: 5, width: `${count / reasonTotal * 100}%`, background: "#D64545", borderRadius: 999 }} />
+              <div style={{ height: 6, background: "#F1F5F9", borderRadius: 999 }}>
+                <div style={{ height: 6, width: `${count / reasonTotal * 100}%`, background: "#EF4444", borderRadius: 999 }} />
               </div>
             </div>
           ))}
-        </DarkCard>
+        </Card>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "2.2fr 1fr", gap: 12, marginBottom: 12 }}>
-        <DarkCard>
-          <DarkCardHeader title="Order & Production Performance" />
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
-            {[
-              ["Orders in Production", inProduction, "#7F77DD"],
-              ["Capacity Utilization", `${capacityUtilization}%`, "#378ADD"],
-              ["Orders Completed", ordersCompleted, "#1F9E8D"],
-              ["Orders At Risk", ordersAtRisk, "#E2A83B"],
-              ["Orders Delayed", ordersDelayed, "#D64545"],
-              ["Compliance Score", `${financials.complianceScore}%`, "#1F9E8D"],
-            ].map(([label, val, color]) => (
-              <div key={label} style={{ background: "#0E1424", borderRadius: 10, padding: "12px 12px" }}>
-                <div style={{ fontSize: 10, color: "#8489A0", marginBottom: 6 }}>{label}</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color }}>{val}</div>
-              </div>
-            ))}
-          </div>
-        </DarkCard>
-        <DarkCard>
-          <DarkCardHeader title="Critical Alerts" action={`${alerts.length}`} />
-          {alerts.length === 0 ? (
-            <div style={{ fontSize: 11.5, color: "#8489A0" }}>No active alerts.</div>
-          ) : alerts.slice(0, 5).map((a, i) => (
-            <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "7px 0", borderBottom: i < 4 ? "1px solid #262E48" : "none" }}>
-              <TriangleAlert size={13} color={a.sev === "high" ? "#D64545" : "#E2A83B"} style={{ marginTop: 2, flexShrink: 0 }} />
-              <div style={{ fontSize: 11, color: "#C7CADA" }}>{a.text}</div>
-            </div>
-          ))}
-        </DarkCard>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
-        <DarkCard>
-          <DarkCardHeader title="Orders by Buyer" />
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <MiniDonut data={buyerData} size={84} centerLabel={totalOrders} />
-            <div style={{ flex: 1 }}>
-              {buyerData.map(b => (
-                <div key={b.name} style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 4, fontSize: 10.5 }}>
-                  <span style={{ width: 7, height: 7, borderRadius: 999, background: b.color }} />
-                  <span style={{ color: "#C7CADA", flex: 1 }}>{b.name}</span>
-                  <span style={{ color: "#fff", fontWeight: 700 }}>{b.value}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </DarkCard>
-
-        <DarkCard>
-          <DarkCardHeader title="Orders by Country" />
-          {countryArr.map(([country, count]) => (
-            <div key={country} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 7, fontSize: 10.5 }}>
-              <Globe size={11} color="#8489A0" style={{ flexShrink: 0 }} />
-              <span style={{ color: "#C7CADA", width: 70, flexShrink: 0 }}>{country}</span>
-              <div style={{ flex: 1, height: 5, background: "#262E48", borderRadius: 999 }}>
-                <div style={{ height: 5, width: `${(count / countryMax) * 100}%`, background: "#378ADD", borderRadius: 999 }} />
-              </div>
-              <span style={{ color: "#fff", fontWeight: 700 }}>{count}</span>
-            </div>
-          ))}
-        </DarkCard>
-
-        <DarkCard>
-          <DarkCardHeader title="Quality Overview" />
-          <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}>
-            <MiniDonut data={[{ name: "Pass", value: 93.4, color: "#1F9E8D" }, { name: "Fail", value: 6.6, color: "#262E48" }]} size={80} centerLabel="93.4%" centerSub="Pass rate" />
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: "#8489A0" }}>
-            <span>Defect rate <b style={{ color: "#fff" }}>2.1%</b></span>
-            <span>Rework <b style={{ color: "#fff" }}>1.8%</b></span>
-          </div>
-        </DarkCard>
-
-        <DarkCard>
-          <DarkCardHeader title="Predicted Shipment Risk" sub="Next 30 days" />
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <MiniDonut data={riskData} size={80} centerLabel={totalOrders} />
-            <div style={{ flex: 1 }}>
-              {riskData.map(r => (
-                <div key={r.name} style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 4, fontSize: 10 }}>
-                  <span style={{ width: 7, height: 7, borderRadius: 999, background: r.color }} />
-                  <span style={{ color: "#C7CADA", flex: 1 }}>{r.name}</span>
-                  <span style={{ color: "#fff", fontWeight: 700 }}>{r.value}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </DarkCard>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 12, marginBottom: 12 }}>
-        <DarkCard>
-          <DarkCardHeader title="Financial Overview" sub="YTD — entered by Finance team" />
+      {/* Row 3: Order & Production Performance + Department Performance (substituting Critical Alerts) */}
+      <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1.3fr", gap: 12, marginBottom: 16 }}>
+        {/* Order & Production Performance */}
+        <Card>
+          <CardHeader title="ORDER & PRODUCTION PERFORMANCE" />
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
             {[
-              ["Total Revenue", `$${(financials.revenue / 1e6).toFixed(2)}M`, "#fff"],
-              ["Total COGS", `$${(financials.cogs / 1e6).toFixed(2)}M`, "#fff"],
-              ["Gross Profit", `$${(grossProfit / 1e6).toFixed(2)}M`, "#1F9E8D"],
-              ["Gross Margin", `${grossMargin}%`, "#1F9E8D"],
-              ["EBITDA", `$${(financials.ebitda / 1e6).toFixed(2)}M`, "#fff"],
-              ["Stock Value", `$${(financials.stockValue / 1e6).toFixed(2)}M`, "#fff"],
+              ["Orders in Production", inProduction, "#4F46E5"],
+              ["Capacity Utilization", `${capacityUtilization}%`, "#0284C7"],
+              ["Orders Completed", ordersCompleted, "#10B981"],
+              ["Orders At Risk", ordersAtRisk, "#F59E0B"],
+              ["Orders Delayed", ordersDelayed, "#EF4444"],
+              ["Compliance Score", `${financials?.complianceScore || 96}%`, "#10B981"],
             ].map(([label, val, color]) => (
-              <div key={label}>
-                <div style={{ fontSize: 10, color: "#8489A0", marginBottom: 4 }}>{label}</div>
-                <div style={{ fontSize: 15, fontWeight: 700, color }}>{val}</div>
+              <div key={label} style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, padding: "12px 14px" }}>
+                <div style={{ fontSize: 10.5, color: "#64748B", marginBottom: 6 }}>{label}</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color }}>{val}</div>
               </div>
             ))}
           </div>
-        </DarkCard>
-        <DarkCard>
-          <DarkCardHeader title="Activity Feed" sub="Latest updates" />
+        </Card>
+
+        {/* Department Performance (substituting Critical Alerts box per user request) */}
+        <Card>
+          <CardHeader title="DEPARTMENT PERFORMANCE" sub="Stage completion & delay tracking per division" />
+          <div style={{ display: "grid", gridTemplateColumns: "1.8fr 1fr 1.2fr 1fr", fontSize: 10.5, color: "#64748B", fontWeight: 700, paddingBottom: 6, borderBottom: "1px solid #F1F5F9" }}>
+            <div>DEPARTMENT</div>
+            <div style={{ textAlign: "center" }}>STAGES</div>
+            <div>ON-TIME RATE</div>
+            <div style={{ textAlign: "right" }}>DELAYS</div>
+          </div>
+          <div style={{ maxHeight: 180, overflowY: "auto" }}>
+            {deptStats.map(d => (
+              <div key={d.name} style={{ display: "grid", gridTemplateColumns: "1.8fr 1fr 1.2fr 1fr", alignItems: "center", fontSize: 11.5, padding: "6px 0", borderBottom: "1px solid #F8FAFC" }}>
+                <div style={{ fontWeight: 600, color: "#1E293B" }}>{d.name}</div>
+                <div style={{ textAlign: "center", color: "#64748B", fontSize: 11 }}>
+                  {d.completed} / {d.total}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <div style={{ flex: 1, height: 5, background: "#E2E8F0", borderRadius: 999 }}>
+                    <div style={{ height: 5, width: `${d.rate}%`, background: d.rate >= 75 ? "#10B981" : d.rate >= 50 ? "#F59E0B" : "#EF4444", borderRadius: 999 }} />
+                  </div>
+                  <span style={{ fontSize: 10.5, fontWeight: 700, color: "#0F172A", width: 26, textAlign: "right" }}>{d.rate}%</span>
+                </div>
+                <div style={{ textAlign: "right", fontWeight: 700, color: d.delayed > 0 ? "#DC2626" : "#10B981" }}>
+                  {d.delayed > 0 ? `${d.delayed} delayed` : "0"}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+
+      {/* Row 4: Orders by Buyer, Orders by Country, Quality Overview, Predicted Shipment Risk */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, marginBottom: 16 }}>
+        {/* Orders by Buyer */}
+        <Card>
+          <CardHeader title="ORDERS BY BUYER" />
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <MiniDonut data={buyerData} size={84} centerLabel={totalOrders} labelColor="#0F172A" />
+            <div style={{ flex: 1 }}>
+              {buyerData.map(b => (
+                <div key={b.name} style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 4, fontSize: 11 }}>
+                  <span style={{ width: 7, height: 7, borderRadius: 999, background: b.color }} />
+                  <span style={{ color: "#475569", flex: 1 }}>{b.name}</span>
+                  <span style={{ color: "#0F172A", fontWeight: 700 }}>{b.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
+
+        {/* Orders by Country */}
+        <Card>
+          <CardHeader title="ORDERS BY COUNTRY" />
+          {countryArr.map(([country, count]) => (
+            <div key={country} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 7, fontSize: 11 }}>
+              <Globe size={11} color="#64748B" style={{ flexShrink: 0 }} />
+              <span style={{ color: "#475569", width: 70, flexShrink: 0 }}>{country}</span>
+              <div style={{ flex: 1, height: 5, background: "#F1F5F9", borderRadius: 999 }}>
+                <div style={{ height: 5, width: `${(count / countryMax) * 100}%`, background: "#378ADD", borderRadius: 999 }} />
+              </div>
+              <span style={{ color: "#0F172A", fontWeight: 700 }}>{count}</span>
+            </div>
+          ))}
+        </Card>
+
+        {/* Quality Overview */}
+        <Card>
+          <CardHeader title="QUALITY OVERVIEW" />
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}>
+            <MiniDonut data={[{ name: "Pass", value: 93.4, color: "#10B981" }, { name: "Fail", value: 6.6, color: "#E2E8F0" }]} size={80} centerLabel="93.4%" centerSub="Pass rate" labelColor="#0F172A" />
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#64748B" }}>
+            <span>Defect rate <b style={{ color: "#0F172A" }}>2.1%</b></span>
+            <span>Rework <b style={{ color: "#0F172A" }}>1.8%</b></span>
+          </div>
+        </Card>
+
+        {/* Predicted Shipment Risk */}
+        <Card>
+          <CardHeader title="PREDICTED SHIPMENT RISK" sub="Next 30 days" />
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <MiniDonut data={riskData} size={80} centerLabel={totalOrders} labelColor="#0F172A" />
+            <div style={{ flex: 1 }}>
+              {riskData.map(r => (
+                <div key={r.name} style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 4, fontSize: 10.5 }}>
+                  <span style={{ width: 7, height: 7, borderRadius: 999, background: r.color }} />
+                  <span style={{ color: "#475569", flex: 1 }}>{r.name}</span>
+                  <span style={{ color: "#0F172A", fontWeight: 700 }}>{r.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Row 5: Financial Overview + Activity Feed */}
+      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 12, marginBottom: 16 }}>
+        {/* Financial Overview */}
+        <Card>
+          <CardHeader title="FINANCIAL OVERVIEW" sub="YTD — entered by Finance team" />
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+            {[
+              ["Total Revenue", `$${((financials?.revenue || 0) / 1e6).toFixed(2)}M`, "#0F172A"],
+              ["Total COGS", `$${((financials?.cogs || 0) / 1e6).toFixed(2)}M`, "#0F172A"],
+              ["Gross Profit", `$${(grossProfit / 1e6).toFixed(2)}M`, "#10B981"],
+              ["Gross Margin", `${grossMargin}%`, "#10B981"],
+              ["EBITDA", `$${((financials?.ebitda || 0) / 1e6).toFixed(2)}M`, "#0F172A"],
+              ["Stock Value", `$${((financials?.stockValue || 0) / 1e6).toFixed(2)}M`, "#0F172A"],
+            ].map(([label, val, color]) => (
+              <div key={label} style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 8, padding: "10px 12px" }}>
+                <div style={{ fontSize: 10.5, color: "#64748B", marginBottom: 4 }}>{label}</div>
+                <div style={{ fontSize: 17, fontWeight: 800, color }}>{val}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        {/* Activity Feed */}
+        <Card>
+          <CardHeader title="ACTIVITY FEED" sub="Latest updates" />
           {activityFeed.length === 0 ? (
-            <div style={{ fontSize: 11.5, color: "#8489A0" }}>No recent activity.</div>
+            <div style={{ fontSize: 12, color: "#94A3B8" }}>No recent activity.</div>
           ) : activityFeed.map((a, i) => (
-            <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "6px 0", borderBottom: i < activityFeed.length - 1 ? "1px solid #262E48" : "none" }}>
-              <CheckCircle2 size={12} color="#1F9E8D" style={{ marginTop: 2, flexShrink: 0 }} />
+            <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "6px 0", borderBottom: i < activityFeed.length - 1 ? "1px solid #F1F5F9" : "none" }}>
+              <CheckCircle2 size={13} color="#10B981" style={{ marginTop: 2, flexShrink: 0 }} />
               <div>
-                <div style={{ fontSize: 11, color: "#C7CADA" }}>{a.text}</div>
-                <div style={{ fontSize: 9.5, color: "#8489A0" }}>{a.sub}</div>
+                <div style={{ fontSize: 11.5, color: "#1E293B", fontWeight: 500 }}>{a.text}</div>
+                <div style={{ fontSize: 10, color: "#94A3B8" }}>{a.sub}</div>
               </div>
             </div>
           ))}
-        </DarkCard>
+        </Card>
       </div>
 
+      {/* Row 6: Bottom 6 Summary Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 12 }}>
         {[
           ["Open Tasks", openTasksRows.length, "#378ADD"],
-          ["Overdue Tasks", overdueRows.length, "#D64545"],
-          ["Pending Approvals", pendingApprovals.length, "#E2A83B"],
+          ["Overdue Tasks", overdueRows.length, "#EF4444"],
+          ["Pending Approvals", pendingApprovals.length, "#F59E0B"],
           ["Open POs", openPOStages.length, "#378ADD"],
-          ["Late POs", latePOStages.length, "#D64545"],
-          ["Cash Flow, YTD", `$${(financials.cashFlow / 1e6).toFixed(2)}M`, "#1F9E8D"],
+          ["Late POs", latePOStages.length, "#EF4444"],
+          ["Cash Flow, YTD", `$${((financials?.cashFlow || 0) / 1e6).toFixed(2)}M`, "#10B981"],
         ].map(([label, val, color]) => (
-          <DarkCard key={label} style={{ padding: "12px 14px" }}>
-            <div style={{ fontSize: 9.5, color: "#8489A0", marginBottom: 6 }}>{label}</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color }}>{val}</div>
-          </DarkCard>
+          <Card key={label} style={{ padding: "12px 14px" }}>
+            <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600, textTransform: "uppercase", marginBottom: 6 }}>{label}</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color }}>{val}</div>
+          </Card>
         ))}
       </div>
     </div>
   );
 }
 
-export function SettingsPage({ role, setRole }) {
+export function SettingsPage({ role, setRole, orgStructure = {}, onUpdateDepartment }) {
+  const [activeTab, setActiveTab] = useState("departments");
+  const [newDeptName, setNewDeptName] = useState("");
+  const [newHeadName, setNewHeadName] = useState("");
+  const [newHeadTitle, setNewHeadTitle] = useState("");
+
+  const deptList = useMemo(() => {
+    return Object.entries(orgStructure).map(([deptName, roles]) => {
+      const head = Array.isArray(roles) && roles.length > 0 ? roles[0] : null;
+      return {
+        name: deptName,
+        headName: head?.name || "—",
+        headTitle: head?.title || "Lead",
+      };
+    });
+  }, [orgStructure]);
+
+  const handleAddDept = (e) => {
+    e.preventDefault();
+    if (!newDeptName.trim()) return;
+    const name = newDeptName.trim();
+    const roles = [];
+    if (newHeadName.trim() || newHeadTitle.trim()) {
+      roles.push({
+        name: newHeadName.trim() || "—",
+        title: newHeadTitle.trim() || "Manager",
+      });
+    }
+    if (onUpdateDepartment) {
+      onUpdateDepartment(name, { name, roles, description: "" });
+    }
+    setNewDeptName("");
+    setNewHeadName("");
+    setNewHeadTitle("");
+  };
+
   return (
-    <div>
-      <PageHeader title="Settings" sub="Prototype account settings" />
-      <Card style={{ maxWidth: 420 }}>
-        <CardHeader title="Signed in as" />
-        <div style={{ marginBottom: 14 }}>
-          <label style={{ fontSize: 12, color: "#8A8D98", display: "block", marginBottom: 6 }}>Role</label>
-          <select
-            value={role.label}
-            onChange={e => setRole(ROLE_OPTIONS.find(r => r.label === e.target.value))}
-            style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid #E7E8ED", fontSize: 13 }}
-          >
-            {ROLE_OPTIONS.map(r => <option key={r.label} value={r.label}>{r.label}</option>)}
-          </select>
+    <div style={{ paddingBottom: 40 }}>
+      <PageHeader title="Settings" />
+
+      {/* Tabs Header: Account & Departments */}
+      <div style={{ display: "flex", gap: 24, borderBottom: "1px solid #E2E8F0", marginBottom: 20 }}>
+        <button
+          onClick={() => setActiveTab("account")}
+          style={{
+            background: "none",
+            border: "none",
+            padding: "8px 4px 12px 4px",
+            fontSize: 13.5,
+            fontWeight: activeTab === "account" ? 700 : 500,
+            color: activeTab === "account" ? "#2563EB" : "#64748B",
+            borderBottom: activeTab === "account" ? "2px solid #2563EB" : "2px solid transparent",
+            cursor: "pointer",
+            transition: "all 0.2s"
+          }}
+        >
+          Account
+        </button>
+        <button
+          onClick={() => setActiveTab("departments")}
+          style={{
+            background: "none",
+            border: "none",
+            padding: "8px 4px 12px 4px",
+            fontSize: 13.5,
+            fontWeight: activeTab === "departments" ? 700 : 500,
+            color: activeTab === "departments" ? "#2563EB" : "#64748B",
+            borderBottom: activeTab === "departments" ? "2px solid #2563EB" : "2px solid transparent",
+            cursor: "pointer",
+            transition: "all 0.2s"
+          }}
+        >
+          Departments
+        </button>
+      </div>
+
+      {/* Tab 1: Account (Login / Role Switcher) */}
+      {activeTab === "account" && (
+        <Card style={{ maxWidth: 440 }}>
+          <CardHeader title="Signed in as" sub="Select role to view role-specific tasks & modules" />
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ fontSize: 12, color: "#64748B", fontWeight: 600, display: "block", marginBottom: 6 }}>Role / Persona</label>
+            <select
+              value={role.label}
+              onChange={e => setRole(ROLE_OPTIONS.find(r => r.label === e.target.value))}
+              style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "1px solid #CBD5E1", fontSize: 13, background: "#FFFFFF", color: "#0F172A", fontWeight: 500 }}
+            >
+              {ROLE_OPTIONS.map(r => <option key={r.label} value={r.label}>{r.label}</option>)}
+            </select>
+          </div>
+          <div style={{ fontSize: 12, color: "#94A3B8" }}>
+            Switching your role personalizes the sidebar and navigation tasks to match that department.
+          </div>
+        </Card>
+      )}
+
+      {/* Tab 2: Departments (Add Department form & List) */}
+      {activeTab === "departments" && (
+        <div>
+          {/* Add department Card */}
+          <Card style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#0F172A", marginBottom: 14 }}>
+              Add department
+            </div>
+            <form onSubmit={handleAddDept}>
+              <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: 14, marginBottom: 14 }}>
+                <div>
+                  <label style={{ fontSize: 11.5, color: "#64748B", display: "block", marginBottom: 6 }}>
+                    Department name *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. IE / Industrial Engg"
+                    value={newDeptName}
+                    onChange={e => setNewDeptName(e.target.value)}
+                    required
+                    style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid #CBD5E1", fontSize: 12.5 }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11.5, color: "#64748B", display: "block", marginBottom: 6 }}>
+                    Head name
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Ramesh"
+                    value={newHeadName}
+                    onChange={e => setNewHeadName(e.target.value)}
+                    style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid #CBD5E1", fontSize: 12.5 }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11.5, color: "#64748B", display: "block", marginBottom: 6 }}>
+                    Head title
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. IE Manager"
+                    value={newHeadTitle}
+                    onChange={e => setNewHeadTitle(e.target.value)}
+                    style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid #CBD5E1", fontSize: 12.5 }}
+                  />
+                </div>
+              </div>
+              <button
+                type="submit"
+                style={{
+                  background: "#4F46E5",
+                  color: "#FFFFFF",
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "8px 16px",
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  boxShadow: "0 1px 2px rgba(0,0,0,0.05)"
+                }}
+              >
+                Add department
+              </button>
+            </form>
+          </Card>
+
+          {/* Departments List Card */}
+          <Card>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#0F172A", marginBottom: 14 }}>
+              Departments ({deptList.length})
+            </div>
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              {deptList.map((d, index) => (
+                <div
+                  key={d.name}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 16,
+                    padding: "10px 4px",
+                    borderBottom: index < deptList.length - 1 ? "1px solid #F1F5F9" : "none",
+                    fontSize: 13
+                  }}
+                >
+                  <div style={{ fontWeight: 600, color: "#0F172A", minWidth: 160 }}>
+                    {d.name}
+                  </div>
+                  <div style={{ color: "#64748B", fontSize: 12.5 }}>
+                    {d.headName} <span style={{ color: "#94A3B8" }}>- {d.headTitle}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
         </div>
-        <div style={{ fontSize: 12, color: "#8A8D98" }}>Switching your role changes what shows up under "My tasks."</div>
-      </Card>
+      )}
     </div>
   );
 }
