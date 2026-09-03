@@ -575,19 +575,31 @@ function DocumentsPanel({ order, role, costingContent, preProdContent, complianc
     return () => { cancelled = true; };
   }, [order.id]);
 
-  const uploaderName = role.label.split(" (")[0];
-
   async function upload(docType, file) {
-    const entry = { name: file.name, uploadedAt: new Date().toLocaleString(), by: uploaderName };
-    const next = { ...docs, [docType]: entry };
-    setDocs(next);
-    try {
-      if (window.storage && window.storage.set) {
-        await window.storage.set(`docs:${order.id}`, JSON.stringify(next), true);
-      } else {
-        localStorage.setItem(`docs:${order.id}`, JSON.stringify(next));
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUrl = reader.result;
+      const entry = {
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        dataUrl,
+        uploadedAt: new Date().toLocaleString(),
+        by: uploaderName
+      };
+      const next = { ...docs, [docType]: entry };
+      setDocs(next);
+      try {
+        if (window.storage && window.storage.set) {
+          await window.storage.set(`docs:${order.id}`, JSON.stringify(next), true);
+        } else {
+          localStorage.setItem(`docs:${order.id}`, JSON.stringify(next));
+        }
+      } catch (e) {
+        console.warn("Storage upload save error:", e.message);
       }
-    } catch (e) {}
+    };
+    reader.readAsDataURL(file);
   }
 
   async function addCustomType() {
@@ -714,8 +726,17 @@ function DocumentsPanel({ order, role, costingContent, preProdContent, complianc
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: "#1B2130" }}>{docType}</div>
                   {entry ? (
-                    <div style={{ fontSize: 11, color: "#1F9E8D", marginTop: 3, display: "flex", alignItems: "center", gap: 5 }}>
-                      <CheckCircle2 size={12} /> {entry.name} · {entry.by} · {entry.uploadedAt}
+                    <div style={{ fontSize: 11, color: "#1F9E8D", marginTop: 3, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                      <CheckCircle2 size={12} />
+                      {entry.dataUrl && entry.type && entry.type.startsWith("image/") ? (
+                        <a href={entry.dataUrl} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "#059669", fontWeight: 600, textDecoration: "underline" }}>
+                          <img src={entry.dataUrl} alt={entry.name} style={{ width: 22, height: 22, objectFit: "cover", borderRadius: 4, border: "1px solid #BBF7D0" }} />
+                          {entry.name}
+                        </a>
+                      ) : (
+                        <span style={{ fontWeight: 600 }}>{entry.name}</span>
+                      )}
+                      <span>· {entry.by} · {entry.uploadedAt}</span>
                     </div>
                   ) : (
                     <div style={{ fontSize: 11, color: "#B0B2BA", marginTop: 3 }}>Not uploaded yet</div>

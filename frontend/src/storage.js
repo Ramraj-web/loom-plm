@@ -8,7 +8,7 @@
 //   DELETE /api/storage/:key?shared=true|false
 //   GET    /api/storage?prefix=xxx&shared=true|false
 
-export const API_BASE_URL = "https://loom-plm.vercel.app";
+export const API_BASE_URL = typeof window !== "undefined" ? window.location.origin : "https://loom-plm.vercel.app";
 const BASE = `${API_BASE_URL}/api/storage`;
 
 async function get(key, shared = false) {
