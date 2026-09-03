@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import {
   Calendar, CheckCircle2, Clock, Circle, Lock, ChevronDown, Upload, Send, Zap,
-  AlertTriangle, FileText, ClipboardList, Package, Layers, ShieldCheck, Factory, Truck, TrendingUp
+  AlertTriangle, FileText, ClipboardList, Package, Layers, ShieldCheck, Factory, Truck, TrendingUp,
+  Eye, Trash2, X, Download
 } from "lucide-react";
 import {
   REASONS, VAP_SUPPLIERS, DOC_TABS_CONFIG, DOC_TAB_NAMES, DOC_TAB_ICONS, CUSTOMIZABLE_TABS,
@@ -280,6 +281,14 @@ function CostingTab({ order, onSetTemplate, onUpdateRow, onAddRow }) {
   const rows = order.costingRows || [];
   const grandTotal = rows.reduce((a, r) => a + (r.isHeader ? 0 : (Number(r.price) || 0) * (Number(r.qty) || 0)), 0);
 
+  const [usdRate, setUsdRate] = useState(83.5);
+  const [eurRate, setEurRate] = useState(90.2);
+  const [approvalStatus, setApprovalStatus] = useState(null);
+
+  const handleSubmitApproval = () => {
+    setApprovalStatus("Submitted for DGM / MD Approval (" + new Date().toLocaleDateString() + ")");
+  };
+
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
@@ -302,23 +311,51 @@ function CostingTab({ order, onSetTemplate, onUpdateRow, onAddRow }) {
       {rows.map((row, i) => (
         row.isHeader ? (
           <div key={i} style={{ fontSize: 12, fontWeight: 700, color: "#1B2130", padding: "12px 4px 6px" }}>{row.label}</div>
-        ) : (
-          <div key={i} style={{ display: "grid", gridTemplateColumns: "1.6fr 0.8fr 0.7fr 0.9fr", alignItems: "center", fontSize: 12.5, padding: "6px 4px", borderBottom: "1px solid #F7F7F9", background: row.custom ? "#FBFAFF" : "transparent" }}>
-            {row.custom ? (
-              <input
-                value={row.label}
-                placeholder="e.g. Recycled polyester tape"
-                onChange={e => onUpdateRow(order.id, i, "label", e.target.value)}
-                style={{ fontSize: 12.5, padding: "5px 8px", borderRadius: 6, border: "1px solid #E0DBF5", marginLeft: 8, marginRight: 8, color: "#1B2130" }}
-              />
-            ) : (
-              <div style={{ color: "#565A66", paddingLeft: 8 }}>{row.label}</div>
-            )}
-            <input type="number" value={row.price} onChange={e => onUpdateRow(order.id, i, "price", e.target.value)} style={{ width: 64, fontSize: 12, padding: "4px 6px", borderRadius: 6, border: "1px solid #E7E8ED" }} />
-            <input type="number" value={row.qty} onChange={e => onUpdateRow(order.id, i, "qty", e.target.value)} style={{ width: 54, fontSize: 12, padding: "4px 6px", borderRadius: 6, border: "1px solid #E7E8ED" }} />
-            <div style={{ fontWeight: 600 }}>{((Number(row.price) || 0) * (Number(row.qty) || 0)).toLocaleString()}</div>
-          </div>
-        )
+        ) : (() => {
+          const isPercentageRow = ["Overheads", "Rejection", "Commercial Costs", "Profit"].includes(row.label);
+          return (
+            <div key={i} style={{ display: "grid", gridTemplateColumns: "1.6fr 0.8fr 0.7fr 0.9fr", alignItems: "center", fontSize: 12.5, padding: "6px 4px", borderBottom: "1px solid #F7F7F9", background: row.custom ? "#FBFAFF" : isPercentageRow ? "#FAFAFC" : "transparent" }}>
+              {row.custom ? (
+                <input
+                  value={row.label}
+                  placeholder="e.g. Recycled polyester tape"
+                  onChange={e => onUpdateRow(order.id, i, "label", e.target.value)}
+                  style={{ fontSize: 12.5, padding: "5px 8px", borderRadius: 6, border: "1px solid #E0DBF5", marginLeft: 8, marginRight: 8, color: "#1B2130" }}
+                />
+              ) : (
+                <div style={{ color: isPercentageRow ? "#1E293B" : "#565A66", fontWeight: isPercentageRow ? 600 : 400, paddingLeft: 8 }}>{row.label}</div>
+              )}
+
+              {/* Price / Rate Column */}
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <input
+                  type="number"
+                  value={row.price}
+                  onChange={e => onUpdateRow(order.id, i, "price", e.target.value)}
+                  style={{ width: isPercentageRow ? 52 : 64, fontSize: 12, padding: "4px 6px", borderRadius: 6, border: "1px solid #E7E8ED" }}
+                />
+                {isPercentageRow && <span style={{ fontSize: 12, fontWeight: 700, color: "#64748B" }}>%</span>}
+              </div>
+
+              {/* Qty Column */}
+              {isPercentageRow ? (
+                <div style={{ fontSize: 11, color: "#64748B", fontWeight: 500 }}>of cost</div>
+              ) : (
+                <input
+                  type="number"
+                  value={row.qty}
+                  onChange={e => onUpdateRow(order.id, i, "qty", e.target.value)}
+                  style={{ width: 54, fontSize: 12, padding: "4px 6px", borderRadius: 6, border: "1px solid #E7E8ED" }}
+                />
+              )}
+
+              {/* Total Column */}
+              <div style={{ fontWeight: 600, color: isPercentageRow ? "#64748B" : "#1B2130", fontSize: 12.5 }}>
+                {isPercentageRow ? "—" : ((Number(row.price) || 0) * (Number(row.qty) || 0)).toLocaleString()}
+              </div>
+            </div>
+          );
+        })()
       ))}
       <button
         onClick={() => onAddRow(order.id)}
@@ -326,9 +363,104 @@ function CostingTab({ order, onSetTemplate, onUpdateRow, onAddRow }) {
       >
         + Add other fabric / trim
       </button>
-      <div style={{ display: "flex", justifyContent: "space-between", padding: "14px 4px 0", fontSize: 14, fontWeight: 700, color: "#1B2130", borderTop: "1px solid #F0F0F2", marginTop: 14 }}>
-        <div>TOTAL COST</div>
-        <div>{grandTotal.toLocaleString()}</div>
+      <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1.5px solid #ECEDF1" }}>
+        {/* TOTAL COST (per pc) Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#1B2130", letterSpacing: 0.5 }}>TOTAL COST (per pc)</div>
+            <div style={{ fontSize: 11, color: "#8A8D98", marginTop: 2 }}>
+              Includes overheads, rejection, commercial costs, and profit margin
+            </div>
+          </div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: "#151B2E" }}>
+            ₹{grandTotal.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+          </div>
+        </div>
+
+        {/* Currency Conversion Section */}
+        <div style={{ marginTop: 18, background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 12, padding: "14px 16px" }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#475569", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>
+            Currency conversion
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            {/* USD Box */}
+            <div style={{ background: "#FFFFFF", border: "1px solid #CBD5E1", borderRadius: 10, padding: "12px 14px", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#0F172A" }}>USD</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#64748B" }}>
+                  <span>$1 = ₹</span>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={usdRate}
+                    onChange={e => setUsdRate(Number(e.target.value) || 0)}
+                    style={{ width: 56, fontSize: 11.5, fontWeight: 600, padding: "3px 6px", borderRadius: 6, border: "1px solid #CBD5E1", textAlign: "right" }}
+                  />
+                </div>
+              </div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: "#0284C7" }}>
+                $ {usdRate > 0 ? (grandTotal / usdRate).toFixed(2) : "0.00"}
+              </div>
+              <div style={{ fontSize: 10.5, color: "#64748B", marginTop: 4 }}>
+                ₹{grandTotal} @ ₹{usdRate} / $1
+              </div>
+            </div>
+
+            {/* EUR Box */}
+            <div style={{ background: "#FFFFFF", border: "1px solid #CBD5E1", borderRadius: 10, padding: "12px 14px", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#0F172A" }}>EUR</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#64748B" }}>
+                  <span>€1 = ₹</span>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={eurRate}
+                    onChange={e => setEurRate(Number(e.target.value) || 0)}
+                    style={{ width: 56, fontSize: 11.5, fontWeight: 600, padding: "3px 6px", borderRadius: 6, border: "1px solid #CBD5E1", textAlign: "right" }}
+                  />
+                </div>
+              </div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: "#4F46E5" }}>
+                € {eurRate > 0 ? (grandTotal / eurRate).toFixed(2) : "0.00"}
+              </div>
+              <div style={{ fontSize: 10.5, color: "#64748B", marginTop: 4 }}>
+                ₹{grandTotal} @ ₹{eurRate} / €1
+              </div>
+            </div>
+          </div>
+
+          <div style={{ fontSize: 10.5, color: "#94A3B8", marginTop: 10 }}>
+            Enter current exchange rate above — conversion is per pc cost
+          </div>
+        </div>
+
+        {/* Costing Approval Button */}
+        <div style={{ marginTop: 16, display: "flex", justifyContent: "space-between", alignItems: "center", background: "#F1F5F9", borderRadius: 10, padding: "12px 16px" }}>
+          <div>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: "#1E293B" }}>Costing approval</div>
+            <div style={{ fontSize: 11, color: approvalStatus ? "#059669" : "#64748B", marginTop: 2, fontWeight: approvalStatus ? 600 : 400 }}>
+              {approvalStatus ? `✓ ${approvalStatus}` : "Requires sign-off from DGM / Managing Director"}
+            </div>
+          </div>
+          <button
+            onClick={handleSubmitApproval}
+            style={{
+              background: approvalStatus ? "#059669" : "#378ADD",
+              color: "#FFFFFF",
+              border: "none",
+              borderRadius: 8,
+              padding: "8px 16px",
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: "pointer",
+              transition: "all 0.2s"
+            }}
+          >
+            {approvalStatus ? "Resubmit for Approval" : "Submit for DGM / MD approval"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -540,6 +672,7 @@ function DocumentsPanel({ order, role, costingContent, preProdContent, complianc
   const [includeStages, setIncludeStages] = useState(() => Object.fromEntries(STAGE_CHAT_TABS.map(t => [t, true])));
   const [draft, setDraft] = useState("");
   const [mentionQuery, setMentionQuery] = useState(null);
+  const [previewDoc, setPreviewDoc] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -602,6 +735,22 @@ function DocumentsPanel({ order, role, costingContent, preProdContent, complianc
       }
     };
     reader.readAsDataURL(file);
+  }
+
+  async function deleteDoc(docType) {
+    if (!window.confirm(`Are you sure you want to delete the file for "${docType}"?`)) return;
+    const next = { ...docs };
+    delete next[docType];
+    setDocs(next);
+    try {
+      if (window.storage && window.storage.set) {
+        await window.storage.set(`docs:${order.id}`, JSON.stringify(next), true);
+      } else {
+        localStorage.setItem(`docs:${order.id}`, JSON.stringify(next));
+      }
+    } catch (e) {
+      console.warn("Storage delete error:", e.message);
+    }
   }
 
   async function addCustomType() {
@@ -723,45 +872,92 @@ function DocumentsPanel({ order, role, costingContent, preProdContent, complianc
           {docTypes.map((docType, i) => {
             const entry = docs[docType];
             const inputId = `upload-${order.id}-${activeTab}-${i}`;
+            const isImage = entry && (entry.type?.startsWith("image/") || entry.dataUrl?.startsWith("data:image/"));
+            const isPdf = entry && (entry.type === "application/pdf" || entry.name?.toLowerCase().endsWith(".pdf") || entry.dataUrl?.startsWith("data:application/pdf"));
+
             return (
-              <div key={docType} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "13px 14px", marginBottom: 8, borderRadius: 10, background: entry ? "#F7FBF9" : "#FAFAFB", border: `1px solid ${entry ? "#DCEFE6" : "#EFEFF2"}` }}>
-                <div>
+              <div key={docType} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", marginBottom: 8, borderRadius: 10, background: entry ? "#F7FBF9" : "#FAFAFB", border: `1px solid ${entry ? "#DCEFE6" : "#EFEFF2"}` }}>
+                <div style={{ flex: 1, minWidth: 0, marginRight: 12 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: "#1B2130" }}>{docType}</div>
                   {entry ? (
-                    <div style={{ fontSize: 11, color: "#1F9E8D", marginTop: 3, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                      <CheckCircle2 size={12} />
-                      {entry.dataUrl && entry.type && entry.type.startsWith("image/") ? (
-                        <a href={entry.dataUrl} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "#059669", fontWeight: 600, textDecoration: "underline" }}>
-                          <img src={entry.dataUrl} alt={entry.name} style={{ width: 22, height: 22, objectFit: "cover", borderRadius: 4, border: "1px solid #BBF7D0" }} />
-                          {entry.name}
-                        </a>
-                      ) : (
-                        <span style={{ fontWeight: 600 }}>{entry.name}</span>
-                      )}
-                      <span>· {entry.by} · {entry.uploadedAt}</span>
+                    <div style={{ fontSize: 11, color: "#1F9E8D", marginTop: 4, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                      <CheckCircle2 size={12} style={{ flexShrink: 0 }} />
+                      <span
+                        onClick={() => setPreviewDoc({ ...entry, docType })}
+                        style={{ fontWeight: 600, color: "#047857", cursor: "pointer", textDecoration: "underline", display: "inline-flex", alignItems: "center", gap: 4 }}
+                        title="Click to view file"
+                      >
+                        {isImage && (
+                          <img src={entry.dataUrl} alt={entry.name} style={{ width: 18, height: 18, objectFit: "cover", borderRadius: 3, border: "1px solid #A7F3D0" }} />
+                        )}
+                        {entry.name}
+                      </span>
+                      <span style={{ color: "#64748B" }}>· {entry.by} · {entry.uploadedAt}</span>
                     </div>
                   ) : (
                     <div style={{ fontSize: 11, color: "#B0B2BA", marginTop: 3 }}>Not uploaded yet</div>
                   )}
                 </div>
-                <div>
+
+                {/* 3 Action Options: View, Upload/Replace, Delete */}
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                  {/* 1. View Button (Enabled when file is uploaded) */}
+                  {entry && (
+                    <button
+                      onClick={() => setPreviewDoc({ ...entry, docType })}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 4,
+                        fontSize: 11.5, fontWeight: 600, color: "#2563EB",
+                        border: "1px solid #BFDBFE", background: "#EFF6FF",
+                        borderRadius: 8, padding: "5px 10px", cursor: "pointer"
+                      }}
+                      title="View file or preview document"
+                    >
+                      <Eye size={12} /> View
+                    </button>
+                  )}
+
+                  {/* 2. Upload / Replace Button */}
                   {canUploadHere ? (
                     <>
                       <input
                         type="file"
                         id={inputId}
                         style={{ display: "none" }}
-                        onChange={e => { const f = e.target.files[0]; if (f) upload(docType, f); }}
+                        onChange={e => { const f = e.target.files[0]; if (f) upload(docType, f); e.target.value = ""; }}
                       />
                       <label
                         htmlFor={inputId}
-                        style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 600, color: entry ? "#1F9E8D" : ACCENT, border: `1px solid ${entry ? "#BFE4D6" : "#D9D6F5"}`, background: "#fff", borderRadius: 999, padding: "6px 12px", cursor: "pointer" }}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 4,
+                          fontSize: 11.5, fontWeight: 600,
+                          color: entry ? "#0D9488" : ACCENT,
+                          border: `1px solid ${entry ? "#99F6E4" : "#D9D6F5"}`,
+                          background: "#fff", borderRadius: 8, padding: "5px 10px", cursor: "pointer"
+                        }}
+                        title={entry ? "Replace existing file" : "Upload new file"}
                       >
-                        <Upload size={11} /> {entry ? "Replace" : "Upload"}
+                        <Upload size={12} /> {entry ? "Replace" : "Upload"}
                       </label>
                     </>
                   ) : (
-                    <span style={{ fontSize: 11, color: "#B0B2BA", fontWeight: 600, padding: "6px 12px" }}>View only</span>
+                    !entry && <span style={{ fontSize: 11, color: "#B0B2BA", fontWeight: 600, padding: "5px 10px" }}>View only</span>
+                  )}
+
+                  {/* 3. Delete Button */}
+                  {entry && canUploadHere && (
+                    <button
+                      onClick={() => deleteDoc(docType)}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 4,
+                        fontSize: 11.5, fontWeight: 600, color: "#DC2626",
+                        border: "1px solid #FECACA", background: "#FEF2F2",
+                        borderRadius: 8, padding: "5px 9px", cursor: "pointer"
+                      }}
+                      title="Delete uploaded file"
+                    >
+                      <Trash2 size={12} /> Delete
+                    </button>
                   )}
                 </div>
               </div>
@@ -860,6 +1056,100 @@ function DocumentsPanel({ order, role, costingContent, preProdContent, complianc
           </div>
         </div>
       </Card>
+
+      {/* Full File Preview Modal (Image / PDF / File Viewer) */}
+      {previewDoc && (
+        <div
+          onClick={() => setPreviewDoc(null)}
+          style={{
+            position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+            background: "rgba(15, 23, 42, 0.75)", backdropFilter: "blur(4px)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            zIndex: 9999, padding: 20
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: "#FFFFFF", borderRadius: 14, maxWidth: "90vw", width: 850,
+              maxHeight: "90vh", display: "flex", flexDirection: "column",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)", overflow: "hidden"
+            }}
+          >
+            {/* Modal Header */}
+            <div style={{ padding: "14px 20px", borderBottom: "1px solid #E2E8F0", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#F8FAFC" }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#0F172A" }}>{previewDoc.docType} — {previewDoc.name}</div>
+                <div style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>
+                  Uploaded by {previewDoc.by} · {previewDoc.uploadedAt}
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                {previewDoc.dataUrl && (
+                  <a
+                    href={previewDoc.dataUrl}
+                    download={previewDoc.name}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 5,
+                      fontSize: 12, fontWeight: 600, color: "#2563EB",
+                      background: "#EFF6FF", border: "1px solid #BFDBFE",
+                      borderRadius: 8, padding: "6px 12px", textDecoration: "none"
+                    }}
+                  >
+                    <Download size={13} /> Download
+                  </a>
+                )}
+                <button
+                  onClick={() => setPreviewDoc(null)}
+                  style={{
+                    background: "#F1F5F9", border: "none", borderRadius: 8,
+                    width: 32, height: 32, display: "flex", alignItems: "center",
+                    justifyContent: "center", cursor: "pointer", color: "#64748B"
+                  }}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body / File Display */}
+            <div style={{ flex: 1, padding: 20, overflow: "auto", display: "flex", alignItems: "center", justifyContent: "center", background: "#F1F5F9", minHeight: 350 }}>
+              {previewDoc.dataUrl && (previewDoc.type?.startsWith("image/") || previewDoc.dataUrl.startsWith("data:image/")) ? (
+                <img
+                  src={previewDoc.dataUrl}
+                  alt={previewDoc.name}
+                  style={{ maxWidth: "100%", maxHeight: "70vh", objectFit: "contain", borderRadius: 8, boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}
+                />
+              ) : previewDoc.dataUrl && (previewDoc.type === "application/pdf" || previewDoc.name?.toLowerCase().endsWith(".pdf") || previewDoc.dataUrl.startsWith("data:application/pdf")) ? (
+                <iframe
+                  src={previewDoc.dataUrl}
+                  title={previewDoc.name}
+                  style={{ width: "100%", height: "70vh", border: "none", borderRadius: 8 }}
+                />
+              ) : (
+                <div style={{ textAlign: "center", padding: 40, background: "#fff", borderRadius: 12, border: "1px solid #CBD5E1" }}>
+                  <FileText size={48} color="#64748B" style={{ margin: "0 auto 12px" }} />
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#0F172A" }}>{previewDoc.name}</div>
+                  <div style={{ fontSize: 12, color: "#64748B", margin: "6px 0 16px" }}>File format preview not directly supported in browser view.</div>
+                  {previewDoc.dataUrl && (
+                    <a
+                      href={previewDoc.dataUrl}
+                      download={previewDoc.name}
+                      style={{
+                        display: "inline-flex", alignItems: "center", gap: 6,
+                        background: "#378ADD", color: "#fff", padding: "8px 16px",
+                        borderRadius: 8, fontSize: 12, fontWeight: 600, textDecoration: "none"
+                      }}
+                    >
+                      <Download size={13} /> Download File
+                    </a>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

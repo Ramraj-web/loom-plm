@@ -118,7 +118,11 @@ export default function LoomPLM() {
                 shippedQty: bo.shippedQty ?? existing?.shippedQty ?? (isDefaultSeed ? Math.round((bo.qty || 5000) * 0.75) : 0),
                 plannedCost: bo.plannedCost ?? existing?.plannedCost ?? Math.round((bo.qty || 5000) * 4),
                 actualCost: bo.actualCost ?? existing?.actualCost ?? Math.round((bo.qty || 5000) * 4.2),
-                stages: bo.stages || existing?.stages || (isDefaultSeed ? makeStages(bo.template || existing?.template || "90", 5, null) : makeStages("90", 0, null)),
+                stages: (bo.stages && bo.stages.length === 34) 
+                  ? bo.stages 
+                  : (existing?.stages && existing.stages.length === 34) 
+                    ? existing.stages 
+                    : makeStages(bo.template || existing?.template || "90", isDefaultSeed ? 5 : 0, null),
                 preProd: bo.preProd || existing?.preProd || initPreProd(),
               };
             });
@@ -527,6 +531,11 @@ export default function LoomPLM() {
 
   const handleSetRole = (newRole) => {
     setRole(newRole);
+    if (newRole && newRole.dept === "Executive") {
+      setView("executiveOverview");
+    } else {
+      setView("dashboard");
+    }
     if (window.storage) window.storage.set("currentRole", JSON.stringify(newRole), true);
   };
 
@@ -1213,7 +1222,28 @@ export default function LoomPLM() {
     return items;
   })();
 
-  const navSections = [
+  const isExecutive = role.dept === "Executive";
+
+  const navSections = isExecutive ? [
+    {
+      section: "Executive Suite",
+      items: [
+        { key: "executiveOverview", label: "Executive Overview", icon: TrendingUp },
+        { key: "orders", label: "Orders", icon: Package },
+        { key: "approvals", label: "Approvals", icon: ClipboardCheck },
+      ]
+    },
+    {
+      section: "Management",
+      items: [
+        { key: "attendance", label: "Attendance & leave", icon: UserCheck },
+        { key: "debitNotes", label: "Debit notes", icon: ArrowDownRight },
+        { key: "finance", label: "Finance", icon: Landmark },
+        { key: "reports", label: "Reports", icon: BarChart3 },
+        { key: "settings", label: "Settings", icon: SettingsIcon },
+      ]
+    }
+  ] : [
     { section: null, items: [
       { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
       ...(canSeeAll ? [{ key: "orders", label: "Orders", icon: Package }] : []),
@@ -1225,20 +1255,19 @@ export default function LoomPLM() {
       ...(canSeeAll
         ? [{ key: "departments", label: "Departments", icon: Users }]
         : [{ key: "myDepartment", label: "My department", icon: Users }]),
-      ...(canSeeAll || ["Cutting", "Production"].includes(role.dept) ? [{ key: "production", label: "Production", icon: Factory }] : []),
-      ...(canSeeAll || role.dept === "Quality" ? [{ key: "quality", label: "Quality", icon: ShieldCheck }] : []),
+      // ...(canSeeAll || ["Cutting", "Production"].includes(role.dept) ? [{ key: "production", label: "Production", icon: Factory }] : []),
+      // ...(canSeeAll || role.dept === "Quality" ? [{ key: "quality", label: "Quality", icon: ShieldCheck }] : []),
       ...(canSeeAll || role.dept === "Compliance & Certification" ? [{ key: "compliance", label: "Compliance & certs", icon: ShieldCheck }] : []),
       { key: "attendance", label: "Attendance & leave", icon: UserCheck },
       ...(canSeeAll || role.dept === "Finance" ? [{ key: "finance", label: "Finance data", icon: Landmark }] : []),
     ]},
     { section: "Insights", items: [
       ...(canSeeAll ? [{ key: "reports", label: "Reports", icon: BarChart3 }] : []),
-      ...(canSeeAll ? [{ key: "insights", label: "All insights", icon: Lightbulb }] : []),
+      // ...(canSeeAll ? [{ key: "insights", label: "All insights", icon: Lightbulb }] : []),
       ...(canSeeAll ? [{ key: "supplierPerformance", label: "Supplier performance", icon: TrendingUp }] : []),
       ...(canSeeAll ? [{ key: "notifications", label: "Notifications", icon: Bell }] : []),
       ...(canSeeAll ? [{ key: "debitNotes", label: "Debit notes", icon: ArrowDownRight }] : []),
       ...(canSeeAll ? [{ key: "capas", label: "CAPAs", icon: RefreshCw }] : []),
-      ...(role.dept === "Executive" ? [{ key: "executiveOverview", label: "Executive Dashboard (MD)", icon: TrendingUp }] : []),
     ]},
     { section: null, items: [
       { key: "settings", label: "Settings", icon: SettingsIcon },
@@ -1617,7 +1646,16 @@ export default function LoomPLM() {
   } else if (view === "finance" && (canSeeAll || role.dept === "Finance")) {
     content = <FinanceEntryPage orders={orders} financials={financials} onUpdate={updateFinancials} onUpdateOrderCost={updateOrderCost} />;
   } else if (view === "executiveOverview" && role.dept === "Executive") {
-    content = <ExecutiveOverviewPage orders={orders} attendance={attendance} financials={financials} roster={roster} />;
+    content = (
+      <ExecutiveOverviewPage
+        orders={orders}
+        attendance={attendance}
+        financials={financials}
+        roster={roster}
+        onOpenOrder={openOrder}
+        onNavigate={navigate}
+      />
+    );
   } else if (view === "settings") {
     content = <SettingsPage role={role} setRole={handleSetRole} />;
   } else if (canSeeAll) {

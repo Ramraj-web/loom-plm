@@ -117,8 +117,19 @@ router.get("/:resource", async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.get("/:resource/:id", async (req, res, next) => {
-  const { resource, id } = req.params;
+// Helper to decode parameter keys safely
+function extractId(raw) {
+  if (!raw) return "";
+  try {
+    return decodeURIComponent(raw);
+  } catch (e) {
+    return raw;
+  }
+}
+
+router.get("/:resource/:id(*)", async (req, res, next) => {
+  const { resource } = req.params;
+  const id = extractId(req.params.id);
   if (!validResource(resource)) return res.status(404).json({ error: "Unknown resource" });
   try {
     const collection = getResourceCollection();
@@ -153,8 +164,9 @@ router.post("/:resource", async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.put("/:resource/:id", async (req, res, next) => {
-  const { resource, id } = req.params;
+router.put("/:resource/:id(*)", async (req, res, next) => {
+  const { resource } = req.params;
+  const id = extractId(req.params.id);
   if (!validResource(resource)) return res.status(404).json({ error: "Unknown resource" });
   try {
     const collection = getResourceCollection();
@@ -182,8 +194,9 @@ router.put("/:resource/:id", async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.patch("/:resource/:id", async (req, res, next) => {
-  const { resource, id } = req.params;
+router.patch("/:resource/:id(*)", async (req, res, next) => {
+  const { resource } = req.params;
+  const id = extractId(req.params.id);
   if (!validResource(resource)) return res.status(404).json({ error: "Unknown resource" });
   try {
     const collection = getResourceCollection();
@@ -211,8 +224,9 @@ router.patch("/:resource/:id", async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.delete("/:resource/:id", async (req, res, next) => {
-  const { resource, id } = req.params;
+router.delete("/:resource/:id(*)", async (req, res, next) => {
+  const { resource } = req.params;
+  const id = extractId(req.params.id);
   if (!validResource(resource)) return res.status(404).json({ error: "Unknown resource" });
   try {
     const collection = getResourceCollection();

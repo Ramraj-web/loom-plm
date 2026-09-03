@@ -56,28 +56,28 @@ export const storageApi = {
 // ===== RESOURCES API =====
 export const resourcesApi = {
   list: (resource, query = "") =>
-    request(`/api/resources/${resource}${query}`),
+    request(`/api/resources/${encodeURIComponent(resource)}${query}`),
   get: (resource, id) =>
-    request(`/api/resources/${resource}/${id}`),
+    request(`/api/resources/${encodeURIComponent(resource)}/${encodeURIComponent(id)}`),
   create: (resource, data) =>
-    request(`/api/resources/${resource}`, {
+    request(`/api/resources/${encodeURIComponent(resource)}`, {
       method: "POST",
       body: JSON.stringify(data),
     }),
   update: (resource, id, data) =>
-    request(`/api/resources/${resource}/${id}`, {
+    request(`/api/resources/${encodeURIComponent(resource)}/${encodeURIComponent(id)}`, {
       method: "PUT",
       body: JSON.stringify(data),
     }),
   patch: (resource, id, data) =>
-    request(`/api/resources/${resource}/${id}`, {
+    request(`/api/resources/${encodeURIComponent(resource)}/${encodeURIComponent(id)}`, {
       method: "PATCH",
       body: JSON.stringify(data),
     }),
   delete: (resource, id) =>
-    request(`/api/resources/${resource}/${id}`, { method: "DELETE" }),
+    request(`/api/resources/${encodeURIComponent(resource)}/${encodeURIComponent(id)}`, { method: "DELETE" }),
   remove: (resource, id) =>
-    request(`/api/resources/${resource}/${id}`, { method: "DELETE" }),
+    request(`/api/resources/${encodeURIComponent(resource)}/${encodeURIComponent(id)}`, { method: "DELETE" }),
 };
 
 // ===== HEALTH CHECK =====

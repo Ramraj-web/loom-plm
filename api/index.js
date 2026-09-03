@@ -547,11 +547,11 @@ export default async function handler(req, res) {
       }
     }
 
-    // 3. Resources API: /api/resources/:resource/:id?
-    const resourceMatch = pathname.match(/^\/(?:api\/)?resources\/([^/]+)(?:\/([^/]+))?\/?$/);
+    // 3. Resources API: /api/resources/:resource/:id? (allows IDs with slashes e.g. DD/2233)
+    const resourceMatch = pathname.match(/^\/(?:api\/)?resources\/([^/]+)(?:\/(.+))?\/?$/);
     if (resourceMatch) {
       const resource = resourceMatch[1];
-      const id = resourceMatch[2] ? decodeURIComponent(resourceMatch[2]) : null;
+      const id = resourceMatch[2] ? decodeURIComponent(resourceMatch[2].replace(/\/$/, "")) : null;
 
       if (!validResource(resource)) {
         return res.status(404).json({ error: "Unknown resource" });
