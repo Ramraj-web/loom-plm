@@ -575,6 +575,8 @@ function DocumentsPanel({ order, role, costingContent, preProdContent, complianc
     return () => { cancelled = true; };
   }, [order.id]);
 
+  const uploaderName = role && role.label ? role.label.split(" (")[0] : "User";
+
   async function upload(docType, file) {
     const reader = new FileReader();
     reader.onload = async () => {
