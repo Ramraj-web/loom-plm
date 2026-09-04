@@ -14,6 +14,7 @@ import {
   Card, CardHeader, PageHeader, BackLink, statusPill, riskDot, collectTasks, GroupedTaskList, OrgChain, TaskTable
 } from "../common/CommonUI.jsx";
 import { AssignWorkModal } from "./InsightsViews.jsx";
+import { DepartmentPerformanceAndKPI } from "./DepartmentKPISection.jsx";
 
 export function OrdersPage({
   orders = [],
@@ -1033,13 +1034,152 @@ export function CalendarPage({ orders, onOpenOrder }) {
   );
 }
 
-export function ApprovalsPage({ orders, onOpenOrder }) {
+export function ApprovalsPage({ orders = [], onOpenOrder, onApproveCosting, onRejectCosting, role = {} }) {
   const rows = useMemo(() => collectTasks(orders, null).filter(r => r.stage.name.toLowerCase().includes("approval") || r.stage.name === "Tech Pack Received"), [orders]);
   const pendingCount = rows.filter(r => r.stage.status !== "done").length;
+
+  const costingPendingOrders = useMemo(() => {
+    return orders.filter(o => o.costingApproval && o.costingApproval.status === "submitted");
+  }, [orders]);
+
+  const costingApprovedOrders = useMemo(() => {
+    return orders.filter(o => o.costingApproval && o.costingApproval.status === "approved");
+  }, [orders]);
+
   return (
     <div>
-      <PageHeader title="Approvals" sub={`Buyer approval checkpoints — Fit, Size Set, and PP — plus tech pack receipt. ${pendingCount} not yet approved.`} />
+      <PageHeader
+        title="Approvals"
+        sub={`Management and buyer approval checkpoints — Costing sign-offs (${costingPendingOrders.length} pending), Fit, Size Set, and PP (${pendingCount} pending).`}
+      />
+
+      {/* COSTING APPROVALS SECTION */}
+      <Card style={{ marginBottom: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#111827", display: "flex", alignItems: "center", gap: 8 }}>
+              <span>Costing Sign-off (DGM / MD Approvals)</span>
+              {costingPendingOrders.length > 0 && (
+                <span style={{ background: "#FEF3C7", color: "#92400E", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999 }}>
+                  {costingPendingOrders.length} Pending
+                </span>
+              )}
+            </div>
+            <div style={{ fontSize: 12, color: "#6B7280", marginTop: 2 }}>
+              Requests submitted from order costing sheets requiring Managing Director authorization
+            </div>
+          </div>
+        </div>
+
+        {costingPendingOrders.length === 0 && costingApprovedOrders.length === 0 ? (
+          <div style={{ padding: "18px 0", textAlign: "center", color: "#9CA3AF", fontSize: 12.5 }}>
+            No costing approval requests at this time. Submit for approval from the order Costing tab.
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {costingPendingOrders.map(o => (
+              <div
+                key={o.id}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  background: "#FFFBEB",
+                  border: "1px solid #FDE68A",
+                  borderRadius: 8,
+                  padding: "12px 16px"
+                }}
+              >
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span
+                      onClick={() => onOpenOrder && onOpenOrder(o.id)}
+                      style={{ cursor: "pointer", fontWeight: 700, color: "#1E293B", textDecoration: "underline", fontSize: 13 }}
+                    >
+                      PO #{o.id} — {o.style}
+                    </span>
+                    <span style={{ fontSize: 11, color: "#6B7280" }}>({o.buyer})</span>
+                    <span style={{ background: "#FEF3C7", color: "#92400E", fontSize: 10.5, fontWeight: 700, padding: "2px 6px", borderRadius: 999 }}>
+                      ⏳ Pending Sign-off
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 11.5, color: "#78350F", marginTop: 4 }}>
+                    Total Cost: <b>₹{(o.costingApproval?.grandTotal || 0).toLocaleString()}</b> per pc · Submitted by {o.costingApproval?.submittedBy || "Merchandiser"} on {o.costingApproval?.submittedDate || "Today"}
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <button
+                    onClick={() => onOpenOrder && onOpenOrder(o.id)}
+                    style={{ background: "#FFFFFF", border: "1px solid #CBD5E1", color: "#334155", borderRadius: 6, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                  >
+                    Review Sheet
+                  </button>
+                  {role?.dept === "Executive" || role?.label?.toLowerCase().includes("md") || role?.label?.toLowerCase().includes("managing director") ? (
+                    <>
+                      <button
+                        onClick={() => onApproveCosting && onApproveCosting(o.id, role?.label || "Managing Director (MD)")}
+                        style={{ background: "#10B981", border: "none", color: "#FFFFFF", borderRadius: 6, padding: "6px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", boxShadow: "0 1px 2px rgba(16, 185, 129, 0.2)" }}
+                      >
+                        ✓ Approve (Pass)
+                      </button>
+                      <button
+                        onClick={() => {
+                          const reason = window.prompt("Reason for rejecting costing?", "Revisions needed");
+                          if (reason !== null && onRejectCosting) onRejectCosting(o.id, reason);
+                        }}
+                        style={{ background: "#EF4444", border: "none", color: "#FFFFFF", borderRadius: 6, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                      >
+                        Reject
+                      </button>
+                    </>
+                  ) : (
+                    <span style={{ fontSize: 11.5, color: "#92400E", fontWeight: 700, background: "#FEF3C7", padding: "5px 10px", borderRadius: 6 }}>
+                      Awaiting MD Sign-off
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {costingApprovedOrders.slice(0, 3).map(o => (
+              <div
+                key={o.id}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  background: "#F0FDF4",
+                  border: "1px solid #BBF7D0",
+                  borderRadius: 8,
+                  padding: "10px 16px",
+                  opacity: 0.9
+                }}
+              >
+                <div>
+                  <span
+                    onClick={() => onOpenOrder && onOpenOrder(o.id)}
+                    style={{ cursor: "pointer", fontWeight: 600, color: "#166534", textDecoration: "underline", fontSize: 12.5 }}
+                  >
+                    PO #{o.id} — {o.style} ({o.buyer})
+                  </span>
+                  <div style={{ fontSize: 11, color: "#15803D", marginTop: 2 }}>
+                    ✓ Approved by {o.costingApproval?.approvedBy || "MD"} ({o.costingApproval?.approvedDate || "Approved"}) · Status: Pass
+                  </div>
+                </div>
+                <span style={{ background: "#DCFCE7", color: "#166534", fontSize: 11, fontWeight: 800, padding: "3px 10px", borderRadius: 999 }}>
+                  ✓ Pass
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
       <Card>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#111827", marginBottom: 12 }}>
+          Buyer Stage Approvals & Tech Pack Receipt
+        </div>
         <GroupedTaskList rows={rows} onOpenOrder={onOpenOrder} emptyText="No approval items right now." />
       </Card>
     </div>
@@ -1093,7 +1233,7 @@ export function CompliancePage({
   onCycleCert,
   onOpenOrder
 }) {
-  const [activeTab, setActiveTab] = useState("certifications"); // "certifications" | "compliances" | "history"
+  const [activeTab, setActiveTab] = useState("compliances"); // "compliances" | "history"
   
   // Modals state
   const [showAddCertModal, setShowAddCertModal] = useState(false);
@@ -1368,25 +1508,6 @@ export function CompliancePage({
         </div>
         <div style={{ display: "flex", gap: 10 }}>
           <button
-            onClick={() => setShowAddCertModal(true)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              background: "#1F9E8D",
-              color: "#FFFFFF",
-              border: "none",
-              borderRadius: 8,
-              padding: "9px 16px",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: "pointer",
-              boxShadow: "0 1px 2px rgba(0,0,0,0.05)"
-            }}
-          >
-            <Plus size={15} /> Add Certification
-          </button>
-          <button
             onClick={() => setShowAddCompModal(true)}
             style={{
               display: "flex",
@@ -1408,30 +1529,7 @@ export function CompliancePage({
         </div>
       </div>
 
-      {/* KPI Cards Section */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, marginBottom: 12 }}>
-        <Card style={{ padding: "14px 16px", borderLeft: "4px solid #378ADD" }}>
-          <div style={{ fontSize: 11.5, color: "#8A8D98", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.3 }}>Total Certifications</div>
-          <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4, color: "#1B2130" }}>{certKpis.total}</div>
-        </Card>
-        <Card style={{ padding: "14px 16px", borderLeft: "4px solid #1F9E8D" }}>
-          <div style={{ fontSize: 11.5, color: "#8A8D98", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.3 }}>Active / Approved</div>
-          <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4, color: "#1F9E8D" }}>{certKpis.approved}</div>
-        </Card>
-        <Card style={{ padding: "14px 16px", borderLeft: "4px solid #F59E0B" }}>
-          <div style={{ fontSize: 11.5, color: "#8A8D98", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.3 }}>Expiring Soon</div>
-          <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4, color: "#D97706" }}>{certKpis.expiringSoon}</div>
-        </Card>
-        <Card style={{ padding: "14px 16px", borderLeft: "4px solid #DC2626" }}>
-          <div style={{ fontSize: 11.5, color: "#8A8D98", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.3 }}>Expired</div>
-          <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4, color: "#DC2626" }}>{certKpis.expired}</div>
-        </Card>
-        <Card style={{ padding: "14px 16px", borderLeft: "4px solid #8B5CF6" }}>
-          <div style={{ fontSize: 11.5, color: "#8A8D98", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.3 }}>Pending Review</div>
-          <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4, color: "#7C3AED" }}>{certKpis.pendingReview}</div>
-        </Card>
-      </div>
-
+      {/* Compliance KPI Cards Section */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
         <Card style={{ padding: "14px 16px", borderLeft: "4px solid #4F46E5" }}>
           <div style={{ fontSize: 11.5, color: "#8A8D98", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.3 }}>Compliance Requirements</div>
@@ -1453,25 +1551,6 @@ export function CompliancePage({
 
       {/* Main Tabs Navigation */}
       <div style={{ display: "flex", gap: 10, borderBottom: "2px solid #E5E7EB", marginBottom: 16 }}>
-        <button
-          onClick={() => setActiveTab("certifications")}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "10px 18px",
-            border: "none",
-            borderBottom: activeTab === "certifications" ? "3px solid #1F9E8D" : "3px solid transparent",
-            background: "none",
-            color: activeTab === "certifications" ? "#1F9E8D" : "#6B7280",
-            fontWeight: activeTab === "certifications" ? 700 : 500,
-            fontSize: 14,
-            cursor: "pointer",
-            marginBottom: -2
-          }}
-        >
-          <Award size={16} /> Certifications ({activeCerts.length})
-        </button>
         <button
           onClick={() => setActiveTab("compliances")}
           style={{
@@ -1508,7 +1587,7 @@ export function CompliancePage({
             marginBottom: -2
           }}
         >
-          <Archive size={16} /> Deleted / History ({deletedCerts.length + deletedCompliances.length})
+          <Archive size={16} /> Deleted / History ({deletedCompliances.length})
         </button>
       </div>
 
@@ -1940,62 +2019,6 @@ export function CompliancePage({
       {/* TAB 3: DELETED / HISTORY */}
       {activeTab === "history" && (
         <div>
-          {/* Deleted Certifications */}
-          <Card style={{ marginBottom: 18 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>
-                Deleted Certifications ({deletedCerts.length})
-              </div>
-              <span style={{ fontSize: 12, color: "#6B7280" }}>Soft-deleted certifications preserved for audit trail</span>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1.2fr 1fr 1fr 1fr 1.2fr 0.8fr", fontSize: 11.5, color: "#6B7280", padding: "0 4px 8px", borderBottom: "1px solid #E5E7EB" }}>
-              <div>Certification</div>
-              <div>Certificate No.</div>
-              <div>Buyer</div>
-              <div>Order</div>
-              <div>Status</div>
-              <div>Deleted At</div>
-              <div style={{ textAlign: "right" }}>Actions</div>
-            </div>
-
-            {deletedCerts.length === 0 ? (
-              <div style={{ padding: "18px 0", textAlign: "center", color: "#9CA3AF", fontSize: 12.5 }}>
-                No deleted certifications in archive.
-              </div>
-            ) : (
-              deletedCerts.map(c => (
-                <div
-                  key={c.id || c.key}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1.5fr 1.2fr 1fr 1fr 1fr 1.2fr 0.8fr",
-                    alignItems: "center",
-                    fontSize: 12.5,
-                    padding: "10px 4px",
-                    borderBottom: "1px solid #F3F4F6",
-                    opacity: 0.8
-                  }}
-                >
-                  <div style={{ textDecoration: "line-through", color: "#6B7280", fontWeight: 600 }}>{c.name}</div>
-                  <div style={{ fontFamily: "monospace", fontSize: 11 }}>{c.certNo || "—"}</div>
-                  <div>{c.buyer}</div>
-                  <div>{c.orderId || "—"}</div>
-                  <div><span style={{ fontSize: 11, color: "#6B7280" }}>{c.status}</span></div>
-                  <div style={{ fontSize: 11, color: "#9CA3AF" }}>{c.deletedAt ? new Date(c.deletedAt).toLocaleDateString() : "Archived"}</div>
-                  <div style={{ textAlign: "right" }}>
-                    <button
-                      onClick={() => onRestoreCertification(c.id || c.key)}
-                      style={{ background: "#ECFDF5", color: "#059669", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 11.5, fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 3 }}
-                    >
-                      <RotateCcw size={11} /> Restore
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </Card>
-
           {/* Deleted Compliances */}
           <Card>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
@@ -3918,6 +3941,15 @@ export function DepartmentDetail({
         <CardHeader title="Reporting structure & responsibilities" />
         <OrgChain roles={roles} />
       </Card>
+
+      {/* Department Performance & Employee KPI Tracking */}
+      <DepartmentPerformanceAndKPI
+        deptName={deptName}
+        roles={roles}
+        allDeptTasks={allDeptTasks}
+        doneTasks={doneTasks}
+        processTasks={processTasks}
+      />
 
       {/* Linked Tasks: 1. Process Tasks */}
       <Card style={{ marginBottom: 18 }}>

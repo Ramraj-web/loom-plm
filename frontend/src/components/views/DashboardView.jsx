@@ -319,7 +319,10 @@ export function Dashboard({
   notifications = [],
   leaveRequests = [],
   debitNotes = [],
-  capas = []
+  capas = [],
+  onApproveCosting,
+  onRejectCosting,
+  role = {}
 }) {
   const activeOrders = useMemo(() => orders.filter(o => o.isDeleted !== true && o.completed !== true), [orders]);
   const completedOrders = useMemo(() => orders.filter(o => o.completed === true && o.isDeleted !== true), [orders]);
@@ -685,6 +688,67 @@ export function Dashboard({
         onOpenOrder={onOpenOrder}
         onNavigate={onNavigate}
       />
+
+      {(() => {
+        const costingPending = orders.filter(o => o.costingApproval && o.costingApproval.status === "submitted");
+        if (costingPending.length === 0) return null;
+        return (
+          <Card style={{ marginBottom: 16, borderLeft: "4px solid #F59E0B", background: "#FFFDF7" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <div>
+                <div style={{ fontSize: 13.5, fontWeight: 700, color: "#92400E", display: "flex", alignItems: "center", gap: 6 }}>
+                  <span>⚠️ Costing Approval Sign-off Requests ({costingPending.length})</span>
+                </div>
+                <div style={{ fontSize: 11.5, color: "#78350F", marginTop: 2 }}>
+                  Merchandiser submitted costing sheets requiring sign-off from DGM / Managing Director
+                </div>
+              </div>
+              <button
+                onClick={() => onNavigate && onNavigate("approvals")}
+                style={{ background: "#F59E0B", color: "#FFFFFF", border: "none", borderRadius: 6, padding: "5px 12px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}
+              >
+                Go to Approvals →
+              </button>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 10 }}>
+              {costingPending.map(o => (
+                <div key={o.id} style={{ background: "#FFFFFF", border: "1px solid #FDE68A", borderRadius: 8, padding: "10px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 12.5, color: "#1E293B" }}>
+                      PO #{o.id} — {o.style}
+                    </div>
+                    <div style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>
+                      Buyer: {o.buyer} · Rate: <b>₹{(o.costingApproval?.grandTotal || 0).toLocaleString()}</b> / pc
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button
+                      onClick={() => onOpenOrder && onOpenOrder(o.id)}
+                      style={{ background: "#F1F5F9", color: "#334155", border: "none", borderRadius: 6, padding: "5px 9px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}
+                    >
+                      View Sheet
+                    </button>
+                    {role?.dept === "Executive" || role?.label?.toLowerCase().includes("md") || role?.label?.toLowerCase().includes("managing director") ? (
+                      onApproveCosting && (
+                        <button
+                          onClick={() => onApproveCosting(o.id, role?.label || "Managing Director (MD)")}
+                          style={{ background: "#10B981", color: "#FFFFFF", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", boxShadow: "0 1px 2px rgba(16, 185, 129, 0.2)" }}
+                        >
+                          ✓ Pass
+                        </button>
+                      )
+                    ) : (
+                      <span style={{ fontSize: 11, color: "#92400E", fontWeight: 700, background: "#FEF3C7", padding: "4px 8px", borderRadius: 6 }}>
+                        Awaiting MD
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        );
+      })()}
 
       <Card style={{ marginBottom: 16 }}>
         <CardHeader title="Critical alerts" action="Notifications" onAction={() => onNavigate("notifications")} />

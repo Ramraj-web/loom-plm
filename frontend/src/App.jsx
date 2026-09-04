@@ -11,7 +11,7 @@ import {
   INITIAL_FINANCIALS, INITIAL_CERTIFICATIONS, INITIAL_COMPLIANCES, INITIAL_DEBIT_NOTES, INITIAL_CAPAS,
   INITIAL_ORDERS, INITIAL_NOTIFICATIONS, VAP_SUPPLIERS, buildCostingRows, makeStages, initPreProd,
   NOTIFICATION_PRIORITY_STYLE, formatTimeAgo, DEFAULT_DEPT_DESCRIPTIONS, INITIAL_SUPPLIERS, INITIAL_SUPPLIER_WORK,
-  INITIAL_CUSTOM_TASKS
+  INITIAL_CUSTOM_TASKS, INITIAL_DEPARTMENT_CHECKLISTS
 } from "./constants/loomData.js";
 import { statusPill } from "./components/common/CommonUI.jsx";
 import { OrderWorkspace } from "./components/order/OrderWorkspace.jsx";
@@ -24,6 +24,7 @@ import {
   FinanceEntryPage, ReportsPage, InsightsPage, SupplierPerformancePage,
   NotificationsPage, DebitNotesPage, CapasPage, ExecutiveOverviewPage, SettingsPage
 } from "./components/views/InsightsViews.jsx";
+import { MyChecklistPage } from "./components/views/MyChecklistPage.jsx";
 
 export default function LoomPLM() {
   const [orders, setOrders] = useState(() =>
@@ -61,6 +62,20 @@ export default function LoomPLM() {
   const [capas, setCapas] = useState(INITIAL_CAPAS);
   const [customTasks, setCustomTasks] = useState(() => JSON.parse(JSON.stringify(INITIAL_CUSTOM_TASKS)));
   const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
+
+  const [departmentChecklists, setDepartmentChecklists] = useState(() => {
+    try {
+      const saved = localStorage.getItem("loom_department_checklists");
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return INITIAL_DEPARTMENT_CHECKLISTS;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("loom_department_checklists", JSON.stringify(departmentChecklists));
+    } catch (e) {}
+  }, [departmentChecklists]);
 
   const [selectedDate, setSelectedDate] = useState("2026-05-12");
   const [searchQuery, setSearchQuery] = useState("");
@@ -161,7 +176,7 @@ export default function LoomPLM() {
       try {
         const dbCompliances = await resourcesApi.list("compliances", "?all=true");
         if (!cancelled && Array.isArray(dbCompliances) && dbCompliances.length > 0) {
-          setCompliances(dbCompliances);
+          setCompliances(dbCompliances.filter(c => c.id !== "comp-2" && !c.name?.toLowerCase().includes("buyer chemical restriction")));
         }
       } catch (e) {}
 
@@ -854,6 +869,35 @@ export default function LoomPLM() {
     try { resourcesApi.remove("tasks", id); } catch (e) {}
   };
 
+  const handleAddChecklistItem = (dept, item) => {
+    setDepartmentChecklists(prev => {
+      const list = prev[dept] || [];
+      const newItem = {
+        id: `chk-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        title: item.title,
+        dueDate: item.dueDate || "Today",
+        done: false,
+      };
+      return { ...prev, [dept]: [newItem, ...list] };
+    });
+  };
+
+  const handleToggleChecklistItem = (dept, itemId) => {
+    setDepartmentChecklists(prev => {
+      const list = prev[dept] || [];
+      const updated = list.map(item => item.id === itemId ? { ...item, done: !item.done } : item);
+      return { ...prev, [dept]: updated };
+    });
+  };
+
+  const handleDeleteChecklistItem = (dept, itemId) => {
+    setDepartmentChecklists(prev => {
+      const list = prev[dept] || [];
+      const updated = list.filter(item => item.id !== itemId);
+      return { ...prev, [dept]: updated };
+    });
+  };
+
   const addOrder = (newOrder) => {
     const fullOrder = {
       template: "90",
@@ -1183,6 +1227,230 @@ export default function LoomPLM() {
     });
   };
 
+  const addOrderProductionLog = (id, logEntry) => {
+    setOrders(prev => prev.map(o => {
+      if (o.id !== id) return o;
+      const currentLogs = o.productionLogs || [
+        {
+          id: "init-log-1",
+          date: "04/09/2026",
+          line: "33",
+          outputPcs: 33,
+          hours: "8h",
+          efficiency: "—"
+        }
+      ];
+      const updatedLogs = [logEntry, ...currentLogs];
+      const updated = { ...o, productionLogs: updatedLogs };
+      try { resourcesApi.update("orders", o.id, updated); } catch (e) {}
+      return updated;
+    }));
+  };
+
+  const deleteOrderProductionLog = (id, logId) => {
+    setOrders(prev => prev.map(o => {
+      if (o.id !== id) return o;
+      const currentLogs = o.productionLogs || [
+        {
+          id: "init-log-1",
+          date: "04/09/2026",
+          line: "33",
+          outputPcs: 33,
+          hours: "8h",
+          efficiency: "—"
+        }
+      ];
+      const updatedLogs = currentLogs.filter(l => l.id !== logId);
+      const updated = { ...o, productionLogs: updatedLogs };
+      try { resourcesApi.update("orders", o.id, updated); } catch (e) {}
+      return updated;
+    }));
+  };
+
+  const updateOrderInspectionData = (id, inspectionData) => {
+    setOrders(prev => prev.map(o => {
+      if (o.id !== id) return o;
+      const updated = { ...o, inspectionData: { ...(o.inspectionData || {}), ...inspectionData } };
+      try { resourcesApi.update("orders", o.id, updated); } catch (e) {}
+      return updated;
+    }));
+  };
+
+  const updateOrderCertificates = (id, certificatesData) => {
+    setOrders(prev => prev.map(o => {
+      if (o.id !== id) return o;
+      const updated = { ...o, certificatesData: { ...(o.certificatesData || {}), ...certificatesData } };
+      try { resourcesApi.update("orders", o.id, updated); } catch (e) {}
+      return updated;
+    }));
+  };
+
+  const updateOrderQuotation = (id, quotationData) => {
+    setOrders(prev => prev.map(o => {
+      if (o.id !== id) return o;
+      const updated = { ...o, quotation: { ...(o.quotation || {}), ...quotationData } };
+      try { resourcesApi.update("orders", o.id, updated); } catch (e) {}
+      return updated;
+    }));
+  };
+
+  const submitOrderQuotation = (id, quotationData) => {
+    setOrders(prev => prev.map(o => {
+      if (o.id !== id) return o;
+      const updated = {
+        ...o,
+        quotation: {
+          ...(o.quotation || {}),
+          ...quotationData,
+          status: "pending",
+          submittedAt: new Date().toISOString()
+        }
+      };
+      try { resourcesApi.update("orders", o.id, updated); } catch (e) {}
+      return updated;
+    }));
+
+    pushNotification({
+      eventKey: `quotation-submitted-${id}`,
+      type: "approval",
+      title: "Quotation Approval Required",
+      message: `Outsourcing quotation (₹${Math.round(quotationData.totalValue || 0).toLocaleString()}) submitted for order ${id}. Needs review.`,
+      relatedModule: "approvals",
+      relatedId: id,
+      priority: "high"
+    });
+  };
+
+  const approveOrderQuotation = (id, approverName) => {
+    setOrders(prev => prev.map(o => {
+      if (o.id !== id) return o;
+      const updated = {
+        ...o,
+        quotation: {
+          ...(o.quotation || {}),
+          status: "approved",
+          approvedBy: approverName,
+          approvedAt: new Date().toISOString()
+        }
+      };
+      try { resourcesApi.update("orders", o.id, updated); } catch (e) {}
+      return updated;
+    }));
+
+    pushNotification({
+      eventKey: `quotation-approved-${id}`,
+      type: "approval",
+      title: "Quotation Approved",
+      message: `Outsourcing quotation approved by ${approverName || "MD"} for order ${id}.`,
+      relatedModule: "orders",
+      relatedId: id,
+      priority: "low"
+    });
+  };
+
+  const rejectOrderQuotation = (id) => {
+    setOrders(prev => prev.map(o => {
+      if (o.id !== id) return o;
+      const updated = {
+        ...o,
+        quotation: {
+          ...(o.quotation || {}),
+          status: "draft"
+        }
+      };
+      try { resourcesApi.update("orders", o.id, updated); } catch (e) {}
+      return updated;
+    }));
+  };
+
+  const submitOrderCosting = (id, costingData = {}) => {
+    const timestamp = new Date().toLocaleDateString();
+    setOrders(prev => prev.map(o => {
+      if (o.id !== id) return o;
+      const updated = {
+        ...o,
+        costingApproval: {
+          status: "submitted",
+          submittedAt: new Date().toISOString(),
+          submittedDate: timestamp,
+          grandTotal: costingData.grandTotal || 0,
+          currency: costingData.currency || "INR",
+          submittedBy: role.label || "Merchandiser"
+        }
+      };
+      try { resourcesApi.update("orders", o.id, updated); } catch (e) {}
+      return updated;
+    }));
+
+    pushNotification({
+      eventKey: `costing-submitted-${id}`,
+      type: "approval",
+      title: "Costing Sign-off Required",
+      message: `Costing approval requested for order ${id}. Requires sign-off from DGM / Managing Director.`,
+      relatedModule: "executiveOverview",
+      relatedId: id,
+      priority: "high"
+    });
+  };
+
+  const approveOrderCosting = (id, approverName) => {
+    const approver = approverName || "Managing Director (MD)";
+    const timestamp = new Date().toLocaleDateString();
+    setOrders(prev => prev.map(o => {
+      if (o.id !== id) return o;
+      const updated = {
+        ...o,
+        costingApproval: {
+          ...(o.costingApproval || {}),
+          status: "approved",
+          approvedBy: approver,
+          approvedAt: new Date().toISOString(),
+          approvedDate: timestamp
+        }
+      };
+      try { resourcesApi.update("orders", o.id, updated); } catch (e) {}
+      return updated;
+    }));
+
+    pushNotification({
+      eventKey: `costing-approved-${id}`,
+      type: "approval",
+      title: "Costing Approved",
+      message: `Costing sign-off approved by ${approver} for order ${id}. Status: Pass.`,
+      relatedModule: "orders",
+      relatedId: id,
+      priority: "low"
+    });
+  };
+
+  const rejectOrderCosting = (id, reason) => {
+    setOrders(prev => prev.map(o => {
+      if (o.id !== id) return o;
+      const updated = {
+        ...o,
+        costingApproval: {
+          ...(o.costingApproval || {}),
+          status: "rejected",
+          rejectedBy: role.label || "Managing Director (MD)",
+          rejectedAt: new Date().toISOString(),
+          reason: reason || "Costing revisions required"
+        }
+      };
+      try { resourcesApi.update("orders", o.id, updated); } catch (e) {}
+      return updated;
+    }));
+
+    pushNotification({
+      eventKey: `costing-rejected-${id}`,
+      type: "approval",
+      title: "Costing Rejected",
+      message: `Costing rejected for order ${id} by MD. Please revise and resubmit.`,
+      relatedModule: "orders",
+      relatedId: id,
+      priority: "high"
+    });
+  };
+
   const navigate = (key) => { setView(key); };
 
   const openOrder = (id) => {
@@ -1231,6 +1499,7 @@ export default function LoomPLM() {
         { key: "executiveOverview", label: "Executive Overview", icon: TrendingUp },
         { key: "orders", label: "Orders", icon: Package },
         { key: "approvals", label: "Approvals", icon: ClipboardCheck },
+        { key: "myChecklist", label: "My checklist", icon: ClipboardList },
       ]
     },
     {
@@ -1248,6 +1517,7 @@ export default function LoomPLM() {
       { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
       ...(canSeeAll ? [{ key: "orders", label: "Orders", icon: Package }] : []),
       { key: "tasks", label: "My tasks", icon: CheckSquare },
+      { key: "myChecklist", label: "My checklist", icon: ClipboardList },
       ...(canSeeAll ? [{ key: "calendar", label: "Timeline / calendar", icon: Calendar }] : []),
       ...(canSeeAll ? [{ key: "approvals", label: "Approvals", icon: ClipboardCheck }] : []),
     ]},
@@ -1257,7 +1527,7 @@ export default function LoomPLM() {
         : [{ key: "myDepartment", label: "My department", icon: Users }]),
       // ...(canSeeAll || ["Cutting", "Production"].includes(role.dept) ? [{ key: "production", label: "Production", icon: Factory }] : []),
       // ...(canSeeAll || role.dept === "Quality" ? [{ key: "quality", label: "Quality", icon: ShieldCheck }] : []),
-      ...(canSeeAll || role.dept === "Compliance & Certification" ? [{ key: "compliance", label: "Compliance & certs", icon: ShieldCheck }] : []),
+      ...(canSeeAll || role.dept === "Compliance & Certification" ? [{ key: "compliance", label: "Certificates", icon: ShieldCheck }] : []),
       { key: "attendance", label: "Attendance & leave", icon: UserCheck },
       ...(canSeeAll || role.dept === "Finance" ? [{ key: "finance", label: "Finance data", icon: Landmark }] : []),
     ]},
@@ -1442,16 +1712,72 @@ export default function LoomPLM() {
   };
 
   const handleUpdateWorkStatus = async (workId, newStatus, completedDate) => {
-    const updatedWork = supplierWork.map(w => {
-      if (w.id === workId) {
-        return {
-          ...w,
-          status: newStatus,
-          completedDate: completedDate !== undefined ? completedDate : w.completedDate
-        };
-      }
-      return w;
-    });
+    let updatedWork;
+    const exists = supplierWork.some(w => w.id === workId);
+
+    if (exists) {
+      updatedWork = supplierWork.map(w => {
+        if (w.id === workId) {
+          return {
+            ...w,
+            status: newStatus,
+            completedDate: completedDate !== undefined ? completedDate : w.completedDate
+          };
+        }
+        return w;
+      });
+    } else if (workId.startsWith("stage-")) {
+      // Derived stage item id format: stage-${orderId}-${idx}
+      const parts = workId.split("-");
+      const stageIdxStr = parts.pop();
+      const stageIdx = parseInt(stageIdxStr, 10);
+      const orderId = parts.slice(1).join("-");
+
+      const parentOrder = orders.find(o => o.id === orderId);
+      const stage = parentOrder?.stages?.[stageIdx];
+
+      const newEntry = {
+        id: workId,
+        orderId,
+        supplierName: stage?.supplier || parentOrder?.supplier || "",
+        stageIdx,
+        dept: stage?.dept || "VAP",
+        taskName: stage?.name || "Stage Task",
+        purpose: stage?.dept === "VAP" ? "Printing & Embroidery" : "Fabric Processing",
+        description: `${stage?.name || 'Task'} for ${orderId} ${parentOrder?.style || ''}`,
+        assignedDate: parentOrder?.createdAt ? new Date(parentOrder.createdAt).toISOString().split("T")[0] : "2026-05-01",
+        expectedDate: stage?.planned || parentOrder?.ship || "—",
+        completedDate: newStatus === "Completed" ? (completedDate || new Date().toISOString().split("T")[0]) : null,
+        status: newStatus,
+        qualityStatus: "Pending",
+        qualityIssueDescription: "",
+        createdAt: parentOrder?.createdAt || new Date().toISOString(),
+        isDeleted: false
+      };
+
+      updatedWork = [newEntry, ...supplierWork];
+
+      // Also sync order stage status
+      setOrders(prev => prev.map(o => {
+        if (o.id === orderId && o.stages && o.stages[stageIdx]) {
+          const stages = o.stages.map((st, i) => {
+            if (i === stageIdx) {
+              return {
+                ...st,
+                status: newStatus === "Completed" ? "done" : newStatus === "In Progress" ? "in_progress" : "pending",
+                reason: newStatus === "Delayed" ? (st.reason || "Delayed past due") : (st.reason === "Delayed past due" ? null : st.reason)
+              };
+            }
+            return st;
+          });
+          return { ...o, stages };
+        }
+        return o;
+      }));
+    } else {
+      updatedWork = supplierWork;
+    }
+
     setSupplierWork(updatedWork);
     try {
       if (window.storage?.set) {
@@ -1459,7 +1785,13 @@ export default function LoomPLM() {
       }
       if (resourcesApi?.update) {
         const target = updatedWork.find(w => w.id === workId);
-        if (target) await resourcesApi.update("supplierWork", workId, target).catch(() => {});
+        if (target) {
+          if (exists) {
+            await resourcesApi.update("supplierWork", workId, target).catch(() => {});
+          } else {
+            await resourcesApi.create("supplierWork", target).catch(() => {});
+          }
+        }
       }
     } catch (err) {
       console.warn("Failed to persist work status update:", err);
@@ -1467,16 +1799,70 @@ export default function LoomPLM() {
   };
 
   const handleUpdateWorkQuality = async (workId, qualityStatus, issueDesc) => {
-    const updatedWork = supplierWork.map(w => {
-      if (w.id === workId) {
-        return {
-          ...w,
-          qualityStatus,
-          qualityIssueDescription: issueDesc || ""
-        };
-      }
-      return w;
-    });
+    let updatedWork;
+    const exists = supplierWork.some(w => w.id === workId);
+
+    if (exists) {
+      updatedWork = supplierWork.map(w => {
+        if (w.id === workId) {
+          return {
+            ...w,
+            qualityStatus,
+            qualityIssueDescription: issueDesc || ""
+          };
+        }
+        return w;
+      });
+    } else if (workId.startsWith("stage-")) {
+      const parts = workId.split("-");
+      const stageIdxStr = parts.pop();
+      const stageIdx = parseInt(stageIdxStr, 10);
+      const orderId = parts.slice(1).join("-");
+
+      const parentOrder = orders.find(o => o.id === orderId);
+      const stage = parentOrder?.stages?.[stageIdx];
+
+      const newEntry = {
+        id: workId,
+        orderId,
+        supplierName: stage?.supplier || parentOrder?.supplier || "",
+        stageIdx,
+        dept: stage?.dept || "VAP",
+        taskName: stage?.name || "Stage Task",
+        purpose: stage?.dept === "VAP" ? "Printing & Embroidery" : "Fabric Processing",
+        description: `${stage?.name || 'Task'} for ${orderId} ${parentOrder?.style || ''}`,
+        assignedDate: parentOrder?.createdAt ? new Date(parentOrder.createdAt).toISOString().split("T")[0] : "2026-05-01",
+        expectedDate: stage?.planned || parentOrder?.ship || "—",
+        completedDate: stage?.status === "done" ? parentOrder?.ship : null,
+        status: stage?.status === "done" ? "Completed" : "Pending",
+        qualityStatus,
+        qualityIssueDescription: issueDesc || "",
+        createdAt: parentOrder?.createdAt || new Date().toISOString(),
+        isDeleted: false
+      };
+
+      updatedWork = [newEntry, ...supplierWork];
+
+      // Also sync order stage reason for quality issues
+      setOrders(prev => prev.map(o => {
+        if (o.id === orderId && o.stages && o.stages[stageIdx]) {
+          const stages = o.stages.map((st, i) => {
+            if (i === stageIdx) {
+              return {
+                ...st,
+                reason: qualityStatus === "Issue" ? (issueDesc || "Quality rework") : (st.reason === "Quality rework" ? null : st.reason)
+              };
+            }
+            return st;
+          });
+          return { ...o, stages };
+        }
+        return o;
+      }));
+    } else {
+      updatedWork = supplierWork;
+    }
+
     setSupplierWork(updatedWork);
     try {
       if (window.storage?.set) {
@@ -1484,7 +1870,13 @@ export default function LoomPLM() {
       }
       if (resourcesApi?.update) {
         const target = updatedWork.find(w => w.id === workId);
-        if (target) await resourcesApi.update("supplierWork", workId, target).catch(() => {});
+        if (target) {
+          if (exists) {
+            await resourcesApi.update("supplierWork", workId, target).catch(() => {});
+          } else {
+            await resourcesApi.create("supplierWork", target).catch(() => {});
+          }
+        }
       }
     } catch (err) {
       console.warn("Failed to persist work quality update:", err);
@@ -1507,11 +1899,22 @@ export default function LoomPLM() {
         onPreProdField={updatePreProdField}
         onPreProdSubmit={submitPreProdDoc}
         onPreProdApprove={approvePreProdDoc}
+        onUpdateQuotation={updateOrderQuotation}
+        onSubmitQuotation={submitOrderQuotation}
+        onApproveQuotation={approveOrderQuotation}
+        onRejectQuotation={rejectOrderQuotation}
+        onSubmitCosting={submitOrderCosting}
+        onApproveCosting={approveOrderCosting}
+        onRejectCosting={rejectOrderCosting}
         certifications={certifications}
         compliances={compliances}
         suppliers={suppliers}
         onAssignSupplier={handleAssignSupplier}
         onAssignWork={handleAssignWork}
+        onAddProductionLog={addOrderProductionLog}
+        onDeleteProductionLog={deleteOrderProductionLog}
+        onUpdateInspectionData={updateOrderInspectionData}
+        onUpdateCertificates={updateOrderCertificates}
         allOrders={orders}
       />
     );
@@ -1569,10 +1972,28 @@ export default function LoomPLM() {
         onOpenOrder={openOrder}
       />
     );
+  } else if (view === "myChecklist") {
+    content = (
+      <MyChecklistPage
+        role={role}
+        checklists={departmentChecklists}
+        onAddChecklistItem={handleAddChecklistItem}
+        onToggleChecklistItem={handleToggleChecklistItem}
+        onDeleteChecklistItem={handleDeleteChecklistItem}
+      />
+    );
   } else if (view === "calendar" && canSeeAll) {
     content = <CalendarPage orders={orders} onOpenOrder={openOrder} />;
   } else if (view === "approvals" && canSeeAll) {
-    content = <ApprovalsPage orders={orders} onOpenOrder={openOrder} />;
+    content = (
+      <ApprovalsPage
+        orders={orders}
+        onOpenOrder={openOrder}
+        onApproveCosting={approveOrderCosting}
+        onRejectCosting={rejectOrderCosting}
+        role={role}
+      />
+    );
   } else if (view === "departments" && canSeeAll) {
     content = (
       <DepartmentsPage 
@@ -1654,6 +2075,8 @@ export default function LoomPLM() {
         roster={roster}
         onOpenOrder={openOrder}
         onNavigate={navigate}
+        onApproveCosting={approveOrderCosting}
+        onRejectCosting={rejectOrderCosting}
       />
     );
   } else if (view === "settings") {
@@ -1682,6 +2105,9 @@ export default function LoomPLM() {
         leaveRequests={leaveRequests}
         debitNotes={debitNotes}
         capas={capas}
+        onApproveCosting={approveOrderCosting}
+        onRejectCosting={rejectOrderCosting}
+        role={role}
       />
     );
   } else {

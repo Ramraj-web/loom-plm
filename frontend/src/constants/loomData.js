@@ -1,6 +1,6 @@
 import {
   FileText, ClipboardList, Package, Layers, CheckCircle2, Warehouse, ShieldCheck,
-  Shirt, Scissors, Palette, Factory, Truck, Users, Calendar, Radio, TrendingUp, ClipboardCheck
+  Shirt, Scissors, Palette, Factory, Truck, Users, Calendar, Radio, TrendingUp, ClipboardCheck, Zap
 } from "lucide-react";
 
 export const SHIPMENT_PERFORMANCE = [
@@ -1163,46 +1163,157 @@ export const DEPT_ICONS = {
 };
 
 export const DOC_TABS_CONFIG = {
-  "Files": ["Techpacks", "Operational Breakdown (OB)", "Updated guidelines", "Pattern Files", "CAD markers", "Stage Uploaded Files"],
+  "Files": [
+    "Techpacks",
+    "PO Sheet",
+    "Program Sheet",
+    "Operational Breakdown (OB)",
+    "Points of measure",
+    "Pattern Files",
+    "CAD markers",
+    "Stage Uploaded Files"
+  ],
   "Order Sheet": ["Order Sheet"],
   "BOMs & POs": ["Fabric BOM", "Trims BOM", "Fabric PO", "Trims PO"],
   "Costing": ["Costing Sheet"],
   "RM Delivery": ["GRN / Delivery Challan", "Fabric Inspection Report"],
   "Sampling": ["Fit Sample Proof", "PP Sample Proof", "Size Set Proof", "TOP Sample Proof", "Testing Sample Proof"],
   "Pre-Production": [],
-  "Compliance & Certs": [],
+  "Quotation": [],
   "Production": ["Cutting Report", "Sewing Output Report"],
   "Inspection": ["Inline Inspection Report", "Final Inspection Report"],
   "Final OCR": ["OCR Report", "Dispatch Proof"],
+  "Certificates": [],
 };
 export const DOC_TAB_NAMES = Object.keys(DOC_TABS_CONFIG);
 export const DOC_TAB_ICONS = {
   "Files": FileText, "Order Sheet": ClipboardList, "BOMs & POs": Package, "Costing": TrendingUp,
-  "RM Delivery": Truck, "Sampling": Layers, "Pre-Production": ClipboardCheck, "Compliance & Certs": ShieldCheck, "Production": Factory, "Inspection": ShieldCheck, "Final OCR": CheckCircle2,
+  "RM Delivery": Truck, "Sampling": Layers, "Pre-Production": ClipboardCheck, "Quotation": Zap, "Production": Factory, "Inspection": ShieldCheck, "Final OCR": CheckCircle2, "Certificates": ShieldCheck,
 };
 export const CUSTOMIZABLE_TABS = new Set(["BOMs & POs", "RM Delivery", "Sampling", "Files"]);
 export const STAGE_CHAT_TABS = ["RM Delivery", "Sampling", "Inspection", "Final OCR"];
 
 export const TAB_ALLOWED_DEPTS = {
-  "Files": ["Merchandising", "Sample", "CAD"],
+  "Files": ["Merchandising", "Sample", "CAD", "Production"],
   "BOMs & POs": ["Purchase – Fabric", "Purchase – Trims"],
   "Costing": ["Merchandising", "Finance"],
   "RM Delivery": ["Purchase – Fabric", "Purchase – Trims", "Warehouse", "Store"],
   "Sampling": ["Sample"],
   "Pre-Production": ["Merchandising", "Production Planning"],
-  "Compliance & Certs": ["Compliance & Certification", "Merchandising", "Quality"],
+  "Quotation": ["Merchandising", "VAP", "Executive", "Finance"],
   "Production": ["Cutting", "Production", "VAP"],
   "Inspection": ["Quality"],
   "Final OCR": ["Logistics & Documentation", "Production"],
+  "Certificates": ["Compliance & Certification", "Merchandising", "Quality"],
+};
+
+/**
+ * Metadata defining ownership badge for each document across tabs
+ */
+export const DOC_ITEM_METADATA = {
+  // Files tab
+  "Techpacks": { dept: "All depts — view only", color: "#15803D", bg: "#DCFCE7", border: "#BBF7D0" },
+  "PO Sheet": { dept: "Merchandising", color: "#4338CA", bg: "#EEF2FF", border: "#C7D2FE" },
+  "Program Sheet": { dept: "Merchandising", color: "#4338CA", bg: "#EEF2FF", border: "#C7D2FE" },
+  "Operational Breakdown (OB)": { dept: "Production", color: "#4338CA", bg: "#EEF2FF", border: "#C7D2FE" },
+  "Points of measure": { dept: "Merchandising", color: "#4338CA", bg: "#EEF2FF", border: "#C7D2FE" },
+  "Pattern Files": { dept: "CAD", color: "#4338CA", bg: "#EEF2FF", border: "#C7D2FE" },
+  "CAD markers": { dept: "CAD", color: "#4338CA", bg: "#EEF2FF", border: "#C7D2FE" },
+  "Stage Uploaded Files": { dept: "Merchandising", color: "#4338CA", bg: "#EEF2FF", border: "#C7D2FE" },
+  "Updated guidelines": { dept: "Merchandising", color: "#4338CA", bg: "#EEF2FF", border: "#C7D2FE" },
+
+  // Order Sheet & BOMs
+  "Order Sheet": { dept: "Merchandising", color: "#4338CA", bg: "#EEF2FF", border: "#C7D2FE" },
+  "Fabric BOM": { dept: "Purchase – Fabric", color: "#4338CA", bg: "#EEF2FF", border: "#C7D2FE" },
+  "Trims BOM": { dept: "Purchase – Trims", color: "#4338CA", bg: "#EEF2FF", border: "#C7D2FE" },
+  "Fabric PO": { dept: "Purchase – Fabric", color: "#4338CA", bg: "#EEF2FF", border: "#C7D2FE" },
+  "Trims PO": { dept: "Purchase – Trims", color: "#4338CA", bg: "#EEF2FF", border: "#C7D2FE" },
+
+  // Costing & RM Delivery
+  "Costing Sheet": { dept: "Costing / Merchandising", color: "#4338CA", bg: "#EEF2FF", border: "#C7D2FE" },
+  "GRN / Delivery Challan": { dept: "Warehouse / Store", color: "#4338CA", bg: "#EEF2FF", border: "#C7D2FE" },
+  "Fabric Inspection Report": { dept: "Quality", color: "#6D28D9", bg: "#F5F3FF", border: "#DDD6FE" },
+
+  // Sampling
+  "Fit Sample Proof": { dept: "Sample", color: "#4338CA", bg: "#EEF2FF", border: "#C7D2FE" },
+  "PP Sample Proof": { dept: "Sample", color: "#4338CA", bg: "#EEF2FF", border: "#C7D2FE" },
+  "Size Set Proof": { dept: "Sample", color: "#4338CA", bg: "#EEF2FF", border: "#C7D2FE" },
+  "TOP Sample Proof": { dept: "Sample", color: "#4338CA", bg: "#EEF2FF", border: "#C7D2FE" },
+  "Testing Sample Proof": { dept: "Quality / Lab", color: "#6D28D9", bg: "#F5F3FF", border: "#DDD6FE" },
+
+  // Production & Inspection & OCR
+  "Cutting Report": { dept: "Cutting", color: "#6D28D9", bg: "#F5F3FF", border: "#DDD6FE" },
+  "Sewing Output Report": { dept: "Production", color: "#4338CA", bg: "#EEF2FF", border: "#C7D2FE" },
+  "Inline Inspection Report": { dept: "Quality", color: "#6D28D9", bg: "#F5F3FF", border: "#DDD6FE" },
+  "Final Inspection Report": { dept: "Quality", color: "#6D28D9", bg: "#F5F3FF", border: "#DDD6FE" },
+  "OCR Report": { dept: "Logistics", color: "#4338CA", bg: "#EEF2FF", border: "#C7D2FE" },
+  "Dispatch Proof": { dept: "Logistics", color: "#4338CA", bg: "#EEF2FF", border: "#C7D2FE" },
 };
 
 export const PRE_PROD_DOC_TYPES = [
-  { key: "techPack", label: "Tech Pack", fields: [{ key: "styleNo", label: "Style No." }, { key: "revisionNo", label: "Revision No." }, { key: "constructionNotes", label: "Key construction notes" }] },
-  { key: "poSheet", label: "PO Sheet", fields: [{ key: "poNumber", label: "PO Number" }, { key: "poQty", label: "PO Qty", type: "number" }, { key: "poDate", label: "PO Date" }] },
-  { key: "programSheet", label: "Program Sheet", fields: [{ key: "cuttingStart", label: "Cutting start date" }, { key: "targetShipWeek", label: "Target ship week" }] },
-  { key: "cmtPlanning", label: "CMT Planning", fields: [{ key: "cmtRate", label: "CMT rate / pc ($)", type: "number" }, { key: "targetEfficiency", label: "Target efficiency (%)", type: "number" }, { key: "lineAllocated", label: "Line allocated" }] },
-  { key: "accPlanning", label: "ACC Planning", fields: [{ key: "accessoriesList", label: "Key accessories" }, { key: "leadTimeDays", label: "Lead time (days)", type: "number" }] },
-  { key: "grading", label: "Grading", fields: [{ key: "gradedSizes", label: "Graded size range" }, { key: "gradeRuleRef", label: "Grade rule reference" }] },
+  {
+    key: "techPack",
+    label: "Tech Pack",
+    hint: 'Upload "Techpacks" in the Files tab — it will link here automatically.',
+    hasUpload: false,
+    fields: [
+      { key: "styleNo", label: "Style No." },
+      { key: "revisionNo", label: "Revision No." },
+      { key: "constructionNotes", label: "Key construction notes", fullWidth: true }
+    ]
+  },
+  {
+    key: "poSheet",
+    label: "PO Sheet",
+    hint: 'Upload "PO Sheet" in the Files tab — it will link here automatically.',
+    hasUpload: false,
+    fields: [
+      { key: "poNumber", label: "PO Number" },
+      { key: "poQty", label: "PO Qty", type: "number" },
+      { key: "poDate", label: "PO Date", halfWidth: true }
+    ]
+  },
+  {
+    key: "programSheet",
+    label: "Program Sheet",
+    hint: 'Upload "Program Sheet" in the Files tab — it will link here automatically.',
+    hasUpload: false,
+    fields: [
+      { key: "cuttingStart", label: "Cutting start date" },
+      { key: "targetShipWeek", label: "Target ship week" }
+    ]
+  },
+  {
+    key: "cmtPlanning",
+    label: "CMT Planning",
+    hasUpload: true,
+    uploadLabel: "Upload CMT Planning",
+    fields: [
+      { key: "cmtRate", label: "CMT rate / pc (₹)", type: "number" },
+      { key: "targetEfficiency", label: "Target efficiency (%)", type: "number" },
+      { key: "lineAllocated", label: "Line allocated", halfWidth: true }
+    ]
+  },
+  {
+    key: "accPlanning",
+    label: "ACC Planning",
+    hasUpload: true,
+    uploadLabel: "Upload ACC Planning",
+    fields: [
+      { key: "accessoriesList", label: "Key accessories" },
+      { key: "leadTimeDays", label: "Lead time (days)", type: "number" }
+    ]
+  },
+  {
+    key: "grading",
+    label: "Grading",
+    hasUpload: true,
+    uploadLabel: "Upload Grading",
+    fields: [
+      { key: "gradedSizes", label: "Graded size range" },
+      { key: "gradeRuleRef", label: "Grade rule reference" }
+    ]
+  },
 ];
 
 export function initPreProd() {
@@ -1487,22 +1598,6 @@ export const INITIAL_COMPLIANCES = [
     isDeleted: false
   },
   {
-    id: "comp-2",
-    name: "Buyer Chemical Restriction (RSL/ZDHC)",
-    category: "Environmental",
-    buyer: "Zara",
-    orderId: "GKT-1054",
-    department: "Quality",
-    responsiblePerson: "Sezhiyan",
-    dueDate: "2026-05-19",
-    linkedCert: "OEKO-TEX",
-    description: "ZDHC MRSL level 3 compliance sign-off for dyeing chemicals and auxiliary recipe.",
-    status: "In Progress",
-    priority: "Critical",
-    notes: "Lab dip test report received, pending final bulk test.",
-    isDeleted: false
-  },
-  {
     id: "comp-3",
     name: "Social Compliance Audit (BSCI / SMETA)",
     category: "Social Compliance",
@@ -1692,4 +1787,40 @@ export function formatTimeAgo(isoString) {
   if (days < 7) return `${days} days ago`;
   return date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
+
+export const INITIAL_DEPARTMENT_CHECKLISTS = {
+  "Merchandising": [
+    { id: "chk-merch-1", title: "sewing thread consumption", dueDate: "5/9/26", done: false },
+    { id: "chk-merch-2", title: "shade card for trims sourcing", dueDate: "6/9/26", done: false },
+    { id: "chk-merch-3", title: "CMT planning", dueDate: "2/9/26", done: false },
+  ],
+  "Cutting": [
+    { id: "chk-cut-1", title: "Fabric relaxation test before lay", dueDate: "5/9/26", done: false },
+    { id: "chk-cut-2", title: "Marker efficiency audit for style ST-7788", dueDate: "6/9/26", done: false },
+    { id: "chk-cut-3", title: "End-bit fabric reconciliation", dueDate: "7/9/26", done: false },
+  ],
+  "Quality": [
+    { id: "chk-qa-1", title: "Needle detector daily 9-point calibration", dueDate: "Today", done: false },
+    { id: "chk-qa-2", title: "Inline AQL 2.5 audit on Line 3", dueDate: "5/9/26", done: false },
+    { id: "chk-qa-3", title: "Review buyer comments on pre-final inspection", dueDate: "8/9/26", done: false },
+  ],
+  "Production": [
+    { id: "chk-prod-1", title: "Line balancing for style GKT-1054", dueDate: "Today", done: false },
+    { id: "chk-prod-2", title: "Daily hourly output board reconciliation", dueDate: "Today", done: false },
+    { id: "chk-prod-3", title: "Preventive maintenance on overlock machines", dueDate: "6/9/26", done: false },
+  ],
+  "Sample Room": [
+    { id: "chk-samp-1", title: "Fit sample pattern grading correction", dueDate: "5/9/26", done: false },
+    { id: "chk-samp-2", title: "Strike-off lab dips swatch review", dueDate: "7/9/26", done: false },
+  ],
+  "Finance": [
+    { id: "chk-fin-1", title: "Reconcile buyer LC amendments with sales team", dueDate: "8/9/26", done: false },
+    { id: "chk-fin-2", title: "Debit notes settlement for delayed trims", dueDate: "10/9/26", done: false },
+  ],
+  "Executive": [
+    { id: "chk-exec-1", title: "Review Q3 export shipment revenue & margins", dueDate: "10/9/26", done: false },
+    { id: "chk-exec-2", title: "Approve fabric supplier credit limit revision", dueDate: "12/9/26", done: false },
+  ],
+};
+
 

@@ -6,13 +6,17 @@ import {
 } from "lucide-react";
 import {
   REASONS, VAP_SUPPLIERS, DOC_TABS_CONFIG, DOC_TAB_NAMES, DOC_TAB_ICONS, CUSTOMIZABLE_TABS,
-  STAGE_CHAT_TABS, TAB_ALLOWED_DEPTS, PRE_PROD_DOC_TYPES, allPreProdApproved,
+  STAGE_CHAT_TABS, TAB_ALLOWED_DEPTS, DOC_ITEM_METADATA, PRE_PROD_DOC_TYPES, allPreProdApproved,
   HIGHLIGHT_DEPT_OPTIONS, ALL_PEOPLE, COSTING_TEMPLATES
 } from "../../constants/loomData.js";
 import {
   Card, CardHeader, BackLink, statusPill, riskDot, gatingApproval, renderWithMentions
 } from "../common/CommonUI.jsx";
 import { AssignWorkModal } from "../views/InsightsViews.jsx";
+import { OutsourcingQuotationPanel } from "./OutsourcingQuotationPanel.jsx";
+import { ProductionTab } from "./ProductionTab.jsx";
+import { InspectionTab } from "./InspectionTab.jsx";
+import { CertificatesTab } from "./CertificatesTab.jsx";
 
 function StageNode({ stage, idx, onCycle, onReason, onSupplierChange, lockedBy, suppliers = [] }) {
   const [open, setOpen] = useState(false);
@@ -105,66 +109,323 @@ function StageNode({ stage, idx, onCycle, onReason, onSupplierChange, lockedBy, 
 }
 
 function PreProductionTab({ order, role, onFieldChange, onSubmit, onApprove }) {
-  const canApprove = role.fullAccess;
+  const canApprove = role.fullAccess || role.dept === "Executive";
   const allApproved = allPreProdApproved(order);
 
+  // Count approved documents
+  const approvedDocsCount = PRE_PROD_DOC_TYPES.filter(d => order.preProd && order.preProd[d.key] && order.preProd[d.key].status === "approved").length;
+
+  // Track local upload state for files
+  const [uploadedFiles, setUploadedFiles] = useState({});
+  const [ppMeetingDone, setPpMeetingDone] = useState(false);
+  const [sizeSetDone, setSizeSetDone] = useState(false);
+
+  const handleFileUpload = (docKey, e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setUploadedFiles(prev => ({ ...prev, [docKey]: file.name }));
+    }
+  };
+
   return (
-    <div>
-      <div style={{ fontSize: 14, fontWeight: 700, color: "#1B2130", marginBottom: 4 }}>Pre-production sign-off</div>
-      <div style={{ fontSize: 11.5, color: "#8A8D98", marginBottom: 16 }}>
-        Fill these in here instead of on paper. Bulk production (Cutting onward) stays locked until every document below is approved by a manager.
-      </div>
+    <div style={{ maxWidth: 960, margin: "0 auto", paddingBottom: 24 }}>
+      {/* Top Banner when all approved */}
       {allApproved ? (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#E1F5EE", border: "1px solid #BFE7D8", borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 12.5, color: "#085041", fontWeight: 600 }}>
-          <CheckCircle2 size={14} /> All pre-production documents approved — bulk production is unlocked.
+        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#DCFCE7", border: "1px solid #BBF7D0", borderRadius: 8, padding: "10px 14px", marginBottom: 16, fontSize: 12.5, color: "#15803D", fontWeight: 600 }}>
+          <CheckCircle2 size={15} /> All sign-off documents approved — PP Meeting can now be held.
         </div>
-      ) : (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#FAEEDA", border: "1px solid #F0DBAA", borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 12.5, color: "#633806", fontWeight: 600 }}>
-          <Lock size={13} /> Cutting and every stage after it stay locked until all documents below are approved.
+      ) : null}
+
+      {/* Header section */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
+        <div style={{ width: 24, height: 24, borderRadius: "50%", background: "#F1F5F9", border: "1px solid #CBD5E1", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#475569" }}>
+          {approvedDocsCount}
         </div>
-      )}
-      {PRE_PROD_DOC_TYPES.map(doc => {
-        const state = (order.preProd && order.preProd[doc.key]) || { values: {}, status: "draft" };
-        const st = state.status === "approved" ? { bg: "#E1F5EE", fg: "#085041", label: "Approved" }
-          : state.status === "submitted" ? { bg: "#FAEEDA", fg: "#633806", label: "Submitted — awaiting approval" }
-          : { bg: "#F0F0F2", fg: "#565A66", label: "Draft" };
-        return (
-          <div key={doc.key} style={{ border: "1px solid #ECEDF1", borderRadius: 10, padding: "14px 16px", marginBottom: 12 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#1B2130" }}>{doc.label}</div>
-              <span style={{ fontSize: 11, fontWeight: 600, background: st.bg, color: st.fg, padding: "3px 10px", borderRadius: 999 }}>{st.label}</span>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: `repeat(${doc.fields.length}, 1fr)`, gap: 8, marginBottom: 10 }}>
-              {doc.fields.map(f => (
-                <div key={f.key}>
-                  <label style={{ fontSize: 10.5, color: "#8A8D98", display: "block", marginBottom: 3 }}>{f.label}</label>
-                  <input
-                    type={f.type || "text"}
-                    value={state.values[f.key] || ""}
-                    disabled={state.status === "approved"}
-                    onChange={e => onFieldChange(doc.key, f.key, e.target.value)}
-                    style={{ width: "100%", fontSize: 12, padding: "6px 8px", borderRadius: 6, border: "1px solid #E7E8ED" }}
-                  />
+        <div>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: "#111827" }}>Pre-production sign-off</div>
+          <div style={{ fontSize: 11.5, color: "#6B7280" }}>
+            All documents must be approved before PP Meeting.
+          </div>
+        </div>
+      </div>
+
+      {/* 6 Pre-Production Document Cards */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {PRE_PROD_DOC_TYPES.map(doc => {
+          const state = (order.preProd && order.preProd[doc.key]) || { values: {}, status: "draft" };
+          const isDraft = !state.status || state.status === "draft";
+          const isSubmitted = state.status === "submitted";
+          const isApproved = state.status === "approved";
+
+          const uploadedName = uploadedFiles[doc.key];
+
+          return (
+            <div
+              key={doc.key}
+              style={{
+                background: "#FFFFFF",
+                border: "1px solid #E5E7EB",
+                borderRadius: 10,
+                padding: "16px 18px",
+                boxShadow: "0 1px 2px rgba(0,0,0,0.02)"
+              }}
+            >
+              {/* Card Header & Status */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>{doc.label}</div>
+                <div>
+                  {isDraft && (
+                    <span style={{ fontSize: 11, fontWeight: 600, background: "#F1F5F9", color: "#475569", padding: "3px 10px", borderRadius: 999, border: "1px solid #E2E8F0" }}>
+                      Draft
+                    </span>
+                  )}
+                  {isSubmitted && (
+                    <span style={{ fontSize: 11, fontWeight: 600, background: "#FEF3C7", color: "#B45309", padding: "3px 10px", borderRadius: 999, border: "1px solid #FDE68A" }}>
+                      Pending Approval
+                    </span>
+                  )}
+                  {isApproved && (
+                    <span style={{ fontSize: 11, fontWeight: 600, background: "#DCFCE7", color: "#15803D", padding: "3px 10px", borderRadius: 999, border: "1px solid #BBF7D0" }}>
+                      Approved
+                    </span>
+                  )}
                 </div>
-              ))}
+              </div>
+
+              {/* Subtitle hint */}
+              {doc.hint && (
+                <div style={{ fontSize: 11.5, color: "#6B7280", marginBottom: 12 }}>
+                  {doc.hint}
+                </div>
+              )}
+
+              {/* Dashed upload button for CMT, ACC, Grading */}
+              {doc.hasUpload && (
+                <div style={{ marginBottom: 14 }}>
+                  <label
+                    style={{
+                      background: "#F5F3FF",
+                      border: "1px dashed #C4B5FD",
+                      borderRadius: 8,
+                      color: "#6D28D9",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      padding: "7px 14px",
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      transition: "all 0.15s ease"
+                    }}
+                  >
+                    <Upload size={13} />
+                    {uploadedName ? `Attached: ${uploadedName}` : doc.uploadLabel}
+                    <input
+                      type="file"
+                      onChange={(e) => handleFileUpload(doc.key, e)}
+                      style={{ display: "none" }}
+                    />
+                  </label>
+                </div>
+              )}
+
+              {/* Fields Grid */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 }}>
+                {/* Row 1: First 2 fields */}
+                <div style={{ display: "grid", gridTemplateColumns: doc.fields.length >= 2 ? "1fr 1fr" : "1fr", gap: 12 }}>
+                  {doc.fields.slice(0, 2).map(f => (
+                    <div key={f.key}>
+                      <label style={{ fontSize: 11.5, fontWeight: 500, color: "#6B7280", display: "block", marginBottom: 4 }}>
+                        {f.label}
+                      </label>
+                      <input
+                        type={f.type || "text"}
+                        value={state.values[f.key] || ""}
+                        disabled={isApproved}
+                        onChange={e => onFieldChange(doc.key, f.key, e.target.value)}
+                        style={{
+                          width: "100%",
+                          fontSize: 12.5,
+                          padding: "7px 10px",
+                          borderRadius: 6,
+                          border: "1px solid #D1D5DB",
+                          background: isApproved ? "#F9FAFB" : "#FFFFFF",
+                          color: "#111827",
+                          boxSizing: "border-box",
+                          outline: "none"
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                {/* Row 2: 3rd field if present */}
+                {doc.fields.length > 2 && (
+                  <div style={{ width: doc.fields[2].fullWidth ? "100%" : "calc(50% - 6px)" }}>
+                    <label style={{ fontSize: 11.5, fontWeight: 500, color: "#6B7280", display: "block", marginBottom: 4 }}>
+                      {doc.fields[2].label}
+                    </label>
+                    <input
+                      type={doc.fields[2].type || "text"}
+                      value={state.values[doc.fields[2].key] || ""}
+                      disabled={isApproved}
+                      onChange={e => onFieldChange(doc.key, doc.fields[2].key, e.target.value)}
+                      style={{
+                        width: "100%",
+                        fontSize: 12.5,
+                        padding: "7px 10px",
+                        borderRadius: 6,
+                        border: "1px solid #D1D5DB",
+                        background: isApproved ? "#F9FAFB" : "#FFFFFF",
+                        color: "#111827",
+                        boxSizing: "border-box",
+                        outline: "none"
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                {isDraft && (
+                  <button
+                    type="button"
+                    onClick={() => onSubmit(doc.key)}
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: "#FFFFFF",
+                      background: "#4338CA",
+                      border: "none",
+                      borderRadius: 6,
+                      padding: "7px 16px",
+                      cursor: "pointer",
+                      boxShadow: "0 1px 2px rgba(0,0,0,0.05)"
+                    }}
+                  >
+                    Submit for approval
+                  </button>
+                )}
+                {isSubmitted && canApprove && (
+                  <button
+                    type="button"
+                    onClick={() => onApprove(doc.key)}
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: "#FFFFFF",
+                      background: "#16A34A",
+                      border: "none",
+                      borderRadius: 6,
+                      padding: "7px 16px",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6
+                    }}
+                  >
+                    <Check size={13} strokeWidth={3} /> Approve
+                  </button>
+                )}
+                {isSubmitted && !canApprove && (
+                  <div style={{ fontSize: 12, color: "#B45309", background: "#FEF3C7", padding: "5px 12px", borderRadius: 6, border: "1px solid #FDE68A" }}>
+                    Waiting on manager approval
+                  </div>
+                )}
+                {isApproved && (
+                  <div style={{ fontSize: 12, color: "#15803D", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+                    <CheckCircle2 size={14} /> Approved by {state.approvedBy || "Manager"} · {state.approvedAt || "Recently"}
+                  </div>
+                )}
+              </div>
             </div>
-            <div>
-              {state.status === "draft" && (
-                <button onClick={() => onSubmit(doc.key)} style={{ fontSize: 12, fontWeight: 600, color: "#fff", background: "#378ADD", border: "none", borderRadius: 7, padding: "6px 14px", cursor: "pointer" }}>Submit for approval</button>
-              )}
-              {state.status === "submitted" && canApprove && (
-                <button onClick={() => onApprove(doc.key)} style={{ fontSize: 12, fontWeight: 600, color: "#fff", background: "#1F9E8D", border: "none", borderRadius: 7, padding: "6px 14px", cursor: "pointer" }}>Approve</button>
-              )}
-              {state.status === "submitted" && !canApprove && (
-                <div style={{ fontSize: 11.5, color: "#8A8D98" }}>Waiting on manager approval</div>
-              )}
-              {state.status === "approved" && (
-                <div style={{ fontSize: 11.5, color: "#1F9E8D" }}>Approved by {state.approvedBy} · {state.approvedAt}</div>
-              )}
+          );
+        })}
+      </div>
+
+      {/* Bottom Gated Milestones (from screenshot) */}
+      <div style={{ marginTop: 26, display: "flex", flexDirection: "column", gap: 20 }}>
+        {/* Milestone 1: PP Meeting */}
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: allApproved ? "#10B981" : "#CBD5E1" }} />
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>PP Meeting</div>
+            <div style={{ fontSize: 11.5, color: "#6B7280" }}>
+              Conducted after all sign-off documents are approved.
             </div>
           </div>
-        );
-      })}
+
+          {!allApproved ? (
+            <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 8, padding: "12px 16px", fontSize: 12, color: "#64748B", display: "flex", alignItems: "center", gap: 8 }}>
+              <Lock size={14} /> Complete all sign-off documents first.
+            </div>
+          ) : ppMeetingDone ? (
+            <div style={{ background: "#DCFCE7", border: "1px solid #BBF7D0", borderRadius: 8, padding: "12px 16px", fontSize: 12.5, color: "#15803D", fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
+              <CheckCircle2 size={16} /> PP Meeting conducted & approved. Production authorized to proceed.
+            </div>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <button
+                type="button"
+                onClick={() => setPpMeetingDone(true)}
+                style={{
+                  background: "#4F46E5",
+                  color: "#FFFFFF",
+                  border: "none",
+                  borderRadius: 6,
+                  padding: "8px 18px",
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  cursor: "pointer"
+                }}
+              >
+                Conduct & Approve PP Meeting
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Milestone 2: Size Set & Shrinkage closure */}
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: ppMeetingDone ? "#10B981" : "#CBD5E1" }} />
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>Size Set & Shrinkage closure</div>
+            <div style={{ fontSize: 11.5, color: "#6B7280" }}>
+              Owned by Quality — after PP Meeting is approved.
+            </div>
+          </div>
+
+          {!ppMeetingDone ? (
+            <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 8, padding: "12px 16px", fontSize: 12, color: "#64748B", display: "flex", alignItems: "center", gap: 8 }}>
+              <Lock size={14} /> PP Meeting must be approved first.
+            </div>
+          ) : sizeSetDone ? (
+            <div style={{ background: "#DCFCE7", border: "1px solid #BBF7D0", borderRadius: 8, padding: "12px 16px", fontSize: 12.5, color: "#15803D", fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
+              <CheckCircle2 size={16} /> Size Set & Shrinkage closed by Quality team.
+            </div>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <button
+                type="button"
+                onClick={() => setSizeSetDone(true)}
+                style={{
+                  background: "#16A34A",
+                  color: "#FFFFFF",
+                  border: "none",
+                  borderRadius: 6,
+                  padding: "8px 18px",
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  cursor: "pointer"
+                }}
+              >
+                Close Size Set & Shrinkage (Quality Sign-off)
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -276,17 +537,39 @@ function OrderComplianceSection({ order, certifications = [], compliances = [] }
   );
 }
 
-function CostingTab({ order, onSetTemplate, onUpdateRow, onAddRow }) {
+function CostingTab({ order, role = {}, onSetTemplate, onUpdateRow, onAddRow, onSubmitCosting, onApproveCosting, onRejectCosting }) {
   const tmpl = COSTING_TEMPLATES[order.costingTemplate] || COSTING_TEMPLATES.fabric;
   const rows = order.costingRows || [];
   const grandTotal = rows.reduce((a, r) => a + (r.isHeader ? 0 : (Number(r.price) || 0) * (Number(r.qty) || 0)), 0);
 
   const [usdRate, setUsdRate] = useState(83.5);
   const [eurRate, setEurRate] = useState(90.2);
-  const [approvalStatus, setApprovalStatus] = useState(null);
+
+  const costingApproval = order.costingApproval || {};
+  const isApproved = costingApproval.status === "approved";
+  const isSubmitted = costingApproval.status === "submitted";
+  const isRejected = costingApproval.status === "rejected";
+  const isMDOrExec = role?.dept === "Executive" || role?.fullAccess;
 
   const handleSubmitApproval = () => {
-    setApprovalStatus("Submitted for DGM / MD Approval (" + new Date().toLocaleDateString() + ")");
+    if (onSubmitCosting) {
+      onSubmitCosting(order.id, { grandTotal, currency: "INR" });
+    }
+  };
+
+  const handleApprove = () => {
+    if (onApproveCosting) {
+      onApproveCosting(order.id, role?.label || "Managing Director (MD)");
+    }
+  };
+
+  const handleReject = () => {
+    if (onRejectCosting) {
+      const reason = window.prompt("Reason for rejecting costing?", "Needs review / price adjustment");
+      if (reason !== null) {
+        onRejectCosting(order.id, reason);
+      }
+    }
   };
 
   return (
@@ -436,30 +719,98 @@ function CostingTab({ order, onSetTemplate, onUpdateRow, onAddRow }) {
           </div>
         </div>
 
-        {/* Costing Approval Button */}
-        <div style={{ marginTop: 16, display: "flex", justifyContent: "space-between", alignItems: "center", background: "#F1F5F9", borderRadius: 10, padding: "12px 16px" }}>
+        {/* Costing Approval Section */}
+        <div style={{ marginTop: 16, display: "flex", justifyContent: "space-between", alignItems: "center", background: isApproved ? "#ECFDF5" : isSubmitted ? "#FFFBEB" : isRejected ? "#FEF2F2" : "#F1F5F9", border: `1px solid ${isApproved ? "#A7F3D0" : isSubmitted ? "#FDE68A" : isRejected ? "#FECACA" : "#E2E8F0"}`, borderRadius: 10, padding: "12px 16px" }}>
           <div>
             <div style={{ fontSize: 12.5, fontWeight: 700, color: "#1E293B" }}>Costing approval</div>
-            <div style={{ fontSize: 11, color: approvalStatus ? "#059669" : "#64748B", marginTop: 2, fontWeight: approvalStatus ? 600 : 400 }}>
-              {approvalStatus ? `✓ ${approvalStatus}` : "Requires sign-off from DGM / Managing Director"}
+            <div style={{ fontSize: 11, color: isApproved ? "#059669" : isSubmitted ? "#D97706" : isRejected ? "#DC2626" : "#64748B", marginTop: 2, fontWeight: isApproved || isSubmitted || isRejected ? 600 : 400 }}>
+              {isApproved
+                ? `✓ Approved by ${costingApproval.approvedBy || "Managing Director (MD)"} (${costingApproval.approvedDate || "Approved"}) · Pass`
+                : isSubmitted
+                ? `⏳ Submitted for DGM / MD approval (${costingApproval.submittedDate || "Pending sign-off"}). Awaiting MD authorization.`
+                : isRejected
+                ? `✕ Costing rejected by MD (${costingApproval.reason || "Revisions needed"}). Please revise sheet and resubmit.`
+                : "Requires sign-off from DGM / Managing Director"}
             </div>
           </div>
-          <button
-            onClick={handleSubmitApproval}
-            style={{
-              background: approvalStatus ? "#059669" : "#378ADD",
-              color: "#FFFFFF",
-              border: "none",
-              borderRadius: 8,
-              padding: "8px 16px",
-              fontSize: 12,
-              fontWeight: 700,
-              cursor: "pointer",
-              transition: "all 0.2s"
-            }}
-          >
-            {approvalStatus ? "Resubmit for Approval" : "Submit for DGM / MD approval"}
-          </button>
+
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {isApproved ? (
+              <button
+                style={{
+                  background: "#10B981",
+                  color: "#FFFFFF",
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "8px 20px",
+                  fontSize: 12.5,
+                  fontWeight: 800,
+                  cursor: "default",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  boxShadow: "0 2px 4px rgba(16, 185, 129, 0.2)"
+                }}
+              >
+                <span>✓</span> Pass
+              </button>
+            ) : isSubmitted ? (
+              <button
+                disabled
+                title="Submitted to Managing Director (MD) for authorization"
+                style={{
+                  background: "#F59E0B",
+                  color: "#FFFFFF",
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "8px 18px",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: "not-allowed",
+                  opacity: 0.95,
+                  boxShadow: "0 2px 4px rgba(245, 158, 11, 0.2)"
+                }}
+              >
+                ⏳ Pending MD Approval
+              </button>
+            ) : isRejected ? (
+              <button
+                onClick={handleSubmitApproval}
+                style={{
+                  background: "#378ADD",
+                  color: "#FFFFFF",
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "8px 16px",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                  boxShadow: "0 2px 4px rgba(55, 138, 221, 0.2)"
+                }}
+              >
+                Resubmit for MD approval
+              </button>
+            ) : (
+              <button
+                onClick={handleSubmitApproval}
+                style={{
+                  background: "#378ADD",
+                  color: "#FFFFFF",
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "8px 16px",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                  boxShadow: "0 2px 4px rgba(55, 138, 221, 0.2)"
+                }}
+              >
+                Submit for DGM / MD approval
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -662,7 +1013,10 @@ function OrderHighlightsCard({ order, role }) {
   );
 }
 
-function DocumentsPanel({ order, role, costingContent, preProdContent, complianceContent, onUpdateShippedQty }) {
+function DocumentsPanel({
+  order, role, costingContent, preProdContent, quotationContent, complianceContent,
+  onUpdateShippedQty, onAddProductionLog, onDeleteProductionLog, onUpdateInspectionData, onUpdateCertificates
+}) {
   const [activeTab, setActiveTab] = useState("Files");
   const [docs, setDocs] = useState({});
   const [customTypes, setCustomTypes] = useState({});
@@ -839,7 +1193,41 @@ function DocumentsPanel({ order, role, costingContent, preProdContent, complianc
       <Card style={{ flex: 1, padding: 0, overflow: "hidden" }}>
         <div style={{ height: 3, background: ACCENT }} />
         <div style={{ padding: "18px 20px" }}>
-          {activeTab === "Costing" && costingContent ? costingContent : activeTab === "Pre-Production" && preProdContent ? preProdContent : activeTab === "Compliance & Certs" && complianceContent ? complianceContent : (
+          {activeTab === "Costing" && costingContent ? costingContent : activeTab === "Pre-Production" && preProdContent ? preProdContent : activeTab === "Quotation" && quotationContent ? quotationContent : activeTab === "Production" ? (
+            <ProductionTab
+              order={order}
+              role={role}
+              docs={docs}
+              onUploadDoc={upload}
+              onDeleteDoc={deleteDoc}
+              onViewDoc={(doc) => setPreviewDoc(doc)}
+              onAddProductionLog={onAddProductionLog}
+              onDeleteProductionLog={onDeleteProductionLog}
+              canUploadHere={canUploadHere}
+            />
+          ) : activeTab === "Inspection" ? (
+            <InspectionTab
+              order={order}
+              role={role}
+              docs={docs}
+              onUploadDoc={upload}
+              onDeleteDoc={deleteDoc}
+              onViewDoc={(doc) => setPreviewDoc(doc)}
+              onUpdateInspectionData={onUpdateInspectionData}
+              canUploadHere={canUploadHere}
+            />
+          ) : activeTab === "Certificates" || activeTab === "Compliance & Certs" ? (
+            <CertificatesTab
+              order={order}
+              role={role}
+              docs={docs}
+              onUploadDoc={upload}
+              onDeleteDoc={deleteDoc}
+              onViewDoc={(doc) => setPreviewDoc(doc)}
+              onUpdateCertificates={onUpdateCertificates}
+              canUploadHere={canUploadHere}
+            />
+          ) : (
           <>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
             <div style={{ width: 26, height: 26, borderRadius: 7, background: "#F0EFFB", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -875,10 +1263,30 @@ function DocumentsPanel({ order, role, costingContent, preProdContent, complianc
             const isImage = entry && (entry.type?.startsWith("image/") || entry.dataUrl?.startsWith("data:image/"));
             const isPdf = entry && (entry.type === "application/pdf" || entry.name?.toLowerCase().endsWith(".pdf") || entry.dataUrl?.startsWith("data:application/pdf"));
 
+            const meta = DOC_ITEM_METADATA[docType];
+
             return (
               <div key={docType} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", marginBottom: 8, borderRadius: 10, background: entry ? "#F7FBF9" : "#FAFAFB", border: `1px solid ${entry ? "#DCEFE6" : "#EFEFF2"}` }}>
                 <div style={{ flex: 1, minWidth: 0, marginRight: 12 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "#1B2130" }}>{docType}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "#1B2130" }}>{docType}</span>
+                    {meta && (
+                      <span
+                        style={{
+                          fontSize: 10.5,
+                          fontWeight: 600,
+                          color: meta.color || "#4338CA",
+                          background: meta.bg || "#EEF2FF",
+                          border: `1px solid ${meta.border || "#C7D2FE"}`,
+                          padding: "1px 8px",
+                          borderRadius: 999,
+                          display: "inline-block"
+                        }}
+                      >
+                        {meta.dept}
+                      </span>
+                    )}
+                  </div>
                   {entry ? (
                     <div style={{ fontSize: 11, color: "#1F9E8D", marginTop: 4, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                       <CheckCircle2 size={12} style={{ flexShrink: 0 }} />
@@ -1157,8 +1565,10 @@ function DocumentsPanel({ order, role, costingContent, preProdContent, complianc
 export function OrderWorkspace({
   order, onBack, onUpdateStages, role, onSetTemplate, onSetCostingTemplate,
   onUpdateCostingRow, onAddCostingRow, onUpdateShippedQty, onPreProdField,
-  onPreProdSubmit, onPreProdApprove, certifications = [], compliances = [],
-  suppliers = [], onAssignSupplier, onAssignWork, allOrders = []
+  onPreProdSubmit, onPreProdApprove, onUpdateQuotation, onSubmitQuotation,
+  onApproveQuotation, onRejectQuotation, onSubmitCosting, onApproveCosting, onRejectCosting,
+  certifications = [], compliances = [],
+  suppliers = [], onAssignSupplier, onAssignWork, onAddProductionLog, onDeleteProductionLog, onUpdateInspectionData, onUpdateCertificates, allOrders = []
 }) {
   const [showAssignModal, setShowAssignModal] = useState(false);
   const cuttingIdx = order.stages.findIndex(s => s.name === "Cutting");
@@ -1232,7 +1642,16 @@ export function OrderWorkspace({
   );
 
   const costingContent = (
-    <CostingTab order={order} onSetTemplate={onSetCostingTemplate} onUpdateRow={onUpdateCostingRow} onAddRow={onAddCostingRow} />
+    <CostingTab
+      order={order}
+      role={role}
+      onSetTemplate={onSetCostingTemplate}
+      onUpdateRow={onUpdateCostingRow}
+      onAddRow={onAddCostingRow}
+      onSubmitCosting={onSubmitCosting}
+      onApproveCosting={onApproveCosting}
+      onRejectCosting={onRejectCosting}
+    />
   );
 
   const preProdContent = (
@@ -1247,6 +1666,18 @@ export function OrderWorkspace({
 
   const complianceContent = (
     <OrderComplianceSection order={order} certifications={certifications} compliances={compliances} />
+  );
+
+  const quotationContent = (
+    <OutsourcingQuotationPanel
+      order={order}
+      role={role}
+      suppliers={suppliers}
+      onUpdateQuotation={onUpdateQuotation}
+      onSubmitQuotation={onSubmitQuotation}
+      onApproveQuotation={onApproveQuotation}
+      onRejectQuotation={onRejectQuotation}
+    />
   );
 
   return (
@@ -1310,8 +1741,13 @@ export function OrderWorkspace({
         role={role}
         costingContent={costingContent}
         preProdContent={preProdContent}
+        quotationContent={quotationContent}
         complianceContent={complianceContent}
         onUpdateShippedQty={onUpdateShippedQty}
+        onAddProductionLog={onAddProductionLog}
+        onDeleteProductionLog={onDeleteProductionLog}
+        onUpdateInspectionData={onUpdateInspectionData}
+        onUpdateCertificates={onUpdateCertificates}
       />
 
       {showAssignModal && (

@@ -34,11 +34,11 @@ export function FinanceEntryPage({ orders, financials, onUpdate, onUpdateOrderCo
 
   return (
     <div>
-      <PageHeader title="Finance data" sub="Cost planned vs. cost obtained per order — Total COGS on the Executive Dashboard now comes straight from the actual costs below" />
+      <PageHeader title="Finance data" sub="Cost planned vs. actual cost per order — Total COGS on the Executive Dashboard comes straight from the actual costs below" />
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 16 }}>
         <Card style={{ padding: "16px 18px" }}><div style={{ fontSize: 12, color: "#8A8D98" }}>Total planned cost</div><div style={{ fontSize: 22, fontWeight: 700, marginTop: 6 }}>${totals.planned.toLocaleString()}</div></Card>
-        <Card style={{ padding: "16px 18px" }}><div style={{ fontSize: 12, color: "#8A8D98" }}>Total cost obtained (actual)</div><div style={{ fontSize: 22, fontWeight: 700, marginTop: 6 }}>${totals.actual.toLocaleString()}</div></Card>
+        <Card style={{ padding: "16px 18px" }}><div style={{ fontSize: 12, color: "#8A8D98" }}>Total actual cost</div><div style={{ fontSize: 22, fontWeight: 700, marginTop: 6 }}>${totals.actual.toLocaleString()}</div></Card>
         <Card style={{ padding: "16px 18px" }}>
           <div style={{ fontSize: 12, color: "#8A8D98" }}>Total variance</div>
           <div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: totalVariance > 0 ? "#D64545" : "#1F9E8D" }}>
@@ -50,7 +50,7 @@ export function FinanceEntryPage({ orders, financials, onUpdate, onUpdateOrderCo
       <Card style={{ marginBottom: 16 }}>
         <CardHeader title="Cost by order" sub="Planned cost is set when the order is costed; actual cost is updated as spend comes in through the season" />
         <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr 1fr 0.9fr", fontSize: 11, color: "#8A8D98", padding: "0 4px 8px", borderBottom: "1px solid #F0F0F2" }}>
-          <div>Order / Style</div><div>Buyer</div><div>Planned cost</div><div>Cost obtained</div><div>Variance</div>
+          <div>Order / Style</div><div>Buyer</div><div>Planned cost</div><div>Actual cost</div><div>Variance</div>
         </div>
         {orders.map(o => {
           const variance = (o.actualCost || 0) - (o.plannedCost || 0);
@@ -2293,7 +2293,7 @@ export function CapasPage({ orders, capas, onAdd, onCycleStatus }) {
   );
 }
 
-export function ExecutiveOverviewPage({ orders, attendance, financials, roster, onOpenOrder, onNavigate }) {
+export function ExecutiveOverviewPage({ orders, attendance, financials, roster, onOpenOrder, onNavigate, onApproveCosting, onRejectCosting }) {
   const allStages = orders.flatMap(o => (o.stages || []).map(s => ({ ...s, orderId: o.id, style: o.style, buyer: o.buyer })));
   const totalOrders = orders.length;
   const totalQty = orders.reduce((a, o) => a + (Number(o.qty) || 0), 0);
@@ -2475,6 +2475,62 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
         </Card>
       </div>
 
+      {/* Row: Pending Costing Approvals (MD Sign-off) */}
+      {(() => {
+        const costingPending = orders.filter(o => o.costingApproval && o.costingApproval.status === "submitted");
+        if (costingPending.length === 0) return null;
+        return (
+          <Card style={{ marginBottom: 16, borderLeft: "4px solid #F59E0B", background: "#FFFDF7" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <div>
+                <div style={{ fontSize: 13.5, fontWeight: 700, color: "#92400E", display: "flex", alignItems: "center", gap: 6 }}>
+                  <span>⚠️ Costing Approval Sign-off Requests ({costingPending.length})</span>
+                </div>
+                <div style={{ fontSize: 11.5, color: "#78350F", marginTop: 2 }}>
+                  Merchandisers have submitted order costings for DGM / Managing Director sign-off.
+                </div>
+              </div>
+              <button
+                onClick={() => onNavigate && onNavigate("approvals")}
+                style={{ background: "#F59E0B", color: "#FFFFFF", border: "none", borderRadius: 6, padding: "5px 12px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}
+              >
+                Go to Approvals →
+              </button>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 10 }}>
+              {costingPending.map(o => (
+                <div key={o.id} style={{ background: "#FFFFFF", border: "1px solid #FDE68A", borderRadius: 8, padding: "10px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 12.5, color: "#1E293B" }}>
+                      PO #{o.id} — {o.style}
+                    </div>
+                    <div style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>
+                      Buyer: {o.buyer} · Rate: <b>₹{(o.costingApproval?.grandTotal || 0).toLocaleString()}</b> / pc
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button
+                      onClick={() => onOpenOrder && onOpenOrder(o.id)}
+                      style={{ background: "#F1F5F9", color: "#334155", border: "none", borderRadius: 6, padding: "5px 9px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}
+                    >
+                      View Sheet
+                    </button>
+                    {onApproveCosting && (
+                      <button
+                        onClick={() => onApproveCosting(o.id, "Managing Director (MD)")}
+                        style={{ background: "#10B981", color: "#FFFFFF", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", boxShadow: "0 1px 2px rgba(16, 185, 129, 0.2)" }}
+                      >
+                        ✓ Pass
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        );
+      })()}
+
       {/* Row 3: Order & Production Performance + Department Performance (substituting Critical Alerts) */}
       <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1.3fr", gap: 12, marginBottom: 16 }}>
         {/* Order & Production Performance */}
@@ -2631,15 +2687,14 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
         </Card>
       </div>
 
-      {/* Row 6: Bottom 6 Summary Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 12 }}>
+      {/* Row 6: Bottom 5 Summary Cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12 }}>
         {[
           ["Open Tasks", openTasksRows.length, "#378ADD"],
           ["Overdue Tasks", overdueRows.length, "#EF4444"],
           ["Pending Approvals", pendingApprovals.length, "#F59E0B"],
           ["Open POs", openPOStages.length, "#378ADD"],
           ["Late POs", latePOStages.length, "#EF4444"],
-          ["Cash Flow, YTD", `$${((financials?.cashFlow || 0) / 1e6).toFixed(2)}M`, "#10B981"],
         ].map(([label, val, color]) => (
           <Card key={label} style={{ padding: "12px 14px" }}>
             <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600, textTransform: "uppercase", marginBottom: 6 }}>{label}</div>

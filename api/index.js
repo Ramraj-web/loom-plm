@@ -121,22 +121,6 @@ export const RESOURCE_SEEDS = {
       isDeleted: false
     },
     {
-      id: "comp-2",
-      name: "Buyer Chemical Restriction (RSL/ZDHC)",
-      category: "Environmental",
-      buyer: "Zara",
-      orderId: "GKT-1054",
-      department: "Quality",
-      responsiblePerson: "Sezhiyan",
-      dueDate: "2026-05-19",
-      linkedCert: "OEKO-TEX Standard 100",
-      description: "ZDHC MRSL level 3 compliance sign-off for dyeing chemicals and auxiliary recipe.",
-      status: "In Progress",
-      priority: "Critical",
-      notes: "Lab dip test report received, pending final bulk test.",
-      isDeleted: false
-    },
-    {
       id: "comp-3",
       name: "Social Compliance Audit (BSCI / SMETA)",
       category: "Social Compliance",
