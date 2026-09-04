@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import {
   Calendar, CheckCircle2, Clock, Circle, Lock, ChevronDown, Upload, Send, Zap,
   AlertTriangle, FileText, ClipboardList, Package, Layers, ShieldCheck, Factory, Truck, TrendingUp,
-  Eye, Trash2, X, Download
+  Eye, Trash2, X, Download, Check
 } from "lucide-react";
 import {
   REASONS, VAP_SUPPLIERS, DOC_TABS_CONFIG, DOC_TAB_NAMES, DOC_TAB_ICONS, CUSTOMIZABLE_TABS,
