@@ -41,7 +41,7 @@ export function MyChecklistPage({
   };
 
   return (
-    <div style={{ maxWidth: 1100, margin: "0 auto", paddingBottom: 40 }}>
+    <div style={{ margin: "0 auto", paddingBottom: 40 }}>
       {/* Page Title & Subtitle */}
       <div style={{ marginBottom: 20 }}>
         <h1 style={{ fontSize: 24, fontWeight: 700, color: "#111827", margin: "0 0 6px 0", letterSpacing: "-0.02em" }}>
