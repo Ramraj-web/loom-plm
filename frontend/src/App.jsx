@@ -3,7 +3,8 @@ import {
   LayoutDashboard, Package, CheckSquare, BarChart3, Settings as SettingsIcon,
   ChevronDown, Search, Bell, Moon, Sun, ClipboardList,
   Calendar, TriangleAlert, ArrowDownRight, Award,
-  Users, ShieldCheck, ClipboardCheck, Lightbulb, UserCheck, TrendingUp, Landmark, Factory, RefreshCw
+  Users, ShieldCheck, ClipboardCheck, Lightbulb, UserCheck, TrendingUp, Landmark, Factory, RefreshCw,
+  PanelLeftClose, PanelLeftOpen
 } from "lucide-react";
 import { resourcesApi } from "./api.js";
 import {
@@ -80,6 +81,13 @@ export default function LoomPLM() {
   const [selectedDate, setSelectedDate] = useState("2026-05-12");
   const [searchQuery, setSearchQuery] = useState("");
   const [notifOpen, setNotifOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem("loom_sidebar_collapsed") === "true";
+    } catch (e) {
+      return false;
+    }
+  });
   const [isDarkMode, setIsDarkMode] = useState(() => {
     try {
       return localStorage.getItem("loom_plm_theme") === "dark";
@@ -101,6 +109,12 @@ export default function LoomPLM() {
       document.body.classList.remove("dark-theme");
     }
   }, [isDarkMode]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("loom_sidebar_collapsed", String(isSidebarCollapsed));
+    } catch (e) {}
+  }, [isSidebarCollapsed]);
 
   // Sync data with backend on load if available
   useEffect(() => {
@@ -2172,7 +2186,6 @@ export default function LoomPLM() {
       style={{
         display: "flex",
         height: "100vh",
-        maxWidth: 1440,
         margin: "0 auto",
         background: isDarkMode ? "#0B0F19" : "#F5F6F8",
         color: isDarkMode ? "#F8FAFC" : "#1B2130",
@@ -2185,23 +2198,40 @@ export default function LoomPLM() {
       <div
         className="app-sidebar"
         style={{
-          width: 208,
+          width: isSidebarCollapsed ? 64 : 208,
           background: isDarkMode ? "#060911" : "#151B2E",
           borderRight: `1px solid ${isDarkMode ? "#1E293B" : "transparent"}`,
           padding: "20px 14px",
           flexShrink: 0,
           overflowY: "auto",
-          height: "100%"
+          height: "100%",
+          transition: "width 0.2s ease"
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 8px 20px", color: "#fff" }}>
-          <div style={{ width: 26, height: 26, borderRadius: 7, background: "#1F9E8D", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 13 }}>L</div>
-          <span style={{ fontWeight: 700, fontSize: 15 }}>Loom PLM</span>
+        <div style={{ display: "flex", flexDirection: isSidebarCollapsed ? "column" : "row", alignItems: "center", justifyContent: isSidebarCollapsed ? "center" : "space-between", gap: 8, padding: "0 8px 20px", color: "#fff" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+          <div style={{ width: 26, height: 26, borderRadius: 7, background: "#1F9E8D", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 13 }}>G</div>
+          {!isSidebarCollapsed && <span style={{ fontWeight: 700, fontSize: 15 }}>GarmaX</span>}
+          </div>
+          <button
+            type="button"
+            className="sidebar-toggle"
+            onClick={() => setIsSidebarCollapsed(prev => !prev)}
+            aria-label={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            data-tooltip={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center", width: 26, height: 26,
+              padding: 0, border: "none", borderRadius: 6, background: "transparent", color: "#94A3B8", cursor: "pointer"
+            }}
+          >
+            {isSidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+          </button>
         </div>
         {navSections.map((group, gi) => (
           <div key={gi} style={{ marginBottom: 10 }}>
             {group.section && (
-              <div style={{ fontSize: 10, fontWeight: 700, color: isDarkMode ? "#64748B" : "#5C6178", textTransform: "uppercase", letterSpacing: 0.5, padding: "10px 10px 4px" }}>{group.section}</div>
+              !isSidebarCollapsed && <div style={{ fontSize: 10, fontWeight: 700, color: isDarkMode ? "#64748B" : "#5C6178", textTransform: "uppercase", letterSpacing: 0.5, padding: "10px 10px 4px" }}>{group.section}</div>
             )}
             {group.items.map(item => {
               const active = view === item.key || (item.key === "orders" && (view === "order")) || (item.key === "departments" && view === "departmentDetail");
@@ -2210,13 +2240,14 @@ export default function LoomPLM() {
                   key={item.key}
                   onClick={() => navigate(item.key)}
                   style={{
-                    display: "flex", alignItems: "center", gap: 10, padding: "9px 10px", borderRadius: 8,
+                    display: "flex", alignItems: "center", justifyContent: isSidebarCollapsed ? "center" : "flex-start", gap: isSidebarCollapsed ? 0 : 10, padding: "9px 10px", borderRadius: 8,
                     color: active ? "#fff" : isDarkMode ? "#94A3B8" : "#9498A8", background: active ? (isDarkMode ? "#1F9E8D33" : "#1F9E8D22") : "transparent",
                     fontSize: 13.5, fontWeight: active ? 600 : 500, cursor: "pointer", marginBottom: 2
                   }}
+                  title={isSidebarCollapsed ? item.label : undefined}
                 >
                   <item.icon size={16} />
-                  {item.label}
+                  {!isSidebarCollapsed && item.label}
                 </div>
               );
             })}

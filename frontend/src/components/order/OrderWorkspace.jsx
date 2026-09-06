@@ -82,7 +82,7 @@ function StageNode({ stage, idx, onCycle, onReason, onSupplierChange, lockedBy, 
             {stage.reason || "Flag delay"} <ChevronDown size={10} />
           </button>
           {open && (
-            <div style={{ position: "absolute", top: "100%", left: 0, background: "#fff", border: "1px solid #E7E8ED", borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.08)", zIndex: 10, minWidth: 170, marginTop: 4 }}>
+            <div style={{ position: "absolute", top: "100%", left: 0, background: "#fff", border: "1px solid #E7E8ED", borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.08)", zIndex: 10, minWidth: 170, marginTop: -24 }}>
               {REASONS.map(r => (
                 <div
                   key={r}
@@ -1166,7 +1166,7 @@ function DocumentsPanel({
   return (
     <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
       {/* Vertical icon rail */}
-      <div style={{ width: 92, flexShrink: 0, display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ width: 92, flexShrink: 0, display: "flex", flexDirection: "column", gap: 6, maxHeight: "calc(100vh - 120px)", overflowY: "auto" }}>
         {DOC_TAB_NAMES.map(tab => {
           const Icon = DOC_TAB_ICONS[tab] || FileText;
           const active = activeTab === tab;

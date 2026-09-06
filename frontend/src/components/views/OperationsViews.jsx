@@ -391,7 +391,7 @@ export function OrdersPage({
                     placeholder="e.g. PO-8821"
                     value={form.id}
                     onChange={e => setForm({ ...form, id: e.target.value })}
-                    style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13 }}
+                    style={{ width: "92%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13 }}
                   />
                 </div>
                 <div>
@@ -402,7 +402,7 @@ export function OrdersPage({
                     placeholder="e.g. Oversized Hoodie"
                     value={form.style}
                     onChange={e => setForm({ ...form, style: e.target.value })}
-                    style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13 }}
+                    style={{ width: "92%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13 }}
                   />
                 </div>
               </div>
@@ -415,7 +415,7 @@ export function OrdersPage({
                     placeholder="e.g. Zara"
                     value={form.buyer}
                     onChange={e => setForm({ ...form, buyer: e.target.value })}
-                    style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13 }}
+                    style={{ width: "92%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13 }}
                   />
                 </div>
                 <div>
@@ -425,7 +425,7 @@ export function OrdersPage({
                     placeholder="e.g. Spain"
                     value={form.country}
                     onChange={e => setForm({ ...form, country: e.target.value })}
-                    style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13 }}
+                    style={{ width: "92%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13 }}
                   />
                 </div>
               </div>
@@ -438,7 +438,7 @@ export function OrdersPage({
                     placeholder="e.g. AW26"
                     value={form.season}
                     onChange={e => setForm({ ...form, season: e.target.value })}
-                    style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13 }}
+                    style={{ width: "92%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13 }}
                   />
                 </div>
                 <div>
@@ -449,7 +449,7 @@ export function OrdersPage({
                     placeholder="e.g. 10000"
                     value={form.qty}
                     onChange={e => setForm({ ...form, qty: e.target.value })}
-                    style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13 }}
+                    style={{ width: "92%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13 }}
                   />
                 </div>
               </div>
@@ -462,7 +462,7 @@ export function OrdersPage({
                     placeholder="e.g. 25 May"
                     value={form.ship}
                     onChange={e => setForm({ ...form, ship: e.target.value })}
-                    style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13 }}
+                    style={{ width: "92%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13 }}
                   />
                 </div>
                 <div>
@@ -470,7 +470,7 @@ export function OrdersPage({
                   <select
                     value={form.risk}
                     onChange={e => setForm({ ...form, risk: e.target.value })}
-                    style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13 }}
+                    style={{ width: "92%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13 }}
                   >
                     <option value="low">Low Risk</option>
                     <option value="medium">Medium Risk</option>
@@ -482,7 +482,7 @@ export function OrdersPage({
                   <select
                     value={form.status}
                     onChange={e => setForm({ ...form, status: e.target.value })}
-                    style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13 }}
+                    style={{ width: "92%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13 }}
                   >
                     <option value="On Track">On Track</option>
                     <option value="At Risk">At Risk</option>
@@ -1921,7 +1921,7 @@ export function CompliancePage({
                         {comp.name}
                       </div>
                       {comp.description && (
-                        <div style={{ fontSize: 11, color: "#6B7280", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        <div style={{ fontSize: 11, color: "#6B7280", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 158 }}>
                           {comp.description}
                         </div>
                       )}
