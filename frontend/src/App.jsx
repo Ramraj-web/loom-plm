@@ -26,6 +26,18 @@ import {
   NotificationsPage, DebitNotesPage, CapasPage, ExecutiveOverviewPage, SettingsPage
 } from "./components/views/InsightsViews.jsx";
 import { MyChecklistPage } from "./components/views/MyChecklistPage.jsx";
+import { DEFAULT_TEAMS, DEFAULT_USERS, LoginPage, UserAccessPage } from "./components/UserAccess.jsx";
+
+function roleForUser(user, teams) {
+  const team = teams.find(item => item.id === user.teamId) || teams[0] || { name: "User", permissions: ["dashboard"] };
+  return {
+    label: user.name,
+    dept: team.name,
+    fullAccess: team.permissions.includes("settings"),
+    permissions: team.permissions,
+    userId: user.id,
+  };
+}
 
 export default function LoomPLM() {
   const [orders, setOrders] = useState(() =>
@@ -95,6 +107,16 @@ export default function LoomPLM() {
       return false;
     }
   });
+  const [users, setUsers] = useState(DEFAULT_USERS);
+  const [teams, setTeams] = useState(DEFAULT_TEAMS);
+  const [accessLoaded, setAccessLoaded] = useState(false);
+  const [activeUser, setActiveUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem("loom_active_user");
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) { return null; }
+  });
+  const [rotation, setRotation] = useState({ enabled: false, intervalMinutes: 2 });
 
   // Global Theme Effect
   useEffect(() => {
@@ -115,6 +137,41 @@ export default function LoomPLM() {
       localStorage.setItem("loom_sidebar_collapsed", String(isSidebarCollapsed));
     } catch (e) {}
   }, [isSidebarCollapsed]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [userRes, teamRes, rotationRes] = await Promise.all([
+          window.storage?.get("users", true), window.storage?.get("teams", true), window.storage?.get("dashboard_rotation", true)
+        ]);
+        if (cancelled) return;
+        if (userRes?.value) { try { const parsed = JSON.parse(userRes.value); if (Array.isArray(parsed) && parsed.length) setUsers(parsed); } catch (e) {} }
+        if (teamRes?.value) { try { const parsed = JSON.parse(teamRes.value); if (Array.isArray(parsed) && parsed.length) setTeams(parsed); } catch (e) {} }
+        if (rotationRes?.value) { try { setRotation(prev => ({ ...prev, ...JSON.parse(rotationRes.value) })); } catch (e) {} }
+        setAccessLoaded(true);
+      } catch (e) {}
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => { if (accessLoaded && window.storage) window.storage.set("users", JSON.stringify(users), true); }, [users, accessLoaded]);
+  useEffect(() => { if (accessLoaded && window.storage) window.storage.set("teams", JSON.stringify(teams), true); }, [teams, accessLoaded]);
+  useEffect(() => { if (accessLoaded && window.storage) window.storage.set("dashboard_rotation", JSON.stringify(rotation), true); }, [rotation, accessLoaded]);
+
+  useEffect(() => {
+    if (!rotation.enabled || !activeUser || users.length < 2) return undefined;
+    const timer = window.setInterval(() => {
+      const currentIndex = users.findIndex(user => user.id === activeUser.id);
+      const nextUser = users[(currentIndex + 1) % users.length];
+      if (!nextUser) return;
+      setActiveUser(nextUser);
+      setRole(roleForUser(nextUser, teams));
+      setView("dashboard");
+      try { localStorage.setItem("loom_active_user", JSON.stringify(nextUser)); } catch (e) {}
+    }, rotation.intervalMinutes * 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, [rotation, activeUser, users, teams]);
 
   // Sync data with backend on load if available
   useEffect(() => {
@@ -332,14 +389,6 @@ export default function LoomPLM() {
                   return Array.from(map.values());
                 });
               }
-            } catch (e) {}
-          }
-          const roleRes = await window.storage.get("currentRole", true);
-          if (!cancelled && roleRes && roleRes.value) {
-            try {
-              const parsed = JSON.parse(roleRes.value);
-              const foundRole = ROLE_OPTIONS.find(r => r.label === parsed.label || r.dept === parsed.dept);
-              if (foundRole) setRole(foundRole);
             } catch (e) {}
           }
         }
@@ -566,6 +615,19 @@ export default function LoomPLM() {
       setView("dashboard");
     }
     if (window.storage) window.storage.set("currentRole", JSON.stringify(newRole), true);
+  };
+
+  const handleLogin = (user) => {
+    const nextRole = roleForUser(user, teams);
+    setActiveUser(user);
+    setRole(nextRole);
+    setView("dashboard");
+    try { localStorage.setItem("loom_active_user", JSON.stringify(user)); } catch (e) {}
+  };
+
+  const handleLogout = () => {
+    setActiveUser(null);
+    try { localStorage.removeItem("loom_active_user"); } catch (e) {}
   };
 
   const updateFinancials = (field, value) => {
@@ -1481,6 +1543,7 @@ export default function LoomPLM() {
 
   const selectedOrder = orders.find(o => o.id === selectedId);
   const canSeeAll = !!role.fullAccess;
+  const canAccess = permission => canSeeAll || role.permissions?.includes(permission);
   const personName = (role.label.match(/\(([^)]+)\)/) || [])[1] || role.label;
 
   const searchResults = searchQuery.trim().length === 0 ? [] : orders
@@ -1529,11 +1592,11 @@ export default function LoomPLM() {
   ] : [
     { section: null, items: [
       { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-      ...(canSeeAll ? [{ key: "orders", label: "Orders", icon: Package }] : []),
+      ...(canAccess("orders") ? [{ key: "orders", label: "Orders", icon: Package }] : []),
       { key: "tasks", label: "My tasks", icon: CheckSquare },
       { key: "myChecklist", label: "My checklist", icon: ClipboardList },
       ...(canSeeAll ? [{ key: "calendar", label: "Timeline / calendar", icon: Calendar }] : []),
-      ...(canSeeAll ? [{ key: "approvals", label: "Approvals", icon: ClipboardCheck }] : []),
+      ...(canAccess("approvals") ? [{ key: "approvals", label: "Approvals", icon: ClipboardCheck }] : []),
     ]},
     { section: "Operations", items: [
       ...(canSeeAll
@@ -1546,7 +1609,7 @@ export default function LoomPLM() {
       ...(canSeeAll || role.dept === "Finance" ? [{ key: "finance", label: "Finance data", icon: Landmark }] : []),
     ]},
     { section: "Insights", items: [
-      ...(canSeeAll ? [{ key: "reports", label: "Reports", icon: BarChart3 }] : []),
+      ...(canAccess("reports") ? [{ key: "reports", label: "Reports", icon: BarChart3 }] : []),
       // ...(canSeeAll ? [{ key: "insights", label: "All insights", icon: Lightbulb }] : []),
       ...(canSeeAll ? [{ key: "supplierPerformance", label: "Supplier performance", icon: TrendingUp }] : []),
       ...(canSeeAll ? [{ key: "notifications", label: "Notifications", icon: Bell }] : []),
@@ -1554,7 +1617,7 @@ export default function LoomPLM() {
       ...(canSeeAll ? [{ key: "capas", label: "CAPAs", icon: RefreshCw }] : []),
     ]},
     { section: null, items: [
-      { key: "settings", label: "Settings", icon: SettingsIcon },
+      ...(canAccess("settings") ? [{ key: "settings", label: "Settings", icon: SettingsIcon }] : []),
     ]},
   ];
 
@@ -1960,7 +2023,7 @@ export default function LoomPLM() {
         onAssignWork={handleAssignWork}
       />
     );
-  } else if (view === "orders" && canSeeAll) {
+  } else if (view === "orders" && canAccess("orders")) {
     content = (
       <OrdersPage
         orders={orders}
@@ -1998,7 +2061,7 @@ export default function LoomPLM() {
     );
   } else if (view === "calendar" && canSeeAll) {
     content = <CalendarPage orders={orders} onOpenOrder={openOrder} />;
-  } else if (view === "approvals" && canSeeAll) {
+  } else if (view === "approvals" && canAccess("approvals")) {
     content = (
       <ApprovalsPage
         orders={orders}
@@ -2041,7 +2104,7 @@ export default function LoomPLM() {
         onOpenOrder={openOrder}
       />
     );
-  } else if (view === "reports" && canSeeAll) {
+  } else if (view === "reports" && canAccess("reports")) {
     content = <ReportsPage orders={orders} />;
   } else if (view === "insights" && canSeeAll) {
     content = <InsightsPage orders={orders} />;
@@ -2095,12 +2158,7 @@ export default function LoomPLM() {
     );
   } else if (view === "settings") {
     content = (
-      <SettingsPage
-        role={role}
-        setRole={handleSetRole}
-        orgStructure={orgStructure}
-        onUpdateDepartment={handleUpdateDepartment}
-      />
+      <UserAccessPage users={users} teams={teams} onChangeUsers={setUsers} onChangeTeams={setTeams} rotation={rotation} onChangeRotation={setRotation} />
     );
   } else if (canSeeAll) {
     content = (
@@ -2179,6 +2237,9 @@ export default function LoomPLM() {
     if (notif.type === "compliance") return <ShieldCheck size={14} color={prioColor} />;
     return <Bell size={14} color={prioColor} />;
   };
+
+  if (!accessLoaded) return null;
+  if (!activeUser) return <LoginPage users={users} onLogin={handleLogin} />;
 
   return (
     <div
@@ -2596,7 +2657,7 @@ export default function LoomPLM() {
             </div>
 
             {/* 5. User Profile */}
-            <div style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }} onClick={() => navigate("settings")}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }} onClick={() => navigate("settings")} title="Open account settings">
               <div style={{ width: 30, height: 30, borderRadius: 999, background: "#7F77DD", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 11, fontWeight: 700 }}>
                 {role.label.split(" ")[0].slice(0, 2).toUpperCase()}
               </div>
@@ -2604,6 +2665,7 @@ export default function LoomPLM() {
                 <div style={{ fontSize: 12.5, fontWeight: 600, color: isDarkMode ? "#F8FAFC" : "#1B2130" }}>{role.label.split(" (")[0]}</div>
                 <div style={{ fontSize: 10.5, color: isDarkMode ? "#94A3B8" : "#8A8D98" }}>{role.dept}</div>
               </div>
+              <button onClick={event => { event.stopPropagation(); handleLogout(); }} style={{ border: "1px solid #D1D5DB", background: "transparent", borderRadius: 6, padding: "5px 8px", color: isDarkMode ? "#CBD5E1" : "#565A66", fontSize: 11, cursor: "pointer" }}>Sign out</button>
             </div>
           </div>
         </div>
