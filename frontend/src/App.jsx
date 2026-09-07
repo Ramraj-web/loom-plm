@@ -147,7 +147,17 @@ export default function LoomPLM() {
         ]);
         if (cancelled) return;
         if (userRes?.value) { try { const parsed = JSON.parse(userRes.value); if (Array.isArray(parsed) && parsed.length) setUsers(parsed); } catch (e) {} }
-        if (teamRes?.value) { try { const parsed = JSON.parse(teamRes.value); if (Array.isArray(parsed) && parsed.length) setTeams(parsed); } catch (e) {} }
+        if (teamRes?.value) {
+          try {
+            const parsed = JSON.parse(teamRes.value);
+            if (Array.isArray(parsed) && parsed.length) {
+              // Merge any missing default department teams so user never has to type them manually
+              const existingNames = new Set(parsed.map(t => t.name.toLowerCase()));
+              const missingDefaults = DEFAULT_TEAMS.filter(dt => !existingNames.has(dt.name.toLowerCase()));
+              setTeams([...parsed, ...missingDefaults]);
+            }
+          } catch (e) {}
+        }
         if (rotationRes?.value) { try { setRotation(prev => ({ ...prev, ...JSON.parse(rotationRes.value) })); } catch (e) {} }
         setAccessLoaded(true);
       } catch (e) {}

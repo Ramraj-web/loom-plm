@@ -1,15 +1,37 @@
 import React, { useMemo, useState } from "react";
 
+import { ORG_STRUCTURE } from "../constants/loomData.js";
+
 const PERMISSIONS = [
   ["dashboard", "Dashboard"], ["orders", "Orders"], ["tasks", "Tasks"],
   ["approvals", "Approvals"], ["attendance", "Attendance & leave"],
   ["reports", "Reports"], ["settings", "Settings"],
 ];
 const makeId = prefix => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+// Generate teams for each department in GarmaX
+const ALL_DEPARTMENTS = Object.keys(ORG_STRUCTURE);
+
 export const DEFAULT_TEAMS = [
   { id: "team-admin", name: "Administrators", permissions: PERMISSIONS.map(([key]) => key) },
-  { id: "team-operations", name: "Operations", permissions: ["dashboard", "orders", "tasks", "attendance"] },
+  ...ALL_DEPARTMENTS.map(dept => {
+    // Determine permissions per department
+    let perms = ["dashboard", "tasks", "attendance"];
+    if (["Merchandising", "Planning", "Program", "Sample", "Costing"].includes(dept)) {
+      perms.push("orders", "approvals", "reports");
+    } else if (["Purchase – Fabric", "Purchase – Trims", "Quality", "Finishing", "Production", "Cutting"].includes(dept)) {
+      perms.push("orders", "approvals");
+    } else {
+      perms.push("orders");
+    }
+    return {
+      id: `team-${dept.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+      name: dept,
+      permissions: perms,
+    };
+  })
 ];
+
 export const DEFAULT_USERS = [
   { id: "user-admin", employeeId: "EMP001", name: "Admin", email: "admin@loom.local", username: "admin", password: "admin123", teamId: "team-admin", active: true },
 ];
@@ -57,13 +79,199 @@ export function UserAccessPage({ users, teams, onChangeUsers, onChangeTeams, rot
     onChangeTeams([...teams, { id: makeId("team"), name: teamName.trim(), permissions: ["dashboard"] }]);
     setTeamName("");
   };
-  const togglePermission = (teamId, permission) => onChangeTeams(teams.map(team => team.id === teamId ? { ...team, permissions: team.permissions.includes(permission) ? team.permissions.filter(item => item !== permission) : [...team.permissions, permission] } : team));
+  const [selectedDeptToAdd, setSelectedDeptToAdd] = useState(ALL_DEPARTMENTS[0] || "");
+
+  const addDepartmentAsTeam = event => {
+    event.preventDefault();
+    if (!selectedDeptToAdd) return;
+    const existing = teams.find(t => t.name.toLowerCase() === selectedDeptToAdd.toLowerCase());
+    if (existing) {
+      alert(`Team for "${selectedDeptToAdd}" already exists!`);
+      return;
+    }
+    const newTeam = {
+      id: `team-${selectedDeptToAdd.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now().toString(36)}`,
+      name: selectedDeptToAdd,
+      permissions: ["dashboard", "orders", "tasks", "attendance"]
+    };
+    onChangeTeams([...teams, newTeam]);
+  };
+
   return <div style={{ paddingBottom: 40 }}>
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: 22 }}><div><h1 style={{ margin: 0, fontSize: 22, color: "#1B2130" }}>User management</h1><div style={{ color: "#8A8D98", fontSize: 13.5, marginTop: 4 }}>Create users, assign teams, and control access</div></div>{tab === "users" && <button onClick={resetUser} style={primaryButtonStyle}>Add new user</button>}</div>
-    <div style={{ display: "flex", gap: 4, marginBottom: 18 }}>{[["users", `Users (${users.length})`], ["teams", `Teams (${teams.length})`], ["display", "Big-screen display"]].map(([key, label]) => <button key={key} onClick={() => setTab(key)} style={{ ...tabButtonStyle, ...(tab === key ? activeTabStyle : {}) }}>{label}</button>)}</div>
-    {tab === "users" && <><form onSubmit={submitUser} style={panelStyle}><div style={panelTitle}>{editing ? "Edit user" : "Add user"}</div><div style={formGrid}>{[["name", "Full name"], ["employeeId", "Employee ID"], ["email", "Email"], ["username", "Username"], ["password", "Password"]].map(([key, label]) => <label key={key} style={labelStyle}>{label}<input required={key !== "email"} type={key === "password" ? "password" : "text"} value={userForm[key]} onChange={e => setUserForm({ ...userForm, [key]: e.target.value })} style={inputStyle} /></label>)}<label style={labelStyle}>Team<select value={userForm.teamId} onChange={e => setUserForm({ ...userForm, teamId: e.target.value })} style={inputStyle}>{teams.map(team => <option key={team.id} value={team.id}>{team.name}</option>)}</select></label></div><button type="submit" style={primaryButtonStyle}>{editing ? "Save user" : "Create user"}</button>{editing && <button type="button" onClick={resetUser} style={secondaryButtonStyle}>Cancel</button>}</form><div style={panelStyle}><div style={panelTitle}>Users</div>{users.map(user => <div key={user.id} style={rowStyle}><div style={avatarStyle}>{user.name.slice(0, 1).toUpperCase()}</div><div style={{ flex: 1 }}><b>{user.name}</b><div style={{ color: "#8A8D98", fontSize: 12 }}>{user.email || user.username} · {teamMap[user.teamId]?.name || "No team"}</div></div><button onClick={() => { setEditing(user); setUserForm(user); }} style={secondaryButtonStyle}>Edit</button><button onClick={() => onChangeUsers(users.filter(item => item.id !== user.id))} style={dangerButtonStyle}>Delete</button></div>)}</div></>}
-    {tab === "teams" && <><form onSubmit={addTeam} style={{ ...panelStyle, display: "flex", gap: 10 }}><input placeholder="Team name" value={teamName} onChange={e => setTeamName(e.target.value)} required style={{ ...inputStyle, flex: 1 }} /><button type="submit" style={primaryButtonStyle}>Add team</button></form>{teams.map(team => <div key={team.id} style={panelStyle}><div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}><b>{team.name}</b>{team.id !== "team-admin" && <button onClick={() => onChangeTeams(teams.filter(item => item.id !== team.id))} style={dangerButtonStyle}>Delete</button>}</div><div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{PERMISSIONS.map(([permission, label]) => <label key={permission} style={{ fontSize: 12, color: "#4B5563" }}><input type="checkbox" checked={team.permissions.includes(permission)} onChange={() => togglePermission(team.id, permission)} /> {label}</label>)}</div></div>)}</>}
-    {tab === "display" && <div style={panelStyle}><div style={panelTitle}>Performance rotation</div><label style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 13, marginBottom: 18 }}><input type="checkbox" checked={rotation.enabled} onChange={e => onChangeRotation({ ...rotation, enabled: e.target.checked })} /> Rotate employee dashboards automatically</label><label style={labelStyle}>Interval (minutes)<input type="number" min="2" max="3" value={rotation.intervalMinutes} onChange={e => onChangeRotation({ ...rotation, intervalMinutes: Math.min(3, Math.max(2, Number(e.target.value) || 2)) })} style={{ ...inputStyle, maxWidth: 120 }} /></label><div style={{ color: "#8A8D98", fontSize: 12, marginTop: 14 }}>When enabled, the screen changes employee dashboard every 2 to 3 minutes.</div></div>}
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: 22 }}>
+      <div>
+        <h1 style={{ margin: 0, fontSize: 22, color: "#1B2130" }}>User & Team Management</h1>
+        <div style={{ color: "#8A8D98", fontSize: 13.5, marginTop: 4 }}>
+          Create users, assign department teams, and control access permissions
+        </div>
+      </div>
+      {tab === "users" && <button onClick={resetUser} style={primaryButtonStyle}>Add new user</button>}
+    </div>
+
+    <div style={{ display: "flex", gap: 4, marginBottom: 18 }}>
+      {[
+        ["users", `Users (${users.length})`],
+        ["teams", `Teams / Departments (${teams.length})`],
+        ["display", "Big-screen display"]
+      ].map(([key, label]) => (
+        <button key={key} onClick={() => setTab(key)} style={{ ...tabButtonStyle, ...(tab === key ? activeTabStyle : {}) }}>
+          {label}
+        </button>
+      ))}
+    </div>
+
+    {tab === "users" && (
+      <>
+        <form onSubmit={submitUser} style={panelStyle}>
+          <div style={panelTitle}>{editing ? "Edit user" : "Add user"}</div>
+          <div style={formGrid}>
+            {[
+              ["name", "Full name"],
+              ["employeeId", "Employee ID"],
+              ["email", "Email"],
+              ["username", "Username"],
+              ["password", "Password"]
+            ].map(([key, label]) => (
+              <label key={key} style={labelStyle}>
+                {label}
+                <input
+                  required={key !== "email"}
+                  type={key === "password" ? "password" : "text"}
+                  value={userForm[key]}
+                  onChange={e => setUserForm({ ...userForm, [key]: e.target.value })}
+                  style={inputStyle}
+                  placeholder={`Enter ${label.toLowerCase()}`}
+                />
+              </label>
+            ))}
+            <label style={labelStyle}>
+              Team / Department
+              <select
+                value={userForm.teamId}
+                onChange={e => setUserForm({ ...userForm, teamId: e.target.value })}
+                style={inputStyle}
+              >
+                {teams.map(team => (
+                  <option key={team.id} value={team.id}>
+                    {team.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+            <button type="submit" style={primaryButtonStyle}>{editing ? "Save user" : "Create user"}</button>
+            {editing && <button type="button" onClick={resetUser} style={secondaryButtonStyle}>Cancel</button>}
+          </div>
+        </form>
+
+        <div style={panelStyle}>
+          <div style={panelTitle}>Users</div>
+          {users.map(user => (
+            <div key={user.id} style={rowStyle}>
+              <div style={avatarStyle}>{user.name.slice(0, 1).toUpperCase()}</div>
+              <div style={{ flex: 1 }}>
+                <b>{user.name}</b>
+                <div style={{ color: "#8A8D98", fontSize: 12 }}>
+                  {user.email || user.username} · <span style={{ fontWeight: 600, color: "#1F9E8D" }}>{teamMap[user.teamId]?.name || "No team"}</span>
+                </div>
+              </div>
+              <button onClick={() => { setEditing(user); setUserForm(user); }} style={secondaryButtonStyle}>Edit</button>
+              <button onClick={() => onChangeUsers(users.filter(item => item.id !== user.id))} style={dangerButtonStyle}>Delete</button>
+            </div>
+          ))}
+        </div>
+      </>
+    )}
+
+    {tab === "teams" && (
+      <>
+        {/* Quick add from existing GarmaX Departments */}
+        <div style={{ ...panelStyle, marginBottom: 16 }}>
+          <div style={panelTitle}>Quick Add Team from GarmaX Departments</div>
+          <form onSubmit={addDepartmentAsTeam} style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <select
+              value={selectedDeptToAdd}
+              onChange={e => setSelectedDeptToAdd(e.target.value)}
+              style={{ ...inputStyle, flex: "1 1 240px", maxWidth: 360 }}
+            >
+              {ALL_DEPARTMENTS.map(d => {
+                const alreadyExists = teams.some(t => t.name.toLowerCase() === d.toLowerCase());
+                return (
+                  <option key={d} value={d}>
+                    {d} {alreadyExists ? "(Already in Teams)" : ""}
+                  </option>
+                );
+              })}
+            </select>
+            <button type="submit" style={primaryButtonStyle}>+ Add Department to Teams</button>
+          </form>
+        </div>
+
+        {/* Custom Team Name */}
+        <form onSubmit={addTeam} style={{ ...panelStyle, display: "flex", gap: 10, alignItems: "center" }}>
+          <input
+            placeholder="Or type custom team name..."
+            value={teamName}
+            onChange={e => setTeamName(e.target.value)}
+            style={{ ...inputStyle, flex: 1 }}
+          />
+          <button type="submit" style={primaryButtonStyle}>Add Custom Team</button>
+        </form>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 12 }}>
+          {teams.map(team => (
+            <div key={team.id} style={{ ...panelStyle, marginBottom: 0 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <b style={{ fontSize: 14, color: "#151B2E" }}>{team.name}</b>
+                {team.id !== "team-admin" && (
+                  <button onClick={() => onChangeTeams(teams.filter(item => item.id !== team.id))} style={dangerButtonStyle}>
+                    Delete
+                  </button>
+                )}
+              </div>
+              <div style={{ fontSize: 11.5, color: "#64748B", marginBottom: 8, fontWeight: 600 }}>Permissions:</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {PERMISSIONS.map(([permission, label]) => (
+                  <label key={permission} style={{ fontSize: 12, color: "#4B5563", display: "flex", alignItems: "center", gap: 4, background: "#F8FAFC", padding: "4px 8px", borderRadius: 6, border: "1px solid #E2E8F0" }}>
+                    <input
+                      type="checkbox"
+                      checked={team.permissions.includes(permission)}
+                      onChange={() => togglePermission(team.id, permission)}
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </>
+    )}
+
+    {tab === "display" && (
+      <div style={panelStyle}>
+        <div style={panelTitle}>Performance rotation</div>
+        <label style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 13, marginBottom: 18 }}>
+          <input type="checkbox" checked={rotation.enabled} onChange={e => onChangeRotation({ ...rotation, enabled: e.target.checked })} />
+          Rotate employee dashboards automatically
+        </label>
+        <label style={labelStyle}>
+          Interval (minutes)
+          <input
+            type="number"
+            min="2"
+            max="3"
+            value={rotation.intervalMinutes}
+            onChange={e => onChangeRotation({ ...rotation, intervalMinutes: Math.min(3, Math.max(2, Number(e.target.value) || 2)) })}
+            style={{ ...inputStyle, maxWidth: 120 }}
+          />
+        </label>
+        <div style={{ color: "#8A8D98", fontSize: 12, marginTop: 14 }}>
+          When enabled, the screen changes employee dashboard every 2 to 3 minutes.
+        </div>
+      </div>
+    )}
   </div>;
 }
 
