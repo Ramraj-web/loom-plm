@@ -97,6 +97,19 @@ export function UserAccessPage({ users, teams, onChangeUsers, onChangeTeams, rot
     onChangeTeams([...teams, newTeam]);
   };
 
+  const togglePermission = (teamId, permission) => {
+    onChangeTeams(
+      teams.map(team => {
+        if (team.id !== teamId) return team;
+        const exists = team.permissions.includes(permission);
+        const updatedPerms = exists
+          ? team.permissions.filter(p => p !== permission)
+          : [...team.permissions, permission];
+        return { ...team, permissions: updatedPerms };
+      })
+    );
+  };
+
   return <div style={{ paddingBottom: 40 }}>
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: 22 }}>
       <div>

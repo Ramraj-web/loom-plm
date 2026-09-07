@@ -597,23 +597,29 @@ export function Dashboard({
             <div></div>
             {["12 May", "13 May", "14 May", "15 May", "16 May", "17 May", "18 May"].map(d => <div key={d} style={{ textAlign: "center" }}>{d}</div>)}
           </div>
-          {activeOrders.slice(0, 5).map((o, i) => {
-            const startCol = (i % 4) + 1;
-            const span = 2 + (i % 3);
-            const color = ["#7F77DD", "#E2A83B", "#1F9E8D", "#D85A30", "#378ADD"][i % 5];
-            const activeStageName = o.stages && o.stages[o.activeUpto] ? o.stages[o.activeUpto].name : "Shipment";
-            return (
-              <div key={o.id} onClick={() => onOpenOrder(o.id)} style={{ display: "grid", gridTemplateColumns: "90px repeat(7, 1fr)", alignItems: "center", marginBottom: 10, cursor: "pointer" }}>
-                <div style={{ fontSize: 11, color: "#565A66" }}>
-                  <div style={{ fontWeight: 600 }}>{o.id}</div>
-                  <div style={{ color: "#B0B2BA" }}>{o.style}</div>
+          {activeOrders.length === 0 ? (
+            <div style={{ padding: "28px 16px", textAlign: "center", color: "#8A8D98", fontSize: 12 }}>
+              No active orders scheduled.
+            </div>
+          ) : (
+            activeOrders.slice(0, 5).map((o, i) => {
+              const startCol = (i % 4) + 1;
+              const span = 2 + (i % 3);
+              const color = ["#7F77DD", "#E2A83B", "#1F9E8D", "#D85A30", "#378ADD"][i % 5];
+              const activeStageName = o.stages && o.stages[o.activeUpto] ? o.stages[o.activeUpto].name : "Shipment";
+              return (
+                <div key={o.id} onClick={() => onOpenOrder(o.id)} style={{ display: "grid", gridTemplateColumns: "90px repeat(7, 1fr)", alignItems: "center", marginBottom: 10, cursor: "pointer" }}>
+                  <div style={{ fontSize: 11, color: "#565A66" }}>
+                    <div style={{ fontWeight: 600 }}>{o.id}</div>
+                    <div style={{ color: "#B0B2BA" }}>{o.style}</div>
+                  </div>
+                  <div style={{ gridColumn: `${startCol + 1} / span ${span}`, height: 20, background: color + "33", color: color, fontSize: 10, fontWeight: 600, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 6px" }}>
+                    {activeStageName}
+                  </div>
                 </div>
-                <div style={{ gridColumn: `${startCol + 1} / span ${span}`, height: 20, background: color + "33", color: color, fontSize: 10, fontWeight: 600, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 6px" }}>
-                  {activeStageName}
-                </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </Card>
 
         <Card style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>

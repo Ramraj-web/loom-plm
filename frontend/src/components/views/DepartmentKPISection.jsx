@@ -124,23 +124,16 @@ export function DepartmentPerformanceAndKPI({
         });
       }
     });
-    if (list.length === 0) {
-      list.push({
-        name: `${deptName} Head`,
-        title: "Manager",
-        initials: deptName.slice(0, 2).toUpperCase()
-      });
-    }
     return list;
-  }, [roles, deptName]);
+  }, [roles]);
 
   // Live Department Performance Metrics
-  const totalTasksCount = allDeptTasks.length > 0 ? allDeptTasks.length : 54;
-  const completedCount = allDeptTasks.length > 0 ? doneTasks.length : 19;
-  const inProgressCount = allDeptTasks.length > 0 ? processTasks.length : 2;
+  const totalTasksCount = allDeptTasks.length;
+  const completedCount = doneTasks.length;
+  const inProgressCount = processTasks.length;
   const delayedCount = allDeptTasks.filter(t => t.stage?.status === "delayed" || t.stage?.reason).length;
 
-  const taskCompletionRate = totalTasksCount > 0 ? Math.round((completedCount / totalTasksCount) * 100) : 35;
+  const taskCompletionRate = totalTasksCount > 0 ? Math.round((completedCount / totalTasksCount) * 100) : 0;
   const onTimeRate = totalTasksCount > 0 ? Math.max(0, Math.round(((totalTasksCount - delayedCount) / totalTasksCount) * 100)) : 100;
 
   // Selected KPI template
@@ -333,7 +326,12 @@ export function DepartmentPerformanceAndKPI({
 
         {/* Staff List */}
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {staffList.map(staff => {
+          {staffList.length === 0 ? (
+            <div style={{ padding: "28px 16px", textAlign: "center", color: "#64748B", background: "#F8FAFC", borderRadius: 8, border: "1px dashed #E2E8F0" }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#334155" }}>No personnel assigned yet</div>
+              <div style={{ fontSize: 12, marginTop: 4 }}>Click &quot;Edit Department&quot; above to assign team members and managers to track their KPIs.</div>
+            </div>
+          ) : staffList.map(staff => {
             const isExpanded = expandedStaff === staff.name;
             const overallScore = calculateOverallScore(staff.name);
             const appraisal = getAppraisalRecommendation(overallScore);

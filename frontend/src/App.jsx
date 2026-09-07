@@ -40,20 +40,7 @@ function roleForUser(user, teams) {
 }
 
 export default function LoomPLM() {
-  const [orders, setOrders] = useState(() =>
-    INITIAL_ORDERS.map((o, i) => ({
-      ...o,
-      template: "90",
-      costingTemplate: "fabric",
-      costingRows: buildCostingRows("fabric"),
-      vapCount: 1,
-      shippedQty: Math.round(o.qty * [0.72, 0.4, 0.55, 0.9, 0.6, 0.98][i % 6]),
-      plannedCost: Math.round(o.qty * [4.2, 2.1, 7.8, 3.6, 5.4, 2.8][i % 6]),
-      actualCost: Math.round(o.qty * [4.2, 2.1, 7.8, 3.6, 5.4, 2.8][i % 6] * [1.044, 1.077, 0.976, 0.991, 1.052, 0.977][i % 6]),
-      stages: makeStages("90", o.activeUpto, o.delayedAt).map(s => s.dept === "VAP" ? { ...s, supplier: VAP_SUPPLIERS[i % VAP_SUPPLIERS.length] } : s),
-      preProd: initPreProd(),
-    }))
-  );
+  const [orders, setOrders] = useState([]);
 
   const [view, setView] = useState("dashboard");
   const [previousView, setPreviousView] = useState("dashboard");
@@ -90,7 +77,7 @@ export default function LoomPLM() {
     } catch (e) {}
   }, [departmentChecklists]);
 
-  const [selectedDate, setSelectedDate] = useState("2026-05-12");
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [searchQuery, setSearchQuery] = useState("");
   const [notifOpen, setNotifOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
@@ -166,7 +153,12 @@ export default function LoomPLM() {
   }, []);
 
   useEffect(() => { if (accessLoaded && window.storage) window.storage.set("users", JSON.stringify(users), true); }, [users, accessLoaded]);
-  useEffect(() => { if (accessLoaded && window.storage) window.storage.set("teams", JSON.stringify(teams), true); }, [teams, accessLoaded]);
+  useEffect(() => {
+    if (accessLoaded && window.storage) window.storage.set("teams", JSON.stringify(teams), true);
+    if (activeUser) {
+      setRole(roleForUser(activeUser, teams));
+    }
+  }, [teams, accessLoaded, activeUser]);
   useEffect(() => { if (accessLoaded && window.storage) window.storage.set("dashboard_rotation", JSON.stringify(rotation), true); }, [rotation, accessLoaded]);
 
   useEffect(() => {
@@ -189,40 +181,43 @@ export default function LoomPLM() {
     (async () => {
       try {
         const backendOrders = await resourcesApi.list("orders", "?all=true");
-        if (!cancelled && Array.isArray(backendOrders) && backendOrders.length > 0) {
-          setOrders(prev => {
-            const merged = [...backendOrders];
-            prev.forEach(p => {
-              if (!merged.some(m => m.id === p.id)) {
-                merged.push(p);
-              }
+        if (!cancelled && Array.isArray(backendOrders)) {
+          // Filter out dummy demo seeds
+          const realOrders = backendOrders.filter(bo => !["GKT-1054", "ST-7788", "JKT-2231", "TR-8899", "DR-5566", "PL-3321"].includes(bo.id));
+          if (realOrders.length > 0) {
+            setOrders(prev => {
+              const merged = [...realOrders];
+              prev.forEach(p => {
+                if (!merged.some(m => m.id === p.id)) {
+                  merged.push(p);
+                }
+              });
+              return merged.map((bo) => {
+                const existing = prev.find(p => p.id === bo.id);
+                return {
+                  ...existing,
+                  ...bo,
+                  completed: bo.completed ?? existing?.completed ?? false,
+                  isDeleted: bo.isDeleted ?? existing?.isDeleted ?? false,
+                  completedAt: bo.completedAt || existing?.completedAt || null,
+                  deletedAt: bo.deletedAt || existing?.deletedAt || null,
+                  template: bo.template || existing?.template || "90",
+                  costingTemplate: bo.costingTemplate || existing?.costingTemplate || "fabric",
+                  costingRows: bo.costingRows || existing?.costingRows || buildCostingRows(bo.costingTemplate || existing?.costingTemplate || "fabric"),
+                  vapCount: bo.vapCount ?? existing?.vapCount ?? 1,
+                  shippedQty: bo.shippedQty ?? existing?.shippedQty ?? 0,
+                  plannedCost: bo.plannedCost ?? existing?.plannedCost ?? 0,
+                  actualCost: bo.actualCost ?? existing?.actualCost ?? 0,
+                  stages: (bo.stages && bo.stages.length === 34) 
+                    ? bo.stages 
+                    : (existing?.stages && existing.stages.length === 34) 
+                      ? existing.stages 
+                      : makeStages(bo.template || existing?.template || "90", 0, null),
+                  preProd: bo.preProd || existing?.preProd || initPreProd(),
+                };
+              });
             });
-            return merged.map((bo) => {
-              const existing = prev.find(p => p.id === bo.id);
-              const isDefaultSeed = ["GKT-1054", "ST-7788", "JKT-2231", "TR-8899", "DR-5566", "PL-3321"].includes(bo.id);
-              return {
-                ...existing,
-                ...bo,
-                completed: bo.completed ?? existing?.completed ?? false,
-                isDeleted: bo.isDeleted ?? existing?.isDeleted ?? false,
-                completedAt: bo.completedAt || existing?.completedAt || null,
-                deletedAt: bo.deletedAt || existing?.deletedAt || null,
-                template: bo.template || existing?.template || "90",
-                costingTemplate: bo.costingTemplate || existing?.costingTemplate || "fabric",
-                costingRows: bo.costingRows || existing?.costingRows || buildCostingRows(bo.costingTemplate || existing?.costingTemplate || "fabric"),
-                vapCount: bo.vapCount ?? existing?.vapCount ?? 1,
-                shippedQty: bo.shippedQty ?? existing?.shippedQty ?? (isDefaultSeed ? Math.round((bo.qty || 5000) * 0.75) : 0),
-                plannedCost: bo.plannedCost ?? existing?.plannedCost ?? Math.round((bo.qty || 5000) * 4),
-                actualCost: bo.actualCost ?? existing?.actualCost ?? Math.round((bo.qty || 5000) * 4.2),
-                stages: (bo.stages && bo.stages.length === 34) 
-                  ? bo.stages 
-                  : (existing?.stages && existing.stages.length === 34) 
-                    ? existing.stages 
-                    : makeStages(bo.template || existing?.template || "90", isDefaultSeed ? 5 : 0, null),
-                preProd: bo.preProd || existing?.preProd || initPreProd(),
-              };
-            });
-          });
+          }
         }
       } catch (e) {}
 
@@ -304,8 +299,10 @@ export default function LoomPLM() {
             }
           } catch (e) {}
 
-          if (!cancelled && Array.isArray(baseRoster) && baseRoster.length > 0) {
-            setRoster(baseRoster);
+          const DEMO_NAMES = new Set(["Arasinth Raja", "Suresh", "Durai", "Praveen Kumar", "Gopal", "Sezhiyan", "Murugan", "Karthik", "Ravi", "Kavitha", "Selva Kumar", "Ramesh", "Priya", "Anand", "Rajesh"]);
+          if (!cancelled && Array.isArray(baseRoster)) {
+            const cleanRoster = baseRoster.filter(s => s.name && s.name !== "—" && !DEMO_NAMES.has(s.name));
+            setRoster(cleanRoster);
           }
 
           // Load org structure
@@ -327,7 +324,16 @@ export default function LoomPLM() {
 
           const attRes = await window.storage.get("attendance", true);
           if (!cancelled && attRes && attRes.value) {
-            try { setAttendance(JSON.parse(attRes.value)); } catch (e) {}
+            try {
+              const parsed = JSON.parse(attRes.value);
+              if (parsed && typeof parsed === "object") {
+                const cleanAtt = {};
+                Object.keys(parsed).forEach(k => {
+                  if (!DEMO_NAMES.has(k) && k !== "—") cleanAtt[k] = parsed[k];
+                });
+                setAttendance(cleanAtt);
+              }
+            } catch (e) {}
           }
           const certRes = await window.storage.get("certifications", true);
           if (!cancelled && certRes && certRes.value) {
@@ -373,7 +379,12 @@ export default function LoomPLM() {
           }
           const leaveRes = await window.storage.get("leaveRequests", true);
           if (!cancelled && leaveRes && leaveRes.value) {
-            try { setLeaveRequests(JSON.parse(leaveRes.value)); } catch (e) {}
+            try {
+              const parsed = JSON.parse(leaveRes.value);
+              if (Array.isArray(parsed)) {
+                setLeaveRequests(parsed.filter(l => !DEMO_NAMES.has(l.name)));
+              }
+            } catch (e) {}
           }
           const supRes = await window.storage.get("suppliers", true);
           if (!cancelled && supRes && supRes.value) {
@@ -619,7 +630,7 @@ export default function LoomPLM() {
 
   const handleSetRole = (newRole) => {
     setRole(newRole);
-    if (newRole && newRole.dept === "Executive") {
+    if (newRole && (newRole.dept === "Executive" || newRole.dept === "Executive (MD)")) {
       setView("executiveOverview");
     } else {
       setView("dashboard");
@@ -1056,7 +1067,16 @@ export default function LoomPLM() {
 
   const deleteOrder = (id) => {
     const deletedAt = new Date().toISOString();
+    // 1. Soft-delete the order
     setOrders(prev => prev.map(o => o.id === id ? { ...o, isDeleted: true, deletedAt } : o));
+    
+    // 2. Automatically delete/cleanup all tasks related to this order!
+    setCustomTasks(prev => {
+      const remainingTasks = prev.filter(t => t.orderId !== id);
+      if (window.storage) window.storage.set("custom_tasks", JSON.stringify(remainingTasks), true);
+      return remainingTasks;
+    });
+
     try {
       resourcesApi.remove("orders", id).catch(err => {
         console.warn("Error deleting order:", err.message);
@@ -1067,10 +1087,40 @@ export default function LoomPLM() {
       eventKey: `order-deleted-${id}`,
       type: "order",
       title: "Order Deleted",
-      message: `Order ${id} was moved to Deleted History.`,
+      message: `Order ${id} and its associated tasks were removed.`,
       relatedModule: "orders",
       relatedId: id,
       priority: "medium"
+    });
+  };
+
+  const permanentDeleteOrder = (id) => {
+    // Completely purge order from state & storage
+    setOrders(prev => {
+      const remaining = prev.filter(o => o.id !== id);
+      if (window.storage) window.storage.set("orders", JSON.stringify(remaining), true);
+      return remaining;
+    });
+
+    // Clean up any remaining tasks related to this order
+    setCustomTasks(prev => {
+      const remainingTasks = prev.filter(t => t.orderId !== id);
+      if (window.storage) window.storage.set("custom_tasks", JSON.stringify(remainingTasks), true);
+      return remainingTasks;
+    });
+
+    try {
+      resourcesApi.remove("orders", id).catch(() => {});
+    } catch (e) {}
+
+    pushNotification({
+      eventKey: `order-perm-deleted-${id}-${Date.now()}`,
+      type: "order",
+      title: "Order Permanently Deleted",
+      message: `Order ${id} has been permanently removed from the system.`,
+      relatedModule: "orders",
+      relatedId: id,
+      priority: "high"
     });
   };
 
@@ -1111,14 +1161,28 @@ export default function LoomPLM() {
         return res;
       });
 
+      // Auto handover: When a stage is marked done, find the next pending stage and assign it to its department
+      let nextStageToActivate = null;
+      let nextStageIdx = -1;
+
       updatedStages.forEach((s, idx) => {
         const prevStage = o.stages?.[idx];
         if (s.status === "done" && prevStage?.status !== "done") {
+          // Find next pending stage after this completed stage
+          for (let j = idx + 1; j < updatedStages.length; j++) {
+            if (updatedStages[j].status === "pending") {
+              nextStageToActivate = updatedStages[j];
+              nextStageIdx = j;
+              break;
+            }
+          }
+
+          // General stage done notification
           pushNotification({
             eventKey: `tna-stage-done-${id}-${s.name}`,
             type: "tna",
             title: "T&A Stage Completed",
-            message: `${s.name} stage completed for ${id}.`,
+            message: `${s.name} stage completed for ${id} by ${s.dept}.`,
             relatedModule: "tna",
             relatedId: id,
             priority: "low"
@@ -1136,6 +1200,27 @@ export default function LoomPLM() {
           });
         }
       });
+
+      // If next stage found, advance it to in_progress and send Targeted Department Notification
+      if (nextStageToActivate && nextStageIdx !== -1) {
+        updatedStages[nextStageIdx] = {
+          ...nextStageToActivate,
+          status: "in_progress",
+          updatedAt: nowIso
+        };
+
+        // TARGETED NOTIFICATION: Only goes to this specific department!
+        pushNotification({
+          eventKey: `dept-task-assigned-${id}-${nextStageToActivate.name}-${nextStageToActivate.dept}`,
+          type: "task",
+          title: `New Task: ${nextStageToActivate.name}`,
+          message: `Order ${id} has moved to your department (${nextStageToActivate.dept}). Stage "${nextStageToActivate.name}" is now assigned to you!`,
+          relatedModule: "tasks",
+          relatedId: id,
+          targetDept: nextStageToActivate.dept, // Strict department targeting
+          priority: "high"
+        });
+      }
 
       // Detect Order Status change
       if (status !== o.status) {
@@ -1577,13 +1662,14 @@ export default function LoomPLM() {
     return items;
   })();
 
-  const isExecutive = role.dept === "Executive";
+  const isExecutive = role.dept === "Executive" || role.dept === "Executive (MD)";
 
   const navSections = isExecutive ? [
     {
       section: "Executive Suite",
       items: [
-        { key: "executiveOverview", label: "Executive Overview", icon: TrendingUp },
+        { key: "executiveOverview", label: "MD Executive Dashboard", icon: TrendingUp },
+        { key: "departments", label: "Departments", icon: Users },
         { key: "orders", label: "Orders", icon: Package },
         { key: "approvals", label: "Approvals", icon: ClipboardCheck },
         { key: "myChecklist", label: "My checklist", icon: ClipboardList },
@@ -1602,6 +1688,7 @@ export default function LoomPLM() {
   ] : [
     { section: null, items: [
       { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+      ...(canSeeAll ? [{ key: "executiveOverview", label: "MD Dashboard", icon: TrendingUp }] : []),
       ...(canAccess("orders") ? [{ key: "orders", label: "Orders", icon: Package }] : []),
       { key: "tasks", label: "My tasks", icon: CheckSquare },
       { key: "myChecklist", label: "My checklist", icon: ClipboardList },
@@ -2006,33 +2093,86 @@ export default function LoomPLM() {
       />
     );
   } else if (view === "departmentDetail" && selectedDept) {
-    content = (
-      <DepartmentDetail 
-        deptName={selectedDept} 
-        orders={orders} 
-        onBack={() => setView(previousView)} 
-        onOpenOrder={openOrder} 
-        orgStructure={orgStructure} 
-        deptDescriptions={deptDescriptions}
-        onUpdateDepartment={handleUpdateDepartment}
-        suppliers={suppliers}
-        onAssignWork={handleAssignWork}
-      />
-    );
+    if (selectedDept === "Executive (MD)" || selectedDept === "Executive") {
+      content = (
+        <div>
+          <div style={{ marginBottom: 14 }}>
+            <button
+              onClick={() => setView(previousView)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "6px 12px",
+                borderRadius: 6,
+                border: "1px solid #D1D5DB",
+                background: "#FFFFFF",
+                fontSize: 12.5,
+                fontWeight: 600,
+                color: "#374151",
+                cursor: "pointer",
+                marginBottom: 10
+              }}
+            >
+              ← Back to departments
+            </button>
+          </div>
+          <ExecutiveOverviewPage
+            orders={orders}
+            attendance={attendance}
+            financials={financials}
+            roster={roster}
+            onOpenOrder={openOrder}
+            onNavigate={navigate}
+            onApproveCosting={approveOrderCosting}
+            onRejectCosting={rejectOrderCosting}
+          />
+        </div>
+      );
+    } else {
+      content = (
+        <DepartmentDetail 
+          deptName={selectedDept} 
+          orders={orders} 
+          onBack={() => setView(previousView)} 
+          onOpenOrder={openOrder} 
+          orgStructure={orgStructure} 
+          deptDescriptions={deptDescriptions}
+          onUpdateDepartment={handleUpdateDepartment}
+          suppliers={suppliers}
+          onAssignWork={handleAssignWork}
+        />
+      );
+    }
   } else if (view === "myDepartment") {
-    content = (
-      <DepartmentDetail 
-        deptName={role.dept} 
-        orders={orders} 
-        onBack={() => setView("dashboard")} 
-        onOpenOrder={openOrder} 
-        orgStructure={orgStructure} 
-        deptDescriptions={deptDescriptions}
-        onUpdateDepartment={handleUpdateDepartment}
-        suppliers={suppliers}
-        onAssignWork={handleAssignWork}
-      />
-    );
+    if (role.dept === "Executive (MD)" || role.dept === "Executive") {
+      content = (
+        <ExecutiveOverviewPage
+          orders={orders}
+          attendance={attendance}
+          financials={financials}
+          roster={roster}
+          onOpenOrder={openOrder}
+          onNavigate={navigate}
+          onApproveCosting={approveOrderCosting}
+          onRejectCosting={rejectOrderCosting}
+        />
+      );
+    } else {
+      content = (
+        <DepartmentDetail 
+          deptName={role.dept} 
+          orders={orders} 
+          onBack={() => setView("dashboard")} 
+          onOpenOrder={openOrder} 
+          orgStructure={orgStructure} 
+          deptDescriptions={deptDescriptions}
+          onUpdateDepartment={handleUpdateDepartment}
+          suppliers={suppliers}
+          onAssignWork={handleAssignWork}
+        />
+      );
+    }
   } else if (view === "orders" && canAccess("orders")) {
     content = (
       <OrdersPage
@@ -2043,6 +2183,7 @@ export default function LoomPLM() {
         onUncompleteOrder={uncompleteOrder}
         onDeleteOrder={deleteOrder}
         onRestoreOrder={restoreOrder}
+        onPermanentDeleteOrder={permanentDeleteOrder}
       />
     );
   } else if (view === "tasks") {
@@ -2153,7 +2294,7 @@ export default function LoomPLM() {
     content = <AttendancePage roster={roster} attendance={attendance} onCycle={cycleAttendance} leaveRequests={leaveRequests} onApprove={approveLeave} onReject={rejectLeave} onAddStaff={addStaff} onEditStaff={editStaff} onRemoveStaff={removeStaff} onAddLeaveRequest={addLeaveRequest} />;
   } else if (view === "finance" && (canSeeAll || role.dept === "Finance")) {
     content = <FinanceEntryPage orders={orders} financials={financials} onUpdate={updateFinancials} onUpdateOrderCost={updateOrderCost} />;
-  } else if (view === "executiveOverview" && role.dept === "Executive") {
+  } else if (view === "executiveOverview" && (canSeeAll || role.dept === "Executive" || role.dept === "Executive (MD)")) {
     content = (
       <ExecutiveOverviewPage
         orders={orders}
@@ -2214,8 +2355,18 @@ export default function LoomPLM() {
     );
   }
 
-  const unreadNotifCount = notifications.filter(n => !n.isRead && n.isDeleted !== true).length;
-  const recentNotifications = notifications.filter(n => n.isDeleted !== true).slice(0, 8);
+  // Filter notifications: Admin sees all; department users see notifications for their department or general
+  const userNotifications = notifications.filter(n => {
+    if (n.isDeleted === true) return false;
+    if (role.fullAccess || role.dept === "Executive" || role.dept === "Administrators") return true;
+    if (n.targetDept) {
+      return n.targetDept.toLowerCase() === (role.dept || "").toLowerCase();
+    }
+    return true;
+  });
+
+  const unreadNotifCount = userNotifications.filter(n => !n.isRead).length;
+  const recentNotifications = userNotifications.slice(0, 8);
 
   const handleNotificationClickFromDropdown = (notif) => {
     markNotificationAsRead(notif.id);
@@ -2457,10 +2608,10 @@ export default function LoomPLM() {
                   }}
                 />
               </label>
-              {selectedDate !== "2026-05-12" && (
+              {selectedDate !== new Date().toISOString().split("T")[0] && (
                 <button
-                  onClick={() => setSelectedDate("2026-05-12")}
-                  title="Reset to 12 May 2026"
+                  onClick={() => setSelectedDate(new Date().toISOString().split("T")[0])}
+                  title="Reset to Today"
                   style={{
                     background: isDarkMode ? "#1E293B" : "#F3F4F6",
                     border: `1px solid ${isDarkMode ? "#334155" : "#E5E7EB"}`,
@@ -2473,7 +2624,7 @@ export default function LoomPLM() {
                     whiteSpace: "nowrap"
                   }}
                 >
-                  12 May
+                  Today
                 </button>
               )}
             </div>

@@ -23,7 +23,8 @@ export function OrdersPage({
   onCompleteOrder,
   onUncompleteOrder,
   onDeleteOrder,
-  onRestoreOrder
+  onRestoreOrder,
+  onPermanentDeleteOrder
 }) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDeletedSection, setShowDeletedSection] = useState(true);
@@ -311,7 +312,7 @@ export function OrdersPage({
                   <div style={{ fontSize: 11.5, color: "#9CA3AF" }}>
                     {o.deletedAt ? new Date(o.deletedAt).toLocaleDateString() : "Archived"}
                   </div>
-                  <div style={{ textAlign: "right" }}>
+                  <div style={{ textAlign: "right", display: "flex", justifyContent: "flex-end", gap: 6, alignItems: "center" }}>
                     <button
                       onClick={() => onRestoreOrder && onRestoreOrder(o.id)}
                       title="Restore order back to active list"
@@ -331,6 +332,30 @@ export function OrdersPage({
                     >
                       <RotateCcw size={12} />
                       Restore
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (window.confirm(`Are you sure you want to PERMANENTLY delete order ${o.id}? This cannot be undone.`)) {
+                          onPermanentDeleteOrder && onPermanentDeleteOrder(o.id);
+                        }
+                      }}
+                      title="Permanently delete order forever"
+                      style={{
+                        background: "#FCEBEB",
+                        color: "#DC2626",
+                        border: "1px solid #FECACA",
+                        borderRadius: 6,
+                        padding: "4px 8px",
+                        fontSize: 11.5,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 3
+                      }}
+                    >
+                      <Trash2 size={12} />
+                      Delete Forever
                     </button>
                   </div>
                 </div>
@@ -557,10 +582,24 @@ export function MyTasksPage({
     notes: ""
   });
 
-  const tnaRows = useMemo(() => collectTasks(orders, role?.dept).filter(r => r.stage.status !== "done"), [orders, role]);
+  // Strict Department Tasks: Show active & pending stage tasks specifically assigned to this department
+  const tnaRows = useMemo(() => {
+    return collectTasks(orders, role?.dept).filter(r => {
+      if (r.stage.status === "done") return false;
+      // If user has full access / admin, show all active stages
+      if (role?.fullAccess || role?.dept === "Administrators" || role?.dept === "Executive") {
+        return true;
+      }
+      // For specific department: strictly include stages belonging to their department
+      return r.dept && r.dept.toLowerCase() === (role?.dept || "").toLowerCase();
+    });
+  }, [orders, role]);
   
   const roleCustomTasks = useMemo(() => {
-    return tasks.filter(t => !role?.dept || role.fullAccess || t.dept === role.dept || t.dept === "All");
+    return tasks.filter(t => {
+      if (role?.fullAccess || role?.dept === "Administrators" || role?.dept === "Executive") return true;
+      return t.dept === role?.dept || t.dept === "All";
+    });
   }, [tasks, role]);
 
   const handleSubmit = (e) => {
@@ -3121,7 +3160,11 @@ export function AttendancePage({ roster, attendance, onCycle, leaveRequests, onA
         <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr 0.8fr 0.8fr", fontSize: 11, color: "#8A8D98", padding: "0 4px 8px", borderBottom: "1px solid #F0F0F2" }}>
           <div>Name</div><div>Title</div><div>Department</div><div>Status</div><div style={{ textAlign: "right" }}>Actions</div>
         </div>
-        {roster.map(s => {
+        {roster.length === 0 ? (
+          <div style={{ padding: "32px 16px", textAlign: "center", color: "#8A8D98", fontSize: 13 }}>
+            No staff members in the roster yet. Use the &quot;Add a joiner&quot; form above to add team members.
+          </div>
+        ) : roster.map(s => {
           const isEditing = editingName === s.name;
           const status = attendance[s.name] || "present";
           const st = ATTENDANCE_STATUS_STYLE[status] || ATTENDANCE_STATUS_STYLE.present;
@@ -3798,19 +3841,42 @@ export function DepartmentsPage({ orders, onOpenDept, orgStructure, deptDescript
           const Icon = DEPT_ICONS[deptName] || CheckCircle2;
           const linkedStages = TA_STAGES.filter(s => s.dept === deptName).map(s => s.name);
           const description = deptDescriptions?.[deptName] || DEFAULT_DEPT_DESCRIPTIONS[deptName] || "";
+          const isExec = deptName === "Executive (MD)" || deptName === "Executive";
           return (
-            <Card key={deptName} style={{ cursor: "pointer" }}>
+            <Card
+              key={deptName}
+              style={{
+                cursor: "pointer",
+                border: isExec ? "1.5px solid #7F77DD" : undefined,
+                background: isExec ? "#FAF9FF" : undefined
+              }}
+            >
               <div onClick={() => onOpenDept(deptName)}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ width: 26, height: 26, borderRadius: 7, background: "#F0EFFB", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <Icon size={13} color="#534AB7" />
+                    <div style={{ width: 28, height: 28, borderRadius: 8, background: isExec ? "#7F77DD" : "#F0EFFB", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <Icon size={14} color={isExec ? "#FFFFFF" : "#534AB7"} />
                     </div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: "#1B2130" }}>{deptName}</div>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "#1B2130", display: "flex", alignItems: "center", gap: 6 }}>
+                        {deptName}
+                        {isExec && (
+                          <span style={{ fontSize: 10, fontWeight: 700, background: "#7F77DD", color: "#FFF", padding: "1px 7px", borderRadius: 999 }}>
+                            MD Dashboard
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  {taskCount !== null && <span style={{ fontSize: 11, color: "#8A8D98" }}>{taskCount} open tasks</span>}
+                  {isExec ? (
+                    <span style={{ fontSize: 11.5, fontWeight: 700, color: "#534AB7" }}>Open Dashboard →</span>
+                  ) : (
+                    taskCount !== null && <span style={{ fontSize: 11, color: "#8A8D98" }}>{taskCount} open tasks</span>
+                  )}
                 </div>
-                <div style={{ fontSize: 11, color: "#8A8D98", marginBottom: 6 }}>{roles.length} roles · {linkedStages.length > 0 ? `owns: ${linkedStages.join(", ")}` : "support function"}</div>
+                <div style={{ fontSize: 11, color: isExec ? "#534AB7" : "#8A8D98", marginBottom: 6 }}>
+                  {roles.length} roles · {isExec ? "Enterprise Leadership & Governance" : (linkedStages.length > 0 ? `owns: ${linkedStages.join(", ")}` : "support function")}
+                </div>
                 {description && (
                   <div style={{ fontSize: 12, color: "#565A66", lineHeight: 1.4, marginTop: 4, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
                     {description}

@@ -31,80 +31,7 @@ export const SUPPLIER_TYPES = [
   "Others"
 ];
 
-export const INITIAL_SUPPLIERS = [
-  {
-    id: "sup-elite-print",
-    name: "Elite Print & Embro",
-    code: "SUP-EPE-01",
-    type: "Printing & Embroidery",
-    contactPerson: "Manoj Kumar",
-    mobile: "+91 98421 88320",
-    email: "orders@eliteprint.com",
-    address: "42, Avinashi Road, Anupparpalayam",
-    city: "Tirupur",
-    country: "India",
-    onTimeTarget: 95,
-    qualityTarget: 98,
-    notes: "Specialized in reactive rotary printing, high-density embroidery, and silicone badge application.",
-    latestOrderDate: "2026-05-10T10:00:00.000Z",
-    createdAt: "2026-01-01T00:00:00.000Z",
-    isDeleted: false
-  },
-  {
-    id: "sup-colortex",
-    name: "ColorTex Dyeing",
-    code: "SUP-CTX-02",
-    type: "Dyeing & Washing",
-    contactPerson: "R. Saravanan",
-    mobile: "+91 94432 19045",
-    email: "labdips@colortexdyeing.in",
-    address: "18, SIPCOT Industrial Park, Perundurai",
-    city: "Erode",
-    country: "India",
-    onTimeTarget: 92,
-    qualityTarget: 96,
-    notes: "OEKO-TEX Class 1 certified soft flow and garment dyeing facility.",
-    latestOrderDate: "2026-05-08T14:30:00.000Z",
-    createdAt: "2026-01-05T00:00:00.000Z",
-    isDeleted: false
-  },
-  {
-    id: "sup-precision-embro",
-    name: "Precision Embroidery Co.",
-    code: "SUP-PEC-03",
-    type: "Printing & Embroidery",
-    contactPerson: "Anand Venkatesh",
-    mobile: "+91 97890 55112",
-    email: "info@precisionembro.com",
-    address: "7/14, Angeripalayam Main Road",
-    city: "Tirupur",
-    country: "India",
-    onTimeTarget: 95,
-    qualityTarget: 99,
-    notes: "Multi-head Tajima embroidery machines with laser cutting and sequin attachment.",
-    latestOrderDate: "2026-05-05T09:15:00.000Z",
-    createdAt: "2026-01-10T00:00:00.000Z",
-    isDeleted: false
-  },
-  {
-    id: "sup-sunprint",
-    name: "SunPrint Studio",
-    code: "SUP-SPS-04",
-    type: "Printing & Embroidery",
-    contactPerson: "K. Murugan",
-    mobile: "+91 98944 67200",
-    email: "contact@sunprintstudio.com",
-    address: "115, Palladam Road, Veerapandi",
-    city: "Tirupur",
-    country: "India",
-    onTimeTarget: 90,
-    qualityTarget: 95,
-    notes: "Digital pigment printing, sublimation printing, and heat transfer labels.",
-    latestOrderDate: "2026-05-02T11:45:00.000Z",
-    createdAt: "2026-01-15T00:00:00.000Z",
-    isDeleted: false
-  }
-];
+export const INITIAL_SUPPLIERS = [];
 
 export const WORK_PURPOSES = [
   "Printing",
@@ -122,88 +49,7 @@ export const WORK_PURPOSES = [
   "Other"
 ];
 
-export const INITIAL_SUPPLIER_WORK = [
-  {
-    id: "work-1",
-    orderId: "GKT-1054",
-    supplierId: "sup-elite-print",
-    supplierName: "Elite Print & Embro",
-    source: "order",
-    dept: "VAP",
-    taskName: "Printing / Embroidery",
-    stageIdx: 13,
-    purpose: "Printing",
-    description: "Front chest pigment printing and puff print for Zara Hoodie batch",
-    assignedDate: "2026-05-10",
-    expectedDate: "20 May",
-    completedDate: null,
-    status: "In Progress",
-    qualityStatus: "Pending",
-    qualityIssueDescription: "",
-    createdAt: "2026-05-10T10:00:00.000Z",
-    isDeleted: false
-  },
-  {
-    id: "work-2",
-    orderId: "ST-7788",
-    supplierId: "sup-precision-embro",
-    supplierName: "Precision Embroidery Co.",
-    source: "dept_task",
-    dept: "Production",
-    taskName: "Printing / Embroidery",
-    stageIdx: 13,
-    purpose: "Embroidery",
-    description: "Chest multi-head embroidery for H&M T-Shirt",
-    assignedDate: "2026-05-05",
-    expectedDate: "18 May",
-    completedDate: null,
-    status: "Delayed",
-    qualityStatus: "Issue",
-    qualityIssueDescription: "Embroidery thread tension and color mismatch",
-    createdAt: "2026-05-05T09:15:00.000Z",
-    isDeleted: false
-  },
-  {
-    id: "work-3",
-    orderId: "PL-3321",
-    supplierId: "sup-colortex",
-    supplierName: "ColorTex Dyeing",
-    source: "dept_task",
-    dept: "Purchase – Fabric",
-    taskName: "Fabric Booking",
-    stageIdx: 2,
-    purpose: "Dyeing",
-    description: "Reactive yarn dyeing and lab dip matching for Zara Polo pique fabric",
-    assignedDate: "2026-05-08",
-    expectedDate: "28 May",
-    completedDate: "2026-05-27",
-    status: "Completed",
-    qualityStatus: "Passed",
-    qualityIssueDescription: "",
-    createdAt: "2026-05-08T14:30:00.000Z",
-    isDeleted: false
-  },
-  {
-    id: "work-4",
-    orderId: "TR-8899",
-    supplierId: "sup-sunprint",
-    supplierName: "SunPrint Studio",
-    source: "order",
-    dept: "VAP",
-    taskName: "Printing / Embroidery",
-    stageIdx: 13,
-    purpose: "Printing",
-    description: "Heat transfer care labels and pocket branding for M&S Trouser",
-    assignedDate: "2026-05-02",
-    expectedDate: "25 May",
-    completedDate: "2026-05-24",
-    status: "Completed",
-    qualityStatus: "Passed",
-    qualityIssueDescription: "",
-    createdAt: "2026-05-02T11:45:00.000Z",
-    isDeleted: false
-  }
-];
+export const INITIAL_SUPPLIER_WORK = [];
 
 export function calculateSupplierMetrics(supplier, orders = [], supplierWork = []) {
   const supplierName = supplier?.name || "";
@@ -839,57 +685,7 @@ export function collectActivitiesForDate(targetDate, {
   return activities;
 }
 
-export const INITIAL_CUSTOM_TASKS = [
-  {
-    id: "task-seed-1",
-    title: "Review and approve lab dip test report for GKT-1054",
-    orderId: "GKT-1054",
-    dept: "Purchase – Fabric",
-    assignee: "Selva Kumar",
-    dueDate: "20 May",
-    priority: "high",
-    notes: "Reactive dye shade approval required before bulk fabric dyeing.",
-    status: "in_progress",
-    createdAt: "2026-05-12T08:00:00.000Z"
-  },
-  {
-    id: "task-seed-2",
-    title: "Finalize pattern grading marker with CAD team",
-    orderId: "ST-7788",
-    dept: "CAD",
-    assignee: "Senthil",
-    dueDate: "18 May",
-    priority: "medium",
-    notes: "Grading rules updated for EU size specs.",
-    status: "in_progress",
-    createdAt: "2026-05-12T11:20:00.000Z"
-  },
-  {
-    id: "task-seed-3",
-    title: "Quality inline audit for Zara Hoodie sewing line #2",
-    orderId: "GKT-1054",
-    dept: "Quality",
-    assignee: "Sezhiyan",
-    dueDate: "14 May",
-    priority: "high",
-    notes: "Hoodie pocket bar tack and double needle seam inspection.",
-    status: "done",
-    createdAt: "2026-05-11T09:00:00.000Z",
-    completedAt: "2026-05-12T15:30:00.000Z"
-  },
-  {
-    id: "task-seed-4",
-    title: "Verify export packing list & customs carton count",
-    orderId: "PL-3321",
-    dept: "Logistics & Documentation",
-    assignee: "Srinivasan",
-    dueDate: "28 May",
-    priority: "medium",
-    notes: "Commercial invoice draft ready.",
-    status: "in_progress",
-    createdAt: "2026-05-10T14:00:00.000Z"
-  }
-];
+export const INITIAL_CUSTOM_TASKS = [];
 
 export const TA_STAGES_90 = [
   { name: "Order Confirmation & Enquiry", day: "Day 1", dept: "Program" },
@@ -1019,44 +815,44 @@ export function buildCostingRows(templateKey) {
 
 export const ORG_STRUCTURE = {
   "Merchandising": [
-    { title: "Manager", name: "Arasinth Raja", bullets: ["PO receiving", "Fabric plan app", "CMT plan app", "Pre budget plan app", "Bulk file app", "Process app", "VAP app", "Monitoring"] },
-    { title: "Senior", name: "Suresh", bullets: ["Fabric planning & app — projection & bulk", "CMT planning & app", "Acc planning & app", "Pre budget plan", "Lab dips app", "Trims app", "Buyer app — lab dips, trims, strike off, samples", "Monthly budget plan"] },
-    { title: "PPS & TOP", name: "Logesh", bullets: ["PP Sample", "TOP Sample", "Testing"] },
-    { title: "Pro. Merch", name: "Gokul & Saravanan", bullets: ["Style file prep & app", "Consumption details", "Foam CAD", "PP meeting", "Size set & shrinkage closure", "Packing app", "QIMA", "Follow up"] },
-    { title: "VAP Merch", name: "Srinivasan", bullets: ["Rate closure", "Grading app", "Bills closure", "Follow up — VAP"] },
+    { title: "Manager", name: "—", bullets: ["PO receiving", "Fabric plan app", "CMT plan app", "Pre budget plan app", "Bulk file app", "Process app", "VAP app", "Monitoring"] },
+    { title: "Senior", name: "—", bullets: ["Fabric planning & app — projection & bulk", "CMT planning & app", "Acc planning & app", "Pre budget plan", "Lab dips app", "Trims app", "Buyer app — lab dips, trims, strike off, samples", "Monthly budget plan"] },
+    { title: "PPS & TOP", name: "—", bullets: ["PP Sample", "TOP Sample", "Testing"] },
+    { title: "Pro. Merch", name: "—", bullets: ["Style file prep & app", "Consumption details", "Foam CAD", "PP meeting", "Size set & shrinkage closure", "Packing app", "QIMA", "Follow up"] },
+    { title: "VAP Merch", name: "—", bullets: ["Rate closure", "Grading app", "Bills closure", "Follow up — VAP"] },
   ],
   "Program": [
-    { title: "Senior", name: "Vidhya", bullets: ["PO receiving", "Qty app", "Fabric plan app", "Acknowledgement tracking", "Merch approval"] },
-    { title: "Assistant 1", name: "Selvi", bullets: ["Work order sheet", "Fabric planning & app — requirement"] },
-    { title: "Assistant 2", name: "Arachana", bullets: ["Internal order entry", "Enquiry entry"] },
-    { title: "Junior 1", name: "Geetha" },
-    { title: "Junior 2", name: "Sandhya", bullets: ["Fabric program"] },
+    { title: "Senior", name: "—", bullets: ["PO receiving", "Qty app", "Fabric plan app", "Acknowledgement tracking", "Merch approval"] },
+    { title: "Assistant 1", name: "—", bullets: ["Work order sheet", "Fabric planning & app — requirement"] },
+    { title: "Assistant 2", name: "—", bullets: ["Internal order entry", "Enquiry entry"] },
+    { title: "Junior 1", name: "—" },
+    { title: "Junior 2", name: "—", bullets: ["Fabric program"] },
   ],
   "Planning": [
-    { title: "Senior", name: "Krishnan", bullets: ["Fabric plan", "Fabric receiving", "Cut plan", "PPM"] },
-    { title: "Samples", name: "Nivedhini", bullets: ["PPS", "TOP", "Testing", "File status"] },
-    { title: "Cut Plan", name: "Ramya" },
-    { title: "Line Plan", name: "Thangaraj", bullets: ["Line plan", "Shipment plan", "T&A", "Ready for feeding"] },
+    { title: "Senior", name: "—", bullets: ["Fabric plan", "Fabric receiving", "Cut plan", "PPM"] },
+    { title: "Samples", name: "—", bullets: ["PPS", "TOP", "Testing", "File status"] },
+    { title: "Cut Plan", name: "—" },
+    { title: "Line Plan", name: "—", bullets: ["Line plan", "Shipment plan", "T&A", "Ready for feeding"] },
     { title: "Production O/P", name: "—", bullets: ["Fabric program"] },
   ],
   "Purchase – Fabric": [
-    { title: "Senior", name: "Selva Kumar", bullets: ["Fabric req plan", "Supplier rate closure", "Lab dips acq", "Lab dips merch app"] },
-    { title: "Assistant", name: "Raja Sekar", bullets: ["Lab dips acq", "Merch app", "Supplier communication"] },
-    { title: "Junior", name: "Thiru" },
+    { title: "Senior", name: "—", bullets: ["Fabric req plan", "Supplier rate closure", "Lab dips acq", "Lab dips merch app"] },
+    { title: "Assistant", name: "—", bullets: ["Lab dips acq", "Merch app", "Supplier communication"] },
+    { title: "Junior", name: "—" },
     { title: "Junior", name: "—" },
     { title: "Data Entry", name: "—", bullets: ["PO raising", "ERP entries"] },
-    { title: "Senior (Yarn)", name: "Tamil", bullets: ["Yarn req plan", "Supplier rate closure", "Yarn acq", "Send to knitting"] },
+    { title: "Senior (Yarn)", name: "—", bullets: ["Yarn req plan", "Supplier rate closure", "Yarn acq", "Send to knitting"] },
   ],
   "Purchase – Trims": [
-    { title: "Senior", name: "Shankar", bullets: ["Cross check BOM", "Trims & accessories plan", "Rate closure", "Merch app", "PO raise — pre budget app", "Follow up"] },
-    { title: "Assistant", name: "Renuka" },
+    { title: "Senior", name: "—", bullets: ["Cross check BOM", "Trims & accessories plan", "Rate closure", "Merch app", "PO raise — pre budget app", "Follow up"] },
+    { title: "Assistant", name: "—" },
     { title: "Junior", name: "—" },
     { title: "Junior", name: "—" },
     { title: "Data Entry", name: "—", bullets: ["PO raising", "ERP entries"] },
   ],
   "Warehouse": [
-    { title: "Senior", name: "Shiva Kumar", bullets: ["Fabric inhouse", "Inspection", "CSV check", "Lot card & cutting app", "Merch req app", "Delivery"] },
-    { title: "Assistant", name: "Surekha", bullets: ["Fabric GRN & location", "ERP entries"] },
+    { title: "Senior", name: "—", bullets: ["Fabric inhouse", "Inspection", "CSV check", "Lot card & cutting app", "Merch req app", "Delivery"] },
+    { title: "Assistant", name: "—", bullets: ["Fabric GRN & location", "ERP entries"] },
   ],
   "Testing": [
     { title: "Senior", name: "—", bullets: ["Fabric inspection", "Fabric testing", "CSV check", "Shrinkage", "Lot card prep & app — DGM", "Merch app"] },
@@ -1069,70 +865,75 @@ export const ORG_STRUCTURE = {
     { title: "Data Entry 2", name: "—" },
   ],
   "Cutting": [
-    { title: "Manager", name: "Durai" },
+    { title: "Manager", name: "—" },
     { title: "Assistant", name: "—" },
-    { title: "Assistant", name: "Chandhini" },
-    { title: "Data Entry", name: "Mahesh" },
+    { title: "Assistant", name: "—" },
+    { title: "Data Entry", name: "—" },
   ],
   "Production": [
-    { title: "FM", name: "Praveen Kumar", bullets: ["Line plan from planning", "File & complete kit", "Quality discussion on critical points"] },
-    { title: "PM", name: "Shiva Kumar", bullets: ["Cut qty acc", "OB chart from IE / line plan", "Comments from quality", "First op app"] },
+    { title: "FM", name: "—", bullets: ["Line plan from planning", "File & complete kit", "Quality discussion on critical points"] },
+    { title: "PM", name: "—", bullets: ["Cut qty acc", "OB chart from IE / line plan", "Comments from quality", "First op app"] },
     { title: "Supervisor", name: "—", bullets: ["Line qty op", "OCR details", "Manpower handling"] },
-    { title: "IE", name: "Sekar" },
-    { title: "Assistant (IE)", name: "Marutha Muthu" },
-    { title: "Junior 1", name: "Pasumathi" },
-    { title: "Junior 2", name: "Haritha" },
-    { title: "OCR", name: "Dinesh", bullets: ["Process styles handling — supplier / in-house / sewing / finishing", "Balance qty — OCR report", "Follow up — size set"] },
+    { title: "IE", name: "—" },
+    { title: "Assistant (IE)", name: "—" },
+    { title: "Junior 1", name: "—" },
+    { title: "Junior 2", name: "—" },
+    { title: "OCR", name: "—", bullets: ["Process styles handling — supplier / in-house / sewing / finishing", "Balance qty — OCR report", "Follow up — size set"] },
   ],
   "IoT": [
-    { title: "IoT", name: "Aravind" },
+    { title: "IoT", name: "—" },
     { title: "Junior 1", name: "—" },
     { title: "Junior 2", name: "—" },
   ],
   "Finishing": [
-    { title: "Finishing Incharge", name: "Gopal", bullets: ["Order qty complete", "Packing app from merch", "Ironing & packing", "Packing list", "Box auditing", "Inspection", "Dispatch"] },
+    { title: "Finishing Incharge", name: "—", bullets: ["Order qty complete", "Packing app from merch", "Ironing & packing", "Packing list", "Box auditing", "Inspection", "Dispatch"] },
     { title: "Ironing", name: "—" },
     { title: "Packing", name: "—" },
     { title: "Inspection", name: "—" },
     { title: "Data Entry", name: "—" },
   ],
   "Quality": [
-    { title: "DGM", name: "Sezhiyan" },
-    { title: "Assistant — Sample", name: "Kamalkannan", bullets: ["Tech pack — meeting", "Pattern — measurement check — fit check — app", "Artwork app", "Technical — sewing", "Final quality app"] },
-    { title: "Manager — Bulk", name: "Prakash", bullets: ["PPM", "Size set & shrinkage", "Cutting app", "First O/P — line setting — mechanism", "First checking", "Auditing", "Ironing"] },
-    { title: "Assistant — Bulk", name: "Soundar Raj" },
+    { title: "DGM", name: "—" },
+    { title: "Assistant — Sample", name: "—", bullets: ["Tech pack — meeting", "Pattern — measurement check — fit check — app", "Artwork app", "Technical — sewing", "Final quality app"] },
+    { title: "Manager — Bulk", name: "—", bullets: ["PPM", "Size set & shrinkage", "Cutting app", "First O/P — line setting — mechanism", "First checking", "Auditing", "Ironing"] },
+    { title: "Assistant — Bulk", name: "—" },
     { title: "Quality Controller", name: "—" },
   ],
   "Sample": [
-    { title: "DGM", name: "Raza" },
-    { title: "Manager", name: "Viswa", bullets: ["Tech pack — meeting", "Pattern — measurement check — fit check — app", "Artwork app", "Technical — sewing", "Final quality app"] },
-    { title: "Costing", name: "Subha Devi" },
-    { title: "Senior", name: "Abdur" },
-    { title: "Junior", name: "Cahaya Dewi" },
+    { title: "DGM", name: "—" },
+    { title: "Manager", name: "—", bullets: ["Tech pack — meeting", "Pattern — measurement check — fit check — app", "Artwork app", "Technical — sewing", "Final quality app"] },
+    { title: "Costing", name: "—" },
+    { title: "Senior", name: "—" },
+    { title: "Junior", name: "—" },
   ],
   "CAD": [
-    { title: "Pattern", name: "Ramesh" },
-    { title: "Marker", name: "Suresh" },
+    { title: "Pattern", name: "—" },
+    { title: "Marker", name: "—" },
   ],
   "Costing": [
-    { title: "Costing Senior", name: "Subha Devi" },
-    { title: "Costing Incharge", name: "Gokul" },
+    { title: "Costing Senior", name: "—" },
+    { title: "Costing Incharge", name: "—" },
   ],
   "Logistics & Documentation": [
-    { title: "Senior", name: "Srinivasan" },
-    { title: "Assistant", name: "Raghu" },
-    { title: "Assistant", name: "Prakash" },
+    { title: "Senior", name: "—" },
+    { title: "Assistant", name: "—" },
+    { title: "Assistant", name: "—" },
     { title: "Junior", name: "—" },
   ],
   "VAP": [
-    { title: "VAP Merch", name: "Srinivasan", bullets: ["Rate closure", "Grading app", "Bills closure", "Follow up — VAP"] },
+    { title: "VAP Merch", name: "—", bullets: ["Rate closure", "Grading app", "Bills closure", "Follow up — VAP"] },
   ],
   "Compliance & Certification": [
     { title: "Compliance Officer", name: "—", bullets: ["Apply for and renew Transaction Certificates (TC) per shipment", "Apply for and maintain GOTS certification", "Apply for and maintain OCS certification", "Social compliance audits (BSCI, WRAP, SEDEX)", "Chemical management (ZDHC) and sustainability documentation"] },
   ],
+  "Executive (MD)": [
+    { title: "Managing Director", name: "—", bullets: ["Company Strategy & Leadership", "Final Order & Costing Sign-off", "Financial Performance & Margins", "Buyer & Factory Oversight"] },
+    { title: "Director / COO", name: "—", bullets: ["Operations Oversight", "Capacity & Line Efficiency", "Inter-Department Governance"] },
+  ],
 };
 
 export const DEFAULT_DEPT_DESCRIPTIONS = {
+  "Executive (MD)": "Executive leadership suite & Managing Director oversight. Real-time factory performance, order health, financials, approvals, and company strategy.",
   "Merchandising": "Owns T&A steps: Order Confirmation & Enquiry, Tech Pack Received, Fit Approval, Size Set Approval, PP Approval. Responsible for buyer communications, approvals, and order tracking.",
   "Program": "Manages work orders, internal order entry, program sheets, fabric programming, and merchandiser approvals.",
   "Planning": "Responsible for line planning, capacity planning, cut plan, shipment planning, and PPM coordination.",
@@ -1155,6 +956,8 @@ export const DEFAULT_DEPT_DESCRIPTIONS = {
 };
 
 export const DEPT_ICONS = {
+  "Executive (MD)": TrendingUp,
+  "Executive": TrendingUp,
   "Merchandising": Users, "Program": ClipboardList, "Planning": Calendar, "Costing": TrendingUp, "Purchase – Fabric": Package,
   "Purchase – Trims": Package, "Warehouse": Warehouse, "Testing": ShieldCheck, "Store": Warehouse,
   "Cutting": Scissors, "Production": Factory, "IoT": Radio, "Finishing": Shirt, "Quality": ShieldCheck,
@@ -1379,15 +1182,15 @@ export function makeStages(template, activeUpto = 0, delayedAt = null) {
 }
 
 export const ROLE_OPTIONS = [
-  { label: "Merchandiser (Arasinth Raja)", dept: "Merchandising", fullAccess: true },
-  { label: "Fabric purchase (Selva Kumar)", dept: "Purchase – Fabric", fullAccess: false },
-  { label: "Trims purchase (Shankar)", dept: "Purchase – Trims", fullAccess: false },
-  { label: "Sample (Viswa)", dept: "Sample", fullAccess: true },
-  { label: "Quality (Sezhiyan)", dept: "Quality", fullAccess: true },
-  { label: "Cutting (Durai)", dept: "Cutting", fullAccess: true },
-  { label: "Production (Praveen Kumar)", dept: "Production", fullAccess: true },
-  { label: "Finishing (Gopal)", dept: "Finishing", fullAccess: true },
-  { label: "Logistics & documentation (Srinivasan)", dept: "Logistics & Documentation", fullAccess: false },
+  { label: "Merchandiser", dept: "Merchandising", fullAccess: false },
+  { label: "Fabric purchase", dept: "Purchase – Fabric", fullAccess: false },
+  { label: "Trims purchase", dept: "Purchase – Trims", fullAccess: false },
+  { label: "Sample incharge", dept: "Sample", fullAccess: false },
+  { label: "Quality incharge", dept: "Quality", fullAccess: false },
+  { label: "Cutting incharge", dept: "Cutting", fullAccess: false },
+  { label: "Production manager", dept: "Production", fullAccess: false },
+  { label: "Finishing incharge", dept: "Finishing", fullAccess: false },
+  { label: "Logistics & documentation", dept: "Logistics & Documentation", fullAccess: false },
   { label: "Compliance officer", dept: "Compliance & Certification", fullAccess: false },
   { label: "Finance Team", dept: "Finance", fullAccess: false },
   { label: "Managing Director (MD)", dept: "Executive", fullAccess: true },
@@ -1416,11 +1219,7 @@ export function seedAttendance() {
   return rec;
 }
 
-export const INITIAL_LEAVE_REQUESTS = [
-  { id: 1, name: STAFF_LIST[2] ? STAFF_LIST[2].name : "Staff", dept: STAFF_LIST[2] ? STAFF_LIST[2].dept : "", from: "26 May", to: "27 May", reason: "Personal", status: "pending" },
-  { id: 2, name: STAFF_LIST[8] ? STAFF_LIST[8].name : "Staff", dept: STAFF_LIST[8] ? STAFF_LIST[8].dept : "", from: "29 May", to: "31 May", reason: "Family function", status: "pending" },
-  { id: 3, name: STAFF_LIST[15] ? STAFF_LIST[15].name : "Staff", dept: STAFF_LIST[15] ? STAFF_LIST[15].dept : "", from: "20 May", to: "20 May", reason: "Medical", status: "approved" },
-];
+export const INITIAL_LEAVE_REQUESTS = [];
 
 export const ATTENDANCE_STATUS_STYLE = {
   present: { bg: "#E1F5EE", fg: "#085041", label: "Present" },
@@ -1491,184 +1290,24 @@ export const COMPLIANCE_CATEGORIES = [
   "Certification",
 ];
 
-export const INITIAL_CERTIFICATIONS = [
-  {
-    id: "tc",
-    key: "tc",
-    name: "Transaction Certificate (TC)",
-    certNo: "TC-2026-8812",
-    certType: "Organic Textile / Transaction",
-    issuingOrg: "Control Union",
-    buyer: "Zara",
-    orderId: "GKT-1054",
-    issueDate: "2026-01-10",
-    expiryDate: "2026-12-31",
-    status: "Approved",
-    file: "TC_GKT1054_ControlUnion.pdf",
-    note: "Per-shipment chain of custody certificate for organic cotton hoodie batch.",
-    notes: "Per-shipment chain of custody certificate for organic cotton hoodie batch.",
-    isDeleted: false
-  },
-  {
-    id: "gots",
-    key: "gots",
-    name: "GOTS",
-    certNo: "GOTS-2026-001",
-    certType: "Organic Textile",
-    issuingOrg: "OneCert International",
-    buyer: "All Buyers",
-    orderId: "GKT-1054",
-    issueDate: "2026-01-01",
-    expiryDate: "2026-12-31",
-    status: "Approved",
-    file: "GOTS_Scope_Certificate_2026.pdf",
-    note: "Global Organic Textile Standard — annual facility certification",
-    notes: "Annual facility scope certificate for organic spinning and garmenting.",
-    isDeleted: false
-  },
-  {
-    id: "ocs",
-    key: "ocs",
-    name: "OCS",
-    certNo: "OCS-2025-449",
-    certType: "Organic Content Standard",
-    issuingOrg: "IDFL Laboratory & Institute",
-    buyer: "H&M",
-    orderId: "ST-7788",
-    issueDate: "2025-08-15",
-    expiryDate: "2026-09-15",
-    status: "Under Review",
-    file: null,
-    note: "Organic Content Standard — annual facility certification",
-    notes: "Organic content certification renewal in progress.",
-    isDeleted: false
-  },
-  {
-    id: "oeko-tex-100",
-    key: "oeko-tex-100",
-    name: "OEKO-TEX",
-    certNo: "OEKO-2026-7890",
-    certType: "Chemical & Safety",
-    issuingOrg: "Hohenstein Institute",
-    buyer: "Zara",
-    orderId: "PL-3321",
-    issueDate: "2025-06-01",
-    expiryDate: "2026-06-01",
-    status: "Expired",
-    file: "OEKO_TEX_Standard_100_Cert.pdf",
-    note: "OEKO-TEX Standard 100 Class I testing for direct skin contact",
-    notes: "Class I testing for direct skin contact garments.",
-    isDeleted: false
-  },
-  {
-    id: "bci-cert",
-    key: "bci-cert",
-    name: "BCI",
-    certNo: "BCI-IND-2026-90",
-    certType: "Better Cotton Initiative",
-    issuingOrg: "Better Cotton Council",
-    buyer: "M&S",
-    orderId: "TR-8899",
-    issueDate: "2026-02-15",
-    expiryDate: "2026-09-20",
-    status: "Approved",
-    file: "BCI_Trader_Certificate.pdf",
-    note: "Better Cotton Initiative mass balance credits allocated",
-    notes: "Mass balance chain of custody credits allocated.",
-    isDeleted: false
-  }
-];
+export const INITIAL_CERTIFICATIONS = [];
 
-export const INITIAL_COMPLIANCES = [
-  {
-    id: "comp-1",
-    name: "GOTS Scope & TC Verification",
-    category: "Certification",
-    buyer: "Zara",
-    orderId: "GKT-1054",
-    department: "Compliance & Certification",
-    responsiblePerson: "Suresh",
-    dueDate: "2026-05-18",
-    linkedCert: "GOTS",
-    description: "Verify transaction certificate and mill TC for 100% organic cotton yarn lot.",
-    status: "Passed",
-    priority: "High",
-    completedAt: "2026-05-10T14:30:00.000Z",
-    notes: "Scope certificate matches lot numbers.",
-    isDeleted: false
-  },
-  {
-    id: "comp-3",
-    name: "Social Compliance Audit (BSCI / SMETA)",
-    category: "Social Compliance",
-    buyer: "H&M",
-    orderId: "ST-7788",
-    department: "Compliance & Certification",
-    responsiblePerson: "Arasinth Raja",
-    dueDate: "2026-05-20",
-    linkedCert: "ISO",
-    description: "Annual SMETA 4-pillar audit renewal for sewing facility units.",
-    status: "Pending",
-    priority: "High",
-    notes: "Auditor visit scheduled for 15 May.",
-    isDeleted: false
-  },
-  {
-    id: "comp-4",
-    name: "Metal Detection & Needle Policy Audit",
-    category: "Factory Compliance",
-    buyer: "Uniqlo",
-    orderId: "JKT-2231",
-    department: "Quality",
-    responsiblePerson: "Kavitha",
-    dueDate: "2026-05-22",
-    linkedCert: "",
-    description: "9-point 100% calibration log verification for 9-head metal detector line.",
-    status: "Pending",
-    priority: "Medium",
-    notes: "Calibration logs updated daily.",
-    isDeleted: false
-  },
-  {
-    id: "comp-5",
-    name: "M&S Fabric Quality & Azo Free Check",
-    category: "Quality",
-    buyer: "M&S",
-    orderId: "TR-8899",
-    department: "Purchase – Fabric",
-    responsiblePerson: "Selva Kumar",
-    dueDate: "2026-05-24",
-    linkedCert: "BCI",
-    description: "Azo-dye test and formaldehyde level testing certification.",
-    status: "Passed",
-    priority: "High",
-    completedAt: "2026-05-08T11:00:00.000Z",
-    notes: "Zero AZO detected in lab report #TR-8899-AZO.",
-    isDeleted: false
-  }
-];
+export const INITIAL_COMPLIANCES = [];
 
 export const INITIAL_FINANCIALS = {
-  revenue: 4415000,
-  cogs: 3610000,
-  ebitda: 2137000,
-  stockValue: 2548000,
-  cashFlow: 1236000,
-  complianceScore: 96,
+  revenue: 0,
+  cogs: 0,
+  ebitda: 0,
+  stockValue: 0,
+  cashFlow: 0,
+  complianceScore: 100,
 };
 
 export const SEASON_OPTIONS = ["AW26", "SS26", "AW27", "SS27"];
 
-export const INITIAL_DEBIT_NOTES = [
-  { id: 1, season: "AW26", buyer: "H&M", po: "ST-7788", amount: 4200, reason: "Late shipment penalty", date: "2 Jun" },
-  { id: 2, season: "AW26", buyer: "Zara", po: "GKT-1054", amount: 1800, reason: "Quality claim — stitching defect", date: "5 Jun" },
-];
+export const INITIAL_DEBIT_NOTES = [];
 
-export const INITIAL_CAPAS = [
-  { id: 1, season: "AW26", buyer: "H&M", po: "ST-7788", issue: "PP approval delay caused late cutting start", action: "Escalate PP samples to buyer within 24 hrs of readiness; weekly follow-up call", status: "in_progress", date: "3 Jun" },
-  { id: 2, season: "AW26", buyer: "Uniqlo", po: "JKT-2231", issue: "Trims shortage delayed cutting", action: "Add a 2-week buffer to trims booking for new suppliers", status: "open", date: "6 Jun" },
-  { id: 3, season: "SS26", buyer: "M&S", po: "TR-8899", issue: "Minor rework on button attachment", action: "Retrain sewing line on button placement SOP", status: "closed", date: "20 May" },
-];
+export const INITIAL_CAPAS = [];
 
 export const CAPA_STATUS_STYLE = {
   open: { bg: "#FCEBEB", fg: "#791F1F", label: "Open" },
@@ -1678,14 +1317,7 @@ export const CAPA_STATUS_STYLE = {
 
 export const RISK_DELAY_DAYS = { high: 3, medium: 2, low: 1 };
 
-export const INITIAL_ORDERS = [
-  { id: "GKT-1054", buyer: "Zara", country: "Spain", season: "AW26", style: "Hoodie", qty: 12500, ship: "20 May", risk: "high", status: "At Risk", activeUpto: 10, delayedAt: 10, createdAt: "2026-05-12T08:30:00.000Z" },
-  { id: "ST-7788", buyer: "H&M", country: "Sweden", season: "AW26", style: "T-Shirt", qty: 8000, ship: "18 May", risk: "high", status: "Delayed", activeUpto: 5, delayedAt: 5, createdAt: "2026-05-10T09:15:00.000Z" },
-  { id: "JKT-2231", buyer: "Uniqlo", country: "Japan", season: "AW26", style: "Jacket", qty: 6200, ship: "22 May", risk: "medium", status: "At Risk", activeUpto: 7, delayedAt: null, createdAt: "2026-05-11T14:00:00.000Z" },
-  { id: "TR-8899", buyer: "M&S", country: "United Kingdom", season: "SS26", style: "Trouser", qty: 4500, ship: "25 May", risk: "medium", status: "On Track", activeUpto: 13, delayedAt: null, createdAt: "2026-05-08T10:00:00.000Z" },
-  { id: "DR-5566", buyer: "Next", country: "United Kingdom", season: "SS26", style: "Dress", qty: 5300, ship: "23 May", risk: "medium", status: "Delayed", activeUpto: 8, delayedAt: 8, createdAt: "2026-05-09T11:30:00.000Z" },
-  { id: "PL-3321", buyer: "Zara", country: "Spain", season: "SS26", style: "Polo", qty: 9100, ship: "28 May", risk: "low", status: "On Track", activeUpto: 15, delayedAt: null, createdAt: "2026-05-06T15:00:00.000Z" },
-];
+export const INITIAL_ORDERS = [];
 
 export const NOTIFICATION_PRIORITY_STYLE = {
   critical: { bg: "#FEE2E2", fg: "#991B1B", border: "#F87171", label: "Critical", iconColor: "#DC2626" },
@@ -1703,73 +1335,7 @@ export const NOTIFICATION_TYPE_CONFIG = {
   certification: { label: "Certification", defaultIcon: "Award", color: "#0D9488", module: "compliance" },
 };
 
-export const INITIAL_NOTIFICATIONS = [
-  {
-    id: "notif-seed-1",
-    eventKey: "order-delayed-ST-7788",
-    type: "order",
-    title: "Order Delayed",
-    message: "Order ST-7788 is delayed due to PP sample approval bottleneck.",
-    relatedModule: "orders",
-    relatedId: "ST-7788",
-    priority: "critical",
-    isRead: false,
-    createdAt: "2026-05-12T11:45:00.000Z",
-    isDeleted: false
-  },
-  {
-    id: "notif-seed-2",
-    eventKey: "cert-expiring-gots",
-    type: "certification",
-    title: "Certification Expiring Soon",
-    message: "GOTS certification expires in 15 days.",
-    relatedModule: "compliance",
-    relatedId: "gots",
-    priority: "high",
-    isRead: false,
-    createdAt: "2026-05-12T09:10:00.000Z",
-    isDeleted: false
-  },
-  {
-    id: "notif-seed-3",
-    eventKey: "task-assigned-pp-approval",
-    type: "task",
-    title: "New Task Assigned",
-    message: "A new task 'Review and approve lab dip test report' has been assigned to you.",
-    relatedModule: "tasks",
-    relatedId: "task-seed-1",
-    priority: "medium",
-    isRead: false,
-    createdAt: "2026-05-12T08:00:00.000Z",
-    isDeleted: false
-  },
-  {
-    id: "notif-seed-4",
-    eventKey: "approval-required-app-101",
-    type: "approval",
-    title: "Approval Required",
-    message: "Fit Sample Approval requires your review for order GKT-1054.",
-    relatedModule: "approvals",
-    relatedId: "GKT-1054",
-    priority: "high",
-    isRead: false,
-    createdAt: "2026-05-11T16:00:00.000Z",
-    isDeleted: false
-  },
-  {
-    id: "notif-seed-5",
-    eventKey: "tna-stage-completed-GKT-1054-fabric",
-    type: "tna",
-    title: "T&A Stage Completed",
-    message: "Fabric stage completed for GKT-1054.",
-    relatedModule: "tna",
-    relatedId: "GKT-1054",
-    priority: "low",
-    isRead: true,
-    createdAt: "2026-05-10T10:00:00.000Z",
-    isDeleted: false
-  }
-];
+export const INITIAL_NOTIFICATIONS = [];
 
 export function formatTimeAgo(isoString) {
   if (!isoString) return "Just now";

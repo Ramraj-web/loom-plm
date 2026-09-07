@@ -17,10 +17,14 @@ import {
 } from "../common/CommonUI.jsx";
 
 export function FinanceEntryPage({ orders, financials, onUpdate, onUpdateOrderCost }) {
-  const totals = orders.reduce((a, o) => ({
-    planned: a.planned + (o.plannedCost || 0),
-    actual: a.actual + (o.actualCost || 0),
-  }), { planned: 0, actual: 0 });
+  const totals = orders.reduce((a, o) => {
+    const cmtTotal = o.cmtTotal !== undefined ? (Number(o.cmtTotal) || 0) : ((Number(o.qty) || 0) * (Number(o.cmtRate) || 0));
+    return {
+      planned: a.planned + (o.plannedCost || 0),
+      actual: a.actual + (o.actualCost || 0),
+      cmt: a.cmt + cmtTotal,
+    };
+  }, { planned: 0, actual: 0, cmt: 0 });
   const totalVariance = totals.actual - totals.planned;
   const totalVariancePct = totals.planned > 0 ? (totalVariance / totals.planned) * 100 : 0;
 
@@ -36,9 +40,15 @@ export function FinanceEntryPage({ orders, financials, onUpdate, onUpdateOrderCo
     <div>
       <PageHeader title="Finance data" sub="Cost planned vs. actual cost per order — Total COGS on the Executive Dashboard comes straight from the actual costs below" />
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 16 }}>
         <Card style={{ padding: "16px 18px" }}><div style={{ fontSize: 12, color: "#8A8D98" }}>Total planned cost</div><div style={{ fontSize: 22, fontWeight: 700, marginTop: 6 }}>${totals.planned.toLocaleString()}</div></Card>
         <Card style={{ padding: "16px 18px" }}><div style={{ fontSize: 12, color: "#8A8D98" }}>Total actual cost</div><div style={{ fontSize: 22, fontWeight: 700, marginTop: 6 }}>${totals.actual.toLocaleString()}</div></Card>
+        <Card style={{ padding: "16px 18px" }}>
+          <div style={{ fontSize: 12, color: "#8A8D98" }}>Total CMT Value</div>
+          <div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: "#1F9E8D" }}>
+            ${totals.cmt.toLocaleString()}
+          </div>
+        </Card>
         <Card style={{ padding: "16px 18px" }}>
           <div style={{ fontSize: 12, color: "#8A8D98" }}>Total variance</div>
           <div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: totalVariance > 0 ? "#D64545" : "#1F9E8D" }}>
@@ -48,42 +58,88 @@ export function FinanceEntryPage({ orders, financials, onUpdate, onUpdateOrderCo
       </div>
 
       <Card style={{ marginBottom: 16 }}>
-        <CardHeader title="Cost by order" sub="Planned cost is set when the order is costed; actual cost is updated as spend comes in through the season" />
-        <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr 1fr 0.9fr", fontSize: 11, color: "#8A8D98", padding: "0 4px 8px", borderBottom: "1px solid #F0F0F2" }}>
-          <div>Order / Style</div><div>Buyer</div><div>Planned cost</div><div>Actual cost</div><div>Variance</div>
+        <CardHeader title="Cost by order" sub="Planned cost is set when the order is costed; actual cost & CMT values are updated as spend comes in through the season" />
+        <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.9fr 0.8fr 1fr 1fr 1fr 1fr 0.9fr", fontSize: 11, color: "#8A8D98", padding: "0 4px 8px", borderBottom: "1px solid #F0F0F2", gap: 6 }}>
+          <div>Order / Style</div>
+          <div>Buyer</div>
+          <div>Order Qty</div>
+          <div>CMT Rate / pc ($)</div>
+          <div>CMT Total ($)</div>
+          <div>Planned cost</div>
+          <div>Actual cost</div>
+          <div>Variance</div>
         </div>
-        {orders.map(o => {
-          const variance = (o.actualCost || 0) - (o.plannedCost || 0);
-          const variancePct = o.plannedCost > 0 ? (variance / o.plannedCost) * 100 : 0;
-          return (
-            <div key={o.id} style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr 1fr 0.9fr", alignItems: "center", fontSize: 12.5, padding: "8px 4px", borderBottom: "1px solid #F5F5F7" }}>
-              <div>
-                <div style={{ fontFamily: "monospace", fontSize: 11, color: "#8A8D98" }}>{o.id}</div>
-                <div style={{ fontWeight: 600, color: "#1B2130" }}>{o.style}</div>
+        {orders.length === 0 ? (
+          <div style={{ padding: "32px 16px", textAlign: "center", color: "#8A8D98", fontSize: 13 }}>
+            No orders available. Create or import orders to record planned and actual costs.
+          </div>
+        ) : (
+          orders.map(o => {
+            const qty = Number(o.qty) || 0;
+            const cmtRate = o.cmtRate !== undefined ? o.cmtRate : "";
+            const calculatedCmtTotal = qty * (Number(cmtRate) || 0);
+            const cmtTotalVal = o.cmtTotal !== undefined ? o.cmtTotal : (cmtRate !== "" ? calculatedCmtTotal : 0);
+            const variance = (o.actualCost || 0) - (o.plannedCost || 0);
+            const variancePct = o.plannedCost > 0 ? (variance / o.plannedCost) * 100 : 0;
+
+            return (
+              <div key={o.id} style={{ display: "grid", gridTemplateColumns: "1.2fr 0.9fr 0.8fr 1fr 1fr 1fr 1fr 0.9fr", alignItems: "center", fontSize: 12.5, padding: "8px 4px", borderBottom: "1px solid #F5F5F7", gap: 6 }}>
+                <div>
+                  <div style={{ fontFamily: "monospace", fontSize: 11, color: "#8A8D98" }}>{o.id}</div>
+                  <div style={{ fontWeight: 600, color: "#1B2130" }}>{o.style}</div>
+                </div>
+                <div>{o.buyer}</div>
+                <div style={{ fontWeight: 600, color: "#475569" }}>{qty.toLocaleString()} pcs</div>
+                <div>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={o.cmtRate !== undefined ? o.cmtRate : ""}
+                    onChange={e => {
+                      const rate = e.target.value === "" ? "" : Number(e.target.value);
+                      onUpdateOrderCost(o.id, "cmtRate", rate);
+                      if (rate !== "") {
+                        onUpdateOrderCost(o.id, "cmtTotal", Math.round(qty * Number(rate) * 100) / 100);
+                      }
+                    }}
+                    style={{ width: 84, fontSize: 12, padding: "5px 7px", borderRadius: 6, border: "1px solid #E7E8ED" }}
+                  />
+                </div>
+                <div>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={o.cmtTotal !== undefined ? o.cmtTotal : (cmtRate !== "" ? calculatedCmtTotal : "")}
+                    onChange={e => onUpdateOrderCost(o.id, "cmtTotal", e.target.value === "" ? "" : Number(e.target.value))}
+                    style={{ width: 88, fontSize: 12, padding: "5px 7px", borderRadius: 6, border: "1px solid #E7E8ED", color: "#0F766E", fontWeight: 600 }}
+                    title="Auto-calculated from Qty × CMT Rate, or enter manual override"
+                  />
+                </div>
+                <div>
+                  <input
+                    type="number"
+                    value={o.plannedCost || 0}
+                    onChange={e => onUpdateOrderCost(o.id, "plannedCost", Number(e.target.value))}
+                    style={{ width: 84, fontSize: 12, padding: "5px 7px", borderRadius: 6, border: "1px solid #E7E8ED" }}
+                  />
+                </div>
+                <div>
+                  <input
+                    type="number"
+                    value={o.actualCost || 0}
+                    onChange={e => onUpdateOrderCost(o.id, "actualCost", Number(e.target.value))}
+                    style={{ width: 84, fontSize: 12, padding: "5px 7px", borderRadius: 6, border: "1px solid #E7E8ED" }}
+                  />
+                </div>
+                <div style={{ fontWeight: 600, color: variance > 0 ? "#D64545" : variance < 0 ? "#1F9E8D" : "#8A8D98" }}>
+                  {variance > 0 ? "+" : ""}{variance.toLocaleString()}{o.plannedCost > 0 ? ` (${variancePct > 0 ? "+" : ""}${variancePct.toFixed(1)}%)` : ""}
+                </div>
               </div>
-              <div>{o.buyer}</div>
-              <div>
-                <input
-                  type="number"
-                  value={o.plannedCost || 0}
-                  onChange={e => onUpdateOrderCost(o.id, "plannedCost", Number(e.target.value))}
-                  style={{ width: 92, fontSize: 12, padding: "5px 7px", borderRadius: 6, border: "1px solid #E7E8ED" }}
-                />
-              </div>
-              <div>
-                <input
-                  type="number"
-                  value={o.actualCost || 0}
-                  onChange={e => onUpdateOrderCost(o.id, "actualCost", Number(e.target.value))}
-                  style={{ width: 92, fontSize: 12, padding: "5px 7px", borderRadius: 6, border: "1px solid #E7E8ED" }}
-                />
-              </div>
-              <div style={{ fontWeight: 600, color: variance > 0 ? "#D64545" : variance < 0 ? "#1F9E8D" : "#8A8D98" }}>
-                {variance > 0 ? "+" : ""}{variance.toLocaleString()}{o.plannedCost > 0 ? ` (${variancePct > 0 ? "+" : ""}${variancePct.toFixed(1)}%)` : ""}
-              </div>
-            </div>
-          );
-        })}
+            );
+          })
+        )}
       </Card>
 
       <Card style={{ maxWidth: 460 }}>
@@ -101,11 +157,11 @@ export function ReportsPage({ orders }) {
   const totalQty = orders.reduce((a, o) => a + (Number(o.qty) || 0), 0);
   const rows = [
     ["Total orders", total],
-    ["On-time rate", `${Math.round((onTrack / (total || 1)) * 100)}%`],
+    ["On-time rate", total > 0 ? `${Math.round((onTrack / total) * 100)}%` : "0%"],
     ["Total order quantity", totalQty.toLocaleString() + " pcs"],
-    ["Avg order lead time", "87 days"],
-    ["Avg sampling time", "24 days"],
-    ["Quality pass rate", "93.6%"],
+    ["Avg order lead time", total > 0 ? "87 days" : "0 days"],
+    ["Avg sampling time", total > 0 ? "24 days" : "0 days"],
+    ["Quality pass rate", total > 0 ? "93.6%" : "0%"],
   ];
 
   const seasonRows = useMemo(() => {
@@ -140,16 +196,22 @@ export function ReportsPage({ orders }) {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 0.8fr 1fr 1fr 0.9fr 0.9fr", fontSize: 11, color: "#8A8D98", padding: "0 4px 8px", borderBottom: "1px solid #F0F0F2" }}>
           <div>Buyer</div><div>Season</div><div>Ordered Qty</div><div>Shipped Qty</div><div>Difference</div><div>% Diff</div>
         </div>
-        {seasonRows.map(r => (
-          <div key={r.buyer + r.season} style={{ display: "grid", gridTemplateColumns: "1fr 0.8fr 1fr 1fr 0.9fr 0.9fr", alignItems: "center", fontSize: 12.5, padding: "9px 4px", borderBottom: "1px solid #F5F5F7" }}>
-            <div style={{ fontWeight: 600, color: "#1B2130" }}>{r.buyer}</div>
-            <div>{r.season}</div>
-            <div>{r.ordered.toLocaleString()}</div>
-            <div>{r.shipped.toLocaleString()}</div>
-            <div style={{ color: r.diff < 0 ? "#D64545" : "#1F9E8D", fontWeight: 600 }}>{r.diff > 0 ? "+" : ""}{r.diff.toLocaleString()}</div>
-            <div style={{ color: r.pctDiff < 0 ? "#D64545" : "#1F9E8D", fontWeight: 600 }}>{r.pctDiff > 0 ? "+" : ""}{r.pctDiff.toFixed(2)}%</div>
+        {seasonRows.length === 0 ? (
+          <div style={{ padding: "32px 16px", textAlign: "center", color: "#8A8D98", fontSize: 13 }}>
+            No orders or seasonal shipments recorded yet.
           </div>
-        ))}
+        ) : (
+          seasonRows.map(r => (
+            <div key={r.buyer + r.season} style={{ display: "grid", gridTemplateColumns: "1fr 0.8fr 1fr 1fr 0.9fr 0.9fr", alignItems: "center", fontSize: 12.5, padding: "9px 4px", borderBottom: "1px solid #F5F5F7" }}>
+              <div style={{ fontWeight: 600, color: "#1B2130" }}>{r.buyer}</div>
+              <div>{r.season}</div>
+              <div>{r.ordered.toLocaleString()}</div>
+              <div>{r.shipped.toLocaleString()}</div>
+              <div style={{ color: r.diff < 0 ? "#D64545" : "#1F9E8D", fontWeight: 600 }}>{r.diff > 0 ? "+" : ""}{r.diff.toLocaleString()}</div>
+              <div style={{ color: r.pctDiff < 0 ? "#D64545" : "#1F9E8D", fontWeight: 600 }}>{r.pctDiff > 0 ? "+" : ""}{r.pctDiff.toFixed(2)}%</div>
+            </div>
+          ))
+        )}
       </Card>
     </div>
   );
@@ -2589,44 +2651,52 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
         {/* Orders by Buyer */}
         <Card>
           <CardHeader title="ORDERS BY BUYER" />
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <MiniDonut data={buyerData} size={84} centerLabel={totalOrders} labelColor="#0F172A" />
-            <div style={{ flex: 1 }}>
-              {buyerData.map(b => (
-                <div key={b.name} style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 4, fontSize: 11 }}>
-                  <span style={{ width: 7, height: 7, borderRadius: 999, background: b.color }} />
-                  <span style={{ color: "#475569", flex: 1 }}>{b.name}</span>
-                  <span style={{ color: "#0F172A", fontWeight: 700 }}>{b.value}</span>
-                </div>
-              ))}
+          {buyerData.length === 0 ? (
+            <div style={{ fontSize: 12, color: "#94A3B8", textAlign: "center", padding: "20px 0" }}>No buyers recorded.</div>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <MiniDonut data={buyerData} size={84} centerLabel={totalOrders} labelColor="#0F172A" />
+              <div style={{ flex: 1 }}>
+                {buyerData.map(b => (
+                  <div key={b.name} style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 4, fontSize: 11 }}>
+                    <span style={{ width: 7, height: 7, borderRadius: 999, background: b.color }} />
+                    <span style={{ color: "#475569", flex: 1 }}>{b.name}</span>
+                    <span style={{ color: "#0F172A", fontWeight: 700 }}>{b.value}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </Card>
 
         {/* Orders by Country */}
         <Card>
           <CardHeader title="ORDERS BY COUNTRY" />
-          {countryArr.map(([country, count]) => (
-            <div key={country} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 7, fontSize: 11 }}>
-              <Globe size={11} color="#64748B" style={{ flexShrink: 0 }} />
-              <span style={{ color: "#475569", width: 70, flexShrink: 0 }}>{country}</span>
-              <div style={{ flex: 1, height: 5, background: "#F1F5F9", borderRadius: 999 }}>
-                <div style={{ height: 5, width: `${(count / countryMax) * 100}%`, background: "#378ADD", borderRadius: 999 }} />
+          {countryArr.length === 0 ? (
+            <div style={{ fontSize: 12, color: "#94A3B8", textAlign: "center", padding: "20px 0" }}>No country data.</div>
+          ) : (
+            countryArr.map(([country, count]) => (
+              <div key={country} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 7, fontSize: 11 }}>
+                <Globe size={11} color="#64748B" style={{ flexShrink: 0 }} />
+                <span style={{ color: "#475569", width: 70, flexShrink: 0 }}>{country}</span>
+                <div style={{ flex: 1, height: 5, background: "#F1F5F9", borderRadius: 999 }}>
+                  <div style={{ height: 5, width: `${(count / countryMax) * 100}%`, background: "#378ADD", borderRadius: 999 }} />
+                </div>
+                <span style={{ color: "#0F172A", fontWeight: 700 }}>{count}</span>
               </div>
-              <span style={{ color: "#0F172A", fontWeight: 700 }}>{count}</span>
-            </div>
-          ))}
+            ))
+          )}
         </Card>
 
         {/* Quality Overview */}
         <Card>
           <CardHeader title="QUALITY OVERVIEW" />
           <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}>
-            <MiniDonut data={[{ name: "Pass", value: 93.4, color: "#10B981" }, { name: "Fail", value: 6.6, color: "#E2E8F0" }]} size={80} centerLabel="93.4%" centerSub="Pass rate" labelColor="#0F172A" />
+            <MiniDonut data={totalOrders > 0 ? [{ name: "Pass", value: 100, color: "#10B981" }] : [{ name: "None", value: 100, color: "#E2E8F0" }]} size={80} centerLabel={totalOrders > 0 ? "100%" : "—"} centerSub="Pass rate" labelColor="#0F172A" />
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#64748B" }}>
-            <span>Defect rate <b style={{ color: "#0F172A" }}>2.1%</b></span>
-            <span>Rework <b style={{ color: "#0F172A" }}>1.8%</b></span>
+            <span>Defect rate <b style={{ color: "#0F172A" }}>{totalOrders > 0 ? "0.0%" : "—"}</b></span>
+            <span>Rework <b style={{ color: "#0F172A" }}>{totalOrders > 0 ? "0.0%" : "—"}</b></span>
           </div>
         </Card>
 

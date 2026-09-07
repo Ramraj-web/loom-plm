@@ -18,9 +18,10 @@ import { ProductionTab } from "./ProductionTab.jsx";
 import { InspectionTab } from "./InspectionTab.jsx";
 import { CertificatesTab } from "./CertificatesTab.jsx";
 
-function StageNode({ stage, idx, onCycle, onReason, onSupplierChange, lockedBy, suppliers = [] }) {
+function StageNode({ stage, idx, onCycle, onReason, onSupplierChange, lockedBy, suppliers = [], canEdit = true, roleDept = "" }) {
   const [open, setOpen] = useState(false);
   const locked = !!lockedBy;
+  const isAllowedToEdit = !locked && canEdit;
   const supplierOptions = suppliers.length > 0
     ? suppliers.filter(s => !s.isDeleted).map(s => s.name || s)
     : VAP_SUPPLIERS;
@@ -31,17 +32,23 @@ function StageNode({ stage, idx, onCycle, onReason, onSupplierChange, lockedBy, 
     stage.status === "in_progress" ? <Clock size={17} color="#E2A83B" /> :
     <Circle size={17} color="#C7CAD1" />;
 
+  const tooltipTitle = locked
+    ? `Locked until ${lockedBy} is approved`
+    : !canEdit
+    ? `Only ${stage.dept} department can complete this stage (You are in: ${roleDept})`
+    : "Click to change status (Pending → In Progress → Done)";
+
   return (
-    <div style={{ flex: "0 0 128px", minWidth: 128, position: "relative", opacity: locked ? 0.6 : 1 }}>
+    <div style={{ flex: "0 0 128px", minWidth: 128, position: "relative", opacity: locked ? 0.6 : !canEdit ? 0.75 : 1 }}>
       <div style={{ display: "flex", alignItems: "center" }}>
         <div
-          onClick={locked ? undefined : () => onCycle(idx)}
-          title={locked ? `Locked until ${lockedBy} is approved` : "Click to change status"}
+          onClick={isAllowedToEdit ? () => onCycle(idx) : undefined}
+          title={tooltipTitle}
           style={{
             width: 30, height: 30, borderRadius: 999, background: "#fff",
             border: `2px solid ${stage.status === "done" ? "#1F9E8D" : locked ? "#D9DBE1" : stage.status === "in_progress" ? "#E2A83B" : "#D9DBE1"}`,
             display: "flex", alignItems: "center", justifyContent: "center",
-            cursor: locked ? "not-allowed" : "pointer", flexShrink: 0
+            cursor: isAllowedToEdit ? "pointer" : "not-allowed", flexShrink: 0
           }}
         >
           {icon}
@@ -50,7 +57,9 @@ function StageNode({ stage, idx, onCycle, onReason, onSupplierChange, lockedBy, 
       </div>
       <div style={{ marginTop: 8, fontSize: 11.5, fontWeight: 600, color: locked ? "#B0B2BA" : "#1B2130", lineHeight: 1.3 }}>{stage.name}</div>
       <div style={{ fontSize: 10.5, color: "#8A8D98", marginTop: 2 }}>{stage.planned}</div>
-      <div style={{ fontSize: 10, color: "#B0B2BA", marginTop: 2 }}>{stage.dept}</div>
+      <div style={{ fontSize: 10, color: canEdit ? "#1F9E8D" : "#B0B2BA", marginTop: 2, fontWeight: canEdit ? 600 : 400 }}>
+        {stage.dept} {!canEdit && "(Read-only)"}
+      </div>
       {stage.dept === "VAP" && (
         <select
           value={stage.supplier || ""}
@@ -1629,7 +1638,31 @@ export function OrderWorkspace({
         {(order.stages || []).map((s, i) => {
           const gate = gatingApproval(order.stages, i);
           const bulkLocked = !gate && cuttingIdx !== -1 && i >= cuttingIdx && !bulkGateOpen;
-          return <StageNode key={i} stage={s} idx={i} onCycle={cycle} onReason={setReason} onSupplierChange={setSupplier} lockedBy={gate ? gate.name : bulkLocked ? "Pre-Production sign-off" : null} suppliers={suppliers} />;
+          
+          // Strict Department Ownership:
+          // Admin, Executive, fullAccess can edit any stage.
+          // Department users can ONLY edit/complete stages belonging to their own department!
+          const canEditThisStage = Boolean(
+            role?.fullAccess ||
+            role?.dept === "Executive" ||
+            role?.dept === "Administrators" ||
+            (s.dept && role?.dept && s.dept.toLowerCase() === role.dept.toLowerCase())
+          );
+
+          return (
+            <StageNode
+              key={i}
+              stage={s}
+              idx={i}
+              onCycle={cycle}
+              onReason={setReason}
+              onSupplierChange={setSupplier}
+              lockedBy={gate ? gate.name : bulkLocked ? "Pre-Production sign-off" : null}
+              suppliers={suppliers}
+              canEdit={canEditThisStage}
+              roleDept={role?.dept || "User"}
+            />
+          );
         })}
       </div>
       {flaggedReasons.length > 0 && (
