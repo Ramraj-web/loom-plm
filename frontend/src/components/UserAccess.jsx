@@ -14,7 +14,8 @@ const ALL_DEPARTMENTS = Object.keys(ORG_STRUCTURE);
 
 export const DEFAULT_TEAMS = [
   { id: "team-admin", name: "Administrators", permissions: PERMISSIONS.map(([key]) => key) },
-  ...ALL_DEPARTMENTS.map(dept => {
+  { id: "team-md", name: "Executive (MD)", permissions: PERMISSIONS.map(([key]) => key) },
+  ...ALL_DEPARTMENTS.filter(dept => dept !== "Executive (MD)").map(dept => {
     // Determine permissions per department
     let perms = ["dashboard", "tasks", "attendance"];
     if (["Merchandising", "Planning", "Program", "Sample", "Costing"].includes(dept)) {
@@ -34,6 +35,7 @@ export const DEFAULT_TEAMS = [
 
 export const DEFAULT_USERS = [
   { id: "user-admin", employeeId: "EMP001", name: "Admin", email: "admin@loom.local", username: "admin", password: "admin123", teamId: "team-admin", active: true },
+  { id: "user-md", employeeId: "EMP002", name: "Managing Director", email: "md@loom.local", username: "md", password: "md123", teamId: "team-md", active: true },
 ];
 
 export function LoginPage({ users, onLogin }) {
@@ -46,8 +48,8 @@ export function LoginPage({ users, onLogin }) {
     if (!user) return setError("Invalid username or password");
     onLogin(user);
   };
-  return <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "#F5F6F8" }}>
-    <form onSubmit={submit} style={{ width: "min(390px, calc(100% - 32px))", background: "#fff", border: "1px solid #ECEDF1", borderRadius: 14, padding: 28, boxShadow: "0 16px 40px rgba(21,27,46,.08)" }}>
+  return <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 16, boxSizing: "border-box", backgroundImage: "linear-gradient(rgb(245 246 248 / 54%), rgba(245, 246, 248, 0.92)), url(/login-bg.jpg)", backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }}>
+    <form onSubmit={submit} style={{ width: "min(390px, 100%)", background: "rgba(255, 255, 255, 0.94)", backdropFilter: "blur(8px)", border: "1px solid rgba(255, 255, 255, 0.72)", borderRadius: 14, padding: 28, boxShadow: "0 20px 60px rgba(21,27,46,.16)" }}>
       <div style={{ color: "#1F9E8D", fontSize: 12, fontWeight: 800, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>GarmaX</div>
       <h1 style={{ margin: "0 0 6px", color: "#151B2E", fontSize: 26 }}>Welcome back</h1>
       <p style={{ margin: "0 0 22px", color: "#8A8D98", fontSize: 13 }}>Sign in to your workspace</p>
@@ -55,7 +57,7 @@ export function LoginPage({ users, onLogin }) {
       <label style={{ ...labelStyle, marginTop: 14 }}>Password<input type="password" value={password} onChange={e => setPassword(e.target.value)} required style={inputStyle} /></label>
       {error && <div style={{ color: "#B42318", fontSize: 12, marginTop: 12 }}>{error}</div>}
       <button type="submit" style={primaryButtonStyle}>Sign in</button>
-      <div style={{ color: "#8A8D98", fontSize: 11, marginTop: 16 }}>Initial administrator: admin / admin123</div>
+      <div style={{ color: "#8A8D98", fontSize: 11, marginTop: 16 }}>Initial administrator: admin / admin123 · MD: md / md123</div>
     </form>
   </div>;
 }

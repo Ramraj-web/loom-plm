@@ -2355,7 +2355,102 @@ export function CapasPage({ orders, capas, onAdd, onCycleStatus }) {
   );
 }
 
-export function ExecutiveOverviewPage({ orders, attendance, financials, roster, onOpenOrder, onNavigate, onApproveCosting, onRejectCosting }) {
+function EmployeePerformancePanel({ orders = [], roster = [], attendance = {}, customTasks = [], leaveRequests = [], onNavigate }) {
+  const employeeRows = useMemo(() => {
+    const activeOrders = orders.filter(order => order.isDeleted !== true);
+    const allStages = activeOrders.flatMap(order => (order.stages || []).map(stage => ({ ...stage, orderId: order.id })));
+    const cleanName = value => String(value || "").split("(")[0].trim().toLowerCase();
+    const isDone = value => ["done", "completed", "complete", "closed"].includes(String(value || "").toLowerCase());
+
+    return roster
+      .filter(person => person.name && person.name !== "—")
+      .map(person => {
+        const name = cleanName(person.name);
+        const assignedStages = allStages.filter(stage => cleanName(stage.assignee) === name || cleanName(stage.assignee).includes(name));
+        const assignedTasks = customTasks.filter(task => cleanName(task.assignee) === name || cleanName(task.assignee).includes(name));
+        const completedStages = assignedStages.filter(stage => isDone(stage.status)).length;
+        const completedTasks = assignedTasks.filter(task => isDone(task.status)).length;
+        const workItems = assignedStages.length + assignedTasks.length;
+        const completedItems = completedStages + completedTasks;
+        const delayedItems = assignedStages.filter(stage => stage.reason || stage.status === "Delayed").length;
+        const employeeOrders = new Set(assignedStages.map(stage => stage.orderId));
+        const employeeLeave = leaveRequests.filter(leave => cleanName(leave.name) === name);
+        const approvedLeave = employeeLeave.filter(leave => String(leave.status || "").toLowerCase() === "approved").length;
+        const openTasks = assignedTasks.filter(task => !isDone(task.status)).length + assignedStages.filter(stage => !isDone(stage.status)).length;
+        const score = workItems > 0 ? Math.max(0, Math.round((completedItems / workItems) * 100 - delayedItems * 5)) : 0;
+
+        return {
+          ...person,
+          orderCount: employeeOrders.size,
+          completed: completedItems,
+          delayed: delayedItems,
+          taskCount: assignedTasks.length,
+          openTasks,
+          leaveCount: approvedLeave,
+          attendance: attendance[person.name] || "present",
+          score,
+        };
+      })
+      .sort((a, b) => b.score - a.score || b.orderCount - a.orderCount);
+  }, [orders, roster, attendance, customTasks, leaveRequests]);
+
+  const totals = employeeRows.reduce((summary, row) => ({
+    orders: summary.orders + row.orderCount,
+    tasks: summary.tasks + row.taskCount,
+    open: summary.open + row.openTasks,
+    leave: summary.leave + row.leaveCount,
+  }), { orders: 0, tasks: 0, open: 0, leave: 0 });
+
+  return (
+    <Card style={{ marginBottom: 16 }}>
+      <CardHeader
+        title="EMPLOYEE PERFORMANCE"
+        sub="Order maintenance, daily tasks, attendance, and approved leave"
+        action="Open tasks"
+        onAction={() => onNavigate && onNavigate("tasks")}
+      />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 14 }}>
+        {[
+          ["Employees tracked", employeeRows.length, "#378ADD"],
+          ["Orders maintained", totals.orders, "#1F9E8D"],
+          ["Daily tasks", totals.tasks, "#7F77DD"],
+          ["Open work items", totals.open, "#D64545"],
+        ].map(([label, value, color]) => (
+          <div key={label} style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 8, padding: "10px 12px" }}>
+            <div style={{ fontSize: 10.5, color: "#64748B" }}>{label}</div>
+            <div style={{ fontSize: 19, fontWeight: 800, color, marginTop: 4 }}>{value}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ overflowX: "auto" }}>
+        <div style={{ minWidth: 760, display: "grid", gridTemplateColumns: "1.7fr 0.8fr 0.9fr 0.8fr 0.9fr 0.8fr 0.9fr 0.8fr", fontSize: 10.5, color: "#64748B", fontWeight: 700, padding: "0 0 7px", borderBottom: "1px solid #F1F5F9" }}>
+          <div>EMPLOYEE</div><div>DEPARTMENT</div><div>ORDERS</div><div>DONE</div><div>DAILY TASKS</div><div>DELAYED</div><div>LEAVE</div><div>PERFORMANCE</div>
+        </div>
+        <div style={{ minWidth: 760, maxHeight: 300, overflowY: "auto" }}>
+          {employeeRows.length === 0 ? (
+            <div style={{ padding: "24px 0", color: "#94A3B8", fontSize: 12 }}>No employee records available.</div>
+          ) : employeeRows.map(employee => (
+            <div key={employee.name} style={{ display: "grid", gridTemplateColumns: "1.7fr 0.8fr 0.9fr 0.8fr 0.9fr 0.8fr 0.9fr 0.8fr", alignItems: "center", fontSize: 11.5, padding: "9px 0", borderBottom: "1px solid #F8FAFC" }}>
+              <div>
+                <div style={{ fontWeight: 700, color: "#1E293B" }}>{employee.name}</div>
+                <div style={{ fontSize: 10, color: employee.attendance === "present" ? "#059669" : "#DC2626", marginTop: 2 }}>{employee.attendance === "present" ? "Present" : employee.attendance}</div>
+              </div>
+              <div style={{ color: "#64748B" }}>{employee.dept || "—"}</div>
+              <div style={{ color: "#1E293B", fontWeight: 600 }}>{employee.orderCount}</div>
+              <div style={{ color: "#059669", fontWeight: 700 }}>{employee.completed}</div>
+              <div style={{ color: "#1E293B" }}>{employee.taskCount} <span style={{ color: "#94A3B8" }}>({employee.openTasks} open)</span></div>
+              <div style={{ color: employee.delayed > 0 ? "#DC2626" : "#059669", fontWeight: 700 }}>{employee.delayed}</div>
+              <div style={{ color: "#7C3AED", fontWeight: 600 }}>{employee.leaveCount}</div>
+              <div style={{ color: employee.score >= 75 ? "#059669" : employee.score >= 50 ? "#D97706" : "#DC2626", fontWeight: 800 }}>{employee.score}%</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+export function ExecutiveOverviewPage({ orders, attendance, financials, roster, customTasks = [], leaveRequests = [], onOpenOrder, onNavigate, onApproveCosting, onRejectCosting }) {
   const allStages = orders.flatMap(o => (o.stages || []).map(s => ({ ...s, orderId: o.id, style: o.style, buyer: o.buyer })));
   const totalOrders = orders.length;
   const totalQty = orders.reduce((a, o) => a + (Number(o.qty) || 0), 0);
@@ -2749,6 +2844,15 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
             <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "6px 0", borderBottom: i < activityFeed.length - 1 ? "1px solid #F1F5F9" : "none" }}>
               <CheckCircle2 size={13} color="#10B981" style={{ marginTop: 2, flexShrink: 0 }} />
               <div>
+
+              <EmployeePerformancePanel
+                orders={orders}
+                roster={roster}
+                attendance={attendance}
+                customTasks={customTasks}
+                leaveRequests={leaveRequests}
+                onNavigate={onNavigate}
+              />
                 <div style={{ fontSize: 11.5, color: "#1E293B", fontWeight: 500 }}>{a.text}</div>
                 <div style={{ fontSize: 10, color: "#94A3B8" }}>{a.sub}</div>
               </div>

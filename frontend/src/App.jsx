@@ -30,11 +30,17 @@ import { DEFAULT_TEAMS, DEFAULT_USERS, LoginPage, UserAccessPage } from "./compo
 
 function roleForUser(user, teams) {
   const team = teams.find(item => item.id === user.teamId) || teams[0] || { name: "User", permissions: ["dashboard"] };
+  const isManagingDirector = user.isMD === true
+    || [user.username, user.name, user.email].some(value => /(^|[^a-z])md([^a-z]|$)|managing director/i.test(String(value || "")));
+  const effectiveDept = isManagingDirector ? "Executive (MD)" : team.name;
   return {
     label: user.name,
-    dept: team.name,
-    fullAccess: team.permissions.includes("settings"),
-    permissions: team.permissions,
+    dept: effectiveDept,
+    isMD: isManagingDirector,
+    fullAccess: isManagingDirector || team.permissions.includes("settings"),
+    permissions: isManagingDirector ? ROLE_OPTIONS.find(option => option.dept === "Executive")?.fullAccess
+      ? ["dashboard", "orders", "tasks", "approvals", "attendance", "reports", "settings"]
+      : team.permissions : team.permissions,
     userId: user.id,
   };
 }
@@ -133,7 +139,15 @@ export default function LoomPLM() {
           window.storage?.get("users", true), window.storage?.get("teams", true), window.storage?.get("dashboard_rotation", true)
         ]);
         if (cancelled) return;
-        if (userRes?.value) { try { const parsed = JSON.parse(userRes.value); if (Array.isArray(parsed) && parsed.length) setUsers(parsed); } catch (e) {} }
+        if (userRes?.value) {
+          try {
+            const parsed = JSON.parse(userRes.value);
+            if (Array.isArray(parsed) && parsed.length) {
+              const existingIds = new Set(parsed.map(user => user.id));
+              setUsers([...parsed, ...DEFAULT_USERS.filter(user => !existingIds.has(user.id))]);
+            }
+          } catch (e) {}
+        }
         if (teamRes?.value) {
           try {
             const parsed = JSON.parse(teamRes.value);
@@ -642,7 +656,7 @@ export default function LoomPLM() {
     const nextRole = roleForUser(user, teams);
     setActiveUser(user);
     setRole(nextRole);
-    setView("dashboard");
+    setView(nextRole.dept === "Executive" || nextRole.dept === "Executive (MD)" ? "executiveOverview" : "dashboard");
     try { localStorage.setItem("loom_active_user", JSON.stringify(user)); } catch (e) {}
   };
 
@@ -1662,7 +1676,7 @@ export default function LoomPLM() {
     return items;
   })();
 
-  const isExecutive = role.dept === "Executive" || role.dept === "Executive (MD)";
+  const isExecutive = role.isMD === true;
 
   const navSections = isExecutive ? [
     {
@@ -1688,7 +1702,6 @@ export default function LoomPLM() {
   ] : [
     { section: null, items: [
       { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-      ...(canSeeAll ? [{ key: "executiveOverview", label: "MD Dashboard", icon: TrendingUp }] : []),
       ...(canAccess("orders") ? [{ key: "orders", label: "Orders", icon: Package }] : []),
       { key: "tasks", label: "My tasks", icon: CheckSquare },
       { key: "myChecklist", label: "My checklist", icon: ClipboardList },
@@ -2122,6 +2135,8 @@ export default function LoomPLM() {
             attendance={attendance}
             financials={financials}
             roster={roster}
+            customTasks={customTasks}
+            leaveRequests={leaveRequests}
             onOpenOrder={openOrder}
             onNavigate={navigate}
             onApproveCosting={approveOrderCosting}
@@ -2294,13 +2309,15 @@ export default function LoomPLM() {
     content = <AttendancePage roster={roster} attendance={attendance} onCycle={cycleAttendance} leaveRequests={leaveRequests} onApprove={approveLeave} onReject={rejectLeave} onAddStaff={addStaff} onEditStaff={editStaff} onRemoveStaff={removeStaff} onAddLeaveRequest={addLeaveRequest} />;
   } else if (view === "finance" && (canSeeAll || role.dept === "Finance")) {
     content = <FinanceEntryPage orders={orders} financials={financials} onUpdate={updateFinancials} onUpdateOrderCost={updateOrderCost} />;
-  } else if (view === "executiveOverview" && (canSeeAll || role.dept === "Executive" || role.dept === "Executive (MD)")) {
+  } else if (view === "executiveOverview" && isExecutive) {
     content = (
       <ExecutiveOverviewPage
         orders={orders}
         attendance={attendance}
         financials={financials}
         roster={roster}
+        customTasks={customTasks}
+        leaveRequests={leaveRequests}
         onOpenOrder={openOrder}
         onNavigate={navigate}
         onApproveCosting={approveOrderCosting}
@@ -2310,6 +2327,21 @@ export default function LoomPLM() {
   } else if (view === "settings") {
     content = (
       <UserAccessPage users={users} teams={teams} onChangeUsers={setUsers} onChangeTeams={setTeams} rotation={rotation} onChangeRotation={setRotation} />
+    );
+  } else if (isExecutive) {
+    content = (
+      <ExecutiveOverviewPage
+        orders={orders}
+        attendance={attendance}
+        financials={financials}
+        roster={roster}
+        customTasks={customTasks}
+        leaveRequests={leaveRequests}
+        onOpenOrder={openOrder}
+        onNavigate={navigate}
+        onApproveCosting={approveOrderCosting}
+        onRejectCosting={rejectOrderCosting}
+      />
     );
   } else if (canSeeAll) {
     content = (
