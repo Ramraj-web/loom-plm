@@ -7,6 +7,8 @@ export const RESOURCE_SEEDS = {
   certifications: [],
   compliances: [],
   notifications: [],
+  debitNotes: [],
+  capas: [],
   suppliers: [
     {
       id: "sup-elite-print",

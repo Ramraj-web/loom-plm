@@ -231,13 +231,11 @@ export function GroupedTaskList({ rows, onOpenOrder, emptyText }) {
 export function MiniDonut({ data, size = 96, centerLabel, centerSub, labelColor }) {
   return (
     <div style={{ position: "relative", width: size, height: size }}>
-      <ResponsiveContainer width={size} height={size}>
-        <PieChart>
-          <Pie data={data} dataKey="value" nameKey="name" innerRadius={size * 0.32} outerRadius={size * 0.48} paddingAngle={2} stroke="none">
-            {data.map((d, i) => <Cell key={i} fill={d.color} />)}
-          </Pie>
-        </PieChart>
-      </ResponsiveContainer>
+      <PieChart width={size} height={size}>
+        <Pie data={data} dataKey="value" nameKey="name" innerRadius={size * 0.32} outerRadius={size * 0.48} paddingAngle={2} stroke="none">
+          {data.map((d, i) => <Cell key={i} fill={d.color} />)}
+        </Pie>
+      </PieChart>
       {centerLabel && (
         <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
           <div style={{ fontSize: size > 90 ? 18 : 14, fontWeight: 700, color: labelColor || "#fff" }}>{centerLabel}</div>

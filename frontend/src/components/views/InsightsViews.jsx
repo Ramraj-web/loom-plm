@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from "react";
 import {
   TriangleAlert, Globe, Gauge, CheckCircle2, ClipboardList, Landmark, Clock, Truck, TrendingUp,
   Bell, Package, Calendar, CheckSquare, ClipboardCheck, Award, ShieldCheck, CheckCircle, Search, Trash2, Check,
-  Plus, Edit, X, ChevronLeft, ChevronRight, Building2, Phone, Mail, MapPin, ExternalLink, AlertCircle, Layers
+  Plus, Edit, X, ChevronLeft, ChevronRight, Building2, Phone, Mail, MapPin, ExternalLink, AlertCircle, Layers, RefreshCw
 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer
@@ -3020,7 +3020,7 @@ export function CapasPage({ orders, capas, onAdd, onCycleStatus }) {
   );
 }
 
-function EmployeePerformancePanel({ orders = [], roster = [], attendance = {}, customTasks = [], leaveRequests = [], onNavigate }) {
+export function EmployeePerformancePanel({ orders = [], roster = [], attendance = {}, customTasks = [], leaveRequests = [], onNavigate, onBack }) {
   const employeeRows = useMemo(() => {
     const activeOrders = orders.filter(order => order.isDeleted !== true);
     const allStages = activeOrders.flatMap(order => (order.stages || []).map(stage => ({ ...stage, orderId: order.id })));
@@ -3067,13 +3067,36 @@ function EmployeePerformancePanel({ orders = [], roster = [], attendance = {}, c
   }), { orders: 0, tasks: 0, open: 0, leave: 0 });
 
   return (
-    <Card style={{ marginBottom: 16 }}>
-      <CardHeader
-        title="EMPLOYEE PERFORMANCE"
-        sub="Order maintenance, daily tasks, attendance, and approved leave"
-        action="Open tasks"
-        onAction={() => onNavigate && onNavigate("tasks")}
-      />
+    <div>
+      {onBack && (
+        <div style={{ marginBottom: 14 }}>
+          <button
+            onClick={onBack}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "6px 12px",
+              borderRadius: 6,
+              border: "1px solid #D1D5DB",
+              background: "#FFFFFF",
+              fontSize: 12.5,
+              fontWeight: 600,
+              color: "#374151",
+              cursor: "pointer"
+            }}
+          >
+            ← Back to MD Executive Dashboard
+          </button>
+        </div>
+      )}
+      <Card style={{ marginBottom: 16 }}>
+        <CardHeader
+          title="EMPLOYEE PERFORMANCE & WORK BREAKDOWN"
+          sub="Order maintenance, daily tasks, attendance, and approved leave tracking"
+          action="Open tasks"
+          onAction={() => onNavigate && onNavigate("tasks")}
+        />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 14 }}>
         {[
           ["Employees tracked", employeeRows.length, "#378ADD"],
@@ -3112,10 +3135,11 @@ function EmployeePerformancePanel({ orders = [], roster = [], attendance = {}, c
         </div>
       </div>
     </Card>
+    </div>
   );
 }
 
-export function ExecutiveOverviewPage({ orders, attendance, financials, roster, customTasks = [], leaveRequests = [], onOpenOrder, onNavigate, onApproveCosting, onRejectCosting }) {
+export function ExecutiveOverviewPage({ orders, attendance, financials, roster, customTasks = [], leaveRequests = [], onOpenOrder, onNavigate, onApproveCosting, onRejectCosting, onRefresh, isRefreshing = false, lastRefreshedAt = null }) {
   const allStages = orders.flatMap(o => (o.stages || []).map(s => ({ ...s, orderId: o.id, style: o.style, buyer: o.buyer })));
   const totalOrders = orders.length;
   const totalQty = orders.reduce((a, o) => a + (Number(o.qty) || 0), 0);
@@ -3160,7 +3184,7 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
   const presentCount = roster.filter(s => (attendance[s.name] || "present") === "present").length;
   const capacityUtilization = Math.round((presentCount / (roster.length || 1)) * 100);
 
-  // 4. Department Performance (replacing Critical Alerts per user instruction)
+  // 4. Department Performance
   const depts = ["Merchandising", "Program", "Planning", "Purchase – Fabric", "Purchase – Trims", "Quality", "Cutting", "Production", "Finishing", "Logistics & Documentation"];
   const deptStats = depts.map(d => {
     const dStages = allStages.filter(s => s.dept === d);
@@ -3193,15 +3217,51 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
     { name: "Low risk", value: riskCounts.low, color: "#1F9E8D" },
   ].filter(r => r.value > 0);
 
-  // 6. Activity feed & bottom counters
-  const activityFeed = orders.map(o => {
-    if (!o.stages) return null;
-    const lastDoneIdx = [...o.stages].reverse().findIndex(s => s.status === "done");
-    if (lastDoneIdx === -1) return null;
-    const idx = o.stages.length - 1 - lastDoneIdx;
-    const s = o.stages[idx];
-    return { text: `${s.name} completed`, sub: `PO #${o.id} · ${s.dept}` };
-  }).filter(Boolean).slice(0, 6);
+  // 6. Top 5 Performing Employees (Overall Performance with Work Breakdown)
+  const [selectedPerformer, setSelectedPerformer] = useState(null);
+
+  const topPerformers = useMemo(() => {
+    const activeOrders = orders.filter(order => order.isDeleted !== true);
+    const activeStages = activeOrders.flatMap(order => (order.stages || []).map(stage => ({ ...stage, orderId: order.id, style: order.style, buyer: order.buyer })));
+    const cleanName = value => String(value || "").split("(")[0].trim().toLowerCase();
+    const isDone = value => ["done", "completed", "complete", "closed"].includes(String(value || "").toLowerCase());
+
+    return (roster || [])
+      .filter(person => person.name && person.name !== "—")
+      .map(person => {
+        const name = cleanName(person.name);
+        const assignedStages = activeStages.filter(stage => cleanName(stage.assignee) === name || cleanName(stage.assignee).includes(name));
+        const assignedTasks = (customTasks || []).filter(task => cleanName(task.assignee) === name || cleanName(task.assignee).includes(name));
+        const completedStages = assignedStages.filter(stage => isDone(stage.status));
+        const completedTasks = assignedTasks.filter(task => isDone(task.status));
+        const workItems = assignedStages.length + assignedTasks.length;
+        const completedItems = completedStages.length + completedTasks.length;
+        const delayedStages = assignedStages.filter(stage => stage.reason || stage.status === "Delayed");
+        const onTimeStages = completedStages.filter(stage => !stage.reason);
+        const employeeOrders = Array.from(new Set(assignedStages.map(stage => stage.orderId)));
+        const score = workItems > 0 ? Math.max(0, Math.round((completedItems / workItems) * 100 - delayedStages.length * 5)) : 0;
+        const onTimeRate = completedStages.length > 0 ? Math.round((onTimeStages.length / completedStages.length) * 100) : 100;
+        const mistakeFreeRate = workItems > 0 ? Math.round(((workItems - delayedStages.length) / workItems) * 100) : 100;
+
+        return {
+          ...person,
+          orderCount: employeeOrders.length,
+          orderIds: employeeOrders,
+          completed: completedItems,
+          totalWork: workItems,
+          delayed: delayedStages.length,
+          delayedStages,
+          completedStages,
+          completedTasks,
+          onTimeRate,
+          mistakeFreeRate,
+          attendance: attendance[person.name] || "present",
+          score,
+        };
+      })
+      .sort((a, b) => b.score - a.score || b.completed - a.completed || b.orderCount - a.orderCount)
+      .slice(0, 5);
+  }, [orders, roster, attendance, customTasks]);
 
   const openTasksRows = allStages.filter(s => s.status !== "done");
   const overdueRows = allStages.filter(s => s.status === "in_progress" && s.reason);
@@ -3220,10 +3280,82 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
 
   return (
     <div style={{ padding: "0 0 40px 0" }}>
-      {/* Title */}
-      <div style={{ marginBottom: 18 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0F172A", margin: 0 }}>MD Executive Dashboard</h1>
-        <div style={{ fontSize: 12.5, color: "#64748B", marginTop: 3 }}>Real-time overview of entire organization performance</div>
+      {/* Title & Screen Refresh Controls */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12, marginBottom: 18 }}>
+        <div>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0F172A", margin: 0 }}>MD Executive Dashboard</h1>
+          <div style={{ fontSize: 12.5, color: "#64748B", marginTop: 3 }}>Real-time overview of entire organization performance</div>
+        </div>
+
+        {/* Right side top - Screen Refresh Button & Live Sync status (positioned right above Gross Margin widget) */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {/* Live Auto-Refresh 5 min status badge */}
+          <div
+            title="Dashboard auto-refreshes automatically every 5 minutes with live changes"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "6px 12px",
+              borderRadius: 20,
+              background: "#F0FDF4",
+              border: "1px solid #BBF7D0",
+              fontSize: 11.5,
+              fontWeight: 600,
+              color: "#166534"
+            }}
+          >
+            <span
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: "50%",
+                background: "#22C55E",
+                boxShadow: "0 0 6px #22C55E",
+                display: "inline-block"
+              }}
+            />
+            <span>Auto Sync: 5m</span>
+            <span style={{ color: "#86EFAC", margin: "0 1px" }}>•</span>
+            <span style={{ color: "#15803D", fontWeight: 500 }}>
+              {lastRefreshedAt ? lastRefreshedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Live"}
+            </span>
+          </div>
+
+          {/* Screen Refresh Button */}
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={isRefreshing}
+            title="Click to refresh entire MD Dashboard immediately"
+            style={{
+              cursor: isRefreshing ? "not-allowed" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "8px 16px",
+              borderRadius: 8,
+              background: isRefreshing ? "#E2E8F0" : "#534AB7",
+              border: "none",
+              color: isRefreshing ? "#64748B" : "#FFFFFF",
+              fontSize: 12.5,
+              fontWeight: 700,
+              boxShadow: isRefreshing ? "none" : "0 2px 8px rgba(83, 74, 183, 0.28)",
+              transition: "all 0.2s ease"
+            }}
+            onMouseEnter={e => { if (!isRefreshing) e.currentTarget.style.background = "#4338CA"; }}
+            onMouseLeave={e => { if (!isRefreshing) e.currentTarget.style.background = "#534AB7"; }}
+          >
+            <RefreshCw
+              size={15}
+              style={{
+                animation: isRefreshing ? "spin 1s linear infinite" : "none",
+                transition: "transform 0.2s ease"
+              }}
+            />
+            <span>{isRefreshing ? "Refreshing Dashboard..." : "Screen Refresh"}</span>
+          </button>
+        </div>
       </div>
 
       {/* Row 1: Top 6 KPI Cards */}
@@ -3500,31 +3632,363 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
           </div>
         </Card>
 
-        {/* Activity Feed */}
+        {/* Top 5 Performing Employees (Clickable with Detailed Work Breakdown Modal) */}
         <Card>
-          <CardHeader title="ACTIVITY FEED" sub="Latest updates" />
-          {activityFeed.length === 0 ? (
-            <div style={{ fontSize: 12, color: "#94A3B8" }}>No recent activity.</div>
-          ) : activityFeed.map((a, i) => (
-            <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "6px 0", borderBottom: i < activityFeed.length - 1 ? "1px solid #F1F5F9" : "none" }}>
-              <CheckCircle2 size={13} color="#10B981" style={{ marginTop: 2, flexShrink: 0 }} />
-              <div>
-
-              <EmployeePerformancePanel
-                orders={orders}
-                roster={roster}
-                attendance={attendance}
-                customTasks={customTasks}
-                leaveRequests={leaveRequests}
-                onNavigate={onNavigate}
-              />
-                <div style={{ fontSize: 11.5, color: "#1E293B", fontWeight: 500 }}>{a.text}</div>
-                <div style={{ fontSize: 10, color: "#94A3B8" }}>{a.sub}</div>
-              </div>
+          <CardHeader
+            title="TOP PERFORMING EMPLOYEES"
+            sub="Overall top 5 performers based on efficiency & delivery"
+            action="View all details"
+            onAction={() => onNavigate && onNavigate("employeePerformance")}
+          />
+          {topPerformers.length === 0 ? (
+            <div style={{ fontSize: 12, color: "#94A3B8", padding: "18px 0", textAlign: "center" }}>
+              No employee performance data recorded yet.
             </div>
-          ))}
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {topPerformers.map((emp, idx) => {
+                const rankColors = ["#F59E0B", "#94A3B8", "#B45309", "#3B82F6", "#6366F1"];
+                const rankColor = rankColors[idx] || "#64748B";
+                const isPresent = (attendance[emp.name] || "present") === "present";
+
+                return (
+                  <div
+                    key={emp.name || idx}
+                    onClick={() => setSelectedPerformer(emp)}
+                    title={`Click to view ${emp.name}'s detailed performance & completed works`}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "10px 12px",
+                      borderRadius: 8,
+                      background: idx === 0 ? "#F0FDF4" : "#F8FAFC",
+                      border: `1px solid ${idx === 0 ? "#BBF7D0" : "#E2E8F0"}`,
+                      cursor: "pointer",
+                      transition: "all 0.15s ease"
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.transform = "translateY(-1px)";
+                      e.currentTarget.style.boxShadow = "0 3px 10px rgba(0,0,0,0.06)";
+                      e.currentTarget.style.background = idx === 0 ? "#DCFCE7" : "#F1F5F9";
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.transform = "none";
+                      e.currentTarget.style.boxShadow = "none";
+                      e.currentTarget.style.background = idx === 0 ? "#F0FDF4" : "#F8FAFC";
+                    }}
+                  >
+                    {/* Rank & Profile */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
+                      {/* Rank Number / Badge */}
+                      <div
+                        style={{
+                          width: 26,
+                          height: 26,
+                          borderRadius: 7,
+                          background: rankColor + "22",
+                          color: rankColor,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: 12,
+                          fontWeight: 800,
+                          flexShrink: 0
+                        }}
+                      >
+                        #{idx + 1}
+                      </div>
+
+                      {/* Employee Details */}
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {emp.name}
+                          </span>
+                          <span
+                            style={{
+                              width: 7,
+                              height: 7,
+                              borderRadius: "50%",
+                              background: isPresent ? "#10B981" : "#EF4444",
+                              display: "inline-block",
+                              flexShrink: 0
+                            }}
+                            title={isPresent ? "Present Today" : "Absent / On Leave"}
+                          />
+                        </div>
+                        <div style={{ fontSize: 11, color: "#64748B", marginTop: 2, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                          <span>{emp.dept || "Merchandising"}</span>
+                          <span>•</span>
+                          <span style={{ color: "#059669", fontWeight: 600 }}>{emp.completed || 0} completed</span>
+                          <span>•</span>
+                          <span style={{ color: emp.onTimeRate >= 90 ? "#16A34A" : "#D97706", fontWeight: 600 }}>{emp.onTimeRate}% on-time</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Performance Score Pill & View tag */}
+                    <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 10 }}>
+                      <div
+                        style={{
+                          display: "inline-block",
+                          padding: "3px 9px",
+                          borderRadius: 999,
+                          background: emp.score >= 80 ? "#DCFCE7" : emp.score >= 60 ? "#FEF3C7" : "#FEE2E2",
+                          color: emp.score >= 80 ? "#15803D" : emp.score >= 60 ? "#B45309" : "#B91C1C",
+                          fontSize: 12,
+                          fontWeight: 800
+                        }}
+                      >
+                        {emp.score}%
+                      </div>
+                      <div style={{ fontSize: 10, color: "#534AB7", fontWeight: 600, marginTop: 2 }}>
+                        View details →
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </Card>
       </div>
+
+      {/* Performer Work Details Modal */}
+      {selectedPerformer && (
+        <div
+          onClick={() => setSelectedPerformer(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 23, 42, 0.6)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: 16
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: "#FFFFFF",
+              borderRadius: 14,
+              width: "100%",
+              maxWidth: 640,
+              maxHeight: "88vh",
+              display: "flex",
+              flexDirection: "column",
+              boxShadow: "0 20px 40px rgba(0,0,0,0.24)",
+              border: "1px solid #E2E8F0",
+              overflow: "hidden"
+            }}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                padding: "16px 20px",
+                borderBottom: "1px solid #E2E8F0",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                background: "#F8FAFC"
+              }}
+            >
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 18, fontWeight: 800, color: "#0F172A" }}>
+                    {selectedPerformer.name}
+                  </span>
+                  <span
+                    style={{
+                      padding: "2px 8px",
+                      borderRadius: 999,
+                      background: "#EEF2FF",
+                      color: "#4F46E5",
+                      fontSize: 11,
+                      fontWeight: 700
+                    }}
+                  >
+                    {selectedPerformer.dept || "Department"}
+                  </span>
+                </div>
+                <div style={{ fontSize: 12, color: "#64748B", marginTop: 4 }}>
+                  Top Performer Work & Execution Breakdown · Efficiency Score: <b>{selectedPerformer.score}%</b>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedPerformer(null)}
+                style={{
+                  background: "#EDE9FE",
+                  border: "none",
+                  borderRadius: 8,
+                  width: 30,
+                  height: 30,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  color: "#534AB7",
+                  fontSize: 16,
+                  fontWeight: 700
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ padding: "18px 20px", overflowY: "auto", display: "flex", flexDirection: "column", gap: 16 }}>
+              {/* 4 Performance Metric Badges */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+                <div style={{ background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 8, padding: "10px 12px" }}>
+                  <div style={{ fontSize: 10, color: "#166534", fontWeight: 700, textTransform: "uppercase" }}>Completed</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: "#15803D", marginTop: 2 }}>
+                    {selectedPerformer.completed || 0} items
+                  </div>
+                </div>
+
+                <div style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 8, padding: "10px 12px" }}>
+                  <div style={{ fontSize: 10, color: "#1E40AF", fontWeight: 700, textTransform: "uppercase" }}>On-Time Rate</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: "#1D4ED8", marginTop: 2 }}>
+                    {selectedPerformer.onTimeRate || 100}%
+                  </div>
+                </div>
+
+                <div style={{ background: "#FAF5FF", border: "1px solid #E9D5FF", borderRadius: 8, padding: "10px 12px" }}>
+                  <div style={{ fontSize: 10, color: "#6B21A8", fontWeight: 700, textTransform: "uppercase" }}>Mistake-Free</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: "#7E22CE", marginTop: 2 }}>
+                    {selectedPerformer.mistakeFreeRate || 100}%
+                  </div>
+                </div>
+
+                <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 8, padding: "10px 12px" }}>
+                  <div style={{ fontSize: 10, color: "#92400E", fontWeight: 700, textTransform: "uppercase" }}>Active Orders</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: "#B45309", marginTop: 2 }}>
+                    {selectedPerformer.orderCount || 0} orders
+                  </div>
+                </div>
+              </div>
+
+              {/* Why Top Performer explanation note */}
+              <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 8, padding: "12px 14px" }}>
+                <div style={{ fontSize: 11.5, fontWeight: 700, color: "#0F172A", marginBottom: 3 }}>
+                  ⭐ Why {selectedPerformer.name} is a Top Performer:
+                </div>
+                <div style={{ fontSize: 11.5, color: "#475569", lineHeight: 1.5 }}>
+                  {selectedPerformer.delayed === 0
+                    ? `100% on-time execution without any delivery flags or errors across ${selectedPerformer.completed || 0} completed tasks and order stages.`
+                    : `Completed ${selectedPerformer.completed || 0} critical tasks on-time with an impressive ${selectedPerformer.onTimeRate}% on-time completion rate across ${selectedPerformer.orderCount || 0} active client orders.`}
+                </div>
+              </div>
+
+              {/* Section 1: Completed Order Stages & Work */}
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#0F172A", marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span>Completed Order Stages ({selectedPerformer.completedStages?.length || 0})</span>
+                  <span style={{ fontSize: 10.5, color: "#059669", fontWeight: 600 }}>Zero delays reported</span>
+                </div>
+                {(!selectedPerformer.completedStages || selectedPerformer.completedStages.length === 0) ? (
+                  <div style={{ fontSize: 11.5, color: "#94A3B8", fontStyle: "italic", padding: "8px 0" }}>
+                    No order stages assigned yet.
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 160, overflowY: "auto" }}>
+                    {selectedPerformer.completedStages.map((st, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "7px 10px",
+                          background: "#F8FAFC",
+                          border: "1px solid #F1F5F9",
+                          borderRadius: 6,
+                          fontSize: 11.5
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <CheckCircle2 size={14} color="#10B981" />
+                          <span style={{ fontWeight: 600, color: "#1E293B" }}>{st.name}</span>
+                          <span style={{ fontSize: 10.5, color: "#64748B" }}>({st.orderId} · {st.buyer || "Buyer"})</span>
+                        </div>
+                        <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: "#DCFCE7", color: "#166534" }}>
+                          On Time
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Section 2: Completed Daily Tasks */}
+              {selectedPerformer.completedTasks && selectedPerformer.completedTasks.length > 0 && (
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#0F172A", marginBottom: 8 }}>
+                    Completed Department Tasks ({selectedPerformer.completedTasks.length})
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 130, overflowY: "auto" }}>
+                    {selectedPerformer.completedTasks.map((t, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "7px 10px",
+                          background: "#F8FAFC",
+                          border: "1px solid #F1F5F9",
+                          borderRadius: 6,
+                          fontSize: 11.5
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <CheckCircle size={14} color="#3B82F6" />
+                          <span style={{ fontWeight: 600, color: "#1E293B" }}>{t.title || t.name}</span>
+                          <span style={{ fontSize: 10.5, color: "#64748B" }}>({t.dept || selectedPerformer.dept})</span>
+                        </div>
+                        <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: "#EFF6FF", color: "#1E40AF" }}>
+                          Completed
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div
+              style={{
+                padding: "12px 20px",
+                borderTop: "1px solid #E2E8F0",
+                display: "flex",
+                justifyContent: "flex-end",
+                background: "#F8FAFC"
+              }}
+            >
+              <button
+                onClick={() => setSelectedPerformer(null)}
+                style={{
+                  padding: "6px 16px",
+                  borderRadius: 6,
+                  border: "1px solid #CBD5E1",
+                  background: "#FFFFFF",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  color: "#334155"
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Row 6: Bottom 5 Summary Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12 }}>

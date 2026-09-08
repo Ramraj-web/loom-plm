@@ -30,6 +30,9 @@ async function request(path, options = {}) {
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
+    if (response.status === 404) {
+      return [];
+    }
     const errorMsg = payload.error || `HTTP ${response.status}: ${response.statusText || "Request failed"}`;
     console.error(`API Error on ${options.method || "GET"} ${path}:`, errorMsg, payload);
     throw new Error(errorMsg);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   LayoutDashboard, Package, CheckSquare, BarChart3, Settings as SettingsIcon,
   ChevronDown, Search, Bell, Moon, Sun, ClipboardList,
@@ -23,7 +23,7 @@ import {
 } from "./components/views/OperationsViews.jsx";
 import {
   FinanceEntryPage, ReportsPage, InsightsPage, SupplierPerformancePage,
-  NotificationsPage, DebitNotesPage, CapasPage, ExecutiveOverviewPage, SettingsPage
+  NotificationsPage, DebitNotesPage, CapasPage, ExecutiveOverviewPage, EmployeePerformancePanel, SettingsPage
 } from "./components/views/InsightsViews.jsx";
 import { MyChecklistPage } from "./components/views/MyChecklistPage.jsx";
 import { ProjectChatbot } from "./components/ProjectChatbot.jsx";
@@ -190,241 +190,255 @@ export default function LoomPLM() {
     return () => window.clearInterval(timer);
   }, [rotation, activeUser, users, teams]);
 
-  // Sync data with backend on load if available
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const backendOrders = await resourcesApi.list("orders", "?all=true");
-        if (!cancelled && Array.isArray(backendOrders)) {
-          // Filter out dummy demo seeds
-          const realOrders = backendOrders.filter(bo => !["GKT-1054", "ST-7788", "JKT-2231", "TR-8899", "DR-5566", "PL-3321"].includes(bo.id));
-          setOrders(prev => {
-            return realOrders.map((bo) => {
-              const existing = prev.find(p => p.id === bo.id);
-              return {
-                ...existing,
-                ...bo,
-                completed: bo.completed ?? existing?.completed ?? false,
-                isDeleted: bo.isDeleted ?? existing?.isDeleted ?? false,
-                completedAt: bo.completedAt || existing?.completedAt || null,
-                deletedAt: bo.deletedAt || existing?.deletedAt || null,
-                template: bo.template || existing?.template || "90",
-                costingTemplate: bo.costingTemplate || existing?.costingTemplate || "fabric",
-                costingRows: bo.costingRows || existing?.costingRows || buildCostingRows(bo.costingTemplate || existing?.costingTemplate || "fabric"),
-                vapCount: bo.vapCount ?? existing?.vapCount ?? 1,
-                shippedQty: bo.shippedQty ?? existing?.shippedQty ?? 0,
-                plannedCost: bo.plannedCost ?? existing?.plannedCost ?? 0,
-                actualCost: bo.actualCost ?? existing?.actualCost ?? 0,
-                stages: (bo.stages && bo.stages.length === 34) 
-                  ? bo.stages 
-                  : (existing?.stages && existing.stages.length === 34) 
-                    ? existing.stages 
-                    : makeStages(bo.template || existing?.template || "90", 0, null),
-                preProd: bo.preProd || existing?.preProd || initPreProd(),
-              };
-            });
+  // Master refresh function to pull fresh data from backend and storage
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState(() => new Date());
+
+  const refreshAllData = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      const backendOrders = await resourcesApi.list("orders", "?all=true");
+      if (Array.isArray(backendOrders)) {
+        // Filter out dummy demo seeds
+        const realOrders = backendOrders.filter(bo => !["GKT-1054", "ST-7788", "JKT-2231", "TR-8899", "DR-5566", "PL-3321"].includes(bo.id));
+        setOrders(prev => {
+          return realOrders.map((bo) => {
+            const existing = prev.find(p => p.id === bo.id);
+            return {
+              ...existing,
+              ...bo,
+              completed: bo.completed ?? existing?.completed ?? false,
+              isDeleted: bo.isDeleted ?? existing?.isDeleted ?? false,
+              completedAt: bo.completedAt || existing?.completedAt || null,
+              deletedAt: bo.deletedAt || existing?.deletedAt || null,
+              template: bo.template || existing?.template || "90",
+              costingTemplate: bo.costingTemplate || existing?.costingTemplate || "fabric",
+              costingRows: bo.costingRows || existing?.costingRows || buildCostingRows(bo.costingTemplate || existing?.costingTemplate || "fabric"),
+              vapCount: bo.vapCount ?? existing?.vapCount ?? 1,
+              shippedQty: bo.shippedQty ?? existing?.shippedQty ?? 0,
+              plannedCost: bo.plannedCost ?? existing?.plannedCost ?? 0,
+              actualCost: bo.actualCost ?? existing?.actualCost ?? 0,
+              stages: (bo.stages && bo.stages.length === 34) 
+                ? bo.stages 
+                : (existing?.stages && existing.stages.length === 34) 
+                  ? existing.stages 
+                  : makeStages(bo.template || existing?.template || "90", 0, null),
+              preProd: bo.preProd || existing?.preProd || initPreProd(),
+            };
           });
-        }
-      } catch (e) {}
+        });
+      }
+    } catch (e) {}
 
-      try {
-        const dbDebit = await resourcesApi.list("debitNotes");
-        if (!cancelled && Array.isArray(dbDebit) && dbDebit.length > 0) {
-          setDebitNotes(dbDebit.filter(d => d.isDeleted !== true));
-        }
-      } catch (e) {}
+    try {
+      const dbDebit = await resourcesApi.list("debitNotes");
+      if (Array.isArray(dbDebit) && dbDebit.length > 0) {
+        setDebitNotes(dbDebit.filter(d => d.isDeleted !== true));
+      }
+    } catch (e) {}
 
-      try {
-        const dbCapas = await resourcesApi.list("capas");
-        if (!cancelled && Array.isArray(dbCapas) && dbCapas.length > 0) {
-          setCapas(dbCapas.filter(c => c.isDeleted !== true));
-        }
-      } catch (e) {}
+    try {
+      const dbCapas = await resourcesApi.list("capas");
+      if (Array.isArray(dbCapas) && dbCapas.length > 0) {
+        setCapas(dbCapas.filter(c => c.isDeleted !== true));
+      }
+    } catch (e) {}
 
-      try {
-        const dbTasks = await resourcesApi.list("tasks");
-        if (!cancelled && Array.isArray(dbTasks) && dbTasks.length > 0) {
-          setCustomTasks(dbTasks.filter(t => t.isDeleted !== true));
-        }
-      } catch (e) {}
+    try {
+      const dbTasks = await resourcesApi.list("tasks");
+      if (Array.isArray(dbTasks) && dbTasks.length > 0) {
+        setCustomTasks(dbTasks.filter(t => t.isDeleted !== true));
+      }
+    } catch (e) {}
 
-      try {
-        const dbCerts = await resourcesApi.list("certifications", "?all=true");
-        if (!cancelled && Array.isArray(dbCerts) && dbCerts.length > 0) {
-          setCertifications(dbCerts);
-        }
-      } catch (e) {}
+    try {
+      const dbCerts = await resourcesApi.list("certifications", "?all=true");
+      if (Array.isArray(dbCerts) && dbCerts.length > 0) {
+        setCertifications(dbCerts);
+      }
+    } catch (e) {}
 
-      try {
-        const dbCompliances = await resourcesApi.list("compliances", "?all=true");
-        if (!cancelled && Array.isArray(dbCompliances) && dbCompliances.length > 0) {
-          setCompliances(dbCompliances.filter(c => c.id !== "comp-2" && !c.name?.toLowerCase().includes("buyer chemical restriction")));
-        }
-      } catch (e) {}
+    try {
+      const dbCompliances = await resourcesApi.list("compliances", "?all=true");
+      if (Array.isArray(dbCompliances) && dbCompliances.length > 0) {
+        setCompliances(dbCompliances.filter(c => c.id !== "comp-2" && !c.name?.toLowerCase().includes("buyer chemical restriction")));
+      }
+    } catch (e) {}
 
-      try {
-        const dbNotifs = await resourcesApi.list("notifications", "?all=true");
-        if (!cancelled && Array.isArray(dbNotifs) && dbNotifs.length > 0) {
-          setNotifications(prev => {
-            const map = new Map();
-            dbNotifs.forEach(n => {
-              const key = n.id || n.eventKey;
-              if (key) map.set(key, n);
-            });
-            prev.forEach(n => {
-              const key = n.id || n.eventKey;
-              if (key && !map.has(key)) map.set(key, n);
-            });
-            return Array.from(map.values()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    try {
+      const dbNotifs = await resourcesApi.list("notifications", "?all=true");
+      if (Array.isArray(dbNotifs) && dbNotifs.length > 0) {
+        setNotifications(prev => {
+          const map = new Map();
+          dbNotifs.forEach(n => {
+            const key = n.id || n.eventKey;
+            if (key) map.set(key, n);
           });
-        }
-      } catch (e) {}
+          prev.forEach(n => {
+            const key = n.id || n.eventKey;
+            if (key && !map.has(key)) map.set(key, n);
+          });
+          return Array.from(map.values()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        });
+      }
+    } catch (e) {}
 
-      try {
-        if (window.storage && window.storage.get) {
-          // Load staff roster from storage or backend
-          let baseRoster = null;
+    try {
+      if (window.storage && window.storage.get) {
+        // Load staff roster from storage or backend
+        let baseRoster = null;
+        try {
+          const rosterRes = await window.storage.get("staff_roster", true);
+          if (rosterRes && rosterRes.value) {
+            baseRoster = JSON.parse(rosterRes.value);
+          }
+        } catch (e) {}
+
+        try {
+          const dbStaff = await resourcesApi.list("staff");
+          if (Array.isArray(dbStaff) && dbStaff.length > 0) {
+            const active = dbStaff.filter(s => s.isDeleted !== true);
+            const merged = [...(baseRoster || STAFF_LIST)];
+            active.forEach(as => {
+              if (!merged.some(m => m.name === as.name)) {
+                merged.push({ name: as.name, title: as.title || "Staff", dept: as.dept || "Merchandising" });
+              }
+            });
+            baseRoster = merged;
+          }
+        } catch (e) {}
+
+        const DEMO_NAMES = new Set(["Arasinth Raja", "Suresh", "Durai", "Praveen Kumar", "Gopal", "Sezhiyan", "Murugan", "Karthik", "Ravi", "Kavitha", "Selva Kumar", "Ramesh", "Priya", "Anand", "Rajesh"]);
+        if (Array.isArray(baseRoster)) {
+          const cleanRoster = baseRoster.filter(s => s.name && s.name !== "—" && !DEMO_NAMES.has(s.name));
+          setRoster(cleanRoster);
+        }
+
+        // Load org structure
+        const orgRes = await window.storage.get("org_structure", true);
+        if (orgRes && orgRes.value) {
+          try { setOrgStructure(JSON.parse(orgRes.value)); } catch (e) {}
+        }
+
+        // Load dept descriptions
+        const descRes = await window.storage.get("dept_descriptions", true);
+        if (descRes && descRes.value) {
           try {
-            const rosterRes = await window.storage.get("staff_roster", true);
-            if (rosterRes && rosterRes.value) {
-              baseRoster = JSON.parse(rosterRes.value);
+            const parsed = JSON.parse(descRes.value);
+            if (parsed && typeof parsed === "object") {
+              setDeptDescriptions(prev => ({ ...prev, ...parsed }));
             }
           } catch (e) {}
+        }
 
+        const attRes = await window.storage.get("attendance", true);
+        if (attRes && attRes.value) {
           try {
-            const dbStaff = await resourcesApi.list("staff");
-            if (Array.isArray(dbStaff) && dbStaff.length > 0) {
-              const active = dbStaff.filter(s => s.isDeleted !== true);
-              const merged = [...(baseRoster || STAFF_LIST)];
-              active.forEach(as => {
-                if (!merged.some(m => m.name === as.name)) {
-                  merged.push({ name: as.name, title: as.title || "Staff", dept: as.dept || "Merchandising" });
-                }
+            const parsed = JSON.parse(attRes.value);
+            if (parsed && typeof parsed === "object") {
+              const cleanAtt = {};
+              Object.keys(parsed).forEach(k => {
+                if (!DEMO_NAMES.has(k) && k !== "—") cleanAtt[k] = parsed[k];
               });
-              baseRoster = merged;
+              setAttendance(cleanAtt);
             }
           } catch (e) {}
-
-          const DEMO_NAMES = new Set(["Arasinth Raja", "Suresh", "Durai", "Praveen Kumar", "Gopal", "Sezhiyan", "Murugan", "Karthik", "Ravi", "Kavitha", "Selva Kumar", "Ramesh", "Priya", "Anand", "Rajesh"]);
-          if (!cancelled && Array.isArray(baseRoster)) {
-            const cleanRoster = baseRoster.filter(s => s.name && s.name !== "—" && !DEMO_NAMES.has(s.name));
-            setRoster(cleanRoster);
-          }
-
-          // Load org structure
-          const orgRes = await window.storage.get("org_structure", true);
-          if (!cancelled && orgRes && orgRes.value) {
-            try { setOrgStructure(JSON.parse(orgRes.value)); } catch (e) {}
-          }
-
-          // Load dept descriptions
-          const descRes = await window.storage.get("dept_descriptions", true);
-          if (!cancelled && descRes && descRes.value) {
-            try {
-              const parsed = JSON.parse(descRes.value);
-              if (parsed && typeof parsed === "object") {
-                setDeptDescriptions(prev => ({ ...prev, ...parsed }));
-              }
-            } catch (e) {}
-          }
-
-          const attRes = await window.storage.get("attendance", true);
-          if (!cancelled && attRes && attRes.value) {
-            try {
-              const parsed = JSON.parse(attRes.value);
-              if (parsed && typeof parsed === "object") {
-                const cleanAtt = {};
-                Object.keys(parsed).forEach(k => {
-                  if (!DEMO_NAMES.has(k) && k !== "—") cleanAtt[k] = parsed[k];
-                });
-                setAttendance(cleanAtt);
-              }
-            } catch (e) {}
-          }
-          const certRes = await window.storage.get("certifications", true);
-          if (!cancelled && certRes && certRes.value) {
-            try {
-              const parsed = JSON.parse(certRes.value);
-              if (Array.isArray(parsed) && parsed.length > 0) {
-                setCertifications(prev => {
-                  const map = new Map(prev.map(item => [item.id || item.key, item]));
-                  parsed.forEach(item => map.set(item.id || item.key, { ...map.get(item.id || item.key), ...item }));
-                  return Array.from(map.values());
-                });
-              }
-            } catch (e) {}
-          }
-          const compRes = await window.storage.get("compliances", true);
-          if (!cancelled && compRes && compRes.value) {
-            try {
-              const parsed = JSON.parse(compRes.value);
-              if (Array.isArray(parsed) && parsed.length > 0) {
-                setCompliances(prev => {
-                  const map = new Map(prev.map(item => [item.id, item]));
-                  parsed.forEach(item => map.set(item.id, { ...map.get(item.id), ...item }));
-                  return Array.from(map.values());
-                });
-              }
-            } catch (e) {}
-          }
-          const notifRes = await window.storage.get("notifications", true);
-          if (!cancelled && notifRes && notifRes.value) {
-            try {
-              const parsed = JSON.parse(notifRes.value);
-              if (Array.isArray(parsed) && parsed.length > 0) {
-                setNotifications(prev => {
-                  const map = new Map(prev.map(item => [item.id || item.eventKey, item]));
-                  parsed.forEach(item => {
-                    const key = item.id || item.eventKey;
-                    if (key) map.set(key, { ...map.get(key), ...item });
-                  });
-                  return Array.from(map.values()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-                });
-              }
-            } catch (e) {}
-          }
-          const leaveRes = await window.storage.get("leaveRequests", true);
-          if (!cancelled && leaveRes && leaveRes.value) {
-            try {
-              const parsed = JSON.parse(leaveRes.value);
-              if (Array.isArray(parsed)) {
-                setLeaveRequests(parsed.filter(l => !DEMO_NAMES.has(l.name)));
-              }
-            } catch (e) {}
-          }
-          const supRes = await window.storage.get("suppliers", true);
-          if (!cancelled && supRes && supRes.value) {
-            try {
-              const parsed = JSON.parse(supRes.value);
-              if (Array.isArray(parsed) && parsed.length > 0) {
-                setSuppliers(prev => {
-                  const map = new Map(prev.map(item => [item.id || item.name, item]));
-                  parsed.forEach(item => map.set(item.id || item.name, { ...map.get(item.id || item.name), ...item }));
-                  return Array.from(map.values());
-                });
-              }
-            } catch (e) {}
-          }
-          const workRes = await window.storage.get("supplierWork", true);
-          if (!cancelled && workRes && workRes.value) {
-            try {
-              const parsed = JSON.parse(workRes.value);
-              if (Array.isArray(parsed) && parsed.length > 0) {
-                setSupplierWork(prev => {
-                  const map = new Map(prev.map(item => [item.id, item]));
-                  parsed.forEach(item => map.set(item.id, { ...map.get(item.id), ...item }));
-                  return Array.from(map.values());
-                });
-              }
-            } catch (e) {}
-          }
         }
-      } catch (e) {}
-    })();
-
-    return () => { cancelled = true; };
+        const certRes = await window.storage.get("certifications", true);
+        if (certRes && certRes.value) {
+          try {
+            const parsed = JSON.parse(certRes.value);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setCertifications(prev => {
+                const map = new Map(prev.map(item => [item.id || item.key, item]));
+                parsed.forEach(item => map.set(item.id || item.key, { ...map.get(item.id || item.key), ...item }));
+                return Array.from(map.values());
+              });
+            }
+          } catch (e) {}
+        }
+        const compRes = await window.storage.get("compliances", true);
+        if (compRes && compRes.value) {
+          try {
+            const parsed = JSON.parse(compRes.value);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setCompliances(prev => {
+                const map = new Map(prev.map(item => [item.id, item]));
+                parsed.forEach(item => map.set(item.id, { ...map.get(item.id), ...item }));
+                return Array.from(map.values());
+              });
+            }
+          } catch (e) {}
+        }
+        const notifRes = await window.storage.get("notifications", true);
+        if (notifRes && notifRes.value) {
+          try {
+            const parsed = JSON.parse(notifRes.value);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setNotifications(prev => {
+                const map = new Map(prev.map(item => [item.id || item.eventKey, item]));
+                parsed.forEach(item => {
+                  const key = item.id || item.eventKey;
+                  if (key) map.set(key, { ...map.get(key), ...item });
+                });
+                return Array.from(map.values()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+              });
+            }
+          } catch (e) {}
+        }
+        const leaveRes = await window.storage.get("leaveRequests", true);
+        if (leaveRes && leaveRes.value) {
+          try {
+            const parsed = JSON.parse(leaveRes.value);
+            if (Array.isArray(parsed)) {
+              setLeaveRequests(parsed.filter(l => !DEMO_NAMES.has(l.name)));
+            }
+          } catch (e) {}
+        }
+        const supRes = await window.storage.get("suppliers", true);
+        if (supRes && supRes.value) {
+          try {
+            const parsed = JSON.parse(supRes.value);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setSuppliers(prev => {
+                const map = new Map(prev.map(item => [item.id || item.name, item]));
+                parsed.forEach(item => map.set(item.id || item.name, { ...map.get(item.id || item.name), ...item }));
+                return Array.from(map.values());
+              });
+            }
+          } catch (e) {}
+        }
+        const workRes = await window.storage.get("supplierWork", true);
+        if (workRes && workRes.value) {
+          try {
+            const parsed = JSON.parse(workRes.value);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setSupplierWork(prev => {
+                const map = new Map(prev.map(item => [item.id, item]));
+                parsed.forEach(item => map.set(item.id, { ...map.get(item.id), ...item }));
+                return Array.from(map.values());
+              });
+            }
+          } catch (e) {}
+        }
+      }
+    } catch (e) {} finally {
+      setLastRefreshedAt(new Date());
+      setIsRefreshing(false);
+    }
   }, []);
+
+  // Initial load and periodic 5-minute auto-refresh (Task 2)
+  useEffect(() => {
+    refreshAllData();
+
+    // 5 minutes = 5 * 60 * 1000 = 300,000 ms
+    const autoRefreshInterval = setInterval(() => {
+      refreshAllData();
+    }, 5 * 60 * 1000);
+
+    return () => clearInterval(autoRefreshInterval);
+  }, [refreshAllData]);
 
   // Central Notification Dispatcher with Deduplication
   const pushNotification = (notif) => {
@@ -2183,6 +2197,9 @@ export default function LoomPLM() {
             onNavigate={navigate}
             onApproveCosting={approveOrderCosting}
             onRejectCosting={rejectOrderCosting}
+            onRefresh={refreshAllData}
+            isRefreshing={isRefreshing}
+            lastRefreshedAt={lastRefreshedAt}
           />
         </div>
       );
@@ -2209,10 +2226,15 @@ export default function LoomPLM() {
           attendance={attendance}
           financials={financials}
           roster={roster}
+          customTasks={customTasks}
+          leaveRequests={leaveRequests}
           onOpenOrder={openOrder}
           onNavigate={navigate}
           onApproveCosting={approveOrderCosting}
           onRejectCosting={rejectOrderCosting}
+          onRefresh={refreshAllData}
+          isRefreshing={isRefreshing}
+          lastRefreshedAt={lastRefreshedAt}
         />
       );
     } else {
@@ -2351,6 +2373,18 @@ export default function LoomPLM() {
     content = <AttendancePage roster={roster} attendance={attendance} onCycle={cycleAttendance} leaveRequests={leaveRequests} onApprove={approveLeave} onReject={rejectLeave} onAddStaff={addStaff} onEditStaff={editStaff} onRemoveStaff={removeStaff} onAddLeaveRequest={addLeaveRequest} />;
   } else if (view === "finance" && (canSeeAll || role.dept === "Finance")) {
     content = <FinanceEntryPage orders={orders} financials={financials} onUpdate={updateFinancials} onUpdateOrderCost={updateOrderCost} />;
+  } else if (view === "employeePerformance") {
+    content = (
+      <EmployeePerformancePanel
+        orders={orders}
+        roster={roster}
+        attendance={attendance}
+        customTasks={customTasks}
+        leaveRequests={leaveRequests}
+        onNavigate={navigate}
+        onBack={() => setView("executiveOverview")}
+      />
+    );
   } else if (view === "executiveOverview" && isExecutive) {
     content = (
       <ExecutiveOverviewPage
@@ -2364,6 +2398,9 @@ export default function LoomPLM() {
         onNavigate={navigate}
         onApproveCosting={approveOrderCosting}
         onRejectCosting={rejectOrderCosting}
+        onRefresh={refreshAllData}
+        isRefreshing={isRefreshing}
+        lastRefreshedAt={lastRefreshedAt}
       />
     );
   } else if (view === "settings") {
@@ -2383,6 +2420,9 @@ export default function LoomPLM() {
         onNavigate={navigate}
         onApproveCosting={approveOrderCosting}
         onRejectCosting={rejectOrderCosting}
+        onRefresh={refreshAllData}
+        isRefreshing={isRefreshing}
+        lastRefreshedAt={lastRefreshedAt}
       />
     );
   } else if (canSeeAll) {
@@ -2864,6 +2904,33 @@ export default function LoomPLM() {
                 </div>
               )}
             </div>
+
+            {/* Refresh Button */}
+            <button
+              type="button"
+              onClick={refreshAllData}
+              disabled={isRefreshing}
+              title={`Refresh Dashboard & Orders (Auto-refreshes every 5 mins) · Last synced: ${lastRefreshedAt ? lastRefreshedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now'}`}
+              style={{
+                cursor: isRefreshing ? "not-allowed" : "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "6px 10px",
+                borderRadius: 8,
+                background: isRefreshing ? (isDarkMode ? "#1E293B" : "#F1F5F9") : (isDarkMode ? "#18233C" : "#F5F6F8"),
+                border: `1px solid ${isDarkMode ? "#1E2D4A" : "#E2E8F0"}`,
+                color: isRefreshing ? "#94A3B8" : (isDarkMode ? "#CBD5E1" : "#475569"),
+                fontSize: 12,
+                fontWeight: 600,
+                transition: "all 0.15s ease"
+              }}
+              onMouseEnter={e => { if (!isRefreshing) e.currentTarget.style.background = isDarkMode ? "#1C2B47" : "#ECEEF2"; }}
+              onMouseLeave={e => { if (!isRefreshing) e.currentTarget.style.background = isDarkMode ? "#18233C" : "#F5F6F8"; }}
+            >
+              <RefreshCw size={14} className={isRefreshing ? "spin-animate" : ""} style={{ animation: isRefreshing ? "spin 1s linear infinite" : "none" }} />
+              <span className="refresh-label">Refresh</span>
+            </button>
 
             {/* 4. Dark Mode Toggle (Moon in Light Mode / Sun in Dark Mode) */}
             <div
