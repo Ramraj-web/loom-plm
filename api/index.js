@@ -685,7 +685,35 @@ export default async function handler(req, res) {
       }
     }
 
-    // 4. Storage API: /api/storage/:key?
+    // 4. General project chat
+    if (pathname === "/api/gemini/chat" || pathname === "/gemini/chat") {
+      const { message, orders = [] } = parsedBody;
+      if (!message || !String(message).trim()) return res.status(400).json({ error: "message is required" });
+      const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+      if (!apiKey) return res.status(503).json({ error: "AI chat is not configured" });
+      const prompt = `You are the project assistant for a garment production PLM. Answer the user's question clearly and briefly using only the project data below. If an order number is relevant, include its exact ID in your answer so the app can make it clickable. Explain order process questions using practical steps such as confirmation, booking, costing, approvals, production, quality, and shipment. Do not invent data.
+
+Project orders:
+${JSON.stringify(orders)}
+
+User question:
+${String(message).trim()}`;
+      try {
+        const { GoogleGenerativeAI } = await import("@google/generative-ai");
+        const genAI = new GoogleGenerativeAI(apiKey);
+        let result;
+        try {
+          result = await genAI.getGenerativeModel({ model: "gemini-3.6-flash" }).generateContent(prompt);
+        } catch (error) {
+          result = await genAI.getGenerativeModel({ model: "gemini-flash-latest" }).generateContent(prompt);
+        }
+        return res.status(200).json({ reply: result.response.text().trim() });
+      } catch (error) {
+        return res.status(500).json({ error: error.message || "Failed to answer chat message" });
+      }
+    }
+
+    // 5. Storage API: /api/storage/:key?
     const storageMatch = pathname.match(/^\/(?:api\/)?storage(?:\/([^/]+))?\/?$/);
     if (storageMatch) {
       const key = storageMatch[1] ? decodeURIComponent(storageMatch[1]) : null;

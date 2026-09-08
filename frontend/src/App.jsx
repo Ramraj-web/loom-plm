@@ -26,6 +26,7 @@ import {
   NotificationsPage, DebitNotesPage, CapasPage, ExecutiveOverviewPage, SettingsPage
 } from "./components/views/InsightsViews.jsx";
 import { MyChecklistPage } from "./components/views/MyChecklistPage.jsx";
+import { ProjectChatbot } from "./components/ProjectChatbot.jsx";
 import { DEFAULT_TEAMS, DEFAULT_USERS, LoginPage, UserAccessPage } from "./components/UserAccess.jsx";
 
 function roleForUser(user, teams) {
@@ -2868,6 +2869,7 @@ export default function LoomPLM() {
           {content}
         </div>
       </div>
+      <ProjectChatbot orders={orders} onOpenOrder={openOrder} userId={activeUser.id} />
     </div>
   );
 }

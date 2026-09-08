@@ -3,6 +3,38 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const router = Router();
 
+router.post("/chat", async (req, res) => {
+  const { message, orders = [] } = req.body || {};
+  if (!message || !String(message).trim()) {
+    return res.status(400).json({ error: "message is required" });
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+  if (!apiKey) return res.status(503).json({ error: "AI chat is not configured" });
+
+  const prompt = `You are the project assistant for a garment production PLM. Answer the user's question clearly and briefly using only the project data below. If an order number is relevant, include its exact ID in your answer so the app can make it clickable. Explain order process questions using practical steps such as confirmation, booking, costing, approvals, production, quality, and shipment. Do not invent data.
+
+Project orders:
+${JSON.stringify(orders)}
+
+User question:
+${String(message).trim()}`;
+
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    let result;
+    try {
+      result = await genAI.getGenerativeModel({ model: "gemini-3.6-flash" }).generateContent(prompt);
+    } catch (error) {
+      result = await genAI.getGenerativeModel({ model: "gemini-flash-latest" }).generateContent(prompt);
+    }
+    return res.json({ reply: result.response.text().trim() });
+  } catch (error) {
+    console.error("Gemini chat error:", error);
+    return res.status(500).json({ error: error.message || "Failed to answer chat message" });
+  }
+});
+
 // POST /api/gemini/extract-highlights or /api/claude/extract-highlights
 // Extracts actionable highlights from garment tech pack notes using Google Gemini API.
 router.post("/extract-highlights", async (req, res) => {
