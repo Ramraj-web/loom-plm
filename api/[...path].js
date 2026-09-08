@@ -379,10 +379,11 @@ export default async function handler(req, res) {
       // DELETE
       if (req.method === "DELETE") {
         if (!id) return res.status(400).json({ error: "Record ID required" });
+        const isPermanent = url.searchParams.get("permanent") === "true" || url.searchParams.get("force") === "true";
         const index = memoryDB[resource].findIndex(r => String(r.id) === id);
         if (index < 0) return res.status(404).json({ error: "Record not found" });
 
-        if (isSoftDelete) {
+        if (isSoftDelete && !isPermanent) {
           memoryDB[resource][index] = {
             ...memoryDB[resource][index],
             isDeleted: true,
@@ -392,7 +393,27 @@ export default async function handler(req, res) {
         }
 
         memoryDB[resource].splice(index, 1);
-        return res.status(200).json({ id, deleted: true });
+
+        // Cascade delete in memory for orders
+        if (resource === "orders") {
+          ["tasks", "notifications", "supplierWork", "certifications", "compliances", "debitNotes", "capas"].forEach(relRes => {
+            if (Array.isArray(memoryDB[relRes])) {
+              memoryDB[relRes] = memoryDB[relRes].filter(r =>
+                r.orderId !== id && r.order !== id && r.po !== id && r.relatedId !== id
+              );
+            }
+          });
+          ["personal", "shared"].forEach(b => {
+            if (memoryStorage[b]) {
+              delete memoryStorage[b][`docs:${id}`];
+              delete memoryStorage[b][`highlights:${id}`];
+              delete memoryStorage[b][`chat:${id}`];
+              delete memoryStorage[b][`customTypes:${id}`];
+            }
+          });
+        }
+
+        return res.status(200).json({ id, deleted: true, permanent: true });
       }
     }
 

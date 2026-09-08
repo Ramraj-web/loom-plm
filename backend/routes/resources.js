@@ -231,9 +231,11 @@ router.delete("/:resource/:id(*)", async (req, res, next) => {
   const { resource } = req.params;
   const id = extractId(req.params.id);
   if (!validResource(resource)) return res.status(404).json({ error: "Unknown resource" });
+  const isPermanent = req.query.permanent === "true" || req.query.force === "true";
+
   try {
     const collection = getResourceCollection();
-    if (SOFT_DELETE_RESOURCES.includes(resource)) {
+    if (SOFT_DELETE_RESOURCES.includes(resource) && !isPermanent) {
       const update = { $set: { isDeleted: true, deletedAt: new Date().toISOString() } };
       if (collection) {
         const result = await collection.updateOne({ resource, id }, update);
@@ -245,17 +247,73 @@ router.delete("/:resource/:id(*)", async (req, res, next) => {
       }
       return res.json({ id, deleted: true, isDeleted: true });
     }
+
     if (collection) {
       const result = await collection.deleteOne({ resource, $or: [{ id }, { name: id }] });
-      return res.json({ id, deleted: result.deletedCount > 0 });
+      
+      // Cascade delete order-associated records from MongoDB
+      if (resource === "orders") {
+        try {
+          await collection.deleteMany({
+            resource: "tasks",
+            $or: [{ orderId: id }, { order: id }, { relatedOrderId: id }]
+          });
+          await collection.deleteMany({
+            resource: "notifications",
+            $or: [{ relatedId: id }, { orderId: id }, { eventKey: { $regex: id } }]
+          });
+          await collection.deleteMany({
+            resource: "supplierWork",
+            $or: [{ orderId: id }, { order: id }]
+          });
+          await collection.deleteMany({
+            resource: "certifications",
+            orderId: id
+          });
+          await collection.deleteMany({
+            resource: "compliances",
+            orderId: id
+          });
+          await collection.deleteMany({
+            resource: "debitNotes",
+            $or: [{ po: id }, { orderId: id }]
+          });
+          await collection.deleteMany({
+            resource: "capas",
+            $or: [{ po: id }, { orderId: id }]
+          });
+          const { getStorageCollection } = await import("../db/mongodb.js").catch(() => ({}));
+          const storageCol = getStorageCollection ? getStorageCollection() : null;
+          if (storageCol) {
+            await storageCol.deleteMany({
+              key: { $in: [`docs:${id}`, `highlights:${id}`, `chat:${id}`, `customTypes:${id}`] }
+            });
+          }
+        } catch (cascadeErr) {
+          console.warn("Cascade delete error in resources route:", cascadeErr.message);
+        }
+      }
+
+      return res.json({ id, deleted: result.deletedCount > 0, permanent: true });
     } else {
       const db = readDB();
       const before = db[resource]?.length || 0;
       db[resource] = (db[resource] || []).filter(item => String(item.id) !== id && String(item.name) !== id);
+      
+      // Cascade delete from local DB
+      if (resource === "orders") {
+        ["tasks", "notifications", "supplierWork", "certifications", "compliances", "debitNotes", "capas"].forEach(relRes => {
+          if (Array.isArray(db[relRes])) {
+            db[relRes] = db[relRes].filter(r =>
+              r.orderId !== id && r.order !== id && r.po !== id && r.relatedId !== id
+            );
+          }
+        });
+      }
+
       writeDB(db);
-      return res.json({ id, deleted: db[resource].length < before });
+      return res.json({ id, deleted: db[resource].length < before, permanent: true });
     }
-    res.json({ id, deleted: true });
   } catch (error) { next(error); }
 });
 

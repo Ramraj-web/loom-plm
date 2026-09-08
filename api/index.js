@@ -651,17 +651,70 @@ export default async function handler(req, res) {
       // DELETE /api/resources/:resource/:id
       if (req.method === "DELETE") {
         if (!id) return res.status(400).json({ error: "Record ID required" });
+        const isPermanent = url.searchParams.get("permanent") === "true" || url.searchParams.get("force") === "true";
 
         if (mongoCols?.resources) {
           try {
-            if (isSoftDelete) {
+            if (isSoftDelete && !isPermanent) {
               const update = { $set: { isDeleted: true, deletedAt: new Date().toISOString() } };
               const result = await mongoCols.resources.updateOne({ resource, id }, update);
               if (!result.matchedCount) return res.status(404).json({ error: "Record not found" });
               return res.status(200).json({ id, deleted: true, isDeleted: true });
             }
+
+            // Permanent deletion from MongoDB
             const result = await mongoCols.resources.deleteOne({ resource, $or: [{ id }, { name: id }] });
-            return res.status(200).json({ id, deleted: result.deletedCount > 0 });
+
+            // If an order is permanently deleted, cascade delete related records from MongoDB
+            if (resource === "orders") {
+              try {
+                // Delete tasks associated with this order
+                await mongoCols.resources.deleteMany({
+                  resource: "tasks",
+                  $or: [{ orderId: id }, { order: id }, { relatedOrderId: id }]
+                });
+                // Delete notifications associated with this order
+                await mongoCols.resources.deleteMany({
+                  resource: "notifications",
+                  $or: [{ relatedId: id }, { orderId: id }, { eventKey: { $regex: id } }]
+                });
+                // Delete supplier work associated with this order
+                await mongoCols.resources.deleteMany({
+                  resource: "supplierWork",
+                  $or: [{ orderId: id }, { order: id }]
+                });
+                // Delete certifications associated with this order
+                await mongoCols.resources.deleteMany({
+                  resource: "certifications",
+                  orderId: id
+                });
+                // Delete compliances associated with this order
+                await mongoCols.resources.deleteMany({
+                  resource: "compliances",
+                  orderId: id
+                });
+                // Delete debit notes associated with this order
+                await mongoCols.resources.deleteMany({
+                  resource: "debitNotes",
+                  $or: [{ po: id }, { orderId: id }]
+                });
+                // Delete capas associated with this order
+                await mongoCols.resources.deleteMany({
+                  resource: "capas",
+                  $or: [{ po: id }, { orderId: id }]
+                });
+                // Delete order-specific storage keys
+                if (mongoCols?.storage) {
+                  await mongoCols.storage.deleteMany({
+                    key: { $in: [`docs:${id}`, `highlights:${id}`, `chat:${id}`, `customTypes:${id}`] }
+                  });
+                }
+              } catch (cascadeErr) {
+                console.warn("Cascade delete warning for order", id, cascadeErr.message);
+              }
+            }
+
+            return res.status(200).json({ id, deleted: result.deletedCount > 0, permanent: true });
           } catch (e) {
             console.error("Mongo resource DELETE error:", e.message);
           }
@@ -671,7 +724,7 @@ export default async function handler(req, res) {
         const index = memoryDB[resource].findIndex(r => String(r.id) === id);
         if (index < 0) return res.status(404).json({ error: "Record not found" });
 
-        if (isSoftDelete) {
+        if (isSoftDelete && !isPermanent) {
           memoryDB[resource][index] = {
             ...memoryDB[resource][index],
             isDeleted: true,
@@ -681,7 +734,27 @@ export default async function handler(req, res) {
         }
 
         memoryDB[resource].splice(index, 1);
-        return res.status(200).json({ id, deleted: true });
+
+        // Cascade delete from memoryDB for orders
+        if (resource === "orders") {
+          ["tasks", "notifications", "supplierWork", "certifications", "compliances", "debitNotes", "capas"].forEach(relRes => {
+            if (Array.isArray(memoryDB[relRes])) {
+              memoryDB[relRes] = memoryDB[relRes].filter(r =>
+                r.orderId !== id && r.order !== id && r.po !== id && r.relatedId !== id
+              );
+            }
+          });
+          ["personal", "shared"].forEach(b => {
+            if (memoryStorage[b]) {
+              delete memoryStorage[b][`docs:${id}`];
+              delete memoryStorage[b][`highlights:${id}`];
+              delete memoryStorage[b][`chat:${id}`];
+              delete memoryStorage[b][`customTypes:${id}`];
+            }
+          });
+        }
+
+        return res.status(200).json({ id, deleted: true, permanent: true });
       }
     }
 

@@ -300,9 +300,10 @@ app.patch("/api/resources/:resource/:id", (req, res, next) => {
 app.delete("/api/resources/:resource/:id", (req, res, next) => {
   const { resource, id } = req.params;
   if (!validResource(resource)) return res.status(404).json({ error: "Unknown resource" });
+  const isPermanent = req.query.permanent === "true" || req.query.force === "true";
   try {
     const db = readResourcesDB();
-    if (SOFT_DELETE_RESOURCES.includes(resource)) {
+    if (SOFT_DELETE_RESOURCES.includes(resource) && !isPermanent) {
       const record = db[resource]?.find(item => String(item.id) === id);
       if (!record) return res.status(404).json({ error: "Record not found" });
       record.isDeleted = true;
@@ -312,8 +313,20 @@ app.delete("/api/resources/:resource/:id", (req, res, next) => {
     }
     const before = db[resource]?.length || 0;
     db[resource] = (db[resource] || []).filter(item => String(item.id) !== id);
+    
+    // Cascade delete for orders
+    if (resource === "orders") {
+      ["tasks", "notifications", "supplierWork", "certifications", "compliances", "debitNotes", "capas"].forEach(relRes => {
+        if (Array.isArray(db[relRes])) {
+          db[relRes] = db[relRes].filter(r =>
+            r.orderId !== id && r.order !== id && r.po !== id && r.relatedId !== id
+          );
+        }
+      });
+    }
+
     writeResourcesDB(db);
-    res.json({ id, deleted: db[resource].length < before });
+    res.json({ id, deleted: db[resource].length < before, permanent: true });
   } catch (error) {
     next(error);
   }

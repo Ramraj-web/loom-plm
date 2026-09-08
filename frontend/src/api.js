@@ -74,10 +74,10 @@ export const resourcesApi = {
       method: "PATCH",
       body: JSON.stringify(data),
     }),
-  delete: (resource, id) =>
-    request(`/api/resources/${encodeURIComponent(resource)}/${encodeURIComponent(id)}`, { method: "DELETE" }),
-  remove: (resource, id) =>
-    request(`/api/resources/${encodeURIComponent(resource)}/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  delete: (resource, id, query = "") =>
+    request(`/api/resources/${encodeURIComponent(resource)}/${encodeURIComponent(id)}${query}`, { method: "DELETE" }),
+  remove: (resource, id, query = "") =>
+    request(`/api/resources/${encodeURIComponent(resource)}/${encodeURIComponent(id)}${query}`, { method: "DELETE" }),
 };
 
 // ===== HEALTH CHECK =====

@@ -199,40 +199,32 @@ export default function LoomPLM() {
         if (!cancelled && Array.isArray(backendOrders)) {
           // Filter out dummy demo seeds
           const realOrders = backendOrders.filter(bo => !["GKT-1054", "ST-7788", "JKT-2231", "TR-8899", "DR-5566", "PL-3321"].includes(bo.id));
-          if (realOrders.length > 0) {
-            setOrders(prev => {
-              const merged = [...realOrders];
-              prev.forEach(p => {
-                if (!merged.some(m => m.id === p.id)) {
-                  merged.push(p);
-                }
-              });
-              return merged.map((bo) => {
-                const existing = prev.find(p => p.id === bo.id);
-                return {
-                  ...existing,
-                  ...bo,
-                  completed: bo.completed ?? existing?.completed ?? false,
-                  isDeleted: bo.isDeleted ?? existing?.isDeleted ?? false,
-                  completedAt: bo.completedAt || existing?.completedAt || null,
-                  deletedAt: bo.deletedAt || existing?.deletedAt || null,
-                  template: bo.template || existing?.template || "90",
-                  costingTemplate: bo.costingTemplate || existing?.costingTemplate || "fabric",
-                  costingRows: bo.costingRows || existing?.costingRows || buildCostingRows(bo.costingTemplate || existing?.costingTemplate || "fabric"),
-                  vapCount: bo.vapCount ?? existing?.vapCount ?? 1,
-                  shippedQty: bo.shippedQty ?? existing?.shippedQty ?? 0,
-                  plannedCost: bo.plannedCost ?? existing?.plannedCost ?? 0,
-                  actualCost: bo.actualCost ?? existing?.actualCost ?? 0,
-                  stages: (bo.stages && bo.stages.length === 34) 
-                    ? bo.stages 
-                    : (existing?.stages && existing.stages.length === 34) 
-                      ? existing.stages 
-                      : makeStages(bo.template || existing?.template || "90", 0, null),
-                  preProd: bo.preProd || existing?.preProd || initPreProd(),
-                };
-              });
+          setOrders(prev => {
+            return realOrders.map((bo) => {
+              const existing = prev.find(p => p.id === bo.id);
+              return {
+                ...existing,
+                ...bo,
+                completed: bo.completed ?? existing?.completed ?? false,
+                isDeleted: bo.isDeleted ?? existing?.isDeleted ?? false,
+                completedAt: bo.completedAt || existing?.completedAt || null,
+                deletedAt: bo.deletedAt || existing?.deletedAt || null,
+                template: bo.template || existing?.template || "90",
+                costingTemplate: bo.costingTemplate || existing?.costingTemplate || "fabric",
+                costingRows: bo.costingRows || existing?.costingRows || buildCostingRows(bo.costingTemplate || existing?.costingTemplate || "fabric"),
+                vapCount: bo.vapCount ?? existing?.vapCount ?? 1,
+                shippedQty: bo.shippedQty ?? existing?.shippedQty ?? 0,
+                plannedCost: bo.plannedCost ?? existing?.plannedCost ?? 0,
+                actualCost: bo.actualCost ?? existing?.actualCost ?? 0,
+                stages: (bo.stages && bo.stages.length === 34) 
+                  ? bo.stages 
+                  : (existing?.stages && existing.stages.length === 34) 
+                    ? existing.stages 
+                    : makeStages(bo.template || existing?.template || "90", 0, null),
+                preProd: bo.preProd || existing?.preProd || initPreProd(),
+              };
             });
-          }
+          });
         }
       } catch (e) {}
 
@@ -1109,30 +1101,79 @@ export default function LoomPLM() {
     });
   };
 
-  const permanentDeleteOrder = (id) => {
-    // Completely purge order from state & storage
+  const permanentDeleteOrder = async (id) => {
+    // 1. Completely purge order from state & storage
     setOrders(prev => {
       const remaining = prev.filter(o => o.id !== id);
       if (window.storage) window.storage.set("orders", JSON.stringify(remaining), true);
       return remaining;
     });
 
-    // Clean up any remaining tasks related to this order
+    // 2. Cascade clean all tasks related to this order from state & storage
     setCustomTasks(prev => {
-      const remainingTasks = prev.filter(t => t.orderId !== id);
+      const remainingTasks = prev.filter(t => t.orderId !== id && t.order !== id && t.relatedOrderId !== id);
       if (window.storage) window.storage.set("custom_tasks", JSON.stringify(remainingTasks), true);
       return remainingTasks;
     });
 
+    // 3. Cascade clean notifications related to this order from state & storage
+    setNotifications(prev => {
+      const remainingNotifs = prev.filter(n => n.relatedId !== id && n.orderId !== id && (!n.eventKey || !n.eventKey.includes(id)));
+      if (window.storage) window.storage.set("notifications", JSON.stringify(remainingNotifs), true);
+      return remainingNotifs;
+    });
+
+    // 4. Cascade clean supplier work related to this order
+    setSupplierWork(prev => {
+      const remainingWork = prev.filter(w => w.orderId !== id && w.order !== id);
+      if (window.storage) window.storage.set("supplierWork", JSON.stringify(remainingWork), true);
+      return remainingWork;
+    });
+
+    // 5. Cascade clean certifications & compliances linked to this order
+    setCertifications(prev => {
+      const remaining = prev.filter(c => c.orderId !== id);
+      if (window.storage) window.storage.set("certifications", JSON.stringify(remaining), true);
+      return remaining;
+    });
+    setCompliances(prev => {
+      const remaining = prev.filter(c => c.orderId !== id);
+      if (window.storage) window.storage.set("compliances", JSON.stringify(remaining), true);
+      return remaining;
+    });
+
+    // 6. Cascade clean debit notes & CAPAs linked to this order
+    setDebitNotes(prev => prev.filter(d => d.po !== id && d.orderId !== id));
+    setCapas(prev => prev.filter(c => c.po !== id && c.orderId !== id));
+
+    // 7. Clean order-specific keys from window.storage and localStorage
+    if (window.storage && window.storage.delete) {
+      try {
+        window.storage.delete(`docs:${id}`, true);
+        window.storage.delete(`highlights:${id}`, true);
+        window.storage.delete(`chat:${id}`, true);
+        window.storage.delete(`customTypes:${id}`, true);
+      } catch (e) {}
+    }
     try {
-      resourcesApi.remove("orders", id).catch(() => {});
+      localStorage.removeItem(`storage:docs:${id}`);
+      localStorage.removeItem(`storage:highlights:${id}`);
+      localStorage.removeItem(`storage:chat:${id}`);
+      localStorage.removeItem(`storage:customTypes:${id}`);
     } catch (e) {}
+
+    // 8. Send PERMANENT delete request to backend & MongoDB
+    try {
+      await resourcesApi.remove("orders", id, "?permanent=true");
+    } catch (err) {
+      console.error("Failed to permanently delete order from backend:", err);
+    }
 
     pushNotification({
       eventKey: `order-perm-deleted-${id}-${Date.now()}`,
       type: "order",
       title: "Order Permanently Deleted",
-      message: `Order ${id} has been permanently removed from the system.`,
+      message: `Order ${id} has been permanently removed from the system and database.`,
       relatedModule: "orders",
       relatedId: id,
       priority: "high"

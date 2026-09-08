@@ -971,7 +971,7 @@ export const DOC_TABS_CONFIG = {
     "PO Sheet",
     "Program Sheet",
     "Operational Breakdown (OB)",
-    "Points of measure",
+    "updated guidelines",
     "Pattern Files",
     "CAD markers",
     "Stage Uploaded Files"
@@ -1019,11 +1019,11 @@ export const DOC_ITEM_METADATA = {
   "PO Sheet": { dept: "Merchandising", color: "#4338CA", bg: "#EEF2FF", border: "#C7D2FE" },
   "Program Sheet": { dept: "Merchandising", color: "#4338CA", bg: "#EEF2FF", border: "#C7D2FE" },
   "Operational Breakdown (OB)": { dept: "Production", color: "#4338CA", bg: "#EEF2FF", border: "#C7D2FE" },
-  "Points of measure": { dept: "Merchandising", color: "#4338CA", bg: "#EEF2FF", border: "#C7D2FE" },
+  "updated guidelines": { dept: "Merchandising", color: "#4338CA", bg: "#EEF2FF", border: "#C7D2FE" },
+  "Updated guidelines": { dept: "Merchandising", color: "#4338CA", bg: "#EEF2FF", border: "#C7D2FE" },
   "Pattern Files": { dept: "CAD", color: "#4338CA", bg: "#EEF2FF", border: "#C7D2FE" },
   "CAD markers": { dept: "CAD", color: "#4338CA", bg: "#EEF2FF", border: "#C7D2FE" },
   "Stage Uploaded Files": { dept: "Merchandising", color: "#4338CA", bg: "#EEF2FF", border: "#C7D2FE" },
-  "Updated guidelines": { dept: "Merchandising", color: "#4338CA", bg: "#EEF2FF", border: "#C7D2FE" },
 
   // Order Sheet & BOMs
   "Order Sheet": { dept: "Merchandising", color: "#4338CA", bg: "#EEF2FF", border: "#C7D2FE" },

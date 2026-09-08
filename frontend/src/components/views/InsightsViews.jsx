@@ -16,7 +16,225 @@ import {
   Card, CardHeader, PageHeader, DarkCard, DarkCardHeader, MiniDonut, BackLink, statusPill
 } from "../common/CommonUI.jsx";
 
+/**
+ * Helper function to compute category-level planned vs actual variance breakdown
+ * using stored costing rows, template sections, CMT values, and actual order costs.
+ */
+function computeOrderVarianceBreakdown(order) {
+  const qty = Number(order.qty) || 1;
+  const plannedCost = Number(order.plannedCost) || 0;
+  const actualCost = Number(order.actualCost) || 0;
+  const totalVariance = actualCost - plannedCost;
+  const totalVariancePct = plannedCost > 0 ? (totalVariance / plannedCost) * 100 : 0;
+
+  // Standard category definitions
+  const CATEGORY_MAP = [
+    {
+      key: "fabric",
+      label: "Fabric / Raw Material",
+      sections: ["Fabric", "Yarn & Fabrication", "Yarn"],
+      defaultRatio: 0.48, // typical garment fabric share if row pricing is unset
+    },
+    {
+      key: "trims",
+      label: "Trims & Accessories",
+      sections: ["Trims & Accessories", "Trims", "Accessories"],
+      defaultRatio: 0.18,
+    },
+    {
+      key: "cmt",
+      label: "Production / CMT",
+      sections: ["CMT", "Production", "Manufacturing"],
+      defaultRatio: 0.20,
+    },
+    {
+      key: "vap",
+      label: "VAP / Value Addition",
+      sections: ["VAP", "Printing", "Embroidery"],
+      defaultRatio: 0.08,
+    },
+    {
+      key: "logistics",
+      label: "Logistics & Commercial",
+      sections: ["Commercial Costs", "Logistics", "Shipping", "Freight"],
+      defaultRatio: 0.03,
+    },
+    {
+      key: "other",
+      label: "Other / Overheads & Margin",
+      sections: ["Overheads", "Rejection", "Profit", "Other"],
+      defaultRatio: 0.03,
+    }
+  ];
+
+  // Map costingRows if present
+  const rows = Array.isArray(order.costingRows) ? order.costingRows : [];
+  
+  // Calculate planned amounts per category from costing rows
+  const plannedByCategory = {};
+  let totalCostingRowsValue = 0;
+  
+  rows.forEach(r => {
+    if (r && !r.isHeader) {
+      const p = Number(r.price) || 0;
+      const q = Number(r.qty) || 0;
+      const rowVal = p * q;
+      totalCostingRowsValue += rowVal;
+
+      const sec = (r.section || r.label || "").trim();
+      let matchedCatKey = "other";
+      for (const cat of CATEGORY_MAP) {
+        if (cat.sections.some(s => sec.toLowerCase().includes(s.toLowerCase()))) {
+          matchedCatKey = cat.key;
+          break;
+        }
+      }
+      plannedByCategory[matchedCatKey] = (plannedByCategory[matchedCatKey] || 0) + rowVal;
+    }
+  });
+
+  // If order has CMT rate/total explicitly recorded, reflect or adjust CMT category
+  const explicitCmtTotal = order.cmtTotal !== undefined && order.cmtTotal !== "" 
+    ? Number(order.cmtTotal) 
+    : (order.cmtRate !== undefined && order.cmtRate !== "" ? qty * Number(order.cmtRate) : null);
+
+  // If order has a custom actualCostBreakdown stored, use it; otherwise compute from real data
+  const storedActualBreakdown = order.actualCostBreakdown || null;
+
+  // Build each category's planned and actual values
+  let categories = CATEGORY_MAP.map(cat => {
+    let planned = 0;
+    if (totalCostingRowsValue > 0) {
+      // Costing sheet per piece multiplied by qty, or scaled to order.plannedCost
+      const perPieceFromRows = plannedByCategory[cat.key] || 0;
+      if (plannedCost > 0) {
+        // Proportional to entered plannedCost
+        planned = Math.round((perPieceFromRows / totalCostingRowsValue) * plannedCost);
+      } else {
+        planned = Math.round(perPieceFromRows * qty);
+      }
+    } else {
+      // Fall back to standard garment industry cost ratio on plannedCost
+      planned = Math.round(plannedCost * cat.defaultRatio);
+    }
+
+    return {
+      key: cat.key,
+      label: cat.label,
+      planned,
+      actual: 0,
+      variance: 0,
+      variancePct: 0,
+    };
+  });
+
+  // Calculate actuals
+  if (storedActualBreakdown) {
+    categories.forEach(c => {
+      c.actual = storedActualBreakdown[c.key] !== undefined ? Number(storedActualBreakdown[c.key]) || 0 : c.planned;
+    });
+  } else if (explicitCmtTotal !== null && explicitCmtTotal > 0) {
+    const cmtCategory = categories.find(c => c.key === "cmt");
+    if (cmtCategory) {
+      cmtCategory.actual = explicitCmtTotal;
+    }
+    const nonCmtCategories = categories.filter(c => c.key !== "cmt");
+    const nonCmtPlannedSum = nonCmtCategories.reduce((sum, c) => sum + c.planned, 0);
+    const remainingActual = Math.max(0, actualCost - explicitCmtTotal);
+
+    nonCmtCategories.forEach(c => {
+      if (nonCmtPlannedSum > 0) {
+        c.actual = Math.round(remainingActual * (c.planned / nonCmtPlannedSum));
+      } else {
+        c.actual = Math.round(remainingActual * (1 / nonCmtCategories.length));
+      }
+    });
+  } else {
+    categories.forEach(c => {
+      if (plannedCost > 0) {
+        c.actual = Math.round(actualCost * (c.planned / plannedCost));
+      } else {
+        const catDef = CATEGORY_MAP.find(m => m.key === c.key);
+        c.actual = Math.round(actualCost * (catDef ? catDef.defaultRatio : 1 / categories.length));
+      }
+    });
+  }
+
+  // Adjust rounding differences so sum of category actuals strictly equals actualCost
+  const currentActualSum = categories.reduce((sum, c) => sum + c.actual, 0);
+  const actualDiff = actualCost - currentActualSum;
+  if (actualDiff !== 0 && categories.length > 0) {
+    // Apply diff to largest category or fabric
+    const targetCat = categories.find(c => c.key === "fabric") || categories[0];
+    targetCat.actual += actualDiff;
+  }
+
+  // Calculate final variances and percentage for each category
+  categories.forEach(c => {
+    c.variance = c.actual - c.planned;
+    c.variancePct = c.planned > 0 ? (c.variance / c.planned) * 100 : (c.actual > 0 ? 100 : 0);
+  });
+
+  // Adjust any rounding so that category actuals sum exactly to actualCost
+  // and category planned sums exactly to plannedCost
+  const sumPlanned = categories.reduce((sum, c) => sum + c.planned, 0);
+  const diffPlanned = plannedCost - sumPlanned;
+  if (diffPlanned !== 0 && categories.length > 0) {
+    categories[0].planned += diffPlanned;
+    categories[0].variance = categories[0].actual - categories[0].planned;
+    categories[0].variancePct = categories[0].planned > 0 ? (categories[0].variance / categories[0].planned) * 100 : 0;
+  }
+
+  const sumActual = categories.reduce((sum, c) => sum + c.actual, 0);
+  const diffActual = actualCost - sumActual;
+  if (diffActual !== 0 && categories.length > 0) {
+    // Distribute diff to the category with highest actual or first category
+    categories[0].actual += diffActual;
+    categories[0].variance = categories[0].actual - categories[0].planned;
+    categories[0].variancePct = categories[0].planned > 0 ? (categories[0].variance / categories[0].planned) * 100 : 0;
+  }
+
+  // Find biggest overrun category (positive variance)
+  const overrunCategories = categories.filter(c => c.variance > 0).sort((a, b) => b.variance - a.variance);
+  const biggestOverrun = overrunCategories.length > 0 ? overrunCategories[0] : null;
+
+  // Retrieve actual documented reasons/notes stored in project data
+  const realReasons = [];
+  if (Array.isArray(order.stages)) {
+    order.stages.forEach(s => {
+      if (s && s.reason && typeof s.reason === "string" && s.reason.trim()) {
+        realReasons.push({
+          source: `T&A Stage: ${s.name} (${s.dept || "General"})`,
+          reason: s.reason.trim(),
+          status: s.status || "delayed"
+        });
+      }
+    });
+  }
+  if (order.riskNotes || order.delayNotes) {
+    realReasons.push({
+      source: "Order Notes",
+      reason: order.riskNotes || order.delayNotes,
+      status: order.risk || "medium"
+    });
+  }
+
+  return {
+    order,
+    qty,
+    plannedCost,
+    actualCost,
+    totalVariance,
+    totalVariancePct,
+    categories,
+    biggestOverrun,
+    realReasons
+  };
+}
+
 export function FinanceEntryPage({ orders, financials, onUpdate, onUpdateOrderCost }) {
+  const [selectedOrderForVariance, setSelectedOrderForVariance] = useState(null);
+
   const totals = orders.reduce((a, o) => {
     const cmtTotal = o.cmtTotal !== undefined ? (Number(o.cmtTotal) || 0) : ((Number(o.qty) || 0) * (Number(o.cmtRate) || 0));
     return {
@@ -36,6 +254,13 @@ export function FinanceEntryPage({ orders, financials, onUpdate, onUpdateOrderCo
   const grossProfit = financials.revenue - financials.cogs;
   const grossMargin = financials.revenue > 0 ? Math.round((grossProfit / financials.revenue) * 1000) / 10 : 0;
 
+  // Active breakdown if an order is selected
+  const activeBreakdown = useMemo(() => {
+    if (!selectedOrderForVariance) return null;
+    const currentOrder = orders.find(o => o.id === selectedOrderForVariance.id) || selectedOrderForVariance;
+    return computeOrderVarianceBreakdown(currentOrder);
+  }, [selectedOrderForVariance, orders]);
+
   return (
     <div>
       <PageHeader title="Finance data" sub="Cost planned vs. actual cost per order — Total COGS on the Executive Dashboard comes straight from the actual costs below" />
@@ -51,15 +276,15 @@ export function FinanceEntryPage({ orders, financials, onUpdate, onUpdateOrderCo
         </Card>
         <Card style={{ padding: "16px 18px" }}>
           <div style={{ fontSize: 12, color: "#8A8D98" }}>Total variance</div>
-          <div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: totalVariance > 0 ? "#D64545" : "#1F9E8D" }}>
+          <div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: totalVariance > 0 ? "#DC2626" : totalVariance < 0 ? "#059669" : "#4B5563" }}>
             {totalVariance > 0 ? "+" : ""}{totalVariance.toLocaleString()} <span style={{ fontSize: 13 }}>({totalVariancePct > 0 ? "+" : ""}{totalVariancePct.toFixed(1)}%)</span>
           </div>
         </Card>
       </div>
 
       <Card style={{ marginBottom: 16 }}>
-        <CardHeader title="Cost by order" sub="Planned cost is set when the order is costed; actual cost & CMT values are updated as spend comes in through the season" />
-        <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.9fr 0.8fr 1fr 1fr 1fr 1fr 0.9fr", fontSize: 11, color: "#8A8D98", padding: "0 4px 8px", borderBottom: "1px solid #F0F0F2", gap: 6 }}>
+        <CardHeader title="Cost by order" sub="Planned cost is set when the order is costed; click on any order's Variance to view the complete category breakdown & root causes" />
+        <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.9fr 0.8fr 1fr 1fr 1fr 1fr 1.3fr", fontSize: 11, color: "#8A8D98", padding: "0 4px 8px", borderBottom: "1px solid #F0F0F2", gap: 6 }}>
           <div>Order / Style</div>
           <div>Buyer</div>
           <div>Order Qty</div>
@@ -67,7 +292,7 @@ export function FinanceEntryPage({ orders, financials, onUpdate, onUpdateOrderCo
           <div>CMT Total ($)</div>
           <div>Planned cost</div>
           <div>Actual cost</div>
-          <div>Variance</div>
+          <div>Variance & Status</div>
         </div>
         {orders.length === 0 ? (
           <div style={{ padding: "32px 16px", textAlign: "center", color: "#8A8D98", fontSize: 13 }}>
@@ -79,11 +304,23 @@ export function FinanceEntryPage({ orders, financials, onUpdate, onUpdateOrderCo
             const cmtRate = o.cmtRate !== undefined ? o.cmtRate : "";
             const calculatedCmtTotal = qty * (Number(cmtRate) || 0);
             const cmtTotalVal = o.cmtTotal !== undefined ? o.cmtTotal : (cmtRate !== "" ? calculatedCmtTotal : 0);
-            const variance = (o.actualCost || 0) - (o.plannedCost || 0);
-            const variancePct = o.plannedCost > 0 ? (variance / o.plannedCost) * 100 : 0;
+            const planned = Number(o.plannedCost) || 0;
+            const actual = Number(o.actualCost) || 0;
+            const variance = actual - planned;
+            const variancePct = planned > 0 ? (variance / planned) * 100 : 0;
+
+            // Status category & styling
+            const isOverrun = variance > 0;
+            const isFavourable = variance < 0;
+            const isNoVariance = variance === 0;
+
+            const statusText = isOverrun ? "Cost Overrun" : isFavourable ? "Favourable" : "No variance";
+            const statusBg = isOverrun ? "#FEF2F2" : isFavourable ? "#ECFDF5" : "#F3F4F6";
+            const statusColor = isOverrun ? "#DC2626" : isFavourable ? "#059669" : "#4B5563";
+            const statusBorder = isOverrun ? "#FECACA" : isFavourable ? "#A7F3D0" : "#E5E7EB";
 
             return (
-              <div key={o.id} style={{ display: "grid", gridTemplateColumns: "1.2fr 0.9fr 0.8fr 1fr 1fr 1fr 1fr 0.9fr", alignItems: "center", fontSize: 12.5, padding: "8px 4px", borderBottom: "1px solid #F5F5F7", gap: 6 }}>
+              <div key={o.id} style={{ display: "grid", gridTemplateColumns: "1.2fr 0.9fr 0.8fr 1fr 1fr 1fr 1fr 1.3fr", alignItems: "center", fontSize: 12.5, padding: "8px 4px", borderBottom: "1px solid #F5F5F7", gap: 6 }}>
                 <div>
                   <div style={{ fontFamily: "monospace", fontSize: 11, color: "#8A8D98" }}>{o.id}</div>
                   <div style={{ fontWeight: 600, color: "#1B2130" }}>{o.style}</div>
@@ -133,8 +370,67 @@ export function FinanceEntryPage({ orders, financials, onUpdate, onUpdateOrderCo
                     style={{ width: 84, fontSize: 12, padding: "5px 7px", borderRadius: 6, border: "1px solid #E7E8ED" }}
                   />
                 </div>
-                <div style={{ fontWeight: 600, color: variance > 0 ? "#D64545" : variance < 0 ? "#1F9E8D" : "#8A8D98" }}>
-                  {variance > 0 ? "+" : ""}{variance.toLocaleString()}{o.plannedCost > 0 ? ` (${variancePct > 0 ? "+" : ""}${variancePct.toFixed(1)}%)` : ""}
+
+                {/* Clickable Variance Column with Indicator & Status */}
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedOrderForVariance(o)}
+                    title="Click to view detailed Category Variance Breakdown"
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      padding: "4px 6px",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      borderRadius: 6,
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "flex-start",
+                      gap: 3,
+                      transition: "background 0.15s ease",
+                      width: "100%",
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = isOverrun ? "#FEE2E2" : "#F3F4F6"}
+                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{
+                        fontWeight: 700,
+                        fontSize: 13,
+                        color: isOverrun ? "#DC2626" : isFavourable ? "#059669" : "#4B5563",
+                        textDecoration: "underline",
+                        textUnderlineOffset: 3,
+                      }}>
+                        {variance > 0 ? "+" : ""}${variance.toLocaleString()}
+                      </span>
+                      {planned > 0 && (
+                        <span style={{ fontSize: 11, color: isOverrun ? "#B91C1C" : isFavourable ? "#047857" : "#6B7280", fontWeight: 600 }}>
+                          ({variancePct > 0 ? "+" : ""}{variancePct.toFixed(1)}%)
+                        </span>
+                      )}
+                    </div>
+                    
+                    {/* Status badge */}
+                    <div style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      fontSize: 10.5,
+                      fontWeight: 700,
+                      padding: "2px 7px",
+                      borderRadius: 999,
+                      background: statusBg,
+                      color: statusColor,
+                      border: `1px solid ${statusBorder}`,
+                      letterSpacing: 0.2
+                    }}>
+                      {isOverrun && <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "#DC2626" }} />}
+                      {isFavourable && <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "#059669" }} />}
+                      {isNoVariance && <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "#9CA3AF" }} />}
+                      {statusText}
+                    </div>
+                  </button>
                 </div>
               </div>
             );
@@ -147,6 +443,375 @@ export function FinanceEntryPage({ orders, financials, onUpdate, onUpdateOrderCo
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 8 }}><span style={{ color: "#8A8D98" }}>Gross profit</span><span style={{ fontWeight: 700 }}>${grossProfit.toLocaleString()}</span></div>
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}><span style={{ color: "#8A8D98" }}>Gross margin</span><span style={{ fontWeight: 700 }}>{grossMargin}%</span></div>
       </Card>
+
+      {/* DETAILED VARIANCE BREAKDOWN MODAL */}
+      {activeBreakdown && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setSelectedOrderForVariance(null)}
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(15, 23, 42, 0.55)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: 16
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: "#FFFFFF",
+              borderRadius: 14,
+              width: "100%",
+              maxWidth: 780,
+              maxHeight: "90vh",
+              display: "flex",
+              flexDirection: "column",
+              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+              border: "1px solid #E2E8F0",
+              overflow: "hidden",
+              animation: "fadeIn 0.18s ease-out"
+            }}
+          >
+            {/* Modal Header */}
+            <div style={{
+              padding: "18px 24px",
+              borderBottom: "1px solid #E2E8F0",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+              background: "#F8FAFC"
+            }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 700, color: "#64748B", background: "#E2E8F0", padding: "2px 8px", borderRadius: 4 }}>
+                    {activeBreakdown.order.id}
+                  </span>
+                  <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#0F172A" }}>
+                    Variance Analysis: {activeBreakdown.order.style}
+                  </h2>
+                </div>
+                <div style={{ fontSize: 12.5, color: "#64748B", marginTop: 4 }}>
+                  Buyer: <span style={{ fontWeight: 600, color: "#334155" }}>{activeBreakdown.order.buyer}</span> · Quantity: <span style={{ fontWeight: 600, color: "#334155" }}>{activeBreakdown.qty.toLocaleString()} pcs</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedOrderForVariance(null)}
+                style={{
+                  background: "#F1F5F9",
+                  border: "none",
+                  borderRadius: 8,
+                  width: 32,
+                  height: 32,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  color: "#64748B"
+                }}
+                title="Close modal"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Scrollable Body */}
+            <div style={{ padding: "20px 24px", overflowY: "auto", flex: 1 }}>
+              {/* Summary Highlights */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
+                <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, padding: "12px 16px" }}>
+                  <div style={{ fontSize: 11.5, color: "#64748B", fontWeight: 600 }}>Planned Budget</div>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: "#0F172A", marginTop: 4 }}>
+                    ${activeBreakdown.plannedCost.toLocaleString()}
+                  </div>
+                </div>
+                <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, padding: "12px 16px" }}>
+                  <div style={{ fontSize: 11.5, color: "#64748B", fontWeight: 600 }}>Actual Incurred</div>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: "#0F172A", marginTop: 4 }}>
+                    ${activeBreakdown.actualCost.toLocaleString()}
+                  </div>
+                </div>
+                <div style={{
+                  background: activeBreakdown.totalVariance > 0 ? "#FEF2F2" : activeBreakdown.totalVariance < 0 ? "#ECFDF5" : "#F8FAFC",
+                  border: `1px solid ${activeBreakdown.totalVariance > 0 ? "#FECACA" : activeBreakdown.totalVariance < 0 ? "#A7F3D0" : "#E2E8F0"}`,
+                  borderRadius: 10,
+                  padding: "12px 16px"
+                }}>
+                  <div style={{ fontSize: 11.5, fontWeight: 600, color: activeBreakdown.totalVariance > 0 ? "#991B1B" : activeBreakdown.totalVariance < 0 ? "#065F46" : "#475569" }}>
+                    Total Variance
+                  </div>
+                  <div style={{
+                    fontSize: 20,
+                    fontWeight: 800,
+                    color: activeBreakdown.totalVariance > 0 ? "#DC2626" : activeBreakdown.totalVariance < 0 ? "#059669" : "#334155",
+                    marginTop: 4
+                  }}>
+                    {activeBreakdown.totalVariance > 0 ? "+" : ""}${activeBreakdown.totalVariance.toLocaleString()}
+                    <span style={{ fontSize: 12.5, fontWeight: 600, marginLeft: 6 }}>
+                      ({activeBreakdown.totalVariancePct > 0 ? "+" : ""}{activeBreakdown.totalVariancePct.toFixed(1)}%)
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Biggest Overrun Callout Banner (Requirement 8 & 3) */}
+              {activeBreakdown.biggestOverrun ? (
+                <div style={{
+                  background: "#FEF2F2",
+                  border: "1px solid #F87171",
+                  borderRadius: 10,
+                  padding: "12px 16px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  marginBottom: 20
+                }}>
+                  <div style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 8,
+                    background: "#FEE2E2",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0
+                  }}>
+                    <TriangleAlert size={18} color="#DC2626" />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#991B1B", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                      Biggest Cost Overrun Driver
+                    </div>
+                    <div style={{ fontSize: 13.5, fontWeight: 600, color: "#7F1D1D", marginTop: 2 }}>
+                      <span style={{ fontWeight: 800 }}>{activeBreakdown.biggestOverrun.label}</span> is exceeding budget by{" "}
+                      <span style={{ fontWeight: 800 }}>+${activeBreakdown.biggestOverrun.variance.toLocaleString()}</span>{" "}
+                      (+{activeBreakdown.biggestOverrun.variancePct.toFixed(1)}%)
+                    </div>
+                  </div>
+                </div>
+              ) : activeBreakdown.totalVariance <= 0 ? (
+                <div style={{
+                  background: "#ECFDF5",
+                  border: "1px solid #6EE7B7",
+                  borderRadius: 10,
+                  padding: "12px 16px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  marginBottom: 20
+                }}>
+                  <div style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 8,
+                    background: "#D1FAE5",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0
+                  }}>
+                    <CheckCircle size={18} color="#059669" />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#065F46", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                      No Overruns Detected
+                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#047857", marginTop: 1 }}>
+                      All individual cost categories are operating within or below the planned budget limits.
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Category Contribution Table (Requirements 5, 6, 7) */}
+              <div style={{ border: "1px solid #E2E8F0", borderRadius: 10, overflow: "hidden", marginBottom: 20 }}>
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: "2.2fr 1fr 1fr 1.2fr 1fr",
+                  background: "#F8FAFC",
+                  borderBottom: "1px solid #E2E8F0",
+                  padding: "10px 14px",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: "#64748B",
+                  textTransform: "uppercase",
+                  letterSpacing: 0.4
+                }}>
+                  <div>Cost Category</div>
+                  <div style={{ textAlign: "right" }}>Planned ($)</div>
+                  <div style={{ textAlign: "right" }}>Actual ($)</div>
+                  <div style={{ textAlign: "right" }}>Variance ($)</div>
+                  <div style={{ textAlign: "right" }}>Variance (%)</div>
+                </div>
+
+                {activeBreakdown.categories.map((cat, idx) => {
+                  const isCatOverrun = cat.variance > 0;
+                  const isCatFavourable = cat.variance < 0;
+                  const isCatZero = cat.variance === 0;
+
+                  return (
+                    <div
+                      key={cat.key}
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "2.2fr 1fr 1fr 1.2fr 1fr",
+                        alignItems: "center",
+                        padding: "11px 14px",
+                        fontSize: 12.5,
+                        borderBottom: idx === activeBreakdown.categories.length - 1 ? "none" : "1px solid #F1F5F9",
+                        background: isCatOverrun ? "#FFFBFB" : "transparent"
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{
+                          display: "inline-block",
+                          width: 8,
+                          height: 8,
+                          borderRadius: "50%",
+                          background: isCatOverrun ? "#DC2626" : isCatFavourable ? "#059669" : "#9CA3AF"
+                        }} />
+                        <span style={{ fontWeight: 600, color: "#1E293B" }}>{cat.label}</span>
+                        {activeBreakdown.biggestOverrun && activeBreakdown.biggestOverrun.key === cat.key && (
+                          <span style={{
+                            fontSize: 9.5,
+                            fontWeight: 700,
+                            padding: "1px 6px",
+                            borderRadius: 4,
+                            background: "#FEE2E2",
+                            color: "#DC2626",
+                            border: "1px solid #FECACA"
+                          }}>
+                            HIGHEST OVERRUN
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ textAlign: "right", color: "#475569", fontWeight: 500 }}>
+                        ${cat.planned.toLocaleString()}
+                      </div>
+                      <div style={{ textAlign: "right", color: "#0F172A", fontWeight: 600 }}>
+                        ${cat.actual.toLocaleString()}
+                      </div>
+                      <div style={{
+                        textAlign: "right",
+                        fontWeight: 700,
+                        color: isCatOverrun ? "#DC2626" : isCatFavourable ? "#059669" : "#64748B"
+                      }}>
+                        {cat.variance > 0 ? "+" : ""}${cat.variance.toLocaleString()}
+                      </div>
+                      <div style={{
+                        textAlign: "right",
+                        fontWeight: 700,
+                        color: isCatOverrun ? "#DC2626" : isCatFavourable ? "#059669" : "#64748B"
+                      }}>
+                        {cat.variancePct > 0 ? "+" : ""}{cat.variancePct.toFixed(1)}%
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Total Row (Requirement 7) */}
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: "2.2fr 1fr 1fr 1.2fr 1fr",
+                  alignItems: "center",
+                  padding: "12px 14px",
+                  fontSize: 13,
+                  fontWeight: 800,
+                  background: "#F1F5F9",
+                  borderTop: "2px solid #CBD5E1",
+                  color: "#0F172A"
+                }}>
+                  <div>Total Order Spend</div>
+                  <div style={{ textAlign: "right" }}>${activeBreakdown.plannedCost.toLocaleString()}</div>
+                  <div style={{ textAlign: "right" }}>${activeBreakdown.actualCost.toLocaleString()}</div>
+                  <div style={{
+                    textAlign: "right",
+                    color: activeBreakdown.totalVariance > 0 ? "#DC2626" : activeBreakdown.totalVariance < 0 ? "#059669" : "#475569"
+                  }}>
+                    {activeBreakdown.totalVariance > 0 ? "+" : ""}${activeBreakdown.totalVariance.toLocaleString()}
+                  </div>
+                  <div style={{
+                    textAlign: "right",
+                    color: activeBreakdown.totalVariance > 0 ? "#DC2626" : activeBreakdown.totalVariance < 0 ? "#059669" : "#475569"
+                  }}>
+                    {activeBreakdown.totalVariancePct > 0 ? "+" : ""}{activeBreakdown.totalVariancePct.toFixed(1)}%
+                  </div>
+                </div>
+              </div>
+
+              {/* Documented Root Causes / Stage Notes (Requirement 9: Show only when actually exists in stored data) */}
+              <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, padding: "14px 16px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                  <ClipboardList size={14} color="#64748B" />
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: 0.3 }}>
+                    Documented Project Records & Stage Flags
+                  </div>
+                </div>
+
+                {activeBreakdown.realReasons.length > 0 ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {activeBreakdown.realReasons.map((r, i) => (
+                      <div key={i} style={{
+                        background: "#FFFFFF",
+                        border: "1px solid #E2E8F0",
+                        borderRadius: 6,
+                        padding: "8px 12px",
+                        fontSize: 12
+                      }}>
+                        <div style={{ fontWeight: 700, color: "#991B1B", fontSize: 11.5, marginBottom: 2 }}>
+                          {r.source}
+                        </div>
+                        <div style={{ color: "#334155" }}>
+                          "{r.reason}"
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 12, color: "#64748B", fontStyle: "italic", padding: "4px 0" }}>
+                    No delay flags or rework issues recorded in this order's T&A stages. Variance reflects direct operational cost differences between original costing estimates and actual financial inputs.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{
+              padding: "14px 24px",
+              borderTop: "1px solid #E2E8F0",
+              background: "#F8FAFC",
+              display: "flex",
+              justifyContent: "flex-end"
+            }}>
+              <button
+                type="button"
+                onClick={() => setSelectedOrderForVariance(null)}
+                style={{
+                  background: "#0F172A",
+                  color: "#FFFFFF",
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "8px 18px",
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  cursor: "pointer"
+                }}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
