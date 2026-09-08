@@ -2159,6 +2159,7 @@ export default function LoomPLM() {
         onUpdateInspectionData={updateOrderInspectionData}
         onUpdateCertificates={updateOrderCertificates}
         allOrders={orders}
+        people={users}
       />
     );
   } else if (view === "departmentDetail" && selectedDept) {

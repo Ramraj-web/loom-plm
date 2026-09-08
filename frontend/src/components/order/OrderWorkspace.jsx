@@ -1024,7 +1024,8 @@ function OrderHighlightsCard({ order, role }) {
 
 function DocumentsPanel({
   order, role, costingContent, preProdContent, quotationContent, complianceContent,
-  onUpdateShippedQty, onAddProductionLog, onDeleteProductionLog, onUpdateInspectionData, onUpdateCertificates
+  onUpdateShippedQty, onAddProductionLog, onDeleteProductionLog, onUpdateInspectionData, onUpdateCertificates,
+  people = []
 }) {
   const [activeTab, setActiveTab] = useState("Files");
   const [docs, setDocs] = useState({});
@@ -1161,8 +1162,12 @@ function DocumentsPanel({
     setMentionQuery(null);
   }
 
+  const mentionPeople = Array.from(new Set([
+    ...ALL_PEOPLE,
+    ...people.map(person => person.name || person.username).filter(Boolean)
+  ]));
   const mentionSuggestions = mentionQuery !== null
-    ? ALL_PEOPLE.filter(n => n.split(" ")[0].toLowerCase().startsWith(mentionQuery.toLowerCase())).slice(0, 5)
+    ? mentionPeople.filter(n => n.split(" ")[0].toLowerCase().startsWith(mentionQuery.toLowerCase())).slice(0, 5)
     : [];
 
   const visibleMessages = messages.filter(m => !m.stage || includeStages[m.stage]);
@@ -1464,7 +1469,7 @@ function DocumentsPanel({
             onChange={handleDraftChange}
             placeholder="Type a message... Use @ to mention"
             rows={2}
-            style={{ width: "100%", border: "1px solid #E7E8ED", borderRadius: 8, padding: "8px 10px", fontSize: 12.5, resize: "none", fontFamily: "inherit" }}
+            style={{ width: "92%", border: "1px solid #E7E8ED", borderRadius: 8, padding: "8px 10px", fontSize: 12.5, resize: "none", fontFamily: "inherit" }}
           />
           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
             <button onClick={sendMessage} style={{ display: "flex", alignItems: "center", gap: 5, background: "#378ADD", color: "#fff", border: "none", borderRadius: 999, padding: "7px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
@@ -1577,7 +1582,7 @@ export function OrderWorkspace({
   onPreProdSubmit, onPreProdApprove, onUpdateQuotation, onSubmitQuotation,
   onApproveQuotation, onRejectQuotation, onSubmitCosting, onApproveCosting, onRejectCosting,
   certifications = [], compliances = [],
-  suppliers = [], onAssignSupplier, onAssignWork, onAddProductionLog, onDeleteProductionLog, onUpdateInspectionData, onUpdateCertificates, allOrders = []
+  suppliers = [], onAssignSupplier, onAssignWork, onAddProductionLog, onDeleteProductionLog, onUpdateInspectionData, onUpdateCertificates, allOrders = [], people = []
 }) {
   const [showAssignModal, setShowAssignModal] = useState(false);
   const cuttingIdx = order.stages.findIndex(s => s.name === "Cutting");
@@ -1781,6 +1786,7 @@ export function OrderWorkspace({
         onDeleteProductionLog={onDeleteProductionLog}
         onUpdateInspectionData={onUpdateInspectionData}
         onUpdateCertificates={onUpdateCertificates}
+        people={people}
       />
 
       {showAssignModal && (
