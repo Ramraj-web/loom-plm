@@ -219,6 +219,9 @@ app.get("/api/resources/:resource/:id", (req, res, next) => {
     const db = readResourcesDB();
     const record = (db[resource] || []).find(item => String(item.id) === id);
     if (!record) return res.status(404).json({ error: "Record not found" });
+    if (SOFT_DELETE_RESOURCES.includes(resource) && req.query.all !== "true" && req.query.trash !== "true" && record.isDeleted === true) {
+      return res.status(404).json({ error: "Record not found" });
+    }
     res.json(record);
   } catch (error) {
     next(error);

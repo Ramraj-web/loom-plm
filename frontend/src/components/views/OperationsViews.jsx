@@ -27,7 +27,7 @@ export function OrdersPage({
   onPermanentDeleteOrder
 }) {
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showDeletedSection, setShowDeletedSection] = useState(true);
+  const [showDeletedSection, setShowDeletedSection] = useState(false);
   const [form, setForm] = useState({
     id: "",
     style: "",

@@ -552,6 +552,9 @@ export default async function handler(req, res) {
             if (id) {
               const record = await mongoCols.resources.findOne({ resource, id }, { projection: { _id: 0 } });
               if (!record) return res.status(404).json({ error: "Record not found" });
+              if (isSoftDelete && !showAll && !isTrash && record.isDeleted === true) {
+                return res.status(404).json({ error: "Record not found" });
+              }
               return res.status(200).json(record);
             }
             const filter = isSoftDelete && !showAll
@@ -571,6 +574,9 @@ export default async function handler(req, res) {
         if (id) {
           const item = memoryDB[resource].find(r => String(r.id) === id);
           if (!item) return res.status(404).json({ error: "Record not found" });
+          if (isSoftDelete && !showAll && !isTrash && item.isDeleted === true) {
+            return res.status(404).json({ error: "Record not found" });
+          }
           return res.status(200).json(item);
         }
         const items = memoryDB[resource].filter(r => {
