@@ -74,14 +74,14 @@ export default function LoomPLM() {
     try {
       const saved = localStorage.getItem("loom_department_checklists");
       if (saved) return JSON.parse(saved);
-    } catch (e) {}
+    } catch (e) { }
     return INITIAL_DEPARTMENT_CHECKLISTS;
   });
 
   useEffect(() => {
     try {
       localStorage.setItem("loom_department_checklists", JSON.stringify(departmentChecklists));
-    } catch (e) {}
+    } catch (e) { }
   }, [departmentChecklists]);
 
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split("T")[0]);
@@ -116,7 +116,7 @@ export default function LoomPLM() {
   useEffect(() => {
     try {
       localStorage.setItem("loom_plm_theme", isDarkMode ? "dark" : "light");
-    } catch (e) {}
+    } catch (e) { }
     if (isDarkMode) {
       document.documentElement.setAttribute("data-theme", "dark");
       document.body.classList.add("dark-theme");
@@ -129,7 +129,7 @@ export default function LoomPLM() {
   useEffect(() => {
     try {
       localStorage.setItem("loom_sidebar_collapsed", String(isSidebarCollapsed));
-    } catch (e) {}
+    } catch (e) { }
   }, [isSidebarCollapsed]);
 
   useEffect(() => {
@@ -147,7 +147,7 @@ export default function LoomPLM() {
               const existingIds = new Set(parsed.map(user => user.id));
               setUsers([...parsed, ...DEFAULT_USERS.filter(user => !existingIds.has(user.id))]);
             }
-          } catch (e) {}
+          } catch (e) { }
         }
         if (teamRes?.value) {
           try {
@@ -158,11 +158,11 @@ export default function LoomPLM() {
               const missingDefaults = DEFAULT_TEAMS.filter(dt => !existingNames.has(dt.name.toLowerCase()));
               setTeams([...parsed, ...missingDefaults]);
             }
-          } catch (e) {}
+          } catch (e) { }
         }
-        if (rotationRes?.value) { try { setRotation(prev => ({ ...prev, ...JSON.parse(rotationRes.value) })); } catch (e) {} }
+        if (rotationRes?.value) { try { setRotation(prev => ({ ...prev, ...JSON.parse(rotationRes.value) })); } catch (e) { } }
         setAccessLoaded(true);
-      } catch (e) {}
+      } catch (e) { }
     })();
     return () => { cancelled = true; };
   }, []);
@@ -185,7 +185,7 @@ export default function LoomPLM() {
       setActiveUser(nextUser);
       setRole(roleForUser(nextUser, teams));
       setView("dashboard");
-      try { localStorage.setItem("loom_active_user", JSON.stringify(nextUser)); } catch (e) {}
+      try { localStorage.setItem("loom_active_user", JSON.stringify(nextUser)); } catch (e) { }
     }, rotation.intervalMinutes * 60 * 1000);
     return () => window.clearInterval(timer);
   }, [rotation, activeUser, users, teams]);
@@ -218,52 +218,52 @@ export default function LoomPLM() {
               shippedQty: bo.shippedQty ?? existing?.shippedQty ?? 0,
               plannedCost: bo.plannedCost ?? existing?.plannedCost ?? 0,
               actualCost: bo.actualCost ?? existing?.actualCost ?? 0,
-              stages: (bo.stages && bo.stages.length === 34) 
-                ? bo.stages 
-                : (existing?.stages && existing.stages.length === 34) 
-                  ? existing.stages 
+              stages: (bo.stages && bo.stages.length === 34)
+                ? bo.stages
+                : (existing?.stages && existing.stages.length === 34)
+                  ? existing.stages
                   : makeStages(bo.template || existing?.template || "90", 0, null),
               preProd: bo.preProd || existing?.preProd || initPreProd(),
             };
           });
         });
       }
-    } catch (e) {}
+    } catch (e) { }
 
     try {
       const dbDebit = await resourcesApi.list("debitNotes");
       if (Array.isArray(dbDebit) && dbDebit.length > 0) {
         setDebitNotes(dbDebit.filter(d => d.isDeleted !== true));
       }
-    } catch (e) {}
+    } catch (e) { }
 
     try {
       const dbCapas = await resourcesApi.list("capas");
       if (Array.isArray(dbCapas) && dbCapas.length > 0) {
         setCapas(dbCapas.filter(c => c.isDeleted !== true));
       }
-    } catch (e) {}
+    } catch (e) { }
 
     try {
       const dbTasks = await resourcesApi.list("tasks");
       if (Array.isArray(dbTasks) && dbTasks.length > 0) {
         setCustomTasks(dbTasks.filter(t => t.isDeleted !== true));
       }
-    } catch (e) {}
+    } catch (e) { }
 
     try {
       const dbCerts = await resourcesApi.list("certifications", "?all=true");
       if (Array.isArray(dbCerts) && dbCerts.length > 0) {
         setCertifications(dbCerts);
       }
-    } catch (e) {}
+    } catch (e) { }
 
     try {
       const dbCompliances = await resourcesApi.list("compliances", "?all=true");
       if (Array.isArray(dbCompliances) && dbCompliances.length > 0) {
         setCompliances(dbCompliances.filter(c => c.id !== "comp-2" && !c.name?.toLowerCase().includes("buyer chemical restriction")));
       }
-    } catch (e) {}
+    } catch (e) { }
 
     try {
       const dbNotifs = await resourcesApi.list("notifications", "?all=true");
@@ -281,7 +281,7 @@ export default function LoomPLM() {
           return Array.from(map.values()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         });
       }
-    } catch (e) {}
+    } catch (e) { }
 
     try {
       if (window.storage && window.storage.get) {
@@ -292,7 +292,7 @@ export default function LoomPLM() {
           if (rosterRes && rosterRes.value) {
             baseRoster = JSON.parse(rosterRes.value);
           }
-        } catch (e) {}
+        } catch (e) { }
 
         try {
           const dbStaff = await resourcesApi.list("staff");
@@ -306,7 +306,7 @@ export default function LoomPLM() {
             });
             baseRoster = merged;
           }
-        } catch (e) {}
+        } catch (e) { }
 
         const DEMO_NAMES = new Set(["Arasinth Raja", "Suresh", "Durai", "Praveen Kumar", "Gopal", "Sezhiyan", "Murugan", "Karthik", "Ravi", "Kavitha", "Selva Kumar", "Ramesh", "Priya", "Anand", "Rajesh"]);
         if (Array.isArray(baseRoster)) {
@@ -317,7 +317,7 @@ export default function LoomPLM() {
         // Load org structure
         const orgRes = await window.storage.get("org_structure", true);
         if (orgRes && orgRes.value) {
-          try { setOrgStructure(JSON.parse(orgRes.value)); } catch (e) {}
+          try { setOrgStructure(JSON.parse(orgRes.value)); } catch (e) { }
         }
 
         // Load dept descriptions
@@ -328,7 +328,7 @@ export default function LoomPLM() {
             if (parsed && typeof parsed === "object") {
               setDeptDescriptions(prev => ({ ...prev, ...parsed }));
             }
-          } catch (e) {}
+          } catch (e) { }
         }
 
         const attRes = await window.storage.get("attendance", true);
@@ -342,7 +342,7 @@ export default function LoomPLM() {
               });
               setAttendance(cleanAtt);
             }
-          } catch (e) {}
+          } catch (e) { }
         }
         const certRes = await window.storage.get("certifications", true);
         if (certRes && certRes.value) {
@@ -355,7 +355,7 @@ export default function LoomPLM() {
                 return Array.from(map.values());
               });
             }
-          } catch (e) {}
+          } catch (e) { }
         }
         const compRes = await window.storage.get("compliances", true);
         if (compRes && compRes.value) {
@@ -368,7 +368,7 @@ export default function LoomPLM() {
                 return Array.from(map.values());
               });
             }
-          } catch (e) {}
+          } catch (e) { }
         }
         const notifRes = await window.storage.get("notifications", true);
         if (notifRes && notifRes.value) {
@@ -384,7 +384,7 @@ export default function LoomPLM() {
                 return Array.from(map.values()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
               });
             }
-          } catch (e) {}
+          } catch (e) { }
         }
         const leaveRes = await window.storage.get("leaveRequests", true);
         if (leaveRes && leaveRes.value) {
@@ -393,7 +393,7 @@ export default function LoomPLM() {
             if (Array.isArray(parsed)) {
               setLeaveRequests(parsed.filter(l => !DEMO_NAMES.has(l.name)));
             }
-          } catch (e) {}
+          } catch (e) { }
         }
         const supRes = await window.storage.get("suppliers", true);
         if (supRes && supRes.value) {
@@ -406,7 +406,7 @@ export default function LoomPLM() {
                 return Array.from(map.values());
               });
             }
-          } catch (e) {}
+          } catch (e) { }
         }
         const workRes = await window.storage.get("supplierWork", true);
         if (workRes && workRes.value) {
@@ -419,10 +419,10 @@ export default function LoomPLM() {
                 return Array.from(map.values());
               });
             }
-          } catch (e) {}
+          } catch (e) { }
         }
       }
-    } catch (e) {} finally {
+    } catch (e) { } finally {
       setLastRefreshedAt(new Date());
       setIsRefreshing(false);
     }
@@ -470,8 +470,8 @@ export default function LoomPLM() {
     });
 
     try {
-      resourcesApi.create("notifications", newNotif).catch(() => {});
-    } catch (e) {}
+      resourcesApi.create("notifications", newNotif).catch(() => { });
+    } catch (e) { }
   };
 
   const markNotificationAsRead = (id) => {
@@ -481,8 +481,8 @@ export default function LoomPLM() {
       return updated;
     });
     try {
-      resourcesApi.patch("notifications", id, { isRead: true }).catch(() => {});
-    } catch (e) {}
+      resourcesApi.patch("notifications", id, { isRead: true }).catch(() => { });
+    } catch (e) { }
   };
 
   const markAllNotificationsAsRead = () => {
@@ -494,10 +494,10 @@ export default function LoomPLM() {
     try {
       notifications.forEach(n => {
         if (!n.isRead) {
-          resourcesApi.patch("notifications", n.id, { isRead: true }).catch(() => {});
+          resourcesApi.patch("notifications", n.id, { isRead: true }).catch(() => { });
         }
       });
-    } catch (e) {}
+    } catch (e) { }
   };
 
   const deleteNotification = (id) => {
@@ -507,8 +507,8 @@ export default function LoomPLM() {
       return updated;
     });
     try {
-      resourcesApi.remove("notifications", id).catch(() => {});
-    } catch (e) {}
+      resourcesApi.remove("notifications", id).catch(() => { });
+    } catch (e) { }
   };
 
   const addStaff = (person) => {
@@ -542,7 +542,7 @@ export default function LoomPLM() {
       return updatedOrg;
     });
 
-    try { resourcesApi.create("staff", person); } catch (e) {}
+    try { resourcesApi.create("staff", person); } catch (e) { }
   };
 
   const editStaff = (oldName, updatedPerson) => {
@@ -588,7 +588,7 @@ export default function LoomPLM() {
       return nextOrg;
     });
 
-    try { resourcesApi.create("staff", updatedPerson); } catch (e) {}
+    try { resourcesApi.create("staff", updatedPerson); } catch (e) { }
   };
 
   const removeStaff = (name) => {
@@ -615,7 +615,7 @@ export default function LoomPLM() {
       return nextOrg;
     });
 
-    try { resourcesApi.delete("staff", name); } catch (e) {}
+    try { resourcesApi.delete("staff", name); } catch (e) { }
   };
 
   const cycleAttendance = (name) => {
@@ -646,7 +646,7 @@ export default function LoomPLM() {
       if (window.storage) window.storage.set("leaveRequests", JSON.stringify(updated), true);
       return updated;
     });
-    try { resourcesApi.create("leaveRequests", leave); } catch (e) {}
+    try { resourcesApi.create("leaveRequests", leave); } catch (e) { }
   };
 
   const handleSetRole = (newRole) => {
@@ -664,18 +664,18 @@ export default function LoomPLM() {
     setActiveUser(user);
     setRole(nextRole);
     setView(nextRole.dept === "Executive" || nextRole.dept === "Executive (MD)" ? "executiveOverview" : "dashboard");
-    try { localStorage.setItem("loom_active_user", JSON.stringify(user)); } catch (e) {}
+    try { localStorage.setItem("loom_active_user", JSON.stringify(user)); } catch (e) { }
   };
 
   const handleLogout = () => {
     setActiveUser(null);
-    try { localStorage.removeItem("loom_active_user"); } catch (e) {}
+    try { localStorage.removeItem("loom_active_user"); } catch (e) { }
   };
 
   const updateFinancials = (field, value) => {
     setFinancials(prev => {
       const next = { ...prev, [field]: value };
-      try { resourcesApi.update("financials", "current", next); } catch (e) {}
+      try { resourcesApi.update("financials", "current", next); } catch (e) { }
       return next;
     });
   };
@@ -696,7 +696,7 @@ export default function LoomPLM() {
       if (window.storage) window.storage.set("certifications", JSON.stringify(updated), true);
       return updated;
     });
-    try { resourcesApi.create("certifications", newCert); } catch (e) {}
+    try { resourcesApi.create("certifications", newCert); } catch (e) { }
 
     // Check expiry logic for notification
     if (newCert.expiryDate) {
@@ -732,7 +732,7 @@ export default function LoomPLM() {
       if (window.storage) window.storage.set("certifications", JSON.stringify(updated), true);
       return updated;
     });
-    try { resourcesApi.patch("certifications", id, updates); } catch (e) {}
+    try { resourcesApi.patch("certifications", id, updates); } catch (e) { }
 
     if (updates.status === "Approved") {
       const target = certifications.find(c => c.id === id || c.key === id);
@@ -755,7 +755,7 @@ export default function LoomPLM() {
       if (window.storage) window.storage.set("certifications", JSON.stringify(updated), true);
       return updated;
     });
-    try { resourcesApi.remove("certifications", id); } catch (e) {}
+    try { resourcesApi.remove("certifications", id); } catch (e) { }
   };
 
   const restoreCertification = (id) => {
@@ -764,7 +764,7 @@ export default function LoomPLM() {
       if (window.storage) window.storage.set("certifications", JSON.stringify(updated), true);
       return updated;
     });
-    try { resourcesApi.patch("certifications", id, { isDeleted: false, deletedAt: null }); } catch (e) {}
+    try { resourcesApi.patch("certifications", id, { isDeleted: false, deletedAt: null }); } catch (e) { }
   };
 
   // Compliance CRUD Operations & Task Synchronization
@@ -783,7 +783,7 @@ export default function LoomPLM() {
       if (window.storage) window.storage.set("compliances", JSON.stringify(updated), true);
       return updated;
     });
-    try { resourcesApi.create("compliances", newComp); } catch (e) {}
+    try { resourcesApi.create("compliances", newComp); } catch (e) { }
 
     // Synchronize to My Tasks if a responsible person is assigned
     if (newComp.responsiblePerson && newComp.responsiblePerson !== "—") {
@@ -806,7 +806,7 @@ export default function LoomPLM() {
         }
         return [linkedTask, ...prev];
       });
-      try { resourcesApi.create("tasks", linkedTask); } catch (e) {}
+      try { resourcesApi.create("tasks", linkedTask); } catch (e) { }
     }
 
     // Fire notification for compliance
@@ -834,7 +834,7 @@ export default function LoomPLM() {
       if (window.storage) window.storage.set("compliances", JSON.stringify(updated), true);
       return updated;
     });
-    try { resourcesApi.patch("compliances", id, updates); } catch (e) {}
+    try { resourcesApi.patch("compliances", id, updates); } catch (e) { }
 
     // Update synced task in My Tasks if status or details changed
     setCustomTasks(prev => prev.map(t => {
@@ -847,7 +847,7 @@ export default function LoomPLM() {
           ...(updates.responsiblePerson ? { assignee: updates.responsiblePerson } : {}),
           ...(updates.department ? { dept: updates.department } : {})
         };
-        try { resourcesApi.patch("tasks", t.id, taskUpdates); } catch (e) {}
+        try { resourcesApi.patch("tasks", t.id, taskUpdates); } catch (e) { }
         return { ...t, ...taskUpdates };
       }
       return t;
@@ -885,11 +885,11 @@ export default function LoomPLM() {
       if (window.storage) window.storage.set("compliances", JSON.stringify(updated), true);
       return updated;
     });
-    try { resourcesApi.remove("compliances", id); } catch (e) {}
+    try { resourcesApi.remove("compliances", id); } catch (e) { }
 
     // Remove or complete related task
     setCustomTasks(prev => prev.filter(t => t.complianceId !== id && t.id !== `task-comp-${id}`));
-    try { resourcesApi.remove("tasks", `task-comp-${id}`); } catch (e) {}
+    try { resourcesApi.remove("tasks", `task-comp-${id}`); } catch (e) { }
   };
 
   const restoreCompliance = (id) => {
@@ -898,7 +898,7 @@ export default function LoomPLM() {
       if (window.storage) window.storage.set("compliances", JSON.stringify(updated), true);
       return updated;
     });
-    try { resourcesApi.patch("compliances", id, { isDeleted: false, deletedAt: null }); } catch (e) {}
+    try { resourcesApi.patch("compliances", id, { isDeleted: false, deletedAt: null }); } catch (e) { }
   };
 
   const cycleCert = (key) => {
@@ -915,12 +915,12 @@ export default function LoomPLM() {
 
   const addDebitNote = (note) => {
     setDebitNotes(prev => [note, ...prev]);
-    try { resourcesApi.create("debitNotes", note); } catch (e) {}
+    try { resourcesApi.create("debitNotes", note); } catch (e) { }
   };
 
   const addCapa = (capa) => {
     setCapas(prev => [capa, ...prev]);
-    try { resourcesApi.create("capas", capa); } catch (e) {}
+    try { resourcesApi.create("capas", capa); } catch (e) { }
   };
 
   const cycleCapaStatus = (id) => {
@@ -928,7 +928,7 @@ export default function LoomPLM() {
       if (c.id !== id) return c;
       const next = c.status === "open" ? "in_progress" : c.status === "in_progress" ? "closed" : "open";
       const updated = { ...c, status: next };
-      try { resourcesApi.update("capas", c.id, updated); } catch (e) {}
+      try { resourcesApi.update("capas", c.id, updated); } catch (e) { }
       return updated;
     }));
   };
@@ -941,7 +941,7 @@ export default function LoomPLM() {
       ...task
     };
     setCustomTasks(prev => [newTask, ...prev]);
-    try { resourcesApi.create("tasks", newTask); } catch (e) {}
+    try { resourcesApi.create("tasks", newTask); } catch (e) { }
 
     // Fire notification
     pushNotification({
@@ -959,7 +959,7 @@ export default function LoomPLM() {
     setCustomTasks(prev => prev.map(t => {
       if (t.id !== id) return t;
       const updated = { ...t, ...updates };
-      try { resourcesApi.patch("tasks", id, updates); } catch (e) {}
+      try { resourcesApi.patch("tasks", id, updates); } catch (e) { }
 
       // If this task was linked to a compliance record, update compliance status
       if (t.complianceId && updates.status) {
@@ -984,7 +984,7 @@ export default function LoomPLM() {
 
   const deleteTask = (id) => {
     setCustomTasks(prev => prev.filter(t => t.id !== id));
-    try { resourcesApi.remove("tasks", id); } catch (e) {}
+    try { resourcesApi.remove("tasks", id); } catch (e) { }
   };
 
   const handleAddChecklistItem = (dept, item) => {
@@ -1043,7 +1043,7 @@ export default function LoomPLM() {
       resourcesApi.create("orders", fullOrder).catch(err => {
         console.warn("Error creating order:", err.message);
       });
-    } catch (e) {}
+    } catch (e) { }
 
     // Trigger Notification for New Order
     pushNotification({
@@ -1064,7 +1064,7 @@ export default function LoomPLM() {
       resourcesApi.patch("orders", id, { completed: true, completedAt }).catch(err => {
         console.warn("Error completing order:", err.message);
       });
-    } catch (e) {}
+    } catch (e) { }
 
     pushNotification({
       eventKey: `order-completed-${id}`,
@@ -1083,14 +1083,14 @@ export default function LoomPLM() {
       resourcesApi.patch("orders", id, { completed: false, completedAt: null }).catch(err => {
         console.warn("Error reopening order:", err.message);
       });
-    } catch (e) {}
+    } catch (e) { }
   };
 
   const deleteOrder = (id) => {
     const deletedAt = new Date().toISOString();
     // 1. Soft-delete the order
     setOrders(prev => prev.map(o => o.id === id ? { ...o, isDeleted: true, deletedAt } : o));
-    
+
     // 2. Automatically delete/cleanup all tasks related to this order!
     setCustomTasks(prev => {
       const remainingTasks = prev.filter(t => t.orderId !== id);
@@ -1102,7 +1102,7 @@ export default function LoomPLM() {
       resourcesApi.remove("orders", id).catch(err => {
         console.warn("Error deleting order:", err.message);
       });
-    } catch (e) {}
+    } catch (e) { }
 
     pushNotification({
       eventKey: `order-deleted-${id}`,
@@ -1167,14 +1167,14 @@ export default function LoomPLM() {
         window.storage.delete(`highlights:${id}`, true);
         window.storage.delete(`chat:${id}`, true);
         window.storage.delete(`customTypes:${id}`, true);
-      } catch (e) {}
+      } catch (e) { }
     }
     try {
       localStorage.removeItem(`storage:docs:${id}`);
       localStorage.removeItem(`storage:highlights:${id}`);
       localStorage.removeItem(`storage:chat:${id}`);
       localStorage.removeItem(`storage:customTypes:${id}`);
-    } catch (e) {}
+    } catch (e) { }
 
     // 8. Send PERMANENT delete request to backend & MongoDB
     try {
@@ -1200,7 +1200,7 @@ export default function LoomPLM() {
       resourcesApi.patch("orders", id, { isDeleted: false, deletedAt: null }).catch(err => {
         console.warn("Error restoring order:", err.message);
       });
-    } catch (e) {}
+    } catch (e) { }
   };
 
   const updateStages = (id, stages) => {
@@ -1210,23 +1210,26 @@ export default function LoomPLM() {
       const allDone = stages.length > 0 && doneCount === stages.length;
       const hasFlag = stages.some(s => s.reason);
       const status = allDone ? "On Track" : hasFlag ? "Delayed" : "At Risk";
-      
+
       const isCompleted = allDone;
       const completedAt = isCompleted ? (o.completedAt || new Date().toISOString()) : null;
 
       // Detect stage completions / delays and attach timestamps
       const nowIso = new Date().toISOString();
+      const currentUserName = role?.label || activeUser?.name || "User";
       const updatedStages = stages.map((s, idx) => {
         const prevStage = o.stages?.[idx];
         const res = { ...s };
         if (s.status === "done" && (!prevStage || prevStage.status !== "done")) {
           res.completedAt = s.completedAt || nowIso;
+          res.completedBy = res.completedBy || currentUserName;
         }
         if (s.reason && (!prevStage || prevStage.reason !== s.reason)) {
           res.flaggedAt = s.flaggedAt || nowIso;
         }
         if (s.status === "in_progress" && (!prevStage || prevStage.status !== "in_progress")) {
           res.updatedAt = s.updatedAt || nowIso;
+          res.updatedBy = res.updatedBy || currentUserName;
         }
         return res;
       });
@@ -1346,8 +1349,8 @@ export default function LoomPLM() {
           status,
           completed: isCompleted,
           completedAt
-        }).catch(() => {});
-      } catch (e) {}
+        }).catch(() => { });
+      } catch (e) { }
 
       return updated;
     }));
@@ -1357,7 +1360,7 @@ export default function LoomPLM() {
     setOrders(prev => prev.map(o => {
       if (o.id !== id) return o;
       const updated = { ...o, template: tmpl, stages: makeStages(tmpl, 0, null), status: "On Track" };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) {}
+      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
       return updated;
     }));
   };
@@ -1366,7 +1369,7 @@ export default function LoomPLM() {
     setOrders(prev => prev.map(o => {
       if (o.id !== id) return o;
       const updated = { ...o, costingTemplate: tmpl, costingRows: buildCostingRows(tmpl) };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) {}
+      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
       return updated;
     }));
   };
@@ -1377,7 +1380,7 @@ export default function LoomPLM() {
       const rows = [...(o.costingRows || [])];
       rows[idx] = { ...rows[idx], [field]: value };
       const updated = { ...o, costingRows: rows };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) {}
+      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
       return updated;
     }));
   };
@@ -1386,7 +1389,7 @@ export default function LoomPLM() {
     setOrders(prev => prev.map(o => {
       if (o.id !== id) return o;
       const updated = { ...o, costingRows: [...(o.costingRows || []), { label: "", section: "Other", isHeader: false, price: 0, qty: 1, custom: true }] };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) {}
+      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
       return updated;
     }));
   };
@@ -1395,7 +1398,7 @@ export default function LoomPLM() {
     setOrders(prev => prev.map(o => {
       if (o.id !== id) return o;
       const updated = { ...o, shippedQty: qty };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) {}
+      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
       return updated;
     }));
   };
@@ -1404,7 +1407,7 @@ export default function LoomPLM() {
     setOrders(prev => prev.map(o => {
       if (o.id !== id) return o;
       const updated = { ...o, [field]: value };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) {}
+      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
       return updated;
     }));
   };
@@ -1414,7 +1417,7 @@ export default function LoomPLM() {
       if (o.id !== id) return o;
       const doc = (o.preProd && o.preProd[docKey]) || { values: {}, status: "draft" };
       const updated = { ...o, preProd: { ...(o.preProd || {}), [docKey]: { ...doc, values: { ...doc.values, [fieldKey]: value } } } };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) {}
+      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
       return updated;
     }));
   };
@@ -1423,7 +1426,7 @@ export default function LoomPLM() {
     setOrders(prev => prev.map(o => {
       if (o.id !== id) return o;
       const updated = { ...o, preProd: { ...(o.preProd || {}), [docKey]: { ...(o.preProd[docKey]), status: "submitted" } } };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) {}
+      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
       return updated;
     }));
 
@@ -1453,7 +1456,7 @@ export default function LoomPLM() {
           },
         },
       };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) {}
+      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
       return updated;
     }));
 
@@ -1483,7 +1486,7 @@ export default function LoomPLM() {
       ];
       const updatedLogs = [logEntry, ...currentLogs];
       const updated = { ...o, productionLogs: updatedLogs };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) {}
+      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
       return updated;
     }));
   };
@@ -1503,7 +1506,7 @@ export default function LoomPLM() {
       ];
       const updatedLogs = currentLogs.filter(l => l.id !== logId);
       const updated = { ...o, productionLogs: updatedLogs };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) {}
+      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
       return updated;
     }));
   };
@@ -1512,7 +1515,7 @@ export default function LoomPLM() {
     setOrders(prev => prev.map(o => {
       if (o.id !== id) return o;
       const updated = { ...o, inspectionData: { ...(o.inspectionData || {}), ...inspectionData } };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) {}
+      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
       return updated;
     }));
   };
@@ -1521,7 +1524,7 @@ export default function LoomPLM() {
     setOrders(prev => prev.map(o => {
       if (o.id !== id) return o;
       const updated = { ...o, certificatesData: { ...(o.certificatesData || {}), ...certificatesData } };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) {}
+      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
       return updated;
     }));
   };
@@ -1530,7 +1533,7 @@ export default function LoomPLM() {
     setOrders(prev => prev.map(o => {
       if (o.id !== id) return o;
       const updated = { ...o, quotation: { ...(o.quotation || {}), ...quotationData } };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) {}
+      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
       return updated;
     }));
   };
@@ -1547,7 +1550,7 @@ export default function LoomPLM() {
           submittedAt: new Date().toISOString()
         }
       };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) {}
+      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
       return updated;
     }));
 
@@ -1574,7 +1577,7 @@ export default function LoomPLM() {
           approvedAt: new Date().toISOString()
         }
       };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) {}
+      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
       return updated;
     }));
 
@@ -1599,7 +1602,7 @@ export default function LoomPLM() {
           status: "draft"
         }
       };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) {}
+      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
       return updated;
     }));
   };
@@ -1619,7 +1622,7 @@ export default function LoomPLM() {
           submittedBy: role.label || "Merchandiser"
         }
       };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) {}
+      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
       return updated;
     }));
 
@@ -1649,7 +1652,7 @@ export default function LoomPLM() {
           approvedDate: timestamp
         }
       };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) {}
+      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
       return updated;
     }));
 
@@ -1677,7 +1680,7 @@ export default function LoomPLM() {
           reason: reason || "Costing revisions required"
         }
       };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) {}
+      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
       return updated;
     }));
 
@@ -1756,35 +1759,43 @@ export default function LoomPLM() {
       ]
     }
   ] : [
-    { section: null, items: [
-      { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-      ...(canAccess("orders") ? [{ key: "orders", label: "Orders", icon: Package }] : []),
-      { key: "tasks", label: "My tasks", icon: CheckSquare },
-      { key: "myChecklist", label: "My checklist", icon: ClipboardList },
-      ...(canSeeAll ? [{ key: "calendar", label: "Timeline / calendar", icon: Calendar }] : []),
-      ...(canAccess("approvals") ? [{ key: "approvals", label: "Approvals", icon: ClipboardCheck }] : []),
-    ]},
-    { section: "Operations", items: [
-      ...(canSeeAll
-        ? [{ key: "departments", label: "Departments", icon: Users }]
-        : [{ key: "myDepartment", label: "My department", icon: Users }]),
-      // ...(canSeeAll || ["Cutting", "Production"].includes(role.dept) ? [{ key: "production", label: "Production", icon: Factory }] : []),
-      // ...(canSeeAll || role.dept === "Quality" ? [{ key: "quality", label: "Quality", icon: ShieldCheck }] : []),
-      ...(canSeeAll || role.dept === "Compliance & Certification" ? [{ key: "compliance", label: "Certificates", icon: ShieldCheck }] : []),
-      { key: "attendance", label: "Attendance & leave", icon: UserCheck },
-      ...(canSeeAll || role.dept === "Finance" ? [{ key: "finance", label: "Finance data", icon: Landmark }] : []),
-    ]},
-    { section: "Insights", items: [
-      ...(canAccess("reports") ? [{ key: "reports", label: "Reports", icon: BarChart3 }] : []),
-      // ...(canSeeAll ? [{ key: "insights", label: "All insights", icon: Lightbulb }] : []),
-      ...(canSeeAll ? [{ key: "supplierPerformance", label: "Supplier performance", icon: TrendingUp }] : []),
-      ...(canSeeAll ? [{ key: "notifications", label: "Notifications", icon: Bell }] : []),
-      ...(canSeeAll ? [{ key: "debitNotes", label: "Debit notes", icon: ArrowDownRight }] : []),
-      ...(canSeeAll ? [{ key: "capas", label: "CAPAs", icon: RefreshCw }] : []),
-    ]},
-    { section: null, items: [
-      ...(canAccess("settings") ? [{ key: "settings", label: "Settings", icon: SettingsIcon }] : []),
-    ]},
+    {
+      section: null, items: [
+        { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+        ...(canAccess("orders") ? [{ key: "orders", label: "Orders", icon: Package }] : []),
+        { key: "tasks", label: "My tasks", icon: CheckSquare },
+        { key: "myChecklist", label: "My checklist", icon: ClipboardList },
+        ...(canSeeAll ? [{ key: "calendar", label: "Timeline / calendar", icon: Calendar }] : []),
+        ...(canAccess("approvals") ? [{ key: "approvals", label: "Approvals", icon: ClipboardCheck }] : []),
+      ]
+    },
+    {
+      section: "Operations", items: [
+        ...(canSeeAll
+          ? [{ key: "departments", label: "Departments", icon: Users }]
+          : [{ key: "myDepartment", label: "My department", icon: Users }]),
+        // ...(canSeeAll || ["Cutting", "Production"].includes(role.dept) ? [{ key: "production", label: "Production", icon: Factory }] : []),
+        // ...(canSeeAll || role.dept === "Quality" ? [{ key: "quality", label: "Quality", icon: ShieldCheck }] : []),
+        ...(canSeeAll || role.dept === "Compliance & Certification" ? [{ key: "compliance", label: "Certificates", icon: ShieldCheck }] : []),
+        { key: "attendance", label: "Attendance & leave", icon: UserCheck },
+        ...(canSeeAll || role.dept === "Finance" ? [{ key: "finance", label: "Finance data", icon: Landmark }] : []),
+      ]
+    },
+    {
+      section: "Insights", items: [
+        ...(canAccess("reports") ? [{ key: "reports", label: "Reports", icon: BarChart3 }] : []),
+        // ...(canSeeAll ? [{ key: "insights", label: "All insights", icon: Lightbulb }] : []),
+        ...(canSeeAll ? [{ key: "supplierPerformance", label: "Supplier performance", icon: TrendingUp }] : []),
+        ...(canSeeAll ? [{ key: "notifications", label: "Notifications", icon: Bell }] : []),
+        ...(canSeeAll ? [{ key: "debitNotes", label: "Debit notes", icon: ArrowDownRight }] : []),
+        ...(canSeeAll ? [{ key: "capas", label: "CAPAs", icon: RefreshCw }] : []),
+      ]
+    },
+    {
+      section: null, items: [
+        ...(canAccess("settings") ? [{ key: "settings", label: "Settings", icon: SettingsIcon }] : []),
+      ]
+    },
   ];
 
   const handleUpdateDepartment = async (oldDeptName, updatedData) => {
@@ -1841,7 +1852,7 @@ export default function LoomPLM() {
         if (window.storage?.set) {
           window.storage.set("staff_roster", JSON.stringify(newRoster), true);
         }
-      } catch (e) {}
+      } catch (e) { }
     }
 
     try {
@@ -1862,7 +1873,7 @@ export default function LoomPLM() {
         await window.storage.set("suppliers", JSON.stringify(updated), true);
       }
       if (resourcesApi?.create) {
-        await resourcesApi.create("suppliers", newSup).catch(() => {});
+        await resourcesApi.create("suppliers", newSup).catch(() => { });
       }
     } catch (err) {
       console.warn("Failed to persist new supplier:", err);
@@ -1877,7 +1888,7 @@ export default function LoomPLM() {
         await window.storage.set("suppliers", JSON.stringify(updated), true);
       }
       if (resourcesApi?.update) {
-        await resourcesApi.update("suppliers", updatedSup.id, updatedSup).catch(() => {});
+        await resourcesApi.update("suppliers", updatedSup.id, updatedSup).catch(() => { });
       }
     } catch (err) {
       console.warn("Failed to persist updated supplier:", err);
@@ -1892,7 +1903,7 @@ export default function LoomPLM() {
         await window.storage.set("suppliers", JSON.stringify(updated), true);
       }
       if (resourcesApi?.delete) {
-        await resourcesApi.delete("suppliers", supId).catch(() => {});
+        await resourcesApi.delete("suppliers", supId).catch(() => { });
       }
     } catch (err) {
       console.warn("Failed to persist deleted supplier:", err);
@@ -1913,7 +1924,7 @@ export default function LoomPLM() {
       if (window.storage?.set) {
         await window.storage.set("suppliers", JSON.stringify(updated), true);
       }
-    } catch (e) {}
+    } catch (e) { }
   };
 
   const handleAssignWork = async (newWork) => {
@@ -1947,7 +1958,7 @@ export default function LoomPLM() {
         await window.storage.set("suppliers", JSON.stringify(updatedSuppliers), true);
       }
       if (resourcesApi?.create) {
-        await resourcesApi.create("supplierWork", newWork).catch(() => {});
+        await resourcesApi.create("supplierWork", newWork).catch(() => { });
       }
     } catch (err) {
       console.warn("Failed to persist supplier work:", err);
@@ -2030,9 +2041,9 @@ export default function LoomPLM() {
         const target = updatedWork.find(w => w.id === workId);
         if (target) {
           if (exists) {
-            await resourcesApi.update("supplierWork", workId, target).catch(() => {});
+            await resourcesApi.update("supplierWork", workId, target).catch(() => { });
           } else {
-            await resourcesApi.create("supplierWork", target).catch(() => {});
+            await resourcesApi.create("supplierWork", target).catch(() => { });
           }
         }
       }
@@ -2115,9 +2126,9 @@ export default function LoomPLM() {
         const target = updatedWork.find(w => w.id === workId);
         if (target) {
           if (exists) {
-            await resourcesApi.update("supplierWork", workId, target).catch(() => {});
+            await resourcesApi.update("supplierWork", workId, target).catch(() => { });
           } else {
-            await resourcesApi.create("supplierWork", target).catch(() => {});
+            await resourcesApi.create("supplierWork", target).catch(() => { });
           }
         }
       }
@@ -2159,7 +2170,6 @@ export default function LoomPLM() {
         onUpdateInspectionData={updateOrderInspectionData}
         onUpdateCertificates={updateOrderCertificates}
         allOrders={orders}
-        people={users}
       />
     );
   } else if (view === "departmentDetail" && selectedDept) {
@@ -2194,6 +2204,8 @@ export default function LoomPLM() {
             roster={roster}
             customTasks={customTasks}
             leaveRequests={leaveRequests}
+            users={users}
+            teams={teams}
             onOpenOrder={openOrder}
             onNavigate={navigate}
             onApproveCosting={approveOrderCosting}
@@ -2206,12 +2218,12 @@ export default function LoomPLM() {
       );
     } else {
       content = (
-        <DepartmentDetail 
-          deptName={selectedDept} 
-          orders={orders} 
-          onBack={() => setView(previousView)} 
-          onOpenOrder={openOrder} 
-          orgStructure={orgStructure} 
+        <DepartmentDetail
+          deptName={selectedDept}
+          orders={orders}
+          onBack={() => setView(previousView)}
+          onOpenOrder={openOrder}
+          orgStructure={orgStructure}
           deptDescriptions={deptDescriptions}
           onUpdateDepartment={handleUpdateDepartment}
           suppliers={suppliers}
@@ -2229,6 +2241,8 @@ export default function LoomPLM() {
           roster={roster}
           customTasks={customTasks}
           leaveRequests={leaveRequests}
+          users={users}
+          teams={teams}
           onOpenOrder={openOrder}
           onNavigate={navigate}
           onApproveCosting={approveOrderCosting}
@@ -2240,12 +2254,12 @@ export default function LoomPLM() {
       );
     } else {
       content = (
-        <DepartmentDetail 
-          deptName={role.dept} 
-          orders={orders} 
-          onBack={() => setView("dashboard")} 
-          onOpenOrder={openOrder} 
-          orgStructure={orgStructure} 
+        <DepartmentDetail
+          deptName={role.dept}
+          orders={orders}
+          onBack={() => setView("dashboard")}
+          onOpenOrder={openOrder}
+          orgStructure={orgStructure}
           deptDescriptions={deptDescriptions}
           onUpdateDepartment={handleUpdateDepartment}
           suppliers={suppliers}
@@ -2304,10 +2318,10 @@ export default function LoomPLM() {
     );
   } else if (view === "departments" && canSeeAll) {
     content = (
-      <DepartmentsPage 
-        orders={orders} 
-        onOpenDept={openDept} 
-        orgStructure={orgStructure} 
+      <DepartmentsPage
+        orders={orders}
+        onOpenDept={openDept}
+        orgStructure={orgStructure}
         deptDescriptions={deptDescriptions}
       />
     );
@@ -2382,6 +2396,8 @@ export default function LoomPLM() {
         attendance={attendance}
         customTasks={customTasks}
         leaveRequests={leaveRequests}
+        users={users}
+        teams={teams}
         onNavigate={navigate}
         onBack={() => setView("executiveOverview")}
       />
@@ -2395,6 +2411,8 @@ export default function LoomPLM() {
         roster={roster}
         customTasks={customTasks}
         leaveRequests={leaveRequests}
+        users={users}
+        teams={teams}
         onOpenOrder={openOrder}
         onNavigate={navigate}
         onApproveCosting={approveOrderCosting}
@@ -2417,6 +2435,8 @@ export default function LoomPLM() {
         roster={roster}
         customTasks={customTasks}
         leaveRequests={leaveRequests}
+        users={users}
+        teams={teams}
         onOpenOrder={openOrder}
         onNavigate={navigate}
         onApproveCosting={approveOrderCosting}
@@ -2547,8 +2567,8 @@ export default function LoomPLM() {
       >
         <div style={{ display: "flex", flexDirection: isSidebarCollapsed ? "column" : "row", alignItems: "center", justifyContent: isSidebarCollapsed ? "center" : "space-between", gap: 8, padding: "0 8px 20px", color: "#fff" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-          <div style={{ width: 26, height: 26, borderRadius: 7, background: "#1F9E8D", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 13 }}>G</div>
-          {!isSidebarCollapsed && <span style={{ fontWeight: 700, fontSize: 15 }}>GarmaX</span>}
+            <div style={{ width: 26, height: 26, borderRadius: 7, background: "#1F9E8D", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 13 }}>G</div>
+            {!isSidebarCollapsed && <span style={{ fontWeight: 700, fontSize: 15 }}>GarmaX</span>}
           </div>
           <button
             type="button"
