@@ -7,7 +7,7 @@ import {
 import {
   REASONS, VAP_SUPPLIERS, DOC_TABS_CONFIG, DOC_TAB_NAMES, DOC_TAB_ICONS, CUSTOMIZABLE_TABS,
   STAGE_CHAT_TABS, TAB_ALLOWED_DEPTS, DOC_ITEM_METADATA, PRE_PROD_DOC_TYPES, allPreProdApproved,
-  HIGHLIGHT_DEPT_OPTIONS, ALL_PEOPLE, COSTING_TEMPLATES
+  HIGHLIGHT_DEPT_OPTIONS, ALL_PEOPLE, COSTING_TEMPLATES, firstNamedAssignee
 } from "../../constants/loomData.js";
 import {
   Card, CardHeader, BackLink, statusPill, riskDot, gatingApproval, renderWithMentions
@@ -76,7 +76,9 @@ function StageNode({ stage, idx, onCycle, onReason, onSupplierChange, lockedBy, 
         </div>
       )}
       {!locked && stage.status !== "pending" && (
-        <div style={{ fontSize: 10.5, color: "#565A66", marginTop: 2 }}>{stage.assignee}</div>
+        <div style={{ fontSize: 10.5, color: "#1F9E8D", marginTop: 2, fontWeight: 500 }}>
+          {stage.assignee && stage.assignee !== "Unassigned" ? stage.assignee : "Assigned"}
+        </div>
       )}
       {!locked && stage.status === "in_progress" && (
         <div style={{ marginTop: 6 }}>
@@ -1594,7 +1596,17 @@ export function OrderWorkspace({
     const stages = order.stages.map((s, i) => {
       if (i !== idx) return s;
       const next = s.status === "pending" ? "in_progress" : s.status === "in_progress" ? "done" : "pending";
-      return { ...s, status: next, reason: next === "done" ? null : s.reason };
+      let assignee = s.assignee;
+      if (next !== "pending" && (!assignee || assignee === "Unassigned")) {
+        const found = firstNamedAssignee(s.dept);
+        assignee = found !== "Unassigned" ? found : "Assigned";
+      }
+      return {
+        ...s,
+        status: next,
+        assignee: assignee || s.assignee,
+        reason: next === "done" ? null : s.reason
+      };
     });
     onUpdateStages(order.id, stages);
   };

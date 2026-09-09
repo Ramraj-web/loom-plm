@@ -4067,7 +4067,7 @@ export function DepartmentDetail({
               </div>
               <div style={{ color: "#1B2130" }}>{stage.name}</div>
               <div style={{ color: "#565A66" }}>{stage.planned || order.ship || "—"}</div>
-              <div style={{ color: "#565A66" }}>{stage.assignee || firstNamedAssignee(deptName) || "Unassigned"}</div>
+              <div style={{ color: "#565A66" }}>{stage.assignee || firstNamedAssignee(deptName) || "Assigned"}</div>
               <div>{statusPill(stage.status)}</div>
               <div style={{ color: stage.reason ? "#D64545" : "#B0B2BA", fontWeight: stage.reason ? 600 : 400 }}>
                 {stage.reason || "—"}
@@ -4125,7 +4125,7 @@ export function DepartmentDetail({
               </div>
               <div style={{ color: "#1B2130" }}>{stage.name}</div>
               <div style={{ color: "#565A66" }}>{stage.planned || order.ship || "—"}</div>
-              <div style={{ color: "#565A66" }}>{stage.assignee || firstNamedAssignee(deptName) || "Unassigned"}</div>
+              <div style={{ color: "#565A66" }}>{stage.assignee || firstNamedAssignee(deptName) || "Assigned"}</div>
               <div>{statusPill(stage.status)}</div>
               <div style={{ color: stage.reason ? "#D64545" : "#B0B2BA", fontWeight: stage.reason ? 600 : 400 }}>
                 {stage.reason || "—"}
@@ -4186,7 +4186,7 @@ export function DepartmentDetail({
               <div style={{ color: "#085041", fontWeight: 500 }}>
                 {stage.completedOn || stage.completedAt || (order.completed && order.completedAt ? new Date(order.completedAt).toLocaleDateString() : null) || stage.planned || "Completed"}
               </div>
-              <div style={{ color: "#565A66" }}>{stage.assignee || firstNamedAssignee(deptName) || "Unassigned"}</div>
+              <div style={{ color: "#565A66" }}>{stage.assignee || firstNamedAssignee(deptName) || "Assigned"}</div>
               <div>{statusPill(stage.status)}</div>
               <div style={{ color: stage.reason ? "#D64545" : "#B0B2BA", fontWeight: stage.reason ? 600 : 400 }}>
                 {stage.reason || "—"}

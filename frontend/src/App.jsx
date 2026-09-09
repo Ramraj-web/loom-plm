@@ -12,7 +12,7 @@ import {
   INITIAL_FINANCIALS, INITIAL_CERTIFICATIONS, INITIAL_COMPLIANCES, INITIAL_DEBIT_NOTES, INITIAL_CAPAS,
   INITIAL_ORDERS, INITIAL_NOTIFICATIONS, VAP_SUPPLIERS, buildCostingRows, makeStages, initPreProd,
   NOTIFICATION_PRIORITY_STYLE, formatTimeAgo, DEFAULT_DEPT_DESCRIPTIONS, INITIAL_SUPPLIERS, INITIAL_SUPPLIER_WORK,
-  INITIAL_CUSTOM_TASKS, INITIAL_DEPARTMENT_CHECKLISTS
+  INITIAL_CUSTOM_TASKS, INITIAL_DEPARTMENT_CHECKLISTS, firstNamedAssignee
 } from "./constants/loomData.js";
 import { statusPill } from "./components/common/CommonUI.jsx";
 import { OrderWorkspace } from "./components/order/OrderWorkspace.jsx";
@@ -1276,9 +1276,14 @@ export default function LoomPLM() {
 
       // If next stage found, advance it to in_progress and send Targeted Department Notification
       if (nextStageToActivate && nextStageIdx !== -1) {
+        const nextDeptAssignee = nextStageToActivate.assignee && nextStageToActivate.assignee !== "Unassigned"
+          ? nextStageToActivate.assignee
+          : (firstNamedAssignee(nextStageToActivate.dept) !== "Unassigned" ? firstNamedAssignee(nextStageToActivate.dept) : "Assigned");
+
         updatedStages[nextStageIdx] = {
           ...nextStageToActivate,
           status: "in_progress",
+          assignee: nextDeptAssignee,
           updatedAt: nowIso
         };
 
