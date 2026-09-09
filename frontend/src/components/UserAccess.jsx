@@ -57,7 +57,7 @@ export function LoginPage({ users, onLogin }) {
       <label style={{ ...labelStyle, marginTop: 14 }}>Password<input type="password" value={password} onChange={e => setPassword(e.target.value)} required style={inputStyle} /></label>
       {error && <div style={{ color: "#B42318", fontSize: 12, marginTop: 12 }}>{error}</div>}
       <button type="submit" style={primaryButtonStyle}>Sign in</button>
-      <div style={{ color: "#8A8D98", fontSize: 11, marginTop: 16 }}>Initial administrator: admin / admin123 · MD: md / md123</div>
+      {/* <div style={{ color: "#8A8D98", fontSize: 11, marginTop: 16 }}>Initial administrator: admin / admin123 · MD: md / md123</div> */}
     </form>
   </div>;
 }
