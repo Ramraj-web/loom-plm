@@ -266,18 +266,18 @@ export function FinanceEntryPage({ orders, financials, onUpdate, onUpdateOrderCo
       <PageHeader title="Finance data" sub="Cost planned vs. actual cost per order — Total COGS on the Executive Dashboard comes straight from the actual costs below" />
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 16 }}>
-        <Card style={{ padding: "16px 18px" }}><div style={{ fontSize: 12, color: "#8A8D98" }}>Total planned cost</div><div style={{ fontSize: 22, fontWeight: 700, marginTop: 6 }}>${totals.planned.toLocaleString()}</div></Card>
-        <Card style={{ padding: "16px 18px" }}><div style={{ fontSize: 12, color: "#8A8D98" }}>Total actual cost</div><div style={{ fontSize: 22, fontWeight: 700, marginTop: 6 }}>${totals.actual.toLocaleString()}</div></Card>
+        <Card style={{ padding: "16px 18px" }}><div style={{ fontSize: 12, color: "#8A8D98" }}>Total planned cost</div><div style={{ fontSize: 22, fontWeight: 700, marginTop: 6 }}>₹{totals.planned.toLocaleString("en-IN")}</div></Card>
+        <Card style={{ padding: "16px 18px" }}><div style={{ fontSize: 12, color: "#8A8D98" }}>Total actual cost</div><div style={{ fontSize: 22, fontWeight: 700, marginTop: 6 }}>₹{totals.actual.toLocaleString("en-IN")}</div></Card>
         <Card style={{ padding: "16px 18px" }}>
           <div style={{ fontSize: 12, color: "#8A8D98" }}>Total CMT Value</div>
           <div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: "#1F9E8D" }}>
-            ${totals.cmt.toLocaleString()}
+            ₹{totals.cmt.toLocaleString("en-IN")}
           </div>
         </Card>
         <Card style={{ padding: "16px 18px" }}>
           <div style={{ fontSize: 12, color: "#8A8D98" }}>Total variance</div>
           <div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: totalVariance > 0 ? "#DC2626" : totalVariance < 0 ? "#059669" : "#4B5563" }}>
-            {totalVariance > 0 ? "+" : ""}{totalVariance.toLocaleString()} <span style={{ fontSize: 13 }}>({totalVariancePct > 0 ? "+" : ""}{totalVariancePct.toFixed(1)}%)</span>
+            {totalVariance > 0 ? "+" : totalVariance < 0 ? "-" : ""}₹{Math.abs(totalVariance).toLocaleString("en-IN")} <span style={{ fontSize: 13 }}>({totalVariancePct > 0 ? "+" : ""}{totalVariancePct.toFixed(1)}%)</span>
           </div>
         </Card>
       </div>
@@ -288,10 +288,10 @@ export function FinanceEntryPage({ orders, financials, onUpdate, onUpdateOrderCo
           <div>Order / Style</div>
           <div>Buyer</div>
           <div>Order Qty</div>
-          <div>CMT Rate / pc ($)</div>
-          <div>CMT Total ($)</div>
-          <div>Planned cost</div>
-          <div>Actual cost</div>
+          <div>CMT Rate / pc (₹)</div>
+          <div>CMT Total (₹)</div>
+          <div>Planned cost (₹)</div>
+          <div>Actual cost (₹)</div>
           <div>Variance & Status</div>
         </div>
         {orders.length === 0 ? (
@@ -326,7 +326,7 @@ export function FinanceEntryPage({ orders, financials, onUpdate, onUpdateOrderCo
                   <div style={{ fontWeight: 600, color: "#1B2130" }}>{o.style}</div>
                 </div>
                 <div>{o.buyer}</div>
-                <div style={{ fontWeight: 600, color: "#475569" }}>{qty.toLocaleString()} pcs</div>
+                <div style={{ fontWeight: 600, color: "#475569" }}>{qty.toLocaleString("en-IN")} pcs</div>
                 <div>
                   <input
                     type="number"
@@ -402,7 +402,7 @@ export function FinanceEntryPage({ orders, financials, onUpdate, onUpdateOrderCo
                         textDecoration: "underline",
                         textUnderlineOffset: 3,
                       }}>
-                        {variance > 0 ? "+" : ""}${variance.toLocaleString()}
+                        {variance > 0 ? "+" : variance < 0 ? "-" : ""}₹{Math.abs(variance).toLocaleString("en-IN")}
                       </span>
                       {planned > 0 && (
                         <span style={{ fontSize: 11, color: isOverrun ? "#B91C1C" : isFavourable ? "#047857" : "#6B7280", fontWeight: 600 }}>
@@ -440,7 +440,12 @@ export function FinanceEntryPage({ orders, financials, onUpdate, onUpdateOrderCo
 
       <Card style={{ maxWidth: 460 }}>
         <CardHeader title="Computed" />
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 8 }}><span style={{ color: "#8A8D98" }}>Gross profit</span><span style={{ fontWeight: 700 }}>${grossProfit.toLocaleString()}</span></div>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 8 }}>
+          <span style={{ color: "#8A8D98" }}>Gross profit</span>
+          <span style={{ fontWeight: 700 }}>
+            {grossProfit < 0 ? "-₹" : "₹"}{Math.abs(grossProfit).toLocaleString("en-IN")}
+          </span>
+        </div>
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}><span style={{ color: "#8A8D98" }}>Gross margin</span><span style={{ fontWeight: 700 }}>{grossMargin}%</span></div>
       </Card>
 
@@ -531,13 +536,13 @@ export function FinanceEntryPage({ orders, financials, onUpdate, onUpdateOrderCo
                 <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, padding: "12px 16px" }}>
                   <div style={{ fontSize: 11.5, color: "#64748B", fontWeight: 600 }}>Planned Budget</div>
                   <div style={{ fontSize: 20, fontWeight: 800, color: "#0F172A", marginTop: 4 }}>
-                    ${activeBreakdown.plannedCost.toLocaleString()}
+                    ₹{activeBreakdown.plannedCost.toLocaleString("en-IN")}
                   </div>
                 </div>
                 <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, padding: "12px 16px" }}>
                   <div style={{ fontSize: 11.5, color: "#64748B", fontWeight: 600 }}>Actual Incurred</div>
                   <div style={{ fontSize: 20, fontWeight: 800, color: "#0F172A", marginTop: 4 }}>
-                    ${activeBreakdown.actualCost.toLocaleString()}
+                    ₹{activeBreakdown.actualCost.toLocaleString("en-IN")}
                   </div>
                 </div>
                 <div style={{
@@ -555,7 +560,7 @@ export function FinanceEntryPage({ orders, financials, onUpdate, onUpdateOrderCo
                     color: activeBreakdown.totalVariance > 0 ? "#DC2626" : activeBreakdown.totalVariance < 0 ? "#059669" : "#334155",
                     marginTop: 4
                   }}>
-                    {activeBreakdown.totalVariance > 0 ? "+" : ""}${activeBreakdown.totalVariance.toLocaleString()}
+                    {activeBreakdown.totalVariance > 0 ? "+" : activeBreakdown.totalVariance < 0 ? "-" : ""}₹{Math.abs(activeBreakdown.totalVariance).toLocaleString("en-IN")}
                     <span style={{ fontSize: 12.5, fontWeight: 600, marginLeft: 6 }}>
                       ({activeBreakdown.totalVariancePct > 0 ? "+" : ""}{activeBreakdown.totalVariancePct.toFixed(1)}%)
                     </span>
@@ -593,7 +598,7 @@ export function FinanceEntryPage({ orders, financials, onUpdate, onUpdateOrderCo
                     </div>
                     <div style={{ fontSize: 13.5, fontWeight: 600, color: "#7F1D1D", marginTop: 2 }}>
                       <span style={{ fontWeight: 800 }}>{activeBreakdown.biggestOverrun.label}</span> is exceeding budget by{" "}
-                      <span style={{ fontWeight: 800 }}>+${activeBreakdown.biggestOverrun.variance.toLocaleString()}</span>{" "}
+                      <span style={{ fontWeight: 800 }}>+{activeBreakdown.biggestOverrun.variance > 0 ? "" : "-"}₹{Math.abs(activeBreakdown.biggestOverrun.variance).toLocaleString("en-IN")}</span>{" "}
                       (+{activeBreakdown.biggestOverrun.variancePct.toFixed(1)}%)
                     </div>
                   </div>
@@ -647,9 +652,9 @@ export function FinanceEntryPage({ orders, financials, onUpdate, onUpdateOrderCo
                   letterSpacing: 0.4
                 }}>
                   <div>Cost Category</div>
-                  <div style={{ textAlign: "right" }}>Planned ($)</div>
-                  <div style={{ textAlign: "right" }}>Actual ($)</div>
-                  <div style={{ textAlign: "right" }}>Variance ($)</div>
+                  <div style={{ textAlign: "right" }}>Planned (₹)</div>
+                  <div style={{ textAlign: "right" }}>Actual (₹)</div>
+                  <div style={{ textAlign: "right" }}>Variance (₹)</div>
                   <div style={{ textAlign: "right" }}>Variance (%)</div>
                 </div>
 
@@ -695,17 +700,17 @@ export function FinanceEntryPage({ orders, financials, onUpdate, onUpdateOrderCo
                         )}
                       </div>
                       <div style={{ textAlign: "right", color: "#475569", fontWeight: 500 }}>
-                        ${cat.planned.toLocaleString()}
+                        ₹{cat.planned.toLocaleString("en-IN")}
                       </div>
                       <div style={{ textAlign: "right", color: "#0F172A", fontWeight: 600 }}>
-                        ${cat.actual.toLocaleString()}
+                        ₹{cat.actual.toLocaleString("en-IN")}
                       </div>
                       <div style={{
                         textAlign: "right",
                         fontWeight: 700,
                         color: isCatOverrun ? "#DC2626" : isCatFavourable ? "#059669" : "#64748B"
                       }}>
-                        {cat.variance > 0 ? "+" : ""}${cat.variance.toLocaleString()}
+                        {cat.variance > 0 ? "+" : cat.variance < 0 ? "-" : ""}₹{Math.abs(cat.variance).toLocaleString("en-IN")}
                       </div>
                       <div style={{
                         textAlign: "right",
@@ -731,13 +736,13 @@ export function FinanceEntryPage({ orders, financials, onUpdate, onUpdateOrderCo
                   color: "#0F172A"
                 }}>
                   <div>Total Order Spend</div>
-                  <div style={{ textAlign: "right" }}>${activeBreakdown.plannedCost.toLocaleString()}</div>
-                  <div style={{ textAlign: "right" }}>${activeBreakdown.actualCost.toLocaleString()}</div>
+                  <div style={{ textAlign: "right" }}>₹{activeBreakdown.plannedCost.toLocaleString("en-IN")}</div>
+                  <div style={{ textAlign: "right" }}>₹{activeBreakdown.actualCost.toLocaleString("en-IN")}</div>
                   <div style={{
                     textAlign: "right",
                     color: activeBreakdown.totalVariance > 0 ? "#DC2626" : activeBreakdown.totalVariance < 0 ? "#059669" : "#475569"
                   }}>
-                    {activeBreakdown.totalVariance > 0 ? "+" : ""}${activeBreakdown.totalVariance.toLocaleString()}
+                    {activeBreakdown.totalVariance > 0 ? "+" : activeBreakdown.totalVariance < 0 ? "-" : ""}₹{Math.abs(activeBreakdown.totalVariance).toLocaleString("en-IN")}
                   </div>
                   <div style={{
                     textAlign: "right",

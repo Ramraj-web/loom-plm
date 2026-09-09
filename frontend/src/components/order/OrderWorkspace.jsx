@@ -658,16 +658,28 @@ function CostingTab({ order, role = {}, onSetTemplate, onUpdateRow, onAddRow, on
         + Add other fabric / trim
       </button>
       <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1.5px solid #ECEDF1" }}>
-        {/* TOTAL COST (per pc) Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+        {/* TOTAL COST (per pc) & TOTAL PLANNED BUDGET Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16 }}>
           <div>
             <div style={{ fontSize: 13, fontWeight: 700, color: "#1B2130", letterSpacing: 0.5 }}>TOTAL COST (per pc)</div>
             <div style={{ fontSize: 11, color: "#8A8D98", marginTop: 2 }}>
               Includes overheads, rejection, commercial costs, and profit margin
             </div>
+            <div style={{ fontSize: 24, fontWeight: 800, color: "#151B2E", marginTop: 4 }}>
+              ₹{grandTotal.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+            </div>
           </div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: "#151B2E" }}>
-            ₹{grandTotal.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+
+          <div style={{ background: "#F0FDF4", border: "1.5px solid #86EFAC", borderRadius: 10, padding: "10px 16px", textAlign: "right" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#166534", textTransform: "uppercase", letterSpacing: 0.5 }}>
+              Total Order Planned Cost (Feeds Finances)
+            </div>
+            <div style={{ fontSize: 11, color: "#15803D", marginTop: 2 }}>
+              {Number(order.qty || 0).toLocaleString("en-IN")} pcs × ₹{grandTotal.toLocaleString()} / pc
+            </div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: "#14532D", marginTop: 4 }}>
+              ₹{(Math.round(grandTotal * (Number(order.qty) || 0))).toLocaleString("en-IN")}
+            </div>
           </div>
         </div>
 
@@ -763,8 +775,47 @@ function CostingTab({ order, role = {}, onSetTemplate, onUpdateRow, onAddRow, on
                   boxShadow: "0 2px 4px rgba(16, 185, 129, 0.2)"
                 }}
               >
-                <span>✓</span> Pass
+                <span>✓</span> Approved (Pass)
               </button>
+            ) : isMDOrExec ? (
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  onClick={() => {
+                    handleSubmitApproval();
+                    handleApprove();
+                  }}
+                  style={{
+                    background: "#10B981",
+                    color: "#FFFFFF",
+                    border: "none",
+                    borderRadius: 8,
+                    padding: "8px 18px",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    boxShadow: "0 2px 4px rgba(16, 185, 129, 0.2)"
+                  }}
+                >
+                  ✓ Approve & Sync to Finance
+                </button>
+                {isSubmitted && (
+                  <button
+                    onClick={handleReject}
+                    style={{
+                      background: "#EF4444",
+                      color: "#FFFFFF",
+                      border: "none",
+                      borderRadius: 8,
+                      padding: "8px 14px",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: "pointer"
+                    }}
+                  >
+                    Reject
+                  </button>
+                )}
+              </div>
             ) : isSubmitted ? (
               <button
                 disabled
@@ -782,7 +833,7 @@ function CostingTab({ order, role = {}, onSetTemplate, onUpdateRow, onAddRow, on
                   boxShadow: "0 2px 4px rgba(245, 158, 11, 0.2)"
                 }}
               >
-                ⏳ Pending MD Approval
+                ⏳ Pending MD Approval (Synced)
               </button>
             ) : isRejected ? (
               <button
@@ -818,7 +869,7 @@ function CostingTab({ order, role = {}, onSetTemplate, onUpdateRow, onAddRow, on
                   boxShadow: "0 2px 4px rgba(55, 138, 221, 0.2)"
                 }}
               >
-                Submit for DGM / MD approval
+                Submit & Sync to Finance
               </button>
             )}
           </div>

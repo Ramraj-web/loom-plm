@@ -1616,13 +1616,19 @@ export default function LoomPLM() {
     const timestamp = new Date().toLocaleDateString();
     setOrders(prev => prev.map(o => {
       if (o.id !== id) return o;
+      const orderQty = Number(o.qty) || 1;
+      const grandTotal = Number(costingData.grandTotal) || 0;
+      const totalOrderPlannedCost = Math.round(grandTotal * orderQty);
+
       const updated = {
         ...o,
+        plannedCost: totalOrderPlannedCost > 0 ? totalOrderPlannedCost : o.plannedCost,
         costingApproval: {
           status: "submitted",
           submittedAt: new Date().toISOString(),
           submittedDate: timestamp,
-          grandTotal: costingData.grandTotal || 0,
+          grandTotal: grandTotal,
+          totalPlannedCost: totalOrderPlannedCost,
           currency: costingData.currency || "INR",
           submittedBy: role.label || "Merchandiser"
         }
@@ -1647,11 +1653,21 @@ export default function LoomPLM() {
     const timestamp = new Date().toLocaleDateString();
     setOrders(prev => prev.map(o => {
       if (o.id !== id) return o;
+      const orderQty = Number(o.qty) || 1;
+      const costingRows = o.costingRows || [];
+      const grandTotal = costingRows.length > 0
+        ? costingRows.reduce((a, r) => a + (r.isHeader ? 0 : (Number(r.price) || 0) * (Number(r.qty) || 0)), 0)
+        : (o.costingApproval?.grandTotal || 0);
+      const totalOrderPlannedCost = Math.round(grandTotal * orderQty);
+
       const updated = {
         ...o,
+        plannedCost: totalOrderPlannedCost > 0 ? totalOrderPlannedCost : o.plannedCost,
         costingApproval: {
           ...(o.costingApproval || {}),
           status: "approved",
+          grandTotal: grandTotal || o.costingApproval?.grandTotal || 0,
+          totalPlannedCost: totalOrderPlannedCost || o.costingApproval?.totalPlannedCost,
           approvedBy: approver,
           approvedAt: new Date().toISOString(),
           approvedDate: timestamp
