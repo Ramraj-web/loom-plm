@@ -1,6 +1,96 @@
 import React, { useState, useMemo } from "react";
 import { Check, X, Plus, Calendar, CheckSquare, Clock } from "lucide-react";
 
+const monthNames = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+];
+
+const normalizeDateOnly = (date) => {
+  const copy = new Date(date);
+  copy.setHours(0, 0, 0, 0);
+  return copy;
+};
+
+const parseDueDateValue = (value) => {
+  if (!value) return null;
+
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return normalizeDateOnly(value);
+  }
+
+  if (typeof value !== "string") return null;
+
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const lower = trimmed.toLowerCase();
+  if (lower === "today") {
+    return normalizeDateOnly(new Date());
+  }
+
+  if (lower === "tomorrow") {
+    const date = new Date();
+    date.setDate(date.getDate() + 1);
+    return normalizeDateOnly(date);
+  }
+
+  const slashMatch = trimmed.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+  if (slashMatch) {
+    const [, day, month, yearRaw] = slashMatch;
+    const year = yearRaw.length === 2 ? 2000 + Number(yearRaw) : Number(yearRaw);
+    return new Date(year, Number(month) - 1, Number(day));
+  }
+
+  const monthNameMatch = trimmed.match(/^(\d{1,2})\s+([A-Za-z]{3,9})(?:\s+(\d{2,4}))?$/);
+  if (monthNameMatch) {
+    const [, day, monthName, yearRaw] = monthNameMatch;
+    const monthIndex = monthNames.findIndex((month) => month.toLowerCase() === monthName.toLowerCase());
+    if (monthIndex >= 0) {
+      const year = yearRaw ? (yearRaw.length === 2 ? 2000 + Number(yearRaw) : Number(yearRaw)) : new Date().getFullYear();
+      return new Date(year, monthIndex, Number(day));
+    }
+  }
+
+  const isoDate = new Date(trimmed);
+  if (!Number.isNaN(isoDate.getTime())) {
+    return normalizeDateOnly(isoDate);
+  }
+
+  return null;
+};
+
+const formatDueDateValue = (value) => {
+  const parsed = parseDueDateValue(value);
+  if (!parsed) return value || "—";
+
+  return parsed.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+};
+
+const formatDueDateForStorage = (value) => {
+  const parsed = parseDueDateValue(value);
+  if (!parsed) return value || "Today";
+
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const isOverdueChecklistItem = (item) => {
+  if (!item || item.done) return false;
+
+  const parsed = parseDueDateValue(item.dueDate);
+  if (!parsed) return false;
+
+  const today = normalizeDateOnly(new Date());
+  return parsed < today;
+};
+
 export function MyChecklistPage({
   role,
   checklists = {},
@@ -31,9 +121,13 @@ export function MyChecklistPage({
     e.preventDefault();
     if (!taskText.trim()) return;
 
+    const normalizedDueDate = dueDateText.trim()
+      ? formatDueDateForStorage(dueDateText)
+      : "Today";
+
     onAddChecklistItem(deptName, {
       title: taskText.trim(),
-      dueDate: dueDateText.trim() || "Today",
+      dueDate: normalizedDueDate,
     });
 
     setTaskText("");
@@ -150,10 +244,9 @@ export function MyChecklistPage({
               Due date
             </label>
             <input
-              type="text"
+              type="date"
               value={dueDateText}
               onChange={(e) => setDueDateText(e.target.value)}
-              placeholder="e.g. 20 May"
               style={{
                 width: "100%",
                 padding: "9px 13px",
@@ -242,6 +335,8 @@ export function MyChecklistPage({
         ) : (
           filteredTasks.map((item, idx) => {
             const isLast = idx === filteredTasks.length - 1;
+            const overdue = isOverdueChecklistItem(item);
+
             return (
               <div
                 key={item.id}
@@ -251,6 +346,7 @@ export function MyChecklistPage({
                   justifyContent: "space-between",
                   padding: "12px 10px",
                   borderBottom: isLast ? "none" : "1px solid #F3F4F6",
+                  background: overdue ? "#FEE2E2" : "transparent",
                   transition: "background 0.1s ease"
                 }}
               >
@@ -299,10 +395,10 @@ export function MyChecklistPage({
                         style={{
                           fontSize: 11,
                           fontWeight: 500,
-                          color: item.done ? "#CBD5E1" : "#EF4444"
+                          color: item.done ? "#CBD5E1" : overdue ? "#B91C1C" : "#EF4444"
                         }}
                       >
-                        {item.dueDate}
+                        {formatDueDateValue(item.dueDate)}
                       </div>
                     )}
                   </div>
