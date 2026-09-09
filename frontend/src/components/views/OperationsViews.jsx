@@ -3134,16 +3134,18 @@ export function AttendancePage({ roster, attendance, onCycle, leaveRequests, onA
         ))}
       </Card>
 
-      <Card style={{ marginBottom: 16 }}>
+      
+    {/* future enhancemenst */}
+      {/* <Card style={{ marginBottom: 16 }}>
         <CardHeader title="Add a joiner" sub="Add anyone new who's joined the team — changes persist immediately" />
         <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr 1.2fr auto", gap: 8, alignItems: "end" }}>
           <div>
             <label style={{ fontSize: 11, color: "#8A8D98", display: "block", marginBottom: 4 }}>Name</label>
-            <input value={form.name} onChange={e => set("name", e.target.value)} placeholder="Full name" style={{ width: "100%", padding: "7px 8px", borderRadius: 7, border: "1px solid #E7E8ED", fontSize: 12.5 }} />
+            <input value={form.name} onChange={e => set("name", e.target.value)} placeholder="Full name" style={{ width: "94%", padding: "7px 8px", borderRadius: 7, border: "1px solid #E7E8ED", fontSize: 12.5 }} />
           </div>
           <div>
             <label style={{ fontSize: 11, color: "#8A8D98", display: "block", marginBottom: 4 }}>Title</label>
-            <input value={form.title} onChange={e => set("title", e.target.value)} placeholder="e.g. Junior / Incharge" style={{ width: "100%", padding: "7px 8px", borderRadius: 7, border: "1px solid #E7E8ED", fontSize: 12.5 }} />
+            <input value={form.title} onChange={e => set("title", e.target.value)} placeholder="e.g. Junior / Incharge" style={{ width: "94%", padding: "7px 8px", borderRadius: 7, border: "1px solid #E7E8ED", fontSize: 12.5 }} />
           </div>
           <div>
             <label style={{ fontSize: 11, color: "#8A8D98", display: "block", marginBottom: 4 }}>Department</label>
@@ -3153,9 +3155,9 @@ export function AttendancePage({ roster, attendance, onCycle, leaveRequests, onA
           </div>
           <button onClick={submitAdd} style={{ fontSize: 12.5, fontWeight: 600, color: "#fff", background: "#1F9E8D", border: "none", borderRadius: 8, padding: "8px 16px", cursor: "pointer" }}>Add</button>
         </div>
-      </Card>
+      </Card> */}
 
-      <Card>
+      {/* <Card>
         <CardHeader title="Today's roster" sub="Click a status pill to cycle it — edit or remove team members" />
         <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr 0.8fr 0.8fr", fontSize: 11, color: "#8A8D98", padding: "0 4px 8px", borderBottom: "1px solid #F0F0F2" }}>
           <div>Name</div><div>Title</div><div>Department</div><div>Status</div><div style={{ textAlign: "right" }}>Actions</div>
@@ -3225,7 +3227,7 @@ export function AttendancePage({ roster, attendance, onCycle, leaveRequests, onA
             </div>
           );
         })}
-      </Card>
+      </Card> */}
     </div>
   );
 }
