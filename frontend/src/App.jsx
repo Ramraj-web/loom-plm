@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   LayoutDashboard, Package, CheckSquare, BarChart3, Settings as SettingsIcon,
   ChevronDown, Search, Bell, Moon, Sun, ClipboardList,
@@ -104,6 +104,7 @@ export default function LoomPLM() {
   const [users, setUsers] = useState(DEFAULT_USERS);
   const [teams, setTeams] = useState(DEFAULT_TEAMS);
   const [accessLoaded, setAccessLoaded] = useState(false);
+  const initialViewLoadRef = useRef(false);
   const [activeUser, setActiveUser] = useState(() => {
     try {
       const saved = localStorage.getItem("loom_active_user");
@@ -663,6 +664,18 @@ export default function LoomPLM() {
       console.warn("Failed to load module data:", e.message);
     }
   }, [activeUser]);
+
+  useEffect(() => {
+    if (!activeUser) {
+      initialViewLoadRef.current = false;
+      return;
+    }
+
+    if (accessLoaded && !initialViewLoadRef.current) {
+      loadViewData(view);
+      initialViewLoadRef.current = true;
+    }
+  }, [accessLoaded, activeUser, loadViewData, view]);
 
   // Central Notification Dispatcher with Deduplication
   const pushNotification = (notif) => {
