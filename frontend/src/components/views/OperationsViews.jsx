@@ -36,6 +36,7 @@ export function OrdersPage({
     season: "AW26",
     qty: 10000,
     ship: "25 May",
+    color: "",
     risk: "low",
     status: "On Track"
   });
@@ -56,6 +57,7 @@ export function OrdersPage({
       season: form.season.trim(),
       qty: Number(form.qty) || 5000,
       ship: form.ship.trim() || "15 Jun",
+      color: form.color.trim(),
       risk: form.risk,
       status: form.status,
       completed: false,
@@ -73,6 +75,7 @@ export function OrdersPage({
       season: "AW26",
       qty: 10000,
       ship: "25 May",
+      color: "",
       risk: "low",
       status: "On Track"
     });
@@ -122,8 +125,8 @@ export function OrdersPage({
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.9fr 0.9fr 0.7fr 0.8fr 0.8fr 0.7fr 0.9fr 0.8fr", fontSize: 11.5, color: "#8A8D98", padding: "0 4px 8px", borderBottom: "1px solid #F0F0F2" }}>
-          <div>PO / Style</div><div>Buyer</div><div>Country</div><div>Season</div><div>Qty</div><div>Ship date</div><div>Risk</div><div>Status</div><div style={{ textAlign: "right" }}>Actions</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.9fr 0.9fr 0.7fr 0.8fr 0.8fr 0.7fr 0.9fr 0.8fr 0.7fr", fontSize: 11.5, color: "#8A8D98", padding: "0 4px 8px", borderBottom: "1px solid #F0F0F2" }}>
+          <div>PO / Style</div><div>Buyer</div><div>Country</div><div>Season</div><div>Qty</div><div>Ship date</div><div>Risk</div><div>Status</div><div>Color</div><div style={{ textAlign: "right" }}>Actions</div>
         </div>
 
         {activeOrders.length === 0 ? (
@@ -134,7 +137,7 @@ export function OrdersPage({
           activeOrders.map(o => (
             <div
               key={o.id}
-              style={{ display: "grid", gridTemplateColumns: "1.2fr 0.9fr 0.9fr 0.7fr 0.8fr 0.8fr 0.7fr 0.9fr 0.8fr", alignItems: "center", fontSize: 13, padding: "12px 4px", borderBottom: "1px solid #F5F5F7" }}
+              style={{ display: "grid", gridTemplateColumns: "1.2fr 0.9fr 0.9fr 0.7fr 0.8fr 0.8fr 0.7fr 0.9fr 0.8fr 0.7fr", alignItems: "center", fontSize: 13, padding: "12px 4px", borderBottom: "1px solid #F5F5F7" }}
               onMouseEnter={e => e.currentTarget.style.background = "#FAFAFB"}
               onMouseLeave={e => e.currentTarget.style.background = "transparent"}
             >
@@ -152,6 +155,9 @@ export function OrdersPage({
               </div>
               <div onClick={() => onOpenOrder && onOpenOrder(o.id)} style={{ cursor: "pointer" }}>
                 {statusPill(o.status)}
+              </div>
+              <div onClick={() => onOpenOrder && onOpenOrder(o.id)} style={{ cursor: "pointer", color: o.color ? "#1B2130" : "#9CA3AF" }}>
+                {o.color || "—"}
               </div>
               <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
                 <button
@@ -192,8 +198,8 @@ export function OrdersPage({
           <span style={{ fontSize: 12, color: "#8A8D98" }}>Finished orders — kept in history</span>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.9fr 0.9fr 0.7fr 0.8fr 0.8fr 0.8fr 1.1fr", fontSize: 11.5, color: "#8A8D98", padding: "0 4px 8px", borderBottom: "1px solid #F0F0F2" }}>
-          <div>PO / Style</div><div>Buyer</div><div>Country</div><div>Season</div><div>Qty</div><div>Ship date</div><div>Status</div><div style={{ textAlign: "right" }}>Actions</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.9fr 0.9fr 0.7fr 0.8fr 0.8fr 0.8fr 0.8fr 1.1fr", fontSize: 11.5, color: "#8A8D98", padding: "0 4px 8px", borderBottom: "1px solid #F0F0F2" }}>
+          <div>PO / Style</div><div>Buyer</div><div>Country</div><div>Season</div><div>Qty</div><div>Ship date</div><div>Color</div><div>Status</div><div style={{ textAlign: "right" }}>Actions</div>
         </div>
 
         {completedOrders.length === 0 ? (
@@ -204,7 +210,7 @@ export function OrdersPage({
           completedOrders.map(o => (
             <div
               key={o.id}
-              style={{ display: "grid", gridTemplateColumns: "1.2fr 0.9fr 0.9fr 0.7fr 0.8fr 0.8fr 0.8fr 1.1fr", alignItems: "center", fontSize: 13, padding: "12px 4px", borderBottom: "1px solid #F5F5F7", background: "#FAFDFB" }}
+              style={{ display: "grid", gridTemplateColumns: "1.2fr 0.9fr 0.9fr 0.7fr 0.8fr 0.8fr 0.8fr 0.8fr 1.1fr", alignItems: "center", fontSize: 13, padding: "12px 4px", borderBottom: "1px solid #F5F5F7", background: "#FAFDFB" }}
             >
               <div onClick={() => onOpenOrder && onOpenOrder(o.id)} style={{ cursor: "pointer" }}>
                 <div style={{ fontFamily: "monospace", fontSize: 12, color: "#8A8D98" }}>{o.id}</div>
@@ -215,6 +221,7 @@ export function OrdersPage({
               <div>{o.season || "SS26"}</div>
               <div>{Number(o.qty || 0).toLocaleString()}</div>
               <div>{o.ship}</div>
+              <div style={{ color: o.color ? "#1B2130" : "#9CA3AF" }}>{o.color || "—"}</div>
               <div>
                 <span style={{ background: "#E1F5EE", color: "#085041", fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 999 }}>
                   Completed
@@ -286,8 +293,8 @@ export function OrdersPage({
 
         {showDeletedSection && (
           <>
-            <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.9fr 0.9fr 0.7fr 0.8fr 0.8fr 1fr 0.8fr", fontSize: 11.5, color: "#8A8D98", padding: "0 4px 8px", borderBottom: "1px solid #F0F0F2" }}>
-              <div>PO / Style</div><div>Buyer</div><div>Country</div><div>Season</div><div>Qty</div><div>Ship date</div><div>Deleted date</div><div style={{ textAlign: "right" }}>Actions</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.9fr 0.9fr 0.7fr 0.8fr 0.8fr 0.8fr 1fr 0.8fr", fontSize: 11.5, color: "#8A8D98", padding: "0 4px 8px", borderBottom: "1px solid #F0F0F2" }}>
+              <div>PO / Style</div><div>Buyer</div><div>Country</div><div>Season</div><div>Qty</div><div>Ship date</div><div>Color</div><div>Deleted date</div><div style={{ textAlign: "right" }}>Actions</div>
             </div>
 
             {deletedOrders.length === 0 ? (
@@ -298,7 +305,7 @@ export function OrdersPage({
               deletedOrders.map(o => (
                 <div
                   key={o.id}
-                  style={{ display: "grid", gridTemplateColumns: "1.2fr 0.9fr 0.9fr 0.7fr 0.8fr 0.8fr 1fr 0.8fr", alignItems: "center", fontSize: 13, padding: "12px 4px", borderBottom: "1px solid #F5F5F7", opacity: 0.85 }}
+                  style={{ display: "grid", gridTemplateColumns: "1.2fr 0.9fr 0.9fr 0.7fr 0.8fr 0.8fr 0.8fr 1fr 0.8fr", alignItems: "center", fontSize: 13, padding: "12px 4px", borderBottom: "1px solid #F5F5F7", opacity: 0.85 }}
                 >
                   <div>
                     <div style={{ fontFamily: "monospace", fontSize: 12, color: "#8A8D98", textDecoration: "line-through" }}>{o.id}</div>
@@ -309,6 +316,7 @@ export function OrdersPage({
                   <div style={{ color: "#6B7280" }}>{o.season || "SS26"}</div>
                   <div style={{ color: "#6B7280" }}>{Number(o.qty || 0).toLocaleString()}</div>
                   <div style={{ color: "#6B7280" }}>{o.ship}</div>
+                  <div style={{ color: o.color ? "#6B7280" : "#9CA3AF" }}>{o.color || "—"}</div>
                   <div style={{ fontSize: 11.5, color: "#9CA3AF" }}>
                     {o.deletedAt ? new Date(o.deletedAt).toLocaleDateString() : "Archived"}
                   </div>
@@ -479,7 +487,7 @@ export function OrdersPage({
                 </div>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 20 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, marginBottom: 20 }}>
                 <div>
                   <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#4B5563", marginBottom: 4 }}>Ship Date</label>
                   <input
@@ -488,6 +496,16 @@ export function OrdersPage({
                     value={form.ship}
                     onChange={e => setForm({ ...form, ship: e.target.value })}
                     style={{ width: "92%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13 }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#4B5563", marginBottom: 4,marginLeft: 4 }}>Color</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Navy Blue"
+                    value={form.color}
+                    onChange={e => setForm({ ...form, color: e.target.value })}
+                    style={{ width: "84%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13,marginLeft: 4 }}
                   />
                 </div>
                 <div>
