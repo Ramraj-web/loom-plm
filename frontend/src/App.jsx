@@ -123,7 +123,12 @@ export default function LoomPLM() {
       );
 
       await Promise.all(
-        (nextUsers || []).map(user => resourcesApi.create("users", user))
+        (nextUsers || []).map(user => {
+          const existingUser = (existing || []).find(item => item.id === user.id);
+          return existingUser
+            ? resourcesApi.update("users", user.id, user)
+            : resourcesApi.create("users", user);
+        })
       );
     } catch (e) {
       console.warn("Failed to sync users to backend:", e.message);

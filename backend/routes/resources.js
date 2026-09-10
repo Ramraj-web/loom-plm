@@ -81,6 +81,14 @@ function writeDB(db) {
 
 function validResource(name) { return Object.prototype.hasOwnProperty.call(RESOURCE_SEEDS, name); }
 function makeId(resource, record) { return record.id || `${resource}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`; }
+function uniqueById(records) {
+  const seen = new Set();
+  return records.filter(record => {
+    if (!record.id || seen.has(record.id)) return false;
+    seen.add(record.id);
+    return true;
+  });
+}
 
 const SOFT_DELETE_RESOURCES = [
   "orders",
@@ -111,9 +119,13 @@ router.get("/:resource", async (req, res, next) => {
     const filter = isSoftDelete && !showAll
       ? { resource, isDeleted: isTrash ? true : { $ne: true } }
       : { resource };
-    if (collection) return res.json(await collection.find(filter).project({ _id: 0 }).toArray());
+    if (collection) {
+      const records = await collection.find(filter).project({ _id: 0 }).toArray();
+      return res.json(resource === "users" ? uniqueById(records) : records);
+    }
     const db = readDB();
-    res.json((db[resource] || []).filter(record => !isSoftDelete || showAll || (isTrash ? record.isDeleted === true : record.isDeleted !== true)));
+    const records = (db[resource] || []).filter(record => !isSoftDelete || showAll || (isTrash ? record.isDeleted === true : record.isDeleted !== true));
+    res.json(resource === "users" ? uniqueById(records) : records);
   } catch (error) { next(error); }
 });
 

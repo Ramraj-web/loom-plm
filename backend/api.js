@@ -189,6 +189,15 @@ function makeId(resource, record) {
   return record.id || `${resource}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function uniqueById(records) {
+  const seen = new Set();
+  return records.filter(record => {
+    if (!record.id || seen.has(record.id)) return false;
+    seen.add(record.id);
+    return true;
+  });
+}
+
 const SOFT_DELETE_RESOURCES = [
   "orders", "tasks", "approvals", "departments", "production", "staff",
   "leaveRequests", "financials", "certifications", "compliances", "debitNotes",
@@ -206,7 +215,7 @@ app.get("/api/resources/:resource", (req, res, next) => {
     const records = (db[resource] || []).filter(
       record => !isSoftDelete || showAll || (isTrash ? record.isDeleted === true : record.isDeleted !== true)
     );
-    res.json(records);
+    res.json(resource === "users" ? uniqueById(records) : records);
   } catch (error) {
     next(error);
   }
