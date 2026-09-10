@@ -778,10 +778,19 @@ export default async function handler(req, res) {
       if (!message || !String(message).trim()) return res.status(400).json({ error: "message is required" });
       const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
       if (!apiKey) return res.status(503).json({ error: "AI chat is not configured" });
-      const prompt = `You are the project assistant for a garment production PLM. Answer the user's question clearly and briefly using only the project data below. If an order number is relevant, include its exact ID in your answer so the app can make it clickable. Explain order process questions using practical steps such as confirmation, booking, costing, approvals, production, quality, and shipment. Do not invent data.
+      const prompt = `You are the expert production assistant for a garment manufacturing PLM system (LOOM PLM).
+Answer the user's question accurately, directly, and specifically using ONLY the project data provided below.
 
-Project orders:
-${JSON.stringify(orders)}
+Instructions:
+1. When asked about an order's process, stage, or progress:
+   - Identify the exact order from the data.
+   - State clearly which CURRENT ACTIVE STAGE or PROCESS it is running in (e.g. "Cutting", "Sewing", "Trims Plan", "Lab Dip Approval").
+   - Mention the department handling it, the completion progress (e.g., 6 of 34 stages done), and any delays or bottleneck reasons flagged.
+2. Always output the exact Order ID (e.g. GKT-1054, ST-7788) so the user can click it.
+3. Be concise, direct, and structured with bullet points. Avoid repeating generic boilerplate answers.
+
+Project orders data:
+${JSON.stringify(orders, null, 2)}
 
 User question:
 ${String(message).trim()}`;

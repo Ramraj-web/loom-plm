@@ -3200,10 +3200,14 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
   const onTrackCount = orders.filter(o => o.status === "On Track").length;
   const onTimePct = Math.round((onTrackCount / (totalOrders || 1)) * 100);
 
-  const avgProgress = totalOrders > 0
-    ? orders.reduce((a, o) => a + (o.stages ? o.stages.filter(s => s.status === "done").length / o.stages.length : 0), 0) / totalOrders
-    : 0;
-  const shippedPcs = Math.round(totalQty * avgProgress);
+  // Shipped PCS: only count orders where all stages are 100% completed/done
+  const completedOrdersList = orders.filter(o => {
+    if (o.isDeleted) return false;
+    const stages = o.stages || [];
+    if (stages.length === 0) return false;
+    return stages.every(s => s.status === "done" || s.status === "completed");
+  });
+  const shippedPcs = completedOrdersList.reduce((sum, o) => sum + (Number(o.qty) || 0), 0);
   const grossProfit = (financials?.revenue || 0) - (financials?.cogs || 0);
   const grossMargin = financials?.revenue > 0 ? Math.round((grossProfit / financials.revenue) * 1000) / 10 : 0;
 
@@ -3338,9 +3342,16 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
   const openPOStages = allStages.filter(s => (s.name === "Fabric Booking" || s.name === "Trim Booking") && s.status !== "done");
   const latePOStages = openPOStages.filter(s => s.reason);
 
+  const formatInr = (amount) => {
+    const val = Number(amount) || 0;
+    if (val >= 1e7) return `₹${(val / 1e7).toFixed(2)} Cr`;
+    if (val >= 1e5) return `₹${(val / 1e5).toFixed(2)} L`;
+    return `₹${val.toLocaleString("en-IN")}`;
+  };
+
   const kpis = [
     { label: "Total Orders", value: totalOrders, sub: `${totalQty.toLocaleString()} pcs`, icon: ClipboardList, color: "#378ADD" },
-    { label: "Total Value (USD)", value: `$${((financials?.revenue || 0) / 1e6).toFixed(2)}M`, icon: Landmark, color: "#1F9E8D" },
+    { label: "Total Value (INR)", value: formatInr(financials?.revenue || 0), icon: Landmark, color: "#1F9E8D" },
     { label: "On-Time Shipment %", value: `${onTimePct}%`, icon: Clock, color: "#378ADD" },
     { label: "Overall Order Health", value: `${overallHealth} /100`, icon: Gauge, color: "#E2A83B" },
     { label: "Total Shipped (PCS)", value: shippedPcs.toLocaleString(), icon: Truck, color: "#7F77DD" },
@@ -3683,15 +3694,15 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
       <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 12, marginBottom: 16 }}>
         {/* Financial Overview */}
         <Card>
-          <CardHeader title="FINANCIAL OVERVIEW" sub="YTD — entered by Finance team" />
+          <CardHeader title="FINANCIAL OVERVIEW" sub="YTD (INR) — entered by Finance team" />
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
             {[
-              ["Total Revenue", `$${((financials?.revenue || 0) / 1e6).toFixed(2)}M`, "#0F172A"],
-              ["Total COGS", `$${((financials?.cogs || 0) / 1e6).toFixed(2)}M`, "#0F172A"],
-              ["Gross Profit", `$${(grossProfit / 1e6).toFixed(2)}M`, "#10B981"],
+              ["Total Revenue", formatInr(financials?.revenue || 0), "#0F172A"],
+              ["Total COGS", formatInr(financials?.cogs || 0), "#0F172A"],
+              ["Gross Profit", formatInr(grossProfit || 0), "#10B981"],
               ["Gross Margin", `${grossMargin}%`, "#10B981"],
-              ["EBITDA", `$${((financials?.ebitda || 0) / 1e6).toFixed(2)}M`, "#0F172A"],
-              ["Stock Value", `$${((financials?.stockValue || 0) / 1e6).toFixed(2)}M`, "#0F172A"],
+              ["EBITDA", formatInr(financials?.ebitda || 0), "#0F172A"],
+              ["Stock Value", formatInr(financials?.stockValue || 0), "#0F172A"],
             ].map(([label, val, color]) => (
               <div key={label} style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 8, padding: "10px 12px" }}>
                 <div style={{ fontSize: 10.5, color: "#64748B", marginBottom: 4 }}>{label}</div>
