@@ -8,6 +8,9 @@ export const RESOURCE_SEEDS = {
     { id: "DR-5566", buyer: "Next", country: "United Kingdom", season: "SS26", style: "Dress", qty: 5300, ship: "23 May", risk: "medium", status: "Delayed" },
     { id: "PL-3321", buyer: "Zara", country: "Spain", season: "SS26", style: "Polo", qty: 9100, ship: "28 May", risk: "low", status: "On Track" },
   ],
+  users: [],
+  teams: [],
+  dashboard_rotation: [],
   staff: [
     { id: "staff-arasinth-raja", name: "Arasinth Raja", title: "Manager", dept: "Merchandising", status: "present" },
     { id: "staff-suresh", name: "Suresh", title: "Senior", dept: "Merchandising", status: "present" },

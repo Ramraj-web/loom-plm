@@ -28,7 +28,8 @@ async function get(key, shared = false) {
     if (!res.ok) throw new Error("Storage get failed");
     const data = await res.json();
     if (!data || data.value === null || data.value === undefined) {
-      return null;
+      const local = localStorage.getItem(`storage:${key}`);
+      return local ? { key, value: local, shared } : null;
     }
     try {
       localStorage.setItem(`storage:${key}`, typeof data.value === "string" ? data.value : JSON.stringify(data.value));

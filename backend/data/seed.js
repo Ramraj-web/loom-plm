@@ -1,6 +1,9 @@
 export const RESOURCE_SEEDS = {
   tasks: [],
   orders: [],
+  users: [],
+  teams: [],
+  dashboard_rotation: [],
   staff: [],
   leaveRequests: [],
   financials: [],

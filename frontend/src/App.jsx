@@ -112,6 +112,83 @@ export default function LoomPLM() {
   });
   const [rotation, setRotation] = useState({ enabled: false, intervalMinutes: 2 });
 
+  const syncUsersToBackend = useCallback(async (nextUsers) => {
+    try {
+      const existing = await resourcesApi.list("users");
+      const nextIds = new Set((nextUsers || []).map(user => user.id));
+
+      await Promise.all(
+        (existing || []).filter(user => !nextIds.has(user.id)).map(user => resourcesApi.remove("users", user.id))
+      );
+
+      await Promise.all(
+        (nextUsers || []).map(user => resourcesApi.create("users", user))
+      );
+    } catch (e) {
+      console.warn("Failed to sync users to backend:", e.message);
+    }
+  }, []);
+
+  const syncTeamsToBackend = useCallback(async (nextTeams) => {
+    try {
+      const existing = await resourcesApi.list("teams");
+      const nextIds = new Set((nextTeams || []).map(team => team.id));
+
+      await Promise.all(
+        (existing || []).filter(team => !nextIds.has(team.id)).map(team => resourcesApi.remove("teams", team.id))
+      );
+
+      await Promise.all(
+        (nextTeams || []).map(team => resourcesApi.create("teams", team))
+      );
+    } catch (e) {
+      console.warn("Failed to sync teams to backend:", e.message);
+    }
+  }, []);
+
+  const syncRotationToBackend = useCallback(async (nextRotation) => {
+    try {
+      const existing = await resourcesApi.list("dashboard_rotation");
+      await Promise.all(
+        (existing || []).map(record => resourcesApi.remove("dashboard_rotation", record.id || record.key))
+      );
+      await resourcesApi.create("dashboard_rotation", { id: "dashboard_rotation", ...nextRotation });
+    } catch (e) {
+      console.warn("Failed to sync dashboard rotation to backend:", e.message);
+    }
+  }, []);
+
+  const loadAccessState = useCallback(async () => {
+    try {
+      const [userRes, teamRes, rotationRes] = await Promise.all([
+        resourcesApi.list("users"),
+        resourcesApi.list("teams"),
+        resourcesApi.list("dashboard_rotation")
+      ]);
+
+      if (Array.isArray(userRes) && userRes.length) {
+        const existingIds = new Set(userRes.map(user => user.id));
+        setUsers(prev => {
+          const next = [...userRes, ...DEFAULT_USERS.filter(user => !existingIds.has(user.id) && !prev.some(item => item.id === user.id))];
+          return next;
+        });
+      }
+
+      if (Array.isArray(teamRes) && teamRes.length) {
+        const existingNames = new Set(teamRes.map(team => team.name.toLowerCase()));
+        const missingDefaults = DEFAULT_TEAMS.filter(team => !existingNames.has(team.name.toLowerCase()));
+        setTeams([...teamRes, ...missingDefaults]);
+      }
+
+      if (Array.isArray(rotationRes) && rotationRes.length) {
+        const rotationRecord = rotationRes[0];
+        setRotation(prev => ({ ...prev, ...rotationRecord }));
+      }
+    } catch (e) {
+      console.warn("Failed to load access state from backend:", e.message);
+    }
+  }, []);
+
   // Global Theme Effect
   useEffect(() => {
     try {
@@ -135,46 +212,19 @@ export default function LoomPLM() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      try {
-        const [userRes, teamRes, rotationRes] = await Promise.all([
-          window.storage?.get("users", true), window.storage?.get("teams", true), window.storage?.get("dashboard_rotation", true)
-        ]);
-        if (cancelled) return;
-        if (userRes?.value) {
-          try {
-            const parsed = JSON.parse(userRes.value);
-            if (Array.isArray(parsed) && parsed.length) {
-              const existingIds = new Set(parsed.map(user => user.id));
-              setUsers([...parsed, ...DEFAULT_USERS.filter(user => !existingIds.has(user.id))]);
-            }
-          } catch (e) { }
-        }
-        if (teamRes?.value) {
-          try {
-            const parsed = JSON.parse(teamRes.value);
-            if (Array.isArray(parsed) && parsed.length) {
-              // Merge any missing default department teams so user never has to type them manually
-              const existingNames = new Set(parsed.map(t => t.name.toLowerCase()));
-              const missingDefaults = DEFAULT_TEAMS.filter(dt => !existingNames.has(dt.name.toLowerCase()));
-              setTeams([...parsed, ...missingDefaults]);
-            }
-          } catch (e) { }
-        }
-        if (rotationRes?.value) { try { setRotation(prev => ({ ...prev, ...JSON.parse(rotationRes.value) })); } catch (e) { } }
+      await loadAccessState();
+      if (!cancelled) {
         setAccessLoaded(true);
-      } catch (e) { }
+      }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [loadAccessState]);
 
-  useEffect(() => { if (accessLoaded && window.storage) window.storage.set("users", JSON.stringify(users), true); }, [users, accessLoaded]);
   useEffect(() => {
-    if (accessLoaded && window.storage) window.storage.set("teams", JSON.stringify(teams), true);
     if (activeUser) {
       setRole(roleForUser(activeUser, teams));
     }
-  }, [teams, accessLoaded, activeUser]);
-  useEffect(() => { if (accessLoaded && window.storage) window.storage.set("dashboard_rotation", JSON.stringify(rotation), true); }, [rotation, accessLoaded]);
+  }, [teams, activeUser]);
 
   useEffect(() => {
     if (!rotation.enabled || !activeUser || users.length < 2) return undefined;
@@ -197,6 +247,8 @@ export default function LoomPLM() {
   const refreshAllData = useCallback(async () => {
     setIsRefreshing(true);
     try {
+      await loadAccessState();
+
       const backendOrders = await resourcesApi.list("orders", "?all=true");
       if (Array.isArray(backendOrders)) {
         // Filter out dummy demo seeds
@@ -666,6 +718,21 @@ export default function LoomPLM() {
     setView(nextRole.dept === "Executive" || nextRole.dept === "Executive (MD)" ? "executiveOverview" : "dashboard");
     try { localStorage.setItem("loom_active_user", JSON.stringify(user)); } catch (e) { }
   };
+
+  const handleUsersChange = useCallback((nextUsers) => {
+    setUsers(nextUsers);
+    syncUsersToBackend(nextUsers);
+  }, [syncUsersToBackend]);
+
+  const handleTeamsChange = useCallback((nextTeams) => {
+    setTeams(nextTeams);
+    syncTeamsToBackend(nextTeams);
+  }, [syncTeamsToBackend]);
+
+  const handleRotationChange = useCallback((nextRotation) => {
+    setRotation(nextRotation);
+    syncRotationToBackend(nextRotation);
+  }, [syncRotationToBackend]);
 
   const handleLogout = () => {
     setActiveUser(null);
@@ -2445,7 +2512,7 @@ export default function LoomPLM() {
     );
   } else if (view === "settings") {
     content = (
-      <UserAccessPage users={users} teams={teams} onChangeUsers={setUsers} onChangeTeams={setTeams} rotation={rotation} onChangeRotation={setRotation} />
+      <UserAccessPage users={users} teams={teams} onChangeUsers={handleUsersChange} onChangeTeams={handleTeamsChange} rotation={rotation} onChangeRotation={handleRotationChange} />
     );
   } else if (isExecutive) {
     content = (
