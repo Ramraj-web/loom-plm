@@ -113,6 +113,15 @@ export default function LoomPLM() {
   });
   const [rotation, setRotation] = useState({ enabled: false, intervalMinutes: 2 });
 
+  const uniqueUsersById = usersList => {
+    const seen = new Set();
+    return (usersList || []).filter(user => {
+      if (!user?.id || seen.has(user.id)) return false;
+      seen.add(user.id);
+      return true;
+    });
+  };
+
   const syncUsersToBackend = useCallback(async (nextUsers) => {
     try {
       const existing = await resourcesApi.list("users");
@@ -173,10 +182,11 @@ export default function LoomPLM() {
       ]);
 
       if (Array.isArray(userRes) && userRes.length) {
-        const existingIds = new Set(userRes.map(user => user.id));
+        const loadedUsers = uniqueUsersById(userRes);
+        const existingIds = new Set(loadedUsers.map(user => user.id));
         setUsers(prev => {
-          const next = [...userRes, ...DEFAULT_USERS.filter(user => !existingIds.has(user.id) && !prev.some(item => item.id === user.id))];
-          return next;
+          const next = [...loadedUsers, ...DEFAULT_USERS.filter(user => !existingIds.has(user.id))];
+          return uniqueUsersById(next);
         });
       }
 
