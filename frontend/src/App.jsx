@@ -480,9 +480,9 @@ export default function LoomPLM() {
     }
   }, []);
 
-  // Initial load and periodic 5-minute auto-refresh (Task 2)
+  // Periodic full refresh only for authenticated users; module-specific live data is loaded on navigation.
   useEffect(() => {
-    refreshAllData();
+    if (!activeUser) return undefined;
 
     // 5 minutes = 5 * 60 * 1000 = 300,000 ms
     const autoRefreshInterval = setInterval(() => {
@@ -490,7 +490,179 @@ export default function LoomPLM() {
     }, 5 * 60 * 1000);
 
     return () => clearInterval(autoRefreshInterval);
-  }, [refreshAllData]);
+  }, [refreshAllData, activeUser]);
+
+  useEffect(() => {
+    if (!activeUser) return undefined;
+
+    let cancelled = false;
+
+    const syncNotifications = async () => {
+      try {
+        const dbNotifs = await resourcesApi.list("notifications", "?all=true");
+        if (!Array.isArray(dbNotifs)) return;
+
+        setNotifications(prev => {
+          const map = new Map();
+          dbNotifs.forEach(n => {
+            const key = n.id || n.eventKey;
+            if (key) map.set(key, n);
+          });
+
+          prev.forEach(n => {
+            const key = n.id || n.eventKey;
+            if (key && !map.has(key)) map.set(key, n);
+          });
+
+          return Array.from(map.values()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        });
+      } catch (e) {
+        if (!cancelled) {
+          console.warn("Notification polling failed:", e.message);
+        }
+      }
+    };
+
+    syncNotifications();
+    const pollInterval = setInterval(syncNotifications, 15000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(pollInterval);
+    };
+  }, [activeUser]);
+
+  const loadViewData = useCallback(async (targetView) => {
+    if (!activeUser) return;
+
+    try {
+      if (["dashboard", "orders", "tasks", "approvals", "departments", "calendar", "reports", "compliance", "supplierPerformance", "finance", "myDepartment"].includes(targetView)) {
+        const backendOrders = await resourcesApi.list("orders", "?all=true");
+        if (Array.isArray(backendOrders)) {
+          const realOrders = backendOrders.filter(bo => !["GKT-1054", "ST-7788", "JKT-2231", "TR-8899", "DR-5566", "PL-3321"].includes(bo.id));
+          setOrders(prev => {
+            return realOrders.map((bo) => {
+              const existing = prev.find(p => p.id === bo.id);
+              return {
+                ...existing,
+                ...bo,
+                completed: bo.completed ?? existing?.completed ?? false,
+                isDeleted: bo.isDeleted ?? existing?.isDeleted ?? false,
+                completedAt: bo.completedAt || existing?.completedAt || null,
+                deletedAt: bo.deletedAt || existing?.deletedAt || null,
+                template: bo.template || existing?.template || "90",
+                costingTemplate: bo.costingTemplate || existing?.costingTemplate || "fabric",
+                costingRows: bo.costingRows || existing?.costingRows || buildCostingRows(bo.costingTemplate || existing?.costingTemplate || "fabric"),
+                vapCount: bo.vapCount ?? existing?.vapCount ?? 1,
+                shippedQty: bo.shippedQty ?? existing?.shippedQty ?? 0,
+                plannedCost: bo.plannedCost ?? existing?.plannedCost ?? 0,
+                actualCost: bo.actualCost ?? existing?.actualCost ?? 0,
+                stages: (bo.stages && bo.stages.length === 34)
+                  ? bo.stages
+                  : (existing?.stages && existing.stages.length === 34)
+                    ? existing.stages
+                    : makeStages(bo.template || existing?.template || "90", 0, null),
+                preProd: bo.preProd || existing?.preProd || initPreProd(),
+              };
+            });
+          });
+        }
+      }
+
+      if (["tasks", "supplierPerformance"].includes(targetView)) {
+        const dbTasks = await resourcesApi.list("tasks");
+        if (Array.isArray(dbTasks)) {
+          setCustomTasks(dbTasks.filter(t => t.isDeleted !== true));
+        }
+      }
+
+      if (targetView === "notifications") {
+        const dbNotifs = await resourcesApi.list("notifications", "?all=true");
+        if (Array.isArray(dbNotifs)) {
+          setNotifications(prev => {
+            const map = new Map();
+            dbNotifs.forEach(n => {
+              const key = n.id || n.eventKey;
+              if (key) map.set(key, n);
+            });
+            prev.forEach(n => {
+              const key = n.id || n.eventKey;
+              if (key && !map.has(key)) map.set(key, n);
+            });
+            return Array.from(map.values()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+          });
+        }
+      }
+
+      if (targetView === "compliance") {
+        const [dbCerts, dbCompliances] = await Promise.all([
+          resourcesApi.list("certifications", "?all=true"),
+          resourcesApi.list("compliances", "?all=true")
+        ]);
+
+        if (Array.isArray(dbCerts) && dbCerts.length > 0) {
+          setCertifications(dbCerts);
+        }
+
+        if (Array.isArray(dbCompliances) && dbCompliances.length > 0) {
+          setCompliances(dbCompliances.filter(c => c.id !== "comp-2" && !c.name?.toLowerCase().includes("buyer chemical restriction")));
+        }
+      }
+
+      if (targetView === "debitNotes") {
+        const dbDebit = await resourcesApi.list("debitNotes");
+        if (Array.isArray(dbDebit) && dbDebit.length > 0) {
+          setDebitNotes(dbDebit.filter(d => d.isDeleted !== true));
+        }
+      }
+
+      if (targetView === "capas") {
+        const dbCapas = await resourcesApi.list("capas");
+        if (Array.isArray(dbCapas) && dbCapas.length > 0) {
+          setCapas(dbCapas.filter(c => c.isDeleted !== true));
+        }
+      }
+
+      if (targetView === "attendance") {
+        const [dbStaff, dbLeave] = await Promise.all([
+          resourcesApi.list("staff"),
+          resourcesApi.list("leaveRequests")
+        ]);
+
+        if (Array.isArray(dbStaff) && dbStaff.length > 0) {
+          const active = dbStaff.filter(s => s.isDeleted !== true);
+          const merged = [...STAFF_LIST];
+          active.forEach(as => {
+            if (!merged.some(m => m.name === as.name)) {
+              merged.push({ name: as.name, title: as.title || "Staff", dept: as.dept || "Merchandising" });
+            }
+          });
+          setRoster(merged.filter(s => s.name && s.name !== "—"));
+        }
+
+        if (Array.isArray(dbLeave) && dbLeave.length > 0) {
+          setLeaveRequests(dbLeave.filter(l => l.isDeleted !== true));
+        }
+      }
+
+      if (targetView === "supplierPerformance") {
+        const [dbSuppliers, dbSupplierWork] = await Promise.all([
+          resourcesApi.list("suppliers"),
+          resourcesApi.list("supplierWork")
+        ]);
+
+        if (Array.isArray(dbSuppliers) && dbSuppliers.length > 0) {
+          setSuppliers(dbSuppliers.filter(s => s.isDeleted !== true));
+        }
+
+        if (Array.isArray(dbSupplierWork) && dbSupplierWork.length > 0) {
+          setSupplierWork(dbSupplierWork.filter(w => w.isDeleted !== true));
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to load module data:", e.message);
+    }
+  }, [activeUser]);
 
   // Central Notification Dispatcher with Deduplication
   const pushNotification = (notif) => {
@@ -1100,12 +1272,7 @@ export default function LoomPLM() {
       completedAt: null,
       deletedAt: null,
     };
-    setOrders(prev => {
-      if (prev.some(o => o.id === fullOrder.id)) {
-        return prev.map(o => o.id === fullOrder.id ? { ...o, ...fullOrder } : o);
-      }
-      return [fullOrder, ...prev];
-    });
+    setOrders(prev => [fullOrder, ...prev]);
     try {
       resourcesApi.create("orders", fullOrder).catch(err => {
         console.warn("Error creating order:", err.message);
@@ -1783,7 +1950,12 @@ export default function LoomPLM() {
     });
   };
 
-  const navigate = (key) => { setView(key); };
+  const navigate = (key) => {
+    setView(key);
+    if (activeUser) {
+      loadViewData(key);
+    }
+  };
 
   const openOrder = (id) => {
     setSelectedId(id);

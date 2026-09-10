@@ -151,16 +151,11 @@ router.post("/:resource", async (req, res, next) => {
     const collection = getResourceCollection();
     if (collection) {
       delete record._id;
-      await collection.replaceOne({ resource, id: recordId }, { resource, ...record }, { upsert: true });
+      await collection.insertOne({ resource, ...record });
     } else {
       const db = readDB();
       if (!db[resource]) db[resource] = [];
-      const existingIdx = db[resource].findIndex(item => String(item.id) === String(recordId));
-      if (existingIdx >= 0) {
-        db[resource][existingIdx] = record;
-      } else {
-        db[resource] = [record, ...(db[resource] || [])];
-      }
+      db[resource] = [record, ...(db[resource] || [])];
       writeDB(db);
     }
     res.status(201).json(record);

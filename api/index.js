@@ -460,6 +460,17 @@ async function getMongoCollections() {
 
     const storage = cachedDb.collection("storage");
     const resources = cachedDb.collection("resources");
+
+    const existingIndexes = await resources.listIndexes().toArray();
+    for (const index of existingIndexes) {
+      if (index.name === "_id_") continue;
+      try {
+        await resources.dropIndex(index.name);
+      } catch (e) {
+        // Ignore stale or missing indexes.
+      }
+    }
+    await resources.createIndex({ resource: 1, id: 1 });
     
     return { resources, storage };
   } catch (err) {
@@ -603,7 +614,7 @@ export default async function handler(req, res) {
         if (mongoCols?.resources) {
           try {
             delete record._id;
-            await mongoCols.resources.replaceOne({ resource, id: recordId }, { resource, ...record }, { upsert: true });
+            await mongoCols.resources.insertOne({ resource, ...record });
             return res.status(201).json(record);
           } catch (e) {
             console.error("Mongo resource POST error:", e.message);

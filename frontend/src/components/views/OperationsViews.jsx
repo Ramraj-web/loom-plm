@@ -387,7 +387,6 @@ export function OrdersPage({
             zIndex: 9999,
             padding: 16
           }}
-          onClick={() => setShowAddModal(false)}
         >
           <div
             style={{
