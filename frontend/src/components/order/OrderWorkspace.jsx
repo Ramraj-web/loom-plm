@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Calendar, CheckCircle2, Clock, Circle, Lock, ChevronDown, Upload, Send, Zap,
   AlertTriangle, FileText, ClipboardList, Package, Layers, ShieldCheck, Factory, Truck, TrendingUp,
@@ -13,12 +13,246 @@ import {
   Card, CardHeader, BackLink, statusPill, riskDot, gatingApproval, renderWithMentions
 } from "../common/CommonUI.jsx";
 import { AssignWorkModal } from "../views/InsightsViews.jsx";
+import { OrderStageAlignmentModal } from "../views/OperationsViews.jsx";
 import { OutsourcingQuotationPanel } from "./OutsourcingQuotationPanel.jsx";
 import { ProductionTab } from "./ProductionTab.jsx";
 import { InspectionTab } from "./InspectionTab.jsx";
 import { CertificatesTab } from "./CertificatesTab.jsx";
 
-function StageNode({ stage, idx, onCycle, onReason, onSupplierChange, lockedBy, suppliers = [], canEdit = true, roleDept = "" }) {
+export function DisputeStageModal({
+  isOpen,
+  onClose,
+  stage,
+  stageIdx,
+  order,
+  people = [],
+  onSubmitDispute,
+  currentUserName = "User"
+}) {
+  if (!isOpen || !stage) return null;
+  const initialTagged = stage.completedBy && stage.completedBy !== "Unassigned" ? stage.completedBy : "";
+  const [taggedUser, setTaggedUser] = useState(initialTagged);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState("");
+
+  const allUsersList = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+    (people || []).forEach(p => {
+      const uName = p.username || p.name;
+      if (uName && !seen.has(uName.toLowerCase())) {
+        seen.add(uName.toLowerCase());
+        list.push({
+          id: p.id || uName,
+          name: p.name || p.username,
+          username: p.username || p.name,
+          dept: p.dept || p.teamName || "Team"
+        });
+      }
+    });
+    (ALL_PEOPLE || []).forEach(n => {
+      if (n && n !== "—" && !seen.has(n.toLowerCase())) {
+        seen.add(n.toLowerCase());
+        list.push({ id: n, name: n, username: n.toLowerCase().replace(/\s+/g, ""), dept: "Staff" });
+      }
+    });
+    return list;
+  }, [people]);
+
+  const query = taggedUser.startsWith("@") ? taggedUser.slice(1).toLowerCase().trim() : taggedUser.toLowerCase().trim();
+  const suggestions = allUsersList.filter(u => {
+    if (!query) return true;
+    return u.username.toLowerCase().includes(query) ||
+           u.name.toLowerCase().includes(query) ||
+           (u.dept && u.dept.toLowerCase().includes(query));
+  }).slice(0, 8);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!reason.trim()) {
+      setError("Please specify the reason why this stage was falsely completed.");
+      return;
+    }
+    const cleanTagged = taggedUser.trim().replace(/^@/, "");
+    if (!cleanTagged) {
+      setError("Please mention or tag the responsible user.");
+      return;
+    }
+    onSubmitDispute({
+      orderId: order.id,
+      orderStyle: order.style,
+      stageIdx,
+      stageName: stage.name,
+      stageDept: stage.dept,
+      completedBy: stage.completedBy || "Unassigned",
+      taggedUser: cleanTagged,
+      reason: reason.trim(),
+      reportedBy: currentUserName,
+    });
+    onClose();
+  };
+
+  return (
+    <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(15, 23, 42, 0.65)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: 16 }}>
+      <div style={{ background: "#fff", borderRadius: 14, maxWidth: 520, width: "100%", padding: 24, boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 34, height: 34, borderRadius: 8, background: "#FEE2E2", display: "flex", alignItems: "center", justifyContent: "center", color: "#DC2626" }}>
+              <AlertTriangle size={19} />
+            </div>
+            <div>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#0F172A" }}>Report False Stage Completion</h3>
+              <div style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>
+                Order #{order.id} ({order.style}) · Stage: {stage.name}
+              </div>
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#94A3B8" }}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 12 }}>
+            <div style={{ color: "#64748B" }}>Owning Department: <b style={{ color: "#1E293B" }}>{stage.dept}</b></div>
+            <div style={{ color: "#64748B", marginTop: 4 }}>
+              Completed By: <b style={{ color: "#1E293B" }}>{stage.completedBy || "Unassigned"}</b> {stage.completedAt && `on ${new Date(stage.completedAt).toLocaleDateString()}`}
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 14, position: "relative" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: "#334155" }}>
+                Mention / Tag Responsible False User (@) *
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  setTaggedUser("@");
+                  setShowSuggestions(true);
+                }}
+                style={{
+                  background: "#EDE9FE",
+                  border: "none",
+                  borderRadius: 4,
+                  padding: "2px 8px",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: "#534AB7",
+                  cursor: "pointer"
+                }}
+              >
+                + Browse Users (@)
+              </button>
+            </div>
+            <input
+              type="text"
+              required
+              value={taggedUser}
+              onFocus={() => setShowSuggestions(true)}
+              onChange={e => {
+                setTaggedUser(e.target.value);
+                setShowSuggestions(true);
+              }}
+              placeholder="Type @ to search users or select from list"
+              style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid #CBD5E1", fontSize: 13, boxSizing: "border-box" }}
+            />
+            {showSuggestions && suggestions.length > 0 && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "100%",
+                  left: 0,
+                  right: 0,
+                  zIndex: 30,
+                  background: "#FFFFFF",
+                  borderRadius: 8,
+                  border: "1px solid #CBD5E1",
+                  boxShadow: "0 10px 25px -5px rgba(0,0,0,0.18)",
+                  marginTop: 4,
+                  maxHeight: 180,
+                  overflowY: "auto"
+                }}
+              >
+                <div style={{ padding: "6px 10px", fontSize: 10.5, fontWeight: 700, color: "#64748B", background: "#F8FAFC", borderBottom: "1px solid #F1F5F9" }}>
+                  SELECT USER TO TAG:
+                </div>
+                {suggestions.map(u => (
+                  <div
+                    key={u.id}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      setTaggedUser(`@${u.username || u.name}`);
+                      setShowSuggestions(false);
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "8px 12px",
+                      cursor: "pointer",
+                      borderBottom: "1px solid #F8FAFC",
+                      fontSize: 12
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = "#F1F5F9"}
+                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                  >
+                    <div>
+                      <span style={{ fontWeight: 700, color: "#1E293B" }}>@{u.username || u.name}</span>
+                      {u.name && u.name !== u.username && (
+                        <span style={{ color: "#64748B", marginLeft: 6 }}>({u.name})</span>
+                      )}
+                    </div>
+                    <span style={{ fontSize: 10.5, color: "#4F46E5", background: "#EEF2FF", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>
+                      {u.dept}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ fontSize: 11, color: "#64748B", marginTop: 4 }}>
+              This user will be logged in the dispute registry, notified directly, and penalized -10 pts in the MD Dashboard.
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#334155", marginBottom: 6 }}>
+              Reason for Complaint / False Completion Details *
+            </label>
+            <textarea
+              rows={4}
+              required
+              value={reason}
+              onChange={e => { setReason(e.target.value); setError(""); }}
+              placeholder="Describe why this stage was falsely committed (e.g. Trims Plan marked complete without BOM verification, lab dip samples not actually approved, etc.)"
+              style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid #CBD5E1", fontSize: 13, boxSizing: "border-box", resize: "vertical" }}
+            />
+            {error && <div style={{ color: "#DC2626", fontSize: 11.5, marginTop: 4 }}>{error}</div>}
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid #CBD5E1", background: "#fff", fontSize: 12.5, fontWeight: 600, color: "#64748B", cursor: "pointer" }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              style={{ padding: "8px 18px", borderRadius: 8, border: "none", background: "#DC2626", fontSize: 12.5, fontWeight: 600, color: "#fff", cursor: "pointer" }}
+            >
+              Submit Complaint to MD & Admin
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function StageNode({ stage, idx, onCycle, onReason, onSupplierChange, onOpenDispute, lockedBy, suppliers = [], canEdit = true, roleDept = "" }) {
   const [open, setOpen] = useState(false);
   const locked = !!lockedBy;
   const isAllowedToEdit = !locked && canEdit;
@@ -36,10 +270,14 @@ function StageNode({ stage, idx, onCycle, onReason, onSupplierChange, lockedBy, 
     ? `Locked until ${lockedBy} is approved`
     : !canEdit
     ? `Only ${stage.dept} department can complete this stage (You are in: ${roleDept})`
-    : "Click to change status (Pending → In Progress → Done)";
+    : stage.status === "done"
+    ? "Stage completed (Stays completed; use 'Report False' to dispute)"
+    : stage.status === "in_progress"
+    ? "Click to mark as Done"
+    : "Click to start (Pending → In Progress)";
 
   return (
-    <div style={{ flex: "0 0 128px", minWidth: 128, position: "relative", opacity: locked ? 0.6 : !canEdit ? 0.75 : 1 }}>
+    <div style={{ flex: "0 0 134px", minWidth: 134, position: "relative", opacity: locked ? 0.6 : !canEdit ? 0.75 : 1 }}>
       <div style={{ display: "flex", alignItems: "center" }}>
         <div
           onClick={isAllowedToEdit ? () => onCycle(idx) : undefined}
@@ -75,45 +313,79 @@ function StageNode({ stage, idx, onCycle, onReason, onSupplierChange, lockedBy, 
           <Lock size={9} /> Needs {lockedBy}
         </div>
       )}
-      {!locked && stage.status !== "pending" && (
-        <div style={{ fontSize: 10.5, color: "#1F9E8D", marginTop: 2, fontWeight: 500 }}>
-          {stage.assignee && stage.assignee !== "Unassigned" ? stage.assignee : "Assigned"}
+      {!locked && stage.status === "done" && (
+        <div style={{ marginTop: 4 }}>
+          <div style={{ fontSize: 10, color: "#1F9E8D", fontWeight: 600, display: "flex", alignItems: "center", gap: 3 }}>
+            <CheckCircle2 size={10} color="#1F9E8D" /> Done
+          </div>
+          {stage.completedBy && (
+            <div style={{ fontSize: 9.5, color: "#64748B", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={`Completed by ${stage.completedBy}`}>
+              by {stage.completedBy}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onOpenDispute && onOpenDispute(stage, idx); }}
+            style={{
+              marginTop: 4,
+              background: stage.disputed ? "#FEF2F2" : "#FFF7ED",
+              color: stage.disputed ? "#DC2626" : "#C2410C",
+              border: `1px solid ${stage.disputed ? "#FCA5A5" : "#FDBA74"}`,
+              borderRadius: 5,
+              padding: "2px 6px",
+              fontSize: 9.5,
+              fontWeight: 600,
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 3
+            }}
+            title="Report false stage completion to MD & Admin"
+          >
+            <AlertTriangle size={9} />
+            {stage.disputed ? "Disputed" : "Report False"}
+          </button>
         </div>
       )}
       {!locked && stage.status === "in_progress" && (
-        <div style={{ marginTop: 6 }}>
-          <button
-            onClick={() => setOpen(!open)}
-            style={{
-              fontSize: 10.5, background: stage.reason ? "#FCEBEB" : "#F4F4F6",
-              color: stage.reason ? "#791F1F" : "#565A66", border: "none",
-              padding: "3px 7px", borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", gap: 4
-            }}
-          >
-            {stage.reason || "Flag delay"} <ChevronDown size={10} />
-          </button>
-          {open && (
-            <div style={{ position: "absolute", top: "100%", left: 0, background: "#fff", border: "1px solid #E7E8ED", borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.08)", zIndex: 10, minWidth: 170, marginTop: -24 }}>
-              {REASONS.map(r => (
+        <>
+          <div style={{ fontSize: 10.5, color: "#E2A83B", marginTop: 2, fontWeight: 500 }}>
+            {stage.assignee && stage.assignee !== "Unassigned" ? stage.assignee : "In Progress"}
+          </div>
+          <div style={{ marginTop: 6 }}>
+            <button
+              onClick={() => setOpen(!open)}
+              style={{
+                fontSize: 10.5, background: stage.reason ? "#FCEBEB" : "#F4F4F6",
+                color: stage.reason ? "#791F1F" : "#565A66", border: "none",
+                padding: "3px 7px", borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", gap: 4
+              }}
+            >
+              {stage.reason || "Flag delay"} <ChevronDown size={10} />
+            </button>
+            {open && (
+              <div style={{ position: "absolute", top: "100%", left: 0, background: "#fff", border: "1px solid #E7E8ED", borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.08)", zIndex: 10, minWidth: 170, marginTop: -24 }}>
+                {REASONS.map(r => (
+                  <div
+                    key={r}
+                    onClick={() => { onReason(idx, r); setOpen(false); }}
+                    style={{ padding: "8px 12px", fontSize: 12.5, cursor: "pointer", color: "#1B2130" }}
+                    onMouseEnter={e => e.currentTarget.style.background = "#F7F7F9"}
+                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                  >
+                    {r}
+                  </div>
+                ))}
                 <div
-                  key={r}
-                  onClick={() => { onReason(idx, r); setOpen(false); }}
-                  style={{ padding: "8px 12px", fontSize: 12.5, cursor: "pointer", color: "#1B2130" }}
-                  onMouseEnter={e => e.currentTarget.style.background = "#F7F7F9"}
-                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                  onClick={() => { onReason(idx, null); setOpen(false); }}
+                  style={{ padding: "8px 12px", fontSize: 12.5, cursor: "pointer", color: "#8A8D98", borderTop: "1px solid #F0F0F2" }}
                 >
-                  {r}
+                  Clear
                 </div>
-              ))}
-              <div
-                onClick={() => { onReason(idx, null); setOpen(false); }}
-                style={{ padding: "8px 12px", fontSize: 12.5, cursor: "pointer", color: "#8A8D98", borderTop: "1px solid #F0F0F2" }}
-              >
-                Clear
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        </>
       )}
     </div>
   );
@@ -1078,7 +1350,8 @@ function OrderHighlightsCard({ order, role }) {
 function DocumentsPanel({
   order, role, costingContent, preProdContent, quotationContent, complianceContent,
   onUpdateShippedQty, onAddProductionLog, onDeleteProductionLog, onUpdateInspectionData, onUpdateCertificates,
-  people = []
+  people = [],
+  onPushNotification
 }) {
   const [activeTab, setActiveTab] = useState("Files");
   const [docs, setDocs] = useState({});
@@ -1188,7 +1461,8 @@ function DocumentsPanel({
 
   async function sendMessage() {
     if (!draft.trim()) return;
-    const msg = { id: Date.now(), author: uploaderName, text: draft.trim(), ts: new Date().toLocaleString(), stage: STAGE_CHAT_TABS.includes(activeTab) ? activeTab : null };
+    const text = draft.trim();
+    const msg = { id: Date.now(), author: uploaderName, text, ts: new Date().toLocaleString(), stage: STAGE_CHAT_TABS.includes(activeTab) ? activeTab : null };
     const next = [...messages, msg];
     setMessages(next);
     setDraft("");
@@ -1200,27 +1474,72 @@ function DocumentsPanel({
         localStorage.setItem(`chat:${order.id}`, JSON.stringify(next));
       }
     } catch (e) {}
+
+    // Dispatch direct user notifications for each @mentioned user!
+    if (onPushNotification) {
+      const mentionMatches = text.match(/@([a-zA-Z0-9_.-]+)/g);
+      if (mentionMatches && mentionMatches.length > 0) {
+        const uniqueMentions = Array.from(new Set(mentionMatches.map(m => m.replace(/^@/, "").trim())));
+        uniqueMentions.forEach(uTag => {
+          onPushNotification({
+            eventKey: `chat-mention-${order.id}-${msg.id}-${uTag}`,
+            type: "task",
+            title: `Mentioned in Order #${order.id} Chat`,
+            message: `@${uploaderName} mentioned you in Order #${order.id} (${order.style}): "${text}"`,
+            relatedModule: "orders",
+            relatedId: order.id,
+            targetUser: uTag,
+            priority: "high"
+          });
+        });
+      }
+    }
   }
 
   function handleDraftChange(e) {
     const val = e.target.value;
     setDraft(val);
-    const m = val.match(/@(\w*)$/);
-    setMentionQuery(m ? m[1] : null);
+    const m = val.match(/(?:^|\s)@([a-zA-Z0-9_.-]*)$/);
+    setMentionQuery(m !== null ? m[1] : null);
   }
 
-  function insertMention(name) {
-    const first = name.split(" ")[0];
-    setDraft(d => d.replace(/@(\w*)$/, `@${first} `));
+  function insertMention(u) {
+    const userTag = `@${u.username || u.name} `;
+    setDraft(d => d.replace(/(?:^|\s)@([a-zA-Z0-9_.-]*)$/, match => {
+      return match.startsWith(" ") ? ` ${userTag}` : userTag;
+    }));
     setMentionQuery(null);
   }
 
-  const mentionPeople = Array.from(new Set([
-    ...ALL_PEOPLE,
-    ...people.map(person => person.name || person.username).filter(Boolean)
-  ]));
+  const allUsersList = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+    (people || []).forEach(p => {
+      const uName = p.username || p.name;
+      if (uName && !seen.has(uName.toLowerCase())) {
+        seen.add(uName.toLowerCase());
+        list.push({
+          id: p.id || uName,
+          name: p.name || p.username,
+          username: p.username || p.name,
+          dept: p.dept || p.teamName || "Team"
+        });
+      }
+    });
+    (ALL_PEOPLE || []).forEach(n => {
+      if (n && n !== "—" && !seen.has(n.toLowerCase())) {
+        seen.add(n.toLowerCase());
+        list.push({ id: n, name: n, username: n.toLowerCase().replace(/\s+/g, ""), dept: "Staff" });
+      }
+    });
+    return list;
+  }, [people]);
+
   const mentionSuggestions = mentionQuery !== null
-    ? mentionPeople.filter(n => n.split(" ")[0].toLowerCase().startsWith(mentionQuery.toLowerCase())).slice(0, 5)
+    ? allUsersList.filter(u => {
+        const q = mentionQuery.toLowerCase();
+        return u.username.toLowerCase().includes(q) || u.name.toLowerCase().includes(q);
+      }).slice(0, 6)
     : [];
 
   const visibleMessages = messages.filter(m => !m.stage || includeStages[m.stage]);
@@ -1509,10 +1828,20 @@ function DocumentsPanel({
         </div>
         <div style={{ borderTop: "1px solid #ECEDF1", padding: "10px 16px", position: "relative" }}>
           {mentionSuggestions.length > 0 && (
-            <div style={{ position: "absolute", bottom: "100%", left: 16, right: 16, background: "#fff", border: "1px solid #ECEDF1", borderRadius: 8, boxShadow: "0 -4px 16px rgba(0,0,0,0.08)", marginBottom: 4 }}>
-              {mentionSuggestions.map(n => (
-                <div key={n} onClick={() => insertMention(n)} style={{ padding: "7px 12px", fontSize: 12.5, cursor: "pointer" }} onMouseEnter={e => e.currentTarget.style.background = "#F7F7F9"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                  {n}
+            <div style={{ position: "absolute", bottom: "100%", left: 16, right: 16, background: "#fff", border: "1px solid #ECEDF1", borderRadius: 8, boxShadow: "0 -6px 20px rgba(0,0,0,0.12)", marginBottom: 6, zIndex: 100, overflow: "hidden" }}>
+              <div style={{ padding: "6px 12px", fontSize: 10.5, fontWeight: 700, color: "#8A8D98", background: "#F8FAFC", borderBottom: "1px solid #F1F5F9" }}>
+                SUGGESTED TEAM MEMBERS (TAG WITH @)
+              </div>
+              {mentionSuggestions.map(u => (
+                <div
+                  key={u.id}
+                  onClick={() => insertMention(u)}
+                  style={{ padding: "8px 12px", fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between" }}
+                  onMouseEnter={e => e.currentTarget.style.background = "#F1F5F9"}
+                  onMouseLeave={e => e.currentTarget.style.background = "#fff"}
+                >
+                  <span style={{ fontWeight: 600, color: "#1E293B" }}>@{u.username} <span style={{ fontWeight: 400, color: "#64748B" }}>({u.name})</span></span>
+                  <span style={{ fontSize: 10.5, color: "#94A3B8" }}>{u.dept}</span>
                 </div>
               ))}
             </div>
@@ -1635,18 +1964,27 @@ export function OrderWorkspace({
   onPreProdSubmit, onPreProdApprove, onUpdateQuotation, onSubmitQuotation,
   onApproveQuotation, onRejectQuotation, onSubmitCosting, onApproveCosting, onRejectCosting,
   certifications = [], compliances = [],
-  suppliers = [], onAssignSupplier, onAssignWork, onAddProductionLog, onDeleteProductionLog, onUpdateInspectionData, onUpdateCertificates, allOrders = [], people = []
+  suppliers = [], onAssignSupplier, onAssignWork, onAddProductionLog, onDeleteProductionLog, onUpdateInspectionData, onUpdateCertificates, allOrders = [], people = [],
+  onReportComplaint,
+  onPushNotification
 }) {
   const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showAlignModal, setShowAlignModal] = useState(false);
+  const [disputeModalData, setDisputeModalData] = useState(null);
   const cuttingIdx = order.stages.findIndex(s => s.name === "Cutting");
   const bulkGateOpen = allPreProdApproved(order);
 
   const cycle = (idx) => {
     if (gatingApproval(order.stages, idx)) return;
     if (cuttingIdx !== -1 && idx >= cuttingIdx && !bulkGateOpen) return;
+    const current = order.stages[idx];
+    if (current && current.status === "done") {
+      // Completed stages stay completed — do not cycle back to pending!
+      return;
+    }
     const stages = order.stages.map((s, i) => {
       if (i !== idx) return s;
-      const next = s.status === "pending" ? "in_progress" : s.status === "in_progress" ? "done" : "pending";
+      const next = s.status === "pending" ? "in_progress" : "done";
       let assignee = s.assignee;
       if (next !== "pending" && (!assignee || assignee === "Unassigned")) {
         const found = firstNamedAssignee(s.dept);
@@ -1697,6 +2035,26 @@ export function OrderWorkspace({
             <option value="90">90-day (standard)</option>
             <option value="120">120-day (dye / print, longer lead time)</option>
           </select>
+          <button
+            type="button"
+            onClick={() => setShowAlignModal(true)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              padding: "5px 12px",
+              borderRadius: 7,
+              border: "1px solid #D6D2F3",
+              background: "#F0EFFB",
+              color: "#534AB7",
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: "pointer"
+            }}
+            title="Reorder and align T&A stages 1 to end based on actual process"
+          >
+            Align & Reorder Stages
+          </button>
         </div>
       </div>
       <div style={{ fontSize: 11, color: "#B0B2BA", margin: "6px 0 16px" }}>
@@ -1707,14 +2065,18 @@ export function OrderWorkspace({
           const gate = gatingApproval(order.stages, i);
           const bulkLocked = !gate && cuttingIdx !== -1 && i >= cuttingIdx && !bulkGateOpen;
           
-          // Strict Department Ownership:
+          // Strict Multi-Department Ownership:
           // Admin, Executive, fullAccess can edit any stage.
-          // Department users can ONLY edit/complete stages belonging to their own department!
+          // Department users can edit/complete stages belonging to ANY of their assigned departments!
+          const userDeptList = Array.isArray(role?.departments) && role.departments.length > 0
+            ? role.departments.map(d => d.toLowerCase())
+            : [(role?.dept || "").toLowerCase()];
+          
           const canEditThisStage = Boolean(
             role?.fullAccess ||
             role?.dept === "Executive" ||
             role?.dept === "Administrators" ||
-            (s.dept && role?.dept && s.dept.toLowerCase() === role.dept.toLowerCase())
+            (s.dept && userDeptList.includes(s.dept.toLowerCase()))
           );
 
           return (
@@ -1725,6 +2087,7 @@ export function OrderWorkspace({
               onCycle={cycle}
               onReason={setReason}
               onSupplierChange={setSupplier}
+              onOpenDispute={(st, index) => setDisputeModalData({ isOpen: true, stage: st, stageIdx: index })}
               lockedBy={gate ? gate.name : bulkLocked ? "Pre-Production sign-off" : null}
               suppliers={suppliers}
               canEdit={canEditThisStage}
@@ -1789,8 +2152,32 @@ export function OrderWorkspace({
         <div>
           <div style={{ fontFamily: "monospace", fontSize: 13, color: "#8A8D98", marginBottom: 4 }}>PO #{order.id}</div>
           <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0, color: "#1B2130" }}>{order.style}</h1>
-          <div style={{ fontSize: 13.5, color: "#565A66", marginTop: 4 }}>
-            {order.buyer} · {order.country} · {order.qty.toLocaleString()} pcs · Ship {order.ship}
+          <div style={{ fontSize: 13.5, color: "#565A66", marginTop: 4, display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+            <span>{order.buyer} · {order.country} · {order.qty.toLocaleString()} pcs · Ship {order.ship}</span>
+            {Array.isArray(order.colorBreakdown) && order.colorBreakdown.length > 0 ? (
+              <div style={{ display: "inline-flex", flexWrap: "wrap", gap: 4, marginLeft: 6 }}>
+                {order.colorBreakdown.map((b, bi) => (
+                  <span
+                    key={bi}
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      background: "#EDE9FE",
+                      color: "#534AB7",
+                      padding: "2px 8px",
+                      borderRadius: 6,
+                      border: "1px solid #D6D2F3"
+                    }}
+                  >
+                    {b.color} {b.size && `(${b.size})`}: {b.qty} pcs
+                  </span>
+                ))}
+              </div>
+            ) : order.color ? (
+              <span style={{ fontSize: 11, background: "#F3F4F6", color: "#374151", padding: "2px 8px", borderRadius: 6, fontWeight: 600 }}>
+                {order.color}
+              </span>
+            ) : null}
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -1850,6 +2237,7 @@ export function OrderWorkspace({
         onUpdateInspectionData={onUpdateInspectionData}
         onUpdateCertificates={onUpdateCertificates}
         people={people}
+        onPushNotification={onPushNotification}
       />
 
       {showAssignModal && (
@@ -1859,6 +2247,40 @@ export function OrderWorkspace({
           prefillOrderId={order.id}
           onClose={() => setShowAssignModal(false)}
           onAssign={onAssignWork}
+        />
+      )}
+
+      {showAlignModal && (
+        <OrderStageAlignmentModal
+          order={order}
+          isOpen={showAlignModal}
+          onClose={() => setShowAlignModal(false)}
+          onSaveStages={(orderId, updatedStages, tmpl) => {
+            if (onSetTemplate && tmpl !== order.template) {
+              onSetTemplate(orderId, tmpl);
+            }
+            if (onUpdateStages) {
+              onUpdateStages(orderId, updatedStages);
+            }
+            setShowAlignModal(false);
+          }}
+        />
+      )}
+
+      {disputeModalData?.isOpen && (
+        <DisputeStageModal
+          isOpen={true}
+          stage={disputeModalData.stage}
+          stageIdx={disputeModalData.stageIdx}
+          order={order}
+          people={people}
+          currentUserName={role?.label || "User"}
+          onClose={() => setDisputeModalData(null)}
+          onSubmitDispute={(complaint) => {
+            if (onReportComplaint) {
+              onReportComplaint(complaint);
+            }
+          }}
         />
       )}
     </div>

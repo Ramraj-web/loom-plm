@@ -1094,8 +1094,8 @@ export function AssignWorkModal({
                   }}
                   style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 12.5 }}
                 >
-                  {orders.filter(o => !o.isDeleted).map(o => (
-                    <option key={o.id} value={o.id}>
+                  {Array.from(new Map((orders || []).filter(o => !o.isDeleted).map(o => [o.id, o])).values()).map((o, idx) => (
+                    <option key={o.primaryId || `${o.id}-${idx}`} value={o.id}>
                       {o.id} · {o.style} ({o.buyer})
                     </option>
                   ))}
@@ -2901,7 +2901,9 @@ export function DebitNotesPage({ orders, notes, onAdd }) {
             <label style={{ fontSize: 11, color: "#8A8D98", display: "block", marginBottom: 4 }}>PO (optional)</label>
             <select value={form.po} onChange={e => set("po", e.target.value)} style={{ width: "100%", padding: "7px 8px", borderRadius: 7, border: "1px solid #E7E8ED", fontSize: 12.5 }}>
               <option value="">—</option>
-              {orders.map(o => <option key={o.id} value={o.id}>{o.id}</option>)}
+              {Array.from(new Map((orders || []).map(o => [o.id, o])).values()).map(o => (
+                <option key={o.primaryId || o.id} value={o.id}>{o.id}</option>
+              ))}
             </select>
           </div>
           <div>
@@ -2978,7 +2980,9 @@ export function CapasPage({ orders, capas, onAdd, onCycleStatus }) {
             <label style={{ fontSize: 11, color: "#8A8D98", display: "block", marginBottom: 4 }}>PO (optional)</label>
             <select value={form.po} onChange={e => set("po", e.target.value)} style={{ width: "100%", padding: "7px 8px", borderRadius: 7, border: "1px solid #E7E8ED", fontSize: 12.5 }}>
               <option value="">—</option>
-              {orders.map(o => <option key={o.id} value={o.id}>{o.id}</option>)}
+              {Array.from(new Map((orders || []).map(o => [o.id, o])).values()).map(o => (
+                <option key={o.primaryId || o.id} value={o.id}>{o.id}</option>
+              ))}
             </select>
           </div>
           <div>
@@ -3025,7 +3029,7 @@ export function CapasPage({ orders, capas, onAdd, onCycleStatus }) {
   );
 }
 
-export function EmployeePerformancePanel({ orders = [], roster = [], attendance = {}, customTasks = [], leaveRequests = [], users = [], teams = [], onNavigate, onBack }) {
+export function EmployeePerformancePanel({ orders = [], roster = [], attendance = {}, customTasks = [], leaveRequests = [], users = [], teams = [], complaints = [], onResolveComplaint, isAdmin = false, onNavigate, onBack }) {
   const employeeRows = useMemo(() => {
     const activeOrders = orders.filter(order => order.isDeleted !== true);
     const allStages = activeOrders.flatMap(order => (order.stages || []).map(stage => ({ ...stage, orderId: order.id })));
@@ -3079,7 +3083,15 @@ export function EmployeePerformancePanel({ orders = [], roster = [], attendance 
         const employeeLeave = leaveRequests.filter(leave => cleanName(leave.name) === name || cleanName(leave.username) === username);
         const approvedLeave = employeeLeave.filter(leave => String(leave.status || "").toLowerCase() === "approved").length;
         const openTasks = assignedTasks.filter(task => !isDone(task.status)).length + assignedStages.filter(stage => !isDone(stage.status)).length;
-        const score = workItems > 0 ? Math.max(0, Math.round((completedItems / workItems) * 100 - delayedItems * 5)) : 0;
+
+        // Stage completion complaints / false reporting against this user (-10 pts each)
+        const userComplaints = (complaints || []).filter(c => {
+          const tagged = cleanName(c.taggedUser);
+          return (name && (tagged === name || tagged.includes(name))) ||
+            (username && (tagged === username || tagged.includes(username)));
+        });
+        const complaintsCount = userComplaints.length;
+        const score = workItems > 0 ? Math.max(0, Math.round((completedItems / workItems) * 100 - delayedItems * 5 - complaintsCount * 10)) : 0;
 
         return {
           ...person,
@@ -3089,19 +3101,21 @@ export function EmployeePerformancePanel({ orders = [], roster = [], attendance 
           taskCount: assignedTasks.length,
           openTasks,
           leaveCount: approvedLeave,
+          complaintsCount,
           attendance: attendance[person.name] || "present",
           score,
         };
       })
       .sort((a, b) => b.score - a.score || b.completed - a.completed || b.orderCount - a.orderCount);
-  }, [orders, roster, attendance, customTasks, leaveRequests, users, teams]);
+  }, [orders, roster, attendance, customTasks, leaveRequests, users, teams, complaints]);
 
   const totals = employeeRows.reduce((summary, row) => ({
     orders: summary.orders + row.orderCount,
     tasks: summary.tasks + row.taskCount,
     open: summary.open + row.openTasks,
     leave: summary.leave + row.leaveCount,
-  }), { orders: 0, tasks: 0, open: 0, leave: 0 });
+    complaints: summary.complaints + row.complaintsCount,
+  }), { orders: 0, tasks: 0, open: 0, leave: 0, complaints: 0 });
 
   return (
     <div>
@@ -3130,16 +3144,17 @@ export function EmployeePerformancePanel({ orders = [], roster = [], attendance 
       <Card style={{ marginBottom: 16 }}>
         <CardHeader
           title="EMPLOYEE PERFORMANCE & WORK BREAKDOWN"
-          sub="Order maintenance, daily tasks, attendance, and approved leave tracking"
+          sub="Order maintenance, daily tasks, attendance, false-stage complaints (-10 pts), and leave tracking"
           action="Open tasks"
           onAction={() => onNavigate && onNavigate("tasks")}
         />
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, marginBottom: 14 }}>
         {[
           ["Employees tracked", employeeRows.length, "#378ADD"],
           ["Orders maintained", totals.orders, "#1F9E8D"],
           ["Daily tasks", totals.tasks, "#7F77DD"],
           ["Open work items", totals.open, "#D64545"],
+          ["Stage disputes / complaints", totals.complaints, "#DC2626"],
         ].map(([label, value, color]) => (
           <div key={label} style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 8, padding: "10px 12px" }}>
             <div style={{ fontSize: 10.5, color: "#64748B" }}>{label}</div>
@@ -3148,14 +3163,14 @@ export function EmployeePerformancePanel({ orders = [], roster = [], attendance 
         ))}
       </div>
       <div style={{ overflowX: "auto" }}>
-        <div style={{ minWidth: 760, display: "grid", gridTemplateColumns: "1.7fr 0.8fr 0.9fr 0.8fr 0.9fr 0.8fr 0.9fr 0.8fr", fontSize: 10.5, color: "#64748B", fontWeight: 700, padding: "0 0 7px", borderBottom: "1px solid #F1F5F9" }}>
-          <div>EMPLOYEE</div><div>DEPARTMENT</div><div>ORDERS</div><div>DONE</div><div>DAILY TASKS</div><div>DELAYED</div><div>LEAVE</div><div>PERFORMANCE</div>
+        <div style={{ minWidth: 860, display: "grid", gridTemplateColumns: "1.6fr 0.9fr 0.7fr 0.7fr 0.9fr 0.7fr 0.7fr 0.9fr 0.7fr", fontSize: 10.5, color: "#64748B", fontWeight: 700, padding: "0 0 7px", borderBottom: "1px solid #F1F5F9" }}>
+          <div>EMPLOYEE</div><div>DEPARTMENT</div><div>ORDERS</div><div>DONE</div><div>DAILY TASKS</div><div>DELAYED</div><div>LEAVE</div><div>COMPLAINTS</div><div>PERFORMANCE</div>
         </div>
-        <div style={{ minWidth: 760, maxHeight: 300, overflowY: "auto" }}>
+        <div style={{ minWidth: 860, maxHeight: 300, overflowY: "auto" }}>
           {employeeRows.length === 0 ? (
             <div style={{ padding: "24px 0", color: "#94A3B8", fontSize: 12 }}>No employee records available.</div>
           ) : employeeRows.map(employee => (
-            <div key={employee.name} style={{ display: "grid", gridTemplateColumns: "1.7fr 0.8fr 0.9fr 0.8fr 0.9fr 0.8fr 0.9fr 0.8fr", alignItems: "center", fontSize: 11.5, padding: "9px 0", borderBottom: "1px solid #F8FAFC" }}>
+            <div key={employee.name} style={{ display: "grid", gridTemplateColumns: "1.6fr 0.9fr 0.7fr 0.7fr 0.9fr 0.7fr 0.7fr 0.9fr 0.7fr", alignItems: "center", fontSize: 11.5, padding: "9px 0", borderBottom: "1px solid #F8FAFC" }}>
               <div>
                 <div style={{ fontWeight: 700, color: "#1E293B" }}>{employee.name}</div>
                 <div style={{ fontSize: 10, color: employee.attendance === "present" ? "#059669" : "#DC2626", marginTop: 2 }}>{employee.attendance === "present" ? "Present" : employee.attendance}</div>
@@ -3166,17 +3181,124 @@ export function EmployeePerformancePanel({ orders = [], roster = [], attendance 
               <div style={{ color: "#1E293B" }}>{employee.taskCount} <span style={{ color: "#94A3B8" }}>({employee.openTasks} open)</span></div>
               <div style={{ color: employee.delayed > 0 ? "#DC2626" : "#059669", fontWeight: 700 }}>{employee.delayed}</div>
               <div style={{ color: "#7C3AED", fontWeight: 600 }}>{employee.leaveCount}</div>
+              <div>
+                {employee.complaintsCount > 0 ? (
+                  <span style={{ display: "inline-block", padding: "2px 7px", borderRadius: 999, background: "#FEE2E2", color: "#B91C1C", fontWeight: 700, fontSize: 11 }}>
+                    {employee.complaintsCount} (-{employee.complaintsCount * 10} pts)
+                  </span>
+                ) : (
+                  <span style={{ color: "#94A3B8" }}>0</span>
+                )}
+              </div>
               <div style={{ color: employee.score >= 75 ? "#059669" : employee.score >= 50 ? "#D97706" : "#DC2626", fontWeight: 800 }}>{employee.score}%</div>
             </div>
           ))}
         </div>
       </div>
     </Card>
+
+    {/* Stage Disputes & False Completion Complaints Card */}
+    <Card style={{ marginBottom: 16 }}>
+      <CardHeader
+        title="STAGE DISPUTES & FALSE COMPLETION COMPLAINTS"
+        sub="Complaints filed by downstream stage owners against false stage completions (-10 points per complaint)"
+      />
+      {complaints.length === 0 ? (
+        <div style={{ padding: "24px 0", color: "#94A3B8", fontSize: 12, textAlign: "center" }}>
+          No stage completion disputes reported. All stages completed cleanly.
+        </div>
+      ) : (
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <thead>
+              <tr style={{ background: "#F8FAFC", borderBottom: "1px solid #E2E8F0", textAlign: "left" }}>
+                <th style={{ padding: "8px 10px", fontWeight: 700, color: "#475569" }}>ORDER / STYLE</th>
+                <th style={{ padding: "8px 10px", fontWeight: 700, color: "#475569" }}>STAGE & DEPT</th>
+                <th style={{ padding: "8px 10px", fontWeight: 700, color: "#475569" }}>REPORTED BY</th>
+                <th style={{ padding: "8px 10px", fontWeight: 700, color: "#475569" }}>TAGGED USER (PENALTY)</th>
+                <th style={{ padding: "8px 10px", fontWeight: 700, color: "#475569" }}>REASON / REMARK</th>
+                <th style={{ padding: "8px 10px", fontWeight: 700, color: "#475569" }}>DATE</th>
+                <th style={{ padding: "8px 10px", fontWeight: 700, color: "#475569" }}>STATUS</th>
+                {onResolveComplaint && <th style={{ padding: "8px 10px", fontWeight: 700, color: "#475569", textAlign: "right" }}>ACTION</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {complaints.map(c => {
+                const isResolved = c.status === "Resolved";
+                return (
+                  <tr key={c.id} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                    <td style={{ padding: "9px 10px", fontWeight: 600, color: "#0F172A" }}>
+                      <div>{c.orderId}</div>
+                      <div style={{ fontSize: 10.5, color: "#64748B" }}>{c.orderStyle || "—"}</div>
+                    </td>
+                    <td style={{ padding: "9px 10px" }}>
+                      <div style={{ fontWeight: 600, color: "#1E293B" }}>{c.stageName}</div>
+                      <div style={{ fontSize: 10.5, color: "#64748B" }}>{c.stageDept}</div>
+                    </td>
+                    <td style={{ padding: "9px 10px" }}>
+                      <span style={{ fontWeight: 600, color: "#3B82F6" }}>@{c.reportedBy}</span>
+                    </td>
+                    <td style={{ padding: "9px 10px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ fontWeight: 700, color: "#DC2626" }}>@{c.taggedUser}</span>
+                        <span style={{ background: "#FEE2E2", color: "#991B1B", padding: "1px 6px", borderRadius: 4, fontSize: 10.5, fontWeight: 800 }}>-10 pts</span>
+                      </div>
+                    </td>
+                    <td style={{ padding: "9px 10px", color: "#334155", maxWidth: 280, wordBreak: "break-word" }}>
+                      {c.reason}
+                    </td>
+                    <td style={{ padding: "9px 10px", color: "#64748B", fontSize: 11 }}>
+                      {c.createdAt ? new Date(c.createdAt).toLocaleDateString("en-IN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
+                    </td>
+                    <td style={{ padding: "9px 10px" }}>
+                      <span style={{
+                        display: "inline-block",
+                        padding: "2px 8px",
+                        borderRadius: 999,
+                        fontSize: 10.5,
+                        fontWeight: 700,
+                        background: isResolved ? "#DCFCE7" : "#FEF3C7",
+                        color: isResolved ? "#166534" : "#92400E"
+                      }}>
+                        {c.status || "Under Review"}
+                      </span>
+                    </td>
+                    {onResolveComplaint && (
+                      <td style={{ padding: "9px 10px", textAlign: "right" }}>
+                        {!isResolved ? (
+                          <button
+                            onClick={() => onResolveComplaint(c.id, "Resolved")}
+                            style={{
+                              background: "#10B981",
+                              color: "#FFFFFF",
+                              border: "none",
+                              borderRadius: 5,
+                              padding: "4px 8px",
+                              fontSize: 11,
+                              fontWeight: 700,
+                              cursor: "pointer"
+                            }}
+                          >
+                            Resolve
+                          </button>
+                        ) : (
+                          <span style={{ fontSize: 11, color: "#059669", fontWeight: 600 }}>Resolved</span>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
     </div>
   );
 }
 
-export function ExecutiveOverviewPage({ orders, attendance, financials, roster, customTasks = [], leaveRequests = [], users = [], teams = [], onOpenOrder, onNavigate, onApproveCosting, onRejectCosting, onRefresh, isRefreshing = false, lastRefreshedAt = null }) {
+export function ExecutiveOverviewPage({ orders, attendance, financials, roster, customTasks = [], leaveRequests = [], users = [], teams = [], complaints = [], onResolveComplaint, isAdmin = false, onOpenOrder, onNavigate, onApproveCosting, onRejectCosting, onRefresh, isRefreshing = false, lastRefreshedAt = null }) {
   const allStages = orders.flatMap(o => (o.stages || []).map(s => ({ ...s, orderId: o.id, style: o.style, buyer: o.buyer })));
   const totalOrders = orders.length;
   const totalQty = orders.reduce((a, o) => a + (Number(o.qty) || 0), 0);
@@ -3312,7 +3434,15 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
         const delayedStages = assignedStages.filter(stage => stage.reason || stage.status === "Delayed");
         const onTimeStages = completedStages.filter(stage => !stage.reason);
         const employeeOrders = Array.from(new Set(assignedStages.map(stage => stage.orderId)));
-        const score = workItems > 0 ? Math.max(0, Math.round((completedItems / workItems) * 100 - delayedStages.length * 5)) : 0;
+
+        // Stage disputes / complaints against this user (-10 pts each)
+        const userComplaints = (complaints || []).filter(c => {
+          const tagged = cleanName(c.taggedUser);
+          return (name && (tagged === name || tagged.includes(name))) ||
+            (username && (tagged === username || tagged.includes(username)));
+        });
+        const complaintsCount = userComplaints.length;
+        const score = workItems > 0 ? Math.max(0, Math.round((completedItems / workItems) * 100 - delayedStages.length * 5 - complaintsCount * 10)) : 0;
         const onTimeRate = completedStages.length > 0 ? Math.round((onTimeStages.length / completedStages.length) * 100) : 100;
         const mistakeFreeRate = workItems > 0 ? Math.round(((workItems - delayedStages.length) / workItems) * 100) : 100;
 
@@ -3328,13 +3458,14 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
           completedTasks,
           onTimeRate,
           mistakeFreeRate,
+          complaintsCount,
           attendance: attendance[person.name] || "present",
           score,
         };
       })
       .sort((a, b) => b.score - a.score || b.completed - a.completed || b.orderCount - a.orderCount)
       .slice(0, 5);
-  }, [orders, roster, attendance, customTasks, users, teams]);
+  }, [orders, roster, attendance, customTasks, users, teams, complaints]);
 
   const openTasksRows = allStages.filter(s => s.status !== "done");
   const overdueRows = allStages.filter(s => s.status === "in_progress" && s.reason);
@@ -3964,6 +4095,15 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
                 </div>
               </div>
 
+              {selectedPerformer.complaintsCount > 0 && (
+                <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+                  <AlertCircle size={18} color="#DC2626" style={{ flexShrink: 0 }} />
+                  <div style={{ fontSize: 11.5, color: "#991B1B" }}>
+                    <b>{selectedPerformer.complaintsCount} Stage Completion Dispute(s) Filed</b> — penalty of -{selectedPerformer.complaintsCount * 10} points applied to efficiency score.
+                  </div>
+                </div>
+              )}
+
               {/* Section 1: Completed Order Stages & Work */}
               <div>
                 <div style={{ fontSize: 12, fontWeight: 700, color: "#0F172A", marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -4069,6 +4209,104 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
           </div>
         </div>
       )}
+
+      {/* Stage Disputes & False Completion Complaints Card */}
+      <Card style={{ marginBottom: 16 }}>
+        <CardHeader
+          title="STAGE DISPUTES & FALSE COMPLETION COMPLAINTS"
+          sub="Disputes filed by team members when previous stages were falsified or marked done prematurely (-10 pts per incident)"
+        />
+        {complaints.length === 0 ? (
+          <div style={{ padding: "20px 0", color: "#94A3B8", fontSize: 12, textAlign: "center" }}>
+            No stage completion disputes recorded. All order workflows progressing cleanly.
+          </div>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+              <thead>
+                <tr style={{ background: "#F8FAFC", borderBottom: "1px solid #E2E8F0", textAlign: "left" }}>
+                  <th style={{ padding: "9px 12px", fontWeight: 700, color: "#475569" }}>ORDER / STYLE</th>
+                  <th style={{ padding: "9px 12px", fontWeight: 700, color: "#475569" }}>STAGE & DEPT</th>
+                  <th style={{ padding: "9px 12px", fontWeight: 700, color: "#475569" }}>FILED BY</th>
+                  <th style={{ padding: "9px 12px", fontWeight: 700, color: "#475569" }}>TAGGED USER (PENALTY)</th>
+                  <th style={{ padding: "9px 12px", fontWeight: 700, color: "#475569" }}>REASON / REMARK</th>
+                  <th style={{ padding: "9px 12px", fontWeight: 700, color: "#475569" }}>DATE</th>
+                  <th style={{ padding: "9px 12px", fontWeight: 700, color: "#475569" }}>STATUS</th>
+                  {onResolveComplaint && <th style={{ padding: "9px 12px", fontWeight: 700, color: "#475569", textAlign: "right" }}>ACTION</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {complaints.map(c => {
+                  const isResolved = c.status === "Resolved";
+                  return (
+                    <tr key={c.id} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                      <td style={{ padding: "10px 12px", fontWeight: 600, color: "#0F172A" }}>
+                        <div>{c.orderId}</div>
+                        <div style={{ fontSize: 11, color: "#64748B" }}>{c.orderStyle || "—"}</div>
+                      </td>
+                      <td style={{ padding: "10px 12px" }}>
+                        <div style={{ fontWeight: 600, color: "#1E293B" }}>{c.stageName}</div>
+                        <div style={{ fontSize: 11, color: "#64748B" }}>{c.stageDept}</div>
+                      </td>
+                      <td style={{ padding: "10px 12px" }}>
+                        <span style={{ fontWeight: 600, color: "#3B82F6" }}>@{c.reportedBy}</span>
+                      </td>
+                      <td style={{ padding: "10px 12px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ fontWeight: 700, color: "#DC2626" }}>@{c.taggedUser}</span>
+                          <span style={{ background: "#FEE2E2", color: "#991B1B", padding: "1px 6px", borderRadius: 4, fontSize: 10.5, fontWeight: 800 }}>-10 pts</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: "10px 12px", color: "#334155", maxWidth: 280, wordBreak: "break-word" }}>
+                        {c.reason}
+                      </td>
+                      <td style={{ padding: "10px 12px", color: "#64748B", fontSize: 11 }}>
+                        {c.createdAt ? new Date(c.createdAt).toLocaleDateString("en-IN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
+                      </td>
+                      <td style={{ padding: "10px 12px" }}>
+                        <span style={{
+                          display: "inline-block",
+                          padding: "3px 9px",
+                          borderRadius: 999,
+                          fontSize: 11,
+                          fontWeight: 700,
+                          background: isResolved ? "#DCFCE7" : "#FEF3C7",
+                          color: isResolved ? "#166534" : "#92400E"
+                        }}>
+                          {c.status || "Under Review"}
+                        </span>
+                      </td>
+                      {onResolveComplaint && (
+                        <td style={{ padding: "10px 12px", textAlign: "right" }}>
+                          {!isResolved ? (
+                            <button
+                              onClick={() => onResolveComplaint(c.id, "Resolved")}
+                              style={{
+                                background: "#10B981",
+                                color: "#FFFFFF",
+                                border: "none",
+                                borderRadius: 5,
+                                padding: "4px 10px",
+                                fontSize: 11,
+                                fontWeight: 700,
+                                cursor: "pointer"
+                              }}
+                            >
+                              Resolve
+                            </button>
+                          ) : (
+                            <span style={{ fontSize: 11, color: "#059669", fontWeight: 600 }}>Resolved</span>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
 
       {/* Row 6: Bottom 5 Summary Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12 }}>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   LayoutDashboard, Package, CheckSquare, BarChart3, Settings as SettingsIcon,
   ChevronDown, Search, Bell, Moon, Sun, ClipboardList,
@@ -29,30 +29,138 @@ import { MyChecklistPage } from "./components/views/MyChecklistPage.jsx";
 import { ProjectChatbot } from "./components/ProjectChatbot.jsx";
 import { DEFAULT_TEAMS, DEFAULT_USERS, LoginPage, UserAccessPage } from "./components/UserAccess.jsx";
 
-function roleForUser(user, teams) {
-  const team = teams.find(item => item.id === user.teamId) || teams[0] || { name: "User", permissions: ["dashboard"] };
+function roleForUser(user, teams, activeDeptOverride = null) {
+  const userTeamIds = Array.isArray(user.teamIds) && user.teamIds.length > 0
+    ? user.teamIds
+    : (user.teamId ? [user.teamId] : []);
+  
+  const assignedTeams = teams.filter(t => userTeamIds.includes(t.id));
+  const primaryTeam = assignedTeams[0] || teams.find(item => item.id === user.teamId) || teams[0] || { name: "User", permissions: ["dashboard"] };
+  
   const isManagingDirector = user.isMD === true
     || [user.username, user.name, user.email].some(value => /(^|[^a-z])md([^a-z]|$)|managing director/i.test(String(value || "")));
-  const effectiveDept = isManagingDirector ? "Executive (MD)" : team.name;
+  
+  // Aggregate all departments assigned to this user
+  const userDepartments = isManagingDirector
+    ? ["Executive (MD)", ...assignedTeams.map(t => t.name)]
+    : assignedTeams.length > 0 ? assignedTeams.map(t => t.name) : [primaryTeam.name];
+
+  const effectiveDept = activeDeptOverride && userDepartments.includes(activeDeptOverride)
+    ? activeDeptOverride
+    : isManagingDirector ? "Executive (MD)" : primaryTeam.name;
+
+  // Merge permissions across all assigned teams
+  const mergedPermissions = Array.from(new Set(
+    assignedTeams.flatMap(t => t.permissions || [])
+  ));
+  if (mergedPermissions.length === 0) {
+    mergedPermissions.push(...primaryTeam.permissions);
+  }
+
+  const hasSettingsAccess = isManagingDirector || mergedPermissions.includes("settings");
+
   return {
     label: user.name,
     dept: effectiveDept,
+    departments: userDepartments,
     isMD: isManagingDirector,
-    fullAccess: isManagingDirector || team.permissions.includes("settings"),
-    permissions: isManagingDirector ? ROLE_OPTIONS.find(option => option.dept === "Executive")?.fullAccess
-      ? ["dashboard", "orders", "tasks", "approvals", "attendance", "reports", "settings"]
-      : team.permissions : team.permissions,
+    fullAccess: isManagingDirector || hasSettingsAccess,
+    permissions: isManagingDirector
+      ? (ROLE_OPTIONS.find(option => option.dept === "Executive")?.fullAccess
+        ? ["dashboard", "orders", "tasks", "approvals", "attendance", "reports", "settings"]
+        : mergedPermissions)
+      : mergedPermissions,
     userId: user.id,
   };
+}
+
+const VALID_MODULE_VIEWS = new Set([
+  "dashboard",
+  "orders",
+  "order",
+  "tasks",
+  "myChecklist",
+  "calendar",
+  "approvals",
+  "departments",
+  "departmentDetail",
+  "myDepartment",
+  "production",
+  "quality",
+  "compliance",
+  "attendance",
+  "finance",
+  "reports",
+  "insights",
+  "supplierPerformance",
+  "notifications",
+  "debitNotes",
+  "capas",
+  "settings",
+  "executiveOverview",
+  "employeePerformance"
+]);
+
+function parseRouteFromHash(rawHash) {
+  const hash = String(rawHash || "").replace(/^#\/?/, "").trim();
+  if (!hash) return null;
+
+  const parts = hash.split("/").map(decodeURIComponent).filter(Boolean);
+  if (!parts.length) return null;
+
+  const [segment1, ...rest] = parts;
+
+  if (segment1 === "orders" || segment1 === "order") {
+    if (rest.length > 0 && rest[0]) {
+      return { view: "order", selectedId: rest[0], selectedDept: null };
+    }
+    return { view: "orders", selectedId: null, selectedDept: null };
+  }
+
+  if (segment1 === "departments" || segment1 === "departmentDetail") {
+    if (rest.length > 0 && rest[0]) {
+      return { view: "departmentDetail", selectedId: null, selectedDept: rest.join("/") };
+    }
+    return { view: "departments", selectedId: null, selectedDept: null };
+  }
+
+  if (VALID_MODULE_VIEWS.has(segment1)) {
+    return { view: segment1, selectedId: null, selectedDept: null };
+  }
+
+  return null;
+}
+
+function getRouteHash(view, selectedId = null, selectedDept = null) {
+  if (view === "order" && selectedId) {
+    return `#/orders/${encodeURIComponent(selectedId)}`;
+  }
+  if (view === "departmentDetail" && selectedDept) {
+    return `#/departments/${encodeURIComponent(selectedDept)}`;
+  }
+  if (view === "orders") {
+    return `#/orders`;
+  }
+  if (view === "departments") {
+    return `#/departments`;
+  }
+  return `#/${view || "dashboard"}`;
 }
 
 export default function LoomPLM() {
   const [orders, setOrders] = useState([]);
 
-  const [view, setView] = useState("dashboard");
+  const initialRoute = useMemo(() => {
+    if (typeof window !== "undefined" && window.location.hash) {
+      return parseRouteFromHash(window.location.hash);
+    }
+    return null;
+  }, []);
+
+  const [view, setView] = useState(() => initialRoute?.view || "dashboard");
   const [previousView, setPreviousView] = useState("dashboard");
-  const [selectedId, setSelectedId] = useState(null);
-  const [selectedDept, setSelectedDept] = useState(null);
+  const [selectedId, setSelectedId] = useState(() => initialRoute?.selectedId || null);
+  const [selectedDept, setSelectedDept] = useState(() => initialRoute?.selectedDept || null);
   const [role, setRole] = useState(ROLE_OPTIONS[0]);
   const [attendance, setAttendance] = useState(seedAttendance);
   const [leaveRequests, setLeaveRequests] = useState(INITIAL_LEAVE_REQUESTS);
@@ -112,6 +220,21 @@ export default function LoomPLM() {
     } catch (e) { return null; }
   });
   const [rotation, setRotation] = useState({ enabled: false, intervalMinutes: 2 });
+  const [stageComplaints, setStageComplaints] = useState([]);
+  const [userSessions, setUserSessions] = useState([]);
+  const [currentSessionId, setCurrentSessionId] = useState(() => {
+    try {
+      return sessionStorage.getItem("loom_active_session_id") || null;
+    } catch (e) {
+      return null;
+    }
+  });
+
+  const isAdmin = Boolean(
+    activeUser?.username?.toLowerCase() === "admin" ||
+    role?.dept === "Administrators" ||
+    activeUser?.teamId === "team-admin"
+  );
 
   const uniqueUsersById = usersList => {
     const seen = new Set();
@@ -250,7 +373,7 @@ export default function LoomPLM() {
       if (!nextUser) return;
       setActiveUser(nextUser);
       setRole(roleForUser(nextUser, teams));
-      setView("dashboard");
+      navigate("dashboard");
       try { localStorage.setItem("loom_active_user", JSON.stringify(nextUser)); } catch (e) { }
     }, rotation.intervalMinutes * 60 * 1000);
     return () => window.clearInterval(timer);
@@ -271,10 +394,13 @@ export default function LoomPLM() {
         const realOrders = backendOrders.filter(bo => !["GKT-1054", "ST-7788", "JKT-2231", "TR-8899", "DR-5566", "PL-3321"].includes(bo.id));
         setOrders(prev => {
           return realOrders.map((bo) => {
-            const existing = prev.find(p => p.id === bo.id);
+            const existing = prev.find(p => p.id === bo.id || (p.primaryId && p.primaryId === bo.primaryId));
+            const primaryId = bo.primaryId || bo._id || existing?.primaryId || `ord_${bo.id}_${Math.random().toString(36).slice(2, 7)}`;
             return {
               ...existing,
               ...bo,
+              primaryId,
+              orderId: bo.orderId || bo.id,
               completed: bo.completed ?? existing?.completed ?? false,
               isDeleted: bo.isDeleted ?? existing?.isDeleted ?? false,
               completedAt: bo.completedAt || existing?.completedAt || null,
@@ -489,12 +615,73 @@ export default function LoomPLM() {
             }
           } catch (e) { }
         }
+
+        const stageCompRes = await window.storage.get("stage_complaints", true);
+        if (stageCompRes && stageCompRes.value) {
+          try {
+            const parsed = JSON.parse(stageCompRes.value);
+            if (Array.isArray(parsed)) setStageComplaints(parsed);
+          } catch (e) { }
+        }
+
+        const sessRes = await window.storage.get("user_sessions", true);
+        if (sessRes && sessRes.value) {
+          try {
+            const parsed = JSON.parse(sessRes.value);
+            if (Array.isArray(parsed)) setUserSessions(parsed);
+          } catch (e) { }
+        }
       }
     } catch (e) { } finally {
       setLastRefreshedAt(new Date());
       setIsRefreshing(false);
     }
   }, []);
+
+  // Heartbeat & unload handler to accurately track session hours used
+  useEffect(() => {
+    if (!currentSessionId || !activeUser) return undefined;
+
+    const interval = setInterval(() => {
+      const nowIso = new Date().toISOString();
+      setUserSessions(prev => {
+        const updated = prev.map(s => {
+          if (s.id === currentSessionId && s.active) {
+            const loginMs = new Date(s.loginTime).getTime();
+            const nowMs = new Date(nowIso).getTime();
+            const hours = Math.max(0.01, Number(((nowMs - loginMs) / (1000 * 60 * 60)).toFixed(2)));
+            return { ...s, lastHeartbeat: nowIso, hoursUsed: hours };
+          }
+          return s;
+        });
+        if (window.storage) window.storage.set("user_sessions", JSON.stringify(updated), true);
+        return updated;
+      });
+    }, 60000);
+
+    const handleBeforeUnload = () => {
+      const nowIso = new Date().toISOString();
+      setUserSessions(prev => {
+        const updated = prev.map(s => {
+          if (s.id === currentSessionId && s.active) {
+            const loginMs = new Date(s.loginTime).getTime();
+            const nowMs = new Date(nowIso).getTime();
+            const hours = Math.max(0.01, Number(((nowMs - loginMs) / (1000 * 60 * 60)).toFixed(2)));
+            return { ...s, logoutTime: nowIso, hoursUsed: hours, active: false };
+          }
+          return s;
+        });
+        if (window.storage) window.storage.set("user_sessions", JSON.stringify(updated), true);
+        return updated;
+      });
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [currentSessionId, activeUser]);
 
   // Periodic full refresh only for authenticated users; module-specific live data is loaded on navigation.
   useEffect(() => {
@@ -557,11 +744,14 @@ export default function LoomPLM() {
         if (Array.isArray(backendOrders)) {
           const realOrders = backendOrders.filter(bo => !["GKT-1054", "ST-7788", "JKT-2231", "TR-8899", "DR-5566", "PL-3321"].includes(bo.id));
           setOrders(prev => {
-            return realOrders.map((bo) => {
-              const existing = prev.find(p => p.id === bo.id);
+            const mapped = realOrders.map((bo) => {
+              const existing = prev.find(p => (bo.primaryId && p.primaryId === bo.primaryId) || p.id === bo.id);
+              const primaryId = bo.primaryId || bo._id || existing?.primaryId || `ord_${bo.id}_${Math.random().toString(36).slice(2, 7)}`;
               return {
                 ...existing,
                 ...bo,
+                primaryId,
+                orderId: bo.orderId || bo.id,
                 completed: bo.completed ?? existing?.completed ?? false,
                 isDeleted: bo.isDeleted ?? existing?.isDeleted ?? false,
                 completedAt: bo.completedAt || existing?.completedAt || null,
@@ -581,6 +771,8 @@ export default function LoomPLM() {
                 preProd: bo.preProd || existing?.preProd || initPreProd(),
               };
             });
+            // Keep unique by primaryId || id
+            return Array.from(new Map(mapped.map(item => [item.primaryId || item.id, item])).values());
           });
         }
       }
@@ -691,6 +883,55 @@ export default function LoomPLM() {
       initialViewLoadRef.current = true;
     }
   }, [accessLoaded, activeUser, loadViewData, view]);
+
+  // Route Synchronization: listen to window.location.hash changes (browser back/forward or manual hash change)
+  useEffect(() => {
+    if (!activeUser) return;
+
+    const handleHashChange = () => {
+      const parsed = parseRouteFromHash(window.location.hash);
+      if (parsed && parsed.view) {
+        setView(prevView => {
+          if (prevView !== parsed.view) {
+            setPreviousView(prevView);
+          }
+          return parsed.view;
+        });
+        setSelectedId(parsed.selectedId);
+        setSelectedDept(parsed.selectedDept);
+        loadViewData(parsed.view);
+      } else if (!window.location.hash || window.location.hash === "#" || window.location.hash === "#/") {
+        const defaultView = (role?.dept === "Executive" || role?.dept === "Executive (MD)") ? "executiveOverview" : "dashboard";
+        setView(defaultView);
+        setSelectedId(null);
+        setSelectedDept(null);
+        const targetHash = getRouteHash(defaultView);
+        if (window.location.hash !== targetHash) {
+          window.location.hash = targetHash;
+        }
+        loadViewData(defaultView);
+      }
+    };
+
+    // On initial mount with active user, ensure hash is aligned with current view
+    if (!window.location.hash || window.location.hash === "#" || window.location.hash === "#/") {
+      const defaultView = (role?.dept === "Executive" || role?.dept === "Executive (MD)") ? "executiveOverview" : "dashboard";
+      const targetHash = getRouteHash(view || defaultView, selectedId, selectedDept);
+      if (window.location.hash !== targetHash) {
+        window.location.hash = targetHash;
+      }
+    } else {
+      handleHashChange();
+    }
+
+    window.addEventListener("hashchange", handleHashChange);
+    window.addEventListener("popstate", handleHashChange);
+
+    return () => {
+      window.removeEventListener("hashchange", handleHashChange);
+      window.removeEventListener("popstate", handleHashChange);
+    };
+  }, [activeUser, loadViewData, role?.dept]);
 
   // Central Notification Dispatcher with Deduplication
   const pushNotification = (notif) => {
@@ -903,10 +1144,13 @@ export default function LoomPLM() {
 
   const handleSetRole = (newRole) => {
     setRole(newRole);
-    if (newRole && (newRole.dept === "Executive" || newRole.dept === "Executive (MD)")) {
-      setView("executiveOverview");
-    } else {
-      setView("dashboard");
+    const targetView = (newRole && (newRole.dept === "Executive" || newRole.dept === "Executive (MD)"))
+      ? "executiveOverview"
+      : "dashboard";
+    setView(targetView);
+    const targetHash = getRouteHash(targetView);
+    if (window.location.hash !== targetHash) {
+      window.location.hash = targetHash;
     }
     if (window.storage) window.storage.set("currentRole", JSON.stringify(newRole), true);
   };
@@ -915,8 +1159,58 @@ export default function LoomPLM() {
     const nextRole = roleForUser(user, teams);
     setActiveUser(user);
     setRole(nextRole);
-    setView(nextRole.dept === "Executive" || nextRole.dept === "Executive (MD)" ? "executiveOverview" : "dashboard");
+    const defaultLandingView = (nextRole.dept === "Executive" || nextRole.dept === "Executive (MD)") ? "executiveOverview" : "dashboard";
+    const currentRoute = parseRouteFromHash(window.location.hash);
+    const targetView = currentRoute?.view || defaultLandingView;
+    const targetId = currentRoute?.selectedId || null;
+    const targetDept = currentRoute?.selectedDept || null;
+
+    setView(targetView);
+    if (targetId) setSelectedId(targetId);
+    if (targetDept) setSelectedDept(targetDept);
+
+    const targetHash = getRouteHash(targetView, targetId, targetDept);
+    if (window.location.hash !== targetHash) {
+      window.location.hash = targetHash;
+    }
+
     try { localStorage.setItem("loom_active_user", JSON.stringify(user)); } catch (e) { }
+
+    // 1. Automatically mark attendance as present for today upon login
+    const nowIso = new Date().toISOString();
+    const todayStr = nowIso.slice(0, 10);
+    setAttendance(prev => {
+      const updated = {
+        ...prev,
+        [user.name]: "present",
+        ...(user.username ? { [user.username]: "present" } : {})
+      };
+      if (window.storage) window.storage.set("attendance", JSON.stringify(updated), true);
+      return updated;
+    });
+
+    // 2. Start a new user login session record for usage tracking
+    const sessId = `sess_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const newSession = {
+      id: sessId,
+      userId: user.id,
+      username: user.username,
+      name: user.name,
+      dept: nextRole.dept,
+      loginTime: nowIso,
+      logoutTime: null,
+      hoursUsed: 0.01,
+      active: true,
+      date: todayStr
+    };
+    setCurrentSessionId(sessId);
+    try { sessionStorage.setItem("loom_active_session_id", sessId); } catch (e) {}
+
+    setUserSessions(prev => {
+      const updated = [newSession, ...prev];
+      if (window.storage) window.storage.set("user_sessions", JSON.stringify(updated), true);
+      return updated;
+    });
   };
 
   const handleUsersChange = useCallback((nextUsers) => {
@@ -935,8 +1229,30 @@ export default function LoomPLM() {
   }, [syncRotationToBackend]);
 
   const handleLogout = () => {
+    const sessId = currentSessionId || (typeof sessionStorage !== "undefined" ? sessionStorage.getItem("loom_active_session_id") : null);
+    const nowIso = new Date().toISOString();
+    if (sessId) {
+      setUserSessions(prev => {
+        const updated = prev.map(s => {
+          if (s.id === sessId && s.active) {
+            const loginMs = new Date(s.loginTime).getTime();
+            const logoutMs = new Date(nowIso).getTime();
+            const hours = Math.max(0.01, Number(((logoutMs - loginMs) / (1000 * 60 * 60)).toFixed(2)));
+            return { ...s, logoutTime: nowIso, hoursUsed: hours, active: false };
+          }
+          return s;
+        });
+        if (window.storage) window.storage.set("user_sessions", JSON.stringify(updated), true);
+        return updated;
+      });
+      try { sessionStorage.removeItem("loom_active_session_id"); } catch (e) {}
+      setCurrentSessionId(null);
+    }
     setActiveUser(null);
     try { localStorage.removeItem("loom_active_user"); } catch (e) { }
+    if (window.location.hash && window.location.hash !== "#/login") {
+      window.location.hash = "#/login";
+    }
   };
 
   const updateFinancials = (field, value) => {
@@ -1284,6 +1600,7 @@ export default function LoomPLM() {
   };
 
   const addOrder = (newOrder) => {
+    const primaryId = newOrder.primaryId || `ord_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
     const fullOrder = {
       template: "90",
       costingTemplate: "fabric",
@@ -1295,6 +1612,8 @@ export default function LoomPLM() {
       stages: makeStages("90", 0, null),
       preProd: initPreProd(),
       ...newOrder,
+      primaryId,
+      orderId: newOrder.id,
       completed: false,
       isDeleted: false,
       completedAt: null,
@@ -1309,160 +1628,259 @@ export default function LoomPLM() {
 
     // Trigger Notification for New Order
     pushNotification({
-      eventKey: `order-created-${fullOrder.id}`,
+      eventKey: `order-created-${fullOrder.primaryId || fullOrder.id}`,
       type: "order",
       title: "New Order Added",
-      message: `Order ${fullOrder.id} (${fullOrder.style}) has been created for ${fullOrder.buyer}.`,
+      message: `Order #${fullOrder.id} (${fullOrder.style}) has been created for ${fullOrder.buyer}.`,
       relatedModule: "orders",
       relatedId: fullOrder.id,
       priority: fullOrder.risk === "high" ? "high" : "medium"
     });
   };
 
-  const completeOrder = (id) => {
+  const completeOrder = (primaryKey) => {
     const completedAt = new Date().toISOString();
-    setOrders(prev => prev.map(o => o.id === id ? { ...o, completed: true, completedAt } : o));
+    const targetOrder = orders.find(o => o.primaryId === primaryKey || o.id === primaryKey || o._id === primaryKey);
+    const primId = targetOrder?.primaryId || primaryKey;
+    const orderNum = targetOrder?.id || primaryKey;
+
+    setOrders(prev => prev.map(o => (o.primaryId === primId || o.id === primId || o._id === primId) ? { ...o, completed: true, completedAt } : o));
     try {
-      resourcesApi.patch("orders", id, { completed: true, completedAt }).catch(err => {
+      resourcesApi.patch("orders", primId, { completed: true, completedAt }).catch(err => {
         console.warn("Error completing order:", err.message);
       });
     } catch (e) { }
 
     pushNotification({
-      eventKey: `order-completed-${id}`,
+      eventKey: `order-completed-${primId}`,
       type: "order",
       title: "Order Completed",
-      message: `Order ${id} has been completed.`,
+      message: `Order #${orderNum} has been completed.`,
       relatedModule: "orders",
-      relatedId: id,
+      relatedId: orderNum,
       priority: "low"
     });
   };
 
-  const uncompleteOrder = (id) => {
-    setOrders(prev => prev.map(o => o.id === id ? { ...o, completed: false, completedAt: null } : o));
+  const uncompleteOrder = (primaryKey) => {
+    const targetOrder = orders.find(o => o.primaryId === primaryKey || o.id === primaryKey || o._id === primaryKey);
+    const primId = targetOrder?.primaryId || primaryKey;
+
+    setOrders(prev => prev.map(o => (o.primaryId === primId || o.id === primId || o._id === primId) ? { ...o, completed: false, completedAt: null } : o));
     try {
-      resourcesApi.patch("orders", id, { completed: false, completedAt: null }).catch(err => {
+      resourcesApi.patch("orders", primId, { completed: false, completedAt: null }).catch(err => {
         console.warn("Error reopening order:", err.message);
       });
     } catch (e) { }
   };
 
-  const deleteOrder = (id) => {
+  const deleteOrder = (primaryKey) => {
+    if (!isAdmin) {
+      alert("Permission denied: Only Administrators can delete orders.");
+      return;
+    }
     const deletedAt = new Date().toISOString();
-    // 1. Soft-delete the order
-    setOrders(prev => prev.map(o => o.id === id ? { ...o, isDeleted: true, deletedAt } : o));
+    const targetOrder = orders.find(o => o.primaryId === primaryKey || o.id === primaryKey || o._id === primaryKey);
+    const primId = targetOrder?.primaryId || primaryKey;
+    const orderNum = targetOrder?.id || primaryKey;
+
+    // 1. Soft-delete the order matching primaryId
+    setOrders(prev => prev.map(o => (o.primaryId === primId || o.id === primId || o.id === orderNum || o._id === primId) ? { ...o, isDeleted: true, deletedAt } : o));
 
     // 2. Automatically delete/cleanup all tasks related to this order!
     setCustomTasks(prev => {
-      const remainingTasks = prev.filter(t => t.orderId !== id);
+      const remainingTasks = prev.filter(t => t.orderId !== primId && t.orderId !== orderNum);
       if (window.storage) window.storage.set("custom_tasks", JSON.stringify(remainingTasks), true);
       return remainingTasks;
     });
 
     try {
-      resourcesApi.remove("orders", id).catch(err => {
+      resourcesApi.remove("orders", primId).catch(err => {
         console.warn("Error deleting order:", err.message);
       });
     } catch (e) { }
 
     pushNotification({
-      eventKey: `order-deleted-${id}`,
+      eventKey: `order-deleted-${primId}-${Date.now()}`,
       type: "order",
       title: "Order Deleted",
-      message: `Order ${id} and its associated tasks were removed.`,
+      message: `Order #${orderNum} has been moved to deleted history.`,
       relatedModule: "orders",
-      relatedId: id,
+      relatedId: orderNum,
       priority: "medium"
     });
   };
 
-  const permanentDeleteOrder = async (id) => {
-    // 1. Completely purge order from state & storage
+  const permanentDeleteOrder = async (primaryKey) => {
+    if (!isAdmin) {
+      alert("Permission denied: Only Administrators can permanently delete orders.");
+      return;
+    }
+    const targetOrder = orders.find(o => o.primaryId === primaryKey || o.id === primaryKey || o._id === primaryKey);
+    const primId = targetOrder?.primaryId || primaryKey;
+    const orderNum = targetOrder?.id || primaryKey;
+
+    // 1. Completely purge order from state & storage by primaryId
     setOrders(prev => {
-      const remaining = prev.filter(o => o.id !== id);
+      const remaining = prev.filter(o => o.primaryId !== primId && o.id !== primId && o._id !== primId);
       if (window.storage) window.storage.set("orders", JSON.stringify(remaining), true);
       return remaining;
     });
 
     // 2. Cascade clean all tasks related to this order from state & storage
     setCustomTasks(prev => {
-      const remainingTasks = prev.filter(t => t.orderId !== id && t.order !== id && t.relatedOrderId !== id);
+      const remainingTasks = prev.filter(t => t.orderId !== primId && t.orderId !== orderNum && t.order !== primId && t.order !== orderNum && t.relatedOrderId !== primId && t.relatedOrderId !== orderNum);
       if (window.storage) window.storage.set("custom_tasks", JSON.stringify(remainingTasks), true);
       return remainingTasks;
     });
 
     // 3. Cascade clean notifications related to this order from state & storage
     setNotifications(prev => {
-      const remainingNotifs = prev.filter(n => n.relatedId !== id && n.orderId !== id && (!n.eventKey || !n.eventKey.includes(id)));
+      const remainingNotifs = prev.filter(n => n.relatedId !== primId && n.relatedId !== orderNum && n.orderId !== primId && n.orderId !== orderNum && (!n.eventKey || (!n.eventKey.includes(primId) && !n.eventKey.includes(orderNum))));
       if (window.storage) window.storage.set("notifications", JSON.stringify(remainingNotifs), true);
       return remainingNotifs;
     });
 
     // 4. Cascade clean supplier work related to this order
     setSupplierWork(prev => {
-      const remainingWork = prev.filter(w => w.orderId !== id && w.order !== id);
+      const remainingWork = prev.filter(w => w.orderId !== primId && w.orderId !== orderNum && w.order !== primId && w.order !== orderNum);
       if (window.storage) window.storage.set("supplierWork", JSON.stringify(remainingWork), true);
       return remainingWork;
     });
 
     // 5. Cascade clean certifications & compliances linked to this order
     setCertifications(prev => {
-      const remaining = prev.filter(c => c.orderId !== id);
+      const remaining = prev.filter(c => c.orderId !== primId && c.orderId !== orderNum);
       if (window.storage) window.storage.set("certifications", JSON.stringify(remaining), true);
       return remaining;
     });
     setCompliances(prev => {
-      const remaining = prev.filter(c => c.orderId !== id);
+      const remaining = prev.filter(c => c.orderId !== primId && c.orderId !== orderNum);
       if (window.storage) window.storage.set("compliances", JSON.stringify(remaining), true);
       return remaining;
     });
 
     // 6. Cascade clean debit notes & CAPAs linked to this order
-    setDebitNotes(prev => prev.filter(d => d.po !== id && d.orderId !== id));
-    setCapas(prev => prev.filter(c => c.po !== id && c.orderId !== id));
+    setDebitNotes(prev => prev.filter(d => d.po !== primId && d.po !== orderNum && d.orderId !== primId && d.orderId !== orderNum));
+    setCapas(prev => prev.filter(c => c.po !== primId && c.po !== orderNum && c.orderId !== primId && c.orderId !== orderNum));
 
     // 7. Clean order-specific keys from window.storage and localStorage
     if (window.storage && window.storage.delete) {
       try {
-        window.storage.delete(`docs:${id}`, true);
-        window.storage.delete(`highlights:${id}`, true);
-        window.storage.delete(`chat:${id}`, true);
-        window.storage.delete(`customTypes:${id}`, true);
+        window.storage.delete(`docs:${primId}`, true);
+        window.storage.delete(`docs:${orderNum}`, true);
+        window.storage.delete(`highlights:${primId}`, true);
+        window.storage.delete(`chat:${primId}`, true);
+        window.storage.delete(`chat:${orderNum}`, true);
       } catch (e) { }
     }
     try {
-      localStorage.removeItem(`storage:docs:${id}`);
-      localStorage.removeItem(`storage:highlights:${id}`);
-      localStorage.removeItem(`storage:chat:${id}`);
-      localStorage.removeItem(`storage:customTypes:${id}`);
+      localStorage.removeItem(`docs:${primId}`);
+      localStorage.removeItem(`docs:${orderNum}`);
+      localStorage.removeItem(`highlights:${primId}`);
+      localStorage.removeItem(`chat:${primId}`);
+      localStorage.removeItem(`chat:${orderNum}`);
     } catch (e) { }
 
-    // 8. Send PERMANENT delete request to backend & MongoDB
+    // 8. Send PERMANENT delete request to backend & MongoDB with primaryId
     try {
-      await resourcesApi.remove("orders", id, "?permanent=true");
+      await resourcesApi.remove("orders", primId, "?permanent=true");
     } catch (err) {
       console.error("Failed to permanently delete order from backend:", err);
     }
 
     pushNotification({
-      eventKey: `order-perm-deleted-${id}-${Date.now()}`,
+      eventKey: `order-perm-deleted-${primId}-${Date.now()}`,
       type: "order",
       title: "Order Permanently Deleted",
-      message: `Order ${id} has been permanently removed from the system and database.`,
+      message: `Order #${orderNum} has been permanently removed from the system.`,
       relatedModule: "orders",
-      relatedId: id,
+      relatedId: orderNum,
       priority: "high"
     });
   };
 
-  const restoreOrder = (id) => {
-    setOrders(prev => prev.map(o => o.id === id ? { ...o, isDeleted: false, deletedAt: null } : o));
+  const restoreOrder = (primaryKey) => {
+    if (!isAdmin) {
+      alert("Permission denied: Only Administrators can restore orders.");
+      return;
+    }
+    const targetOrder = orders.find(o => o.primaryId === primaryKey || o.id === primaryKey || o._id === primaryKey);
+    const primId = targetOrder?.primaryId || primaryKey;
+
+    setOrders(prev => prev.map(o => (o.primaryId === primId || o.id === primId || o._id === primId) ? { ...o, isDeleted: false, deletedAt: null } : o));
     try {
-      resourcesApi.patch("orders", id, { isDeleted: false, deletedAt: null }).catch(err => {
+      resourcesApi.patch("orders", primId, { isDeleted: false, deletedAt: null }).catch(err => {
         console.warn("Error restoring order:", err.message);
       });
     } catch (e) { }
+  };
+
+  const handleReportComplaint = (complaint) => {
+    const complaintId = `comp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const newComplaint = {
+      id: complaintId,
+      ...complaint,
+      status: "Under Review",
+      createdAt: new Date().toISOString()
+    };
+    setStageComplaints(prev => {
+      const next = [newComplaint, ...prev];
+      if (window.storage) window.storage.set("stage_complaints", JSON.stringify(next), true);
+      return next;
+    });
+
+    // Mark stage in orders as disputed and flag delay reason
+    setOrders(prev => prev.map(o => {
+      if (o.id !== complaint.orderId && o.primaryId !== complaint.orderId) return o;
+      const updatedStages = (o.stages || []).map((s, idx) => {
+        if (idx === complaint.stageIdx) {
+          return {
+            ...s,
+            disputed: true,
+            disputeId: complaintId,
+            reason: `Disputed: False completion reported by @${complaint.reportedBy}: ${complaint.reason}`
+          };
+        }
+        return s;
+      });
+      return { ...o, stages: updatedStages, status: "Delayed" };
+    }));
+
+    // Post dispute message into order activity chat
+    const chatKey = `chat:${complaint.orderId}`;
+    const disputeMsg = {
+      id: Date.now(),
+      author: complaint.reportedBy || "System",
+      text: `🚨 [Dispute / False Stage Completion Reported]\nStage: ${complaint.stageName} (${complaint.stageDept})\nTagged User: @${complaint.taggedUser}\nReason: ${complaint.reason}`,
+      ts: new Date().toLocaleString(),
+      stage: complaint.stageName || null
+    };
+    try {
+      const existingChat = JSON.parse(localStorage.getItem(chatKey) || "[]");
+      const updatedChat = [...existingChat, disputeMsg];
+      localStorage.setItem(chatKey, JSON.stringify(updatedChat));
+      if (window.storage) window.storage.set(chatKey, JSON.stringify(updatedChat), true);
+    } catch (e) {}
+
+    pushNotification({
+      eventKey: `complaint-${complaintId}`,
+      type: "tna",
+      title: "Stage Dispute / False Completion Filed",
+      message: `@${complaint.reportedBy} reported false completion on Order #${complaint.orderId} (${complaint.stageName}) against @${complaint.taggedUser}: "${complaint.reason}"`,
+      relatedModule: "orders",
+      relatedId: complaint.orderId,
+      targetUser: complaint.taggedUser,
+      priority: "critical"
+    });
+  };
+
+  const handleResolveComplaint = (complaintId, resolutionStatus = "Resolved") => {
+    setStageComplaints(prev => {
+      const updated = prev.map(c => c.id === complaintId ? { ...c, status: resolutionStatus, resolvedAt: new Date().toISOString() } : c);
+      if (window.storage) window.storage.set("stage_complaints", JSON.stringify(updated), true);
+      return updated;
+    });
   };
 
   const updateStages = (id, stages) => {
@@ -1980,6 +2398,12 @@ export default function LoomPLM() {
 
   const navigate = (key) => {
     setView(key);
+    setSelectedId(null);
+    setSelectedDept(null);
+    const targetHash = getRouteHash(key);
+    if (window.location.hash !== targetHash) {
+      window.location.hash = targetHash;
+    }
     if (activeUser) {
       loadViewData(key);
     }
@@ -1989,12 +2413,20 @@ export default function LoomPLM() {
     setSelectedId(id);
     setPreviousView(view === "order" ? previousView : view);
     setView("order");
+    const targetHash = getRouteHash("order", id);
+    if (window.location.hash !== targetHash) {
+      window.location.hash = targetHash;
+    }
   };
 
   const openDept = (name) => {
     setSelectedDept(name);
     setPreviousView(view);
     setView("departmentDetail");
+    const targetHash = getRouteHash("departmentDetail", null, name);
+    if (window.location.hash !== targetHash) {
+      window.location.hash = targetHash;
+    }
   };
 
   const selectedOrder = orders.find(o => o.id === selectedId);
@@ -2430,7 +2862,7 @@ export default function LoomPLM() {
     content = (
       <OrderWorkspace
         order={selectedOrder}
-        onBack={() => setView(previousView)}
+        onBack={() => navigate(previousView === "order" ? "orders" : previousView || "orders")}
         onUpdateStages={updateStages}
         role={role}
         onSetTemplate={setOrderTemplate}
@@ -2458,6 +2890,9 @@ export default function LoomPLM() {
         onUpdateInspectionData={updateOrderInspectionData}
         onUpdateCertificates={updateOrderCertificates}
         allOrders={orders}
+        people={users}
+        onReportComplaint={handleReportComplaint}
+        onPushNotification={pushNotification}
       />
     );
   } else if (view === "departmentDetail" && selectedDept) {
@@ -2466,7 +2901,7 @@ export default function LoomPLM() {
         <div>
           <div style={{ marginBottom: 14 }}>
             <button
-              onClick={() => setView(previousView)}
+              onClick={() => navigate(previousView === "departmentDetail" ? "departments" : previousView || "departments")}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -2494,6 +2929,8 @@ export default function LoomPLM() {
             leaveRequests={leaveRequests}
             users={users}
             teams={teams}
+            complaints={stageComplaints}
+            onResolveComplaint={handleResolveComplaint}
             onOpenOrder={openOrder}
             onNavigate={navigate}
             onApproveCosting={approveOrderCosting}
@@ -2509,7 +2946,7 @@ export default function LoomPLM() {
         <DepartmentDetail
           deptName={selectedDept}
           orders={orders}
-          onBack={() => setView(previousView)}
+          onBack={() => navigate(previousView === "departmentDetail" ? "departments" : previousView || "departments")}
           onOpenOrder={openOrder}
           orgStructure={orgStructure}
           deptDescriptions={deptDescriptions}
@@ -2531,6 +2968,8 @@ export default function LoomPLM() {
           leaveRequests={leaveRequests}
           users={users}
           teams={teams}
+          complaints={stageComplaints}
+          onResolveComplaint={handleResolveComplaint}
           onOpenOrder={openOrder}
           onNavigate={navigate}
           onApproveCosting={approveOrderCosting}
@@ -2545,7 +2984,7 @@ export default function LoomPLM() {
         <DepartmentDetail
           deptName={role.dept}
           orders={orders}
-          onBack={() => setView("dashboard")}
+          onBack={() => navigate("dashboard")}
           onOpenOrder={openOrder}
           orgStructure={orgStructure}
           deptDescriptions={deptDescriptions}
@@ -2559,6 +2998,7 @@ export default function LoomPLM() {
     content = (
       <OrdersPage
         orders={orders}
+        isAdmin={isAdmin}
         onOpenOrder={openOrder}
         onAddOrder={addOrder}
         onCompleteOrder={completeOrder}
@@ -2673,7 +3113,23 @@ export default function LoomPLM() {
   } else if (view === "capas" && canSeeAll) {
     content = <CapasPage orders={orders} capas={capas} onAdd={addCapa} onCycleStatus={cycleCapaStatus} />;
   } else if (view === "attendance") {
-    content = <AttendancePage roster={roster} attendance={attendance} onCycle={cycleAttendance} leaveRequests={leaveRequests} onApprove={approveLeave} onReject={rejectLeave} onAddStaff={addStaff} onEditStaff={editStaff} onRemoveStaff={removeStaff} onAddLeaveRequest={addLeaveRequest} />;
+    content = (
+      <AttendancePage
+        roster={roster}
+        attendance={attendance}
+        onCycle={cycleAttendance}
+        leaveRequests={leaveRequests}
+        onApprove={approveLeave}
+        onReject={rejectLeave}
+        onAddStaff={addStaff}
+        onEditStaff={editStaff}
+        onRemoveStaff={removeStaff}
+        onAddLeaveRequest={addLeaveRequest}
+        userSessions={userSessions}
+        isAdmin={isAdmin}
+        isMD={role?.isMD || role?.dept === "Executive" || role?.dept === "Executive (MD)"}
+      />
+    );
   } else if (view === "finance" && (canSeeAll || role.dept === "Finance")) {
     content = <FinanceEntryPage orders={orders} financials={financials} onUpdate={updateFinancials} onUpdateOrderCost={updateOrderCost} />;
   } else if (view === "employeePerformance") {
@@ -2686,8 +3142,11 @@ export default function LoomPLM() {
         leaveRequests={leaveRequests}
         users={users}
         teams={teams}
+        complaints={stageComplaints}
+        onResolveComplaint={handleResolveComplaint}
+        isAdmin={isAdmin}
         onNavigate={navigate}
-        onBack={() => setView("executiveOverview")}
+        onBack={() => navigate("executiveOverview")}
       />
     );
   } else if (view === "executiveOverview" && isExecutive) {
@@ -2701,6 +3160,9 @@ export default function LoomPLM() {
         leaveRequests={leaveRequests}
         users={users}
         teams={teams}
+        complaints={stageComplaints}
+        onResolveComplaint={handleResolveComplaint}
+        isAdmin={isAdmin}
         onOpenOrder={openOrder}
         onNavigate={navigate}
         onApproveCosting={approveOrderCosting}
@@ -2725,6 +3187,9 @@ export default function LoomPLM() {
         leaveRequests={leaveRequests}
         users={users}
         teams={teams}
+        complaints={stageComplaints}
+        onResolveComplaint={handleResolveComplaint}
+        isAdmin={isAdmin}
         onOpenOrder={openOrder}
         onNavigate={navigate}
         onApproveCosting={approveOrderCosting}
@@ -2778,10 +3243,33 @@ export default function LoomPLM() {
     );
   }
 
-  // Filter notifications: Admin sees all; department users see notifications for their department or general
+  // Filter notifications: Admin and MD see all; department users see their department, general, or notifications specifically targeted to them (@user)
   const userNotifications = notifications.filter(n => {
     if (n.isDeleted === true) return false;
-    if (role.fullAccess || role.dept === "Executive" || role.dept === "Administrators") return true;
+    const isSuper = Boolean(
+      role.fullAccess ||
+      role.dept === "Executive" ||
+      role.dept === "Administrators" ||
+      isAdmin ||
+      activeUser?.username?.toLowerCase() === "admin" ||
+      activeUser?.isMD
+    );
+
+    // If notification is explicitly targeted to a person/username
+    if (n.targetUser) {
+      const target = String(n.targetUser).replace(/^@/, "").trim().toLowerCase();
+      const uName = String(activeUser?.username || "").trim().toLowerCase();
+      const pName = String(personName || activeUser?.name || "").trim().toLowerCase();
+      const isTarget = Boolean(
+        (uName && (uName === target || uName.includes(target) || target.includes(uName))) ||
+        (pName && (pName === target || pName.includes(target) || target.includes(pName)))
+      );
+      if (isTarget) return true;
+      if (isSuper) return true; // Superusers also see complaints & mentions
+      return false;
+    }
+
+    if (isSuper) return true;
     if (n.targetDept) {
       return n.targetDept.toLowerCase() === (role.dept || "").toLowerCase();
     }
@@ -2880,20 +3368,27 @@ export default function LoomPLM() {
             )}
             {group.items.map(item => {
               const active = view === item.key || (item.key === "orders" && (view === "order")) || (item.key === "departments" && view === "departmentDetail");
+              const itemHref = getRouteHash(item.key);
               return (
-                <div
+                <a
                   key={item.key}
-                  onClick={() => navigate(item.key)}
+                  href={itemHref}
+                  onClick={(e) => {
+                    if (!e.metaKey && !e.ctrlKey && !e.shiftKey && e.button === 0) {
+                      e.preventDefault();
+                      navigate(item.key);
+                    }
+                  }}
                   style={{
                     display: "flex", alignItems: "center", justifyContent: isSidebarCollapsed ? "center" : "flex-start", gap: isSidebarCollapsed ? 0 : 10, padding: "9px 10px", borderRadius: 8,
                     color: active ? "#fff" : isDarkMode ? "#94A3B8" : "#9498A8", background: active ? (isDarkMode ? "#1F9E8D33" : "#1F9E8D22") : "transparent",
-                    fontSize: 13.5, fontWeight: active ? 600 : 500, cursor: "pointer", marginBottom: 2
+                    fontSize: 13.5, fontWeight: active ? 600 : 500, cursor: "pointer", marginBottom: 2, textDecoration: "none"
                   }}
                   title={isSidebarCollapsed ? item.label : undefined}
                 >
                   <item.icon size={16} />
                   {!isSidebarCollapsed && item.label}
-                </div>
+                </a>
               );
             })}
           </div>

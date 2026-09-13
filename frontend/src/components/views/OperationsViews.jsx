@@ -3,10 +3,10 @@ import {
   CheckCircle2, Upload, Plus, Trash2, Check, RotateCcw, Archive, X,
   ShieldCheck, Award, FileText, AlertTriangle, Clock, Eye, Edit,
   Search, Filter, ExternalLink, ChevronRight, CheckCircle, AlertCircle,
-  HelpCircle, Calendar, RefreshCw, ArrowUp, ArrowDown, Layers
+  HelpCircle, Calendar, RefreshCw, ArrowUp, ArrowDown, Layers, GripVertical
 } from "lucide-react";
 import {
-  TA_STAGES, DEPT_ICONS, ORG_STRUCTURE, ATTENDANCE_STATUS_STYLE, CERT_STATUS_STYLE,
+  TA_STAGES, TA_STAGES_90, TA_STAGES_120, makeStages, DEPT_ICONS, ORG_STRUCTURE, ATTENDANCE_STATUS_STYLE, CERT_STATUS_STYLE,
   COMPLIANCE_STATUS_STYLE, COMPLIANCE_PRIORITY_STYLE, CERT_NAME_OPTIONS, BUYER_LIST, COMPLIANCE_CATEGORIES,
   DEFAULT_DEPT_DESCRIPTIONS, firstNamedAssignee
 } from "../../constants/loomData.js";
@@ -18,6 +18,7 @@ import { DepartmentPerformanceAndKPI } from "./DepartmentKPISection.jsx";
 
 export function OrdersPage({
   orders = [],
+  isAdmin = false,
   onOpenOrder,
   onAddOrder,
   onCompleteOrder,
@@ -28,36 +29,96 @@ export function OrdersPage({
 }) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDeletedSection, setShowDeletedSection] = useState(false);
+  const [alignModalOrder, setAlignModalOrder] = useState(null);
+
   const [form, setForm] = useState({
     id: "",
     style: "",
     buyer: "Zara",
     country: "Spain",
     season: "AW26",
-    qty: 10000,
+    qty: "",
     ship: "25 May",
-    color: "",
     risk: "low",
-    status: "On Track"
+    status: "On Track",
+    colorBreakdown: [
+      { color: "", size: "M", qty: "" }
+    ]
   });
 
   const activeOrders = useMemo(() => orders.filter(o => o.isDeleted !== true && o.completed !== true), [orders]);
   const completedOrders = useMemo(() => orders.filter(o => o.completed === true && o.isDeleted !== true), [orders]);
   const deletedOrders = useMemo(() => orders.filter(o => o.isDeleted === true), [orders]);
 
+  const addColorBreakdownRow = () => {
+    setForm(prev => ({
+      ...prev,
+      colorBreakdown: [
+        ...prev.colorBreakdown,
+        { color: "", size: "M", qty: "" }
+      ]
+    }));
+  };
+
+  const removeColorBreakdownRow = (index) => {
+    setForm(prev => {
+      let next = prev.colorBreakdown.filter((_, i) => i !== index);
+      if (next.length === 0) {
+        next = [{ color: "", size: "M", qty: "" }];
+      }
+      const totalQty = next.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
+      return {
+        ...prev,
+        colorBreakdown: next,
+        qty: totalQty > 0 ? totalQty : ""
+      };
+    });
+  };
+
+  const updateColorBreakdownRow = (index, field, value) => {
+    setForm(prev => {
+      const next = [...prev.colorBreakdown];
+      next[index] = {
+        ...next[index],
+        [field]: field === "qty" ? (value === "" ? "" : Math.max(0, Number(value) || 0)) : value
+      };
+      // Auto sum quantities
+      const totalQty = next.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
+      return {
+        ...prev,
+        colorBreakdown: next,
+        qty: totalQty > 0 ? totalQty : (field === "qty" && value === "" ? "" : prev.qty)
+      };
+    });
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!form.id.trim() || !form.style.trim()) return;
 
+    // Filter to valid non-empty breakdown rows
+    const validBreakdown = form.colorBreakdown.filter(
+      b => (b.color && b.color.trim()) || (b.qty && Number(b.qty) > 0)
+    );
+    const distinctColors = Array.from(new Set(
+      validBreakdown.map(b => b.color.trim()).filter(Boolean)
+    ));
+    const summaryColorStr = distinctColors.join(", ") || "";
+    const totalBreakdownQty = validBreakdown.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
+    const finalQty = totalBreakdownQty > 0 ? totalBreakdownQty : (Number(form.qty) || 0);
+
     const newOrder = {
+      primaryId: "ord_" + Date.now() + "_" + Math.random().toString(36).slice(2, 9),
       id: form.id.trim().toUpperCase(),
       style: form.style.trim(),
       buyer: form.buyer.trim(),
       country: form.country.trim(),
       season: form.season.trim(),
-      qty: Number(form.qty) || 5000,
+      qty: finalQty,
       ship: form.ship.trim() || "15 Jun",
-      color: form.color.trim(),
+      color: summaryColorStr,
+      colors: distinctColors,
+      colorBreakdown: validBreakdown,
       risk: form.risk,
       status: form.status,
       completed: false,
@@ -67,17 +128,23 @@ export function OrdersPage({
     };
 
     if (onAddOrder) onAddOrder(newOrder);
+
+    // Open T&A Stage Alignment Dialog for this newly created order
+    setAlignModalOrder(newOrder);
+
     setForm({
       id: "",
       style: "",
       buyer: "Zara",
       country: "Spain",
       season: "AW26",
-      qty: 10000,
+      qty: "",
       ship: "25 May",
-      color: "",
       risk: "low",
-      status: "On Track"
+      status: "On Track",
+      colorBreakdown: [
+        { color: "", size: "M", qty: "" }
+      ]
     });
     setShowAddModal(false);
   };
@@ -136,7 +203,7 @@ export function OrdersPage({
         ) : (
           activeOrders.map(o => (
             <div
-              key={o.id}
+              key={o.primaryId || o.id}
               style={{ display: "grid", gridTemplateColumns: "1.2fr 0.9fr 0.9fr 0.7fr 0.8fr 0.8fr 0.7fr 0.9fr 0.8fr 0.7fr", alignItems: "center", fontSize: 13, padding: "12px 4px", borderBottom: "1px solid #F5F5F7" }}
               onMouseEnter={e => e.currentTarget.style.background = "#FAFAFB"}
               onMouseLeave={e => e.currentTarget.style.background = "transparent"}
@@ -156,30 +223,66 @@ export function OrdersPage({
               <div onClick={() => onOpenOrder && onOpenOrder(o.id)} style={{ cursor: "pointer" }}>
                 {statusPill(o.status)}
               </div>
-              <div onClick={() => onOpenOrder && onOpenOrder(o.id)} style={{ cursor: "pointer", color: o.color ? "#1B2130" : "#9CA3AF" }}>
-                {o.color || "—"}
+              <div onClick={() => onOpenOrder && onOpenOrder(o.id)} style={{ cursor: "pointer" }}>
+                {Array.isArray(o.colorBreakdown) && o.colorBreakdown.length > 0 ? (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+                    {o.colorBreakdown.slice(0, 2).map((b, bi) => (
+                      <span
+                        key={bi}
+                        style={{
+                          fontSize: 10.5,
+                          background: "#F0EFFB",
+                          color: "#534AB7",
+                          padding: "1px 5px",
+                          borderRadius: 4,
+                          fontWeight: 600,
+                          whiteSpace: "nowrap"
+                        }}
+                      >
+                        {b.color} {b.size && `(${b.size})`} {b.qty && `· ${b.qty}`}
+                      </span>
+                    ))}
+                    {o.colorBreakdown.length > 2 && (
+                      <span style={{ fontSize: 10, color: "#6B7280", alignSelf: "center", fontWeight: 700 }}>
+                        +{o.colorBreakdown.length - 2}
+                      </span>
+                    )}
+                  </div>
+                ) : Array.isArray(o.colors) && o.colors.length > 0 ? (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+                    {o.colors.map((c, ci) => (
+                      <span key={ci} style={{ fontSize: 10.5, background: "#F3F4F6", color: "#374151", padding: "1px 5px", borderRadius: 4, fontWeight: 500 }}>
+                        {c}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <span style={{ color: o.color ? "#1B2130" : "#9CA3AF" }}>{o.color || "—"}</span>
+                )}
               </div>
               <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
-                <button
-                  onClick={(e) => { e.stopPropagation(); onDeleteOrder && onDeleteOrder(o.id); }}
-                  title="Delete order (move to history)"
-                  style={{
-                    background: "#FCEBEB",
-                    color: "#791F1F",
-                    border: "none",
-                    borderRadius: 6,
-                    padding: "4px 8px",
-                    fontSize: 11.5,
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 3
-                  }}
-                >
-                  <Trash2 size={12} />
-                  Delete
-                </button>
+                {isAdmin && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onDeleteOrder && onDeleteOrder(o.primaryId || o.id); }}
+                    title="Delete order (Admin only)"
+                    style={{
+                      background: "#FCEBEB",
+                      color: "#791F1F",
+                      border: "none",
+                      borderRadius: 6,
+                      padding: "4px 8px",
+                      fontSize: 11.5,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 3
+                    }}
+                  >
+                    <Trash2 size={12} />
+                    Delete
+                  </button>
+                )}
               </div>
             </div>
           ))
@@ -209,7 +312,7 @@ export function OrdersPage({
         ) : (
           completedOrders.map(o => (
             <div
-              key={o.id}
+              key={o.primaryId || o.id}
               style={{ display: "grid", gridTemplateColumns: "1.2fr 0.9fr 0.9fr 0.7fr 0.8fr 0.8fr 0.8fr 0.8fr 1.1fr", alignItems: "center", fontSize: 13, padding: "12px 4px", borderBottom: "1px solid #F5F5F7", background: "#FAFDFB" }}
             >
               <div onClick={() => onOpenOrder && onOpenOrder(o.id)} style={{ cursor: "pointer" }}>
@@ -221,7 +324,35 @@ export function OrdersPage({
               <div>{o.season || "SS26"}</div>
               <div>{Number(o.qty || 0).toLocaleString()}</div>
               <div>{o.ship}</div>
-              <div style={{ color: o.color ? "#1B2130" : "#9CA3AF" }}>{o.color || "—"}</div>
+              <div>
+                {Array.isArray(o.colorBreakdown) && o.colorBreakdown.length > 0 ? (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+                    {o.colorBreakdown.slice(0, 2).map((b, bi) => (
+                      <span
+                        key={bi}
+                        style={{
+                          fontSize: 10.5,
+                          background: "#F0EFFB",
+                          color: "#534AB7",
+                          padding: "1px 5px",
+                          borderRadius: 4,
+                          fontWeight: 600,
+                          whiteSpace: "nowrap"
+                        }}
+                      >
+                        {b.color} {b.size && `(${b.size})`}
+                      </span>
+                    ))}
+                    {o.colorBreakdown.length > 2 && (
+                      <span style={{ fontSize: 10, color: "#6B7280", alignSelf: "center", fontWeight: 700 }}>
+                        +{o.colorBreakdown.length - 2}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <span style={{ color: o.color ? "#1B2130" : "#9CA3AF" }}>{o.color || "—"}</span>
+                )}
+              </div>
               <div>
                 <span style={{ background: "#E1F5EE", color: "#085041", fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 999 }}>
                   Completed
@@ -229,7 +360,7 @@ export function OrdersPage({
               </div>
               <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
                 <button
-                  onClick={() => onUncompleteOrder && onUncompleteOrder(o.id)}
+                  onClick={() => onUncompleteOrder && onUncompleteOrder(o.primaryId || o.id)}
                   title="Move back to Active orders"
                   style={{
                     background: "#F5F3FF",
@@ -248,33 +379,36 @@ export function OrdersPage({
                   <RotateCcw size={12} />
                   Reopen
                 </button>
-                <button
-                  onClick={() => onDeleteOrder && onDeleteOrder(o.id)}
-                  title="Delete order"
-                  style={{
-                    background: "#FCEBEB",
-                    color: "#791F1F",
-                    border: "none",
-                    borderRadius: 6,
-                    padding: "4px 8px",
-                    fontSize: 11.5,
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 3
-                  }}
-                >
-                  <Trash2 size={12} />
-                  Delete
-                </button>
+                {isAdmin && (
+                  <button
+                    onClick={() => onDeleteOrder && onDeleteOrder(o.primaryId || o.id)}
+                    title="Delete order (Admin only)"
+                    style={{
+                      background: "#FCEBEB",
+                      color: "#791F1F",
+                      border: "none",
+                      borderRadius: 6,
+                      padding: "4px 8px",
+                      fontSize: 11.5,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 3
+                    }}
+                  >
+                    <Trash2 size={12} />
+                    Delete
+                  </button>
+                )}
               </div>
             </div>
           ))
         )}
       </Card>
 
-      {/* 3. Deleted Orders / History Section */}
+      {/* 3. Deleted Orders / History Section (Admin Only) */}
+      {isAdmin && (
       <Card>
         <div style={{ padding: "0 0 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
@@ -304,7 +438,7 @@ export function OrdersPage({
             ) : (
               deletedOrders.map(o => (
                 <div
-                  key={o.id}
+                  key={o.primaryId || o.id}
                   style={{ display: "grid", gridTemplateColumns: "1.2fr 0.9fr 0.9fr 0.7fr 0.8fr 0.8fr 0.8fr 1fr 0.8fr", alignItems: "center", fontSize: 13, padding: "12px 4px", borderBottom: "1px solid #F5F5F7", opacity: 0.85 }}
                 >
                   <div>
@@ -322,7 +456,7 @@ export function OrdersPage({
                   </div>
                   <div style={{ textAlign: "right", display: "flex", justifyContent: "flex-end", gap: 6, alignItems: "center" }}>
                     <button
-                      onClick={() => onRestoreOrder && onRestoreOrder(o.id)}
+                      onClick={() => onRestoreOrder && onRestoreOrder(o.primaryId || o.id)}
                       title="Restore order back to active list"
                       style={{
                         background: "#E1F5EE",
@@ -344,7 +478,7 @@ export function OrdersPage({
                     <button
                       onClick={() => {
                         if (window.confirm(`Are you sure you want to PERMANENTLY delete order ${o.id}? This cannot be undone.`)) {
-                          onPermanentDeleteOrder && onPermanentDeleteOrder(o.id);
+                          onPermanentDeleteOrder && onPermanentDeleteOrder(o.primaryId || o.id);
                         }
                       }}
                       title="Permanently delete order forever"
@@ -372,6 +506,7 @@ export function OrdersPage({
           </>
         )}
       </Card>
+      )}
 
       {/* Add Order Modal */}
       {showAddModal && (
@@ -486,7 +621,87 @@ export function OrdersPage({
                 </div>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, marginBottom: 20 }}>
+              {/* Multi-Colour & Size Quantity Breakdown */}
+              <div style={{ marginBottom: 16, padding: "12px 14px", background: "#F9FAFB", border: "1px solid #E5E7EB", borderRadius: 8 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <div>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "#1F2937" }}>Multi-Colour & Size Breakdown</span>
+                    <span style={{ fontSize: 11, color: "#6B7280", marginLeft: 8 }}>(e.g. Red M - 250 pcs)</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addColorBreakdownRow}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      background: "#EDE9FE",
+                      color: "#534AB7",
+                      border: "none",
+                      borderRadius: 6,
+                      padding: "4px 10px",
+                      fontSize: 11.5,
+                      fontWeight: 600,
+                      cursor: "pointer"
+                    }}
+                  >
+                    <Plus size={12} /> Add Colour / Size
+                  </button>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 160, overflowY: "auto" }}>
+                  {form.colorBreakdown.map((row, idx) => (
+                    <div key={idx} style={{ display: "grid", gridTemplateColumns: "1.4fr 0.9fr 1fr auto", gap: 8, alignItems: "center" }}>
+                      <input
+                        type="text"
+                        placeholder="Colour (e.g. Red, Black)"
+                        value={row.color}
+                        onChange={e => updateColorBreakdownRow(idx, "color", e.target.value)}
+                        style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #D1D5DB", fontSize: 12 }}
+                      />
+                      <select
+                        value={row.size}
+                        onChange={e => updateColorBreakdownRow(idx, "size", e.target.value)}
+                        style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #D1D5DB", fontSize: 12 }}
+                      >
+                        {["XS", "S", "M", "L", "XL", "2XL", "3XL", "Free Size"].map(s => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                      <input
+                        type="number"
+                        min="1"
+                        placeholder="Qty (e.g. 250)"
+                        value={row.qty}
+                        onChange={e => updateColorBreakdownRow(idx, "qty", e.target.value)}
+                        style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #D1D5DB", fontSize: 12, textAlign: "right" }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeColorBreakdownRow(idx)}
+                        title="Remove or clear row"
+                        style={{
+                          background: "none",
+                          border: "none",
+                          color: "#EF4444",
+                          cursor: "pointer",
+                          padding: 4
+                        }}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8, paddingTop: 6, borderTop: "1px dashed #E5E7EB", fontSize: 11.5, color: "#4B5563" }}>
+                  <span>Total Order Quantity: <b style={{ color: "#1F2937" }}>{(form.colorBreakdown.reduce((s, i) => s + (Number(i.qty) || 0), 0) || Number(form.qty) || 0).toLocaleString()} pcs</b></span>
+                  <span style={{ color: "#534AB7", fontWeight: 600 }}>
+                    {form.colorBreakdown.filter(b => b.color || b.qty).length} variant{form.colorBreakdown.filter(b => b.color || b.qty).length !== 1 ? "s" : ""}
+                  </span>
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 20 }}>
                 <div>
                   <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#4B5563", marginBottom: 4 }}>Ship Date</label>
                   <input
@@ -494,17 +709,7 @@ export function OrdersPage({
                     placeholder="e.g. 25 May"
                     value={form.ship}
                     onChange={e => setForm({ ...form, ship: e.target.value })}
-                    style={{ width: "92%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13 }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#4B5563", marginBottom: 4,marginLeft: 4 }}>Color</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Navy Blue"
-                    value={form.color}
-                    onChange={e => setForm({ ...form, color: e.target.value })}
-                    style={{ width: "84%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13,marginLeft: 4 }}
+                    style={{ width: "90%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13 }}
                   />
                 </div>
                 <div>
@@ -512,7 +717,7 @@ export function OrdersPage({
                   <select
                     value={form.risk}
                     onChange={e => setForm({ ...form, risk: e.target.value })}
-                    style={{ width: "92%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13 }}
+                    style={{ width: "95%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13 }}
                   >
                     <option value="low">Low Risk</option>
                     <option value="medium">Medium Risk</option>
@@ -524,7 +729,7 @@ export function OrdersPage({
                   <select
                     value={form.status}
                     onChange={e => setForm({ ...form, status: e.target.value })}
-                    style={{ width: "92%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13 }}
+                    style={{ width: "95%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13 }}
                   >
                     <option value="On Track">On Track</option>
                     <option value="At Risk">At Risk</option>
@@ -563,12 +768,32 @@ export function OrdersPage({
                     cursor: "pointer"
                   }}
                 >
-                  Create Order
+                  Create Order & Realign T&A →
                 </button>
               </div>
             </form>
           </div>
         </div>
+      )}
+
+      {/* Post-Order Creation T&A Stage Alignment Dialog */}
+      {alignModalOrder && (
+        <OrderStageAlignmentModal
+          order={alignModalOrder}
+          isOpen={Boolean(alignModalOrder)}
+          onClose={() => setAlignModalOrder(null)}
+          onSaveStages={(orderId, updatedStages, tmpl) => {
+            if (onAddOrder) {
+              // Also update stages in orders state if onAddOrder/onUpdateStages available
+              const found = orders.find(o => o.id === orderId);
+              if (found) {
+                found.stages = updatedStages;
+                found.template = tmpl;
+              }
+            }
+            setAlignModalOrder(null);
+          }}
+        />
       )}
     </div>
   );
@@ -588,7 +813,7 @@ export function MyTasksPage({
   const [showModal, setShowModal] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [assignPrefill, setAssignPrefill] = useState(null);
-  const [taskTab, setTaskTab] = useState("all"); // "all" | "custom" | "tna"
+  const [taskTab, setTaskTab] = useState("all");
   const [form, setForm] = useState({
     title: "",
     orderId: "",
@@ -599,30 +824,32 @@ export function MyTasksPage({
     notes: ""
   });
 
-  // Strict Department Tasks: Show active & pending stage tasks specifically assigned to this department
   const tnaRows = useMemo(() => {
-    return collectTasks(orders, role?.dept).filter(r => {
+    const userDeptList = Array.isArray(role?.departments) && role.departments.length > 0
+      ? role.departments.map(d => d.toLowerCase())
+      : [(role?.dept || "").toLowerCase()];
+
+    return collectTasks(orders, null).filter(r => {
       if (r.stage.status === "done") return false;
-      // If user has full access / admin, show all active stages
-      if (role?.fullAccess || role?.dept === "Administrators" || role?.dept === "Executive") {
-        return true;
-      }
-      // For specific department: strictly include stages belonging to their department
-      return r.dept && r.dept.toLowerCase() === (role?.dept || "").toLowerCase();
+      if (role?.fullAccess || role?.dept === "Administrators" || role?.dept === "Executive") return true;
+      return r.dept && userDeptList.includes(r.dept.toLowerCase());
     });
   }, [orders, role]);
-  
+
   const roleCustomTasks = useMemo(() => {
+    const userDeptList = Array.isArray(role?.departments) && role.departments.length > 0
+      ? role.departments
+      : [role?.dept || ""];
+
     return tasks.filter(t => {
       if (role?.fullAccess || role?.dept === "Administrators" || role?.dept === "Executive") return true;
-      return t.dept === role?.dept || t.dept === "All";
+      return userDeptList.includes(t.dept) || t.dept === "All";
     });
   }, [tasks, role]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!form.title.trim()) return;
-
     const newTask = {
       title: form.title.trim(),
       orderId: form.orderId ? form.orderId.trim().toUpperCase() : null,
@@ -634,9 +861,7 @@ export function MyTasksPage({
       status: "in_progress",
       createdAt: new Date().toISOString()
     };
-
     if (onAddTask) onAddTask(newTask);
-
     setForm({
       title: "",
       orderId: "",
@@ -657,7 +882,6 @@ export function MyTasksPage({
 
   return (
     <div>
-      {/* Page Header with Title and Add Task button */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 700, color: "#151B2E", margin: 0 }}>My tasks</h1>
@@ -914,8 +1138,8 @@ export function MyTasksPage({
                     style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13, boxSizing: "border-box" }}
                   >
                     <option value="">-- General Task / None --</option>
-                    {orders.filter(o => !o.isDeleted).map(o => (
-                      <option key={o.id} value={o.id}>{o.id} - {o.style}</option>
+                    {Array.from(new Map((orders || []).filter(o => !o.isDeleted).map(o => [o.id, o])).values()).map((o, idx) => (
+                      <option key={o.primaryId || `${o.id}-${idx}`} value={o.id}>{o.id} - {o.style}</option>
                     ))}
                   </select>
                 </div>
@@ -1713,7 +1937,9 @@ export function CompliancePage({
                 style={{ padding: "7px 8px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 12.5, color: "#374151" }}
               >
                 <option value="all">All Orders</option>
-                {orders.map(o => <option key={o.id} value={o.id}>{o.id} ({o.buyer})</option>)}
+                {Array.from(new Map((orders || []).filter(o => !o.isDeleted).map(o => [o.id, o])).values()).map((o, idx) => (
+                  <option key={o.primaryId || `${o.id}-${idx}`} value={o.id}>{o.id} ({o.buyer})</option>
+                ))}
               </select>
             </div>
           </Card>
@@ -1924,7 +2150,9 @@ export function CompliancePage({
                 style={{ padding: "7px 8px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 12.5, color: "#374151" }}
               >
                 <option value="all">All Orders</option>
-                {orders.map(o => <option key={o.id} value={o.id}>{o.id}</option>)}
+                {Array.from(new Map((orders || []).filter(o => !o.isDeleted).map(o => [o.id, o])).values()).map((o, idx) => (
+                  <option key={o.primaryId || `${o.id}-${idx}`} value={o.id}>{o.id}</option>
+                ))}
               </select>
             </div>
           </Card>
@@ -2231,7 +2459,9 @@ export function CompliancePage({
                     style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13 }}
                   >
                     <option value="">None (Facility-wide / General)</option>
-                    {orders.map(o => <option key={o.id} value={o.id}>{o.id} ({o.buyer} · {o.style})</option>)}
+                    {Array.from(new Map((orders || []).filter(o => !o.isDeleted).map(o => [o.id, o])).values()).map((o, idx) => (
+                      <option key={o.primaryId || `${o.id}-${idx}`} value={o.id}>{o.id} ({o.buyer} · {o.style})</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -2377,7 +2607,9 @@ export function CompliancePage({
                     style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13 }}
                   >
                     <option value="">None (Factory-wide)</option>
-                    {orders.map(o => <option key={o.id} value={o.id}>{o.id} ({o.buyer} · {o.style})</option>)}
+                    {Array.from(new Map((orders || []).filter(o => !o.isDeleted).map(o => [o.id, o])).values()).map((o, idx) => (
+                      <option key={o.primaryId || `${o.id}-${idx}`} value={o.id}>{o.id} ({o.buyer} · {o.style})</option>
+                    ))}
                   </select>
                 </div>
                 <div>
@@ -3022,7 +3254,24 @@ export function CompliancePage({
   );
 }
 
-export function AttendancePage({ roster, attendance, onCycle, leaveRequests, onApprove, onReject, onAddStaff, onEditStaff, onRemoveStaff, onAddLeaveRequest }) {
+export function AttendancePage({
+  roster,
+  attendance,
+  onCycle,
+  leaveRequests,
+  onApprove,
+  onReject,
+  onAddStaff,
+  onEditStaff,
+  onRemoveStaff,
+  onAddLeaveRequest,
+  userSessions = [],
+  isAdmin = false,
+  isMD = false
+}) {
+  const canViewUsage = isAdmin || isMD;
+  const [activeTab, setActiveTab] = useState("attendance");
+  const [sessionSearch, setSessionSearch] = useState("");
   const [form, setForm] = useState({ name: "", title: "", dept: Object.keys(ORG_STRUCTURE)[0] });
   const [editingName, setEditingName] = useState(null);
   const [editForm, setEditForm] = useState({ name: "", title: "", dept: "" });
@@ -3035,6 +3284,16 @@ export function AttendancePage({ roster, attendance, onCycle, leaveRequests, onA
   const counts = { present: 0, absent: 0, leave: 0 };
   roster.forEach(s => { counts[attendance[s.name] || "present"]++; });
   const pending = leaveRequests.filter(l => l.status === "pending");
+
+  const filteredSessions = useMemo(() => {
+    if (!sessionSearch.trim()) return userSessions;
+    const q = sessionSearch.toLowerCase();
+    return userSessions.filter(s =>
+      (s.name && s.name.toLowerCase().includes(q)) ||
+      (s.username && s.username.toLowerCase().includes(q)) ||
+      (s.dept && s.dept.toLowerCase().includes(q))
+    );
+  }, [userSessions, sessionSearch]);
 
   function submitAdd() {
     if (!form.name.trim()) return;
@@ -3076,12 +3335,182 @@ export function AttendancePage({ roster, attendance, onCycle, leaveRequests, onA
 
   return (
     <div>
-      <PageHeader title="Attendance & Leave" sub="Click a staff member's status to cycle Present → Absent → On leave. Add new joiners or edit/remove team members below." />
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 16 }}>
-        <Card style={{ padding: "16px 18px" }}><div style={{ fontSize: 12, color: "#8A8D98" }}>Present today</div><div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: "#1F9E8D" }}>{counts.present}</div></Card>
-        <Card style={{ padding: "16px 18px" }}><div style={{ fontSize: 12, color: "#8A8D98" }}>Absent today</div><div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: "#D64545" }}>{counts.absent}</div></Card>
-        <Card style={{ padding: "16px 18px" }}><div style={{ fontSize: 12, color: "#8A8D98" }}>On leave today</div><div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: "#E2A83B" }}>{counts.leave}</div></Card>
-      </div>
+      <PageHeader
+        title="Attendance & System Usage"
+        sub="Monitor staff attendance, daily leave requests, and user login/logout activity hours."
+      />
+
+      {canViewUsage && (
+        <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
+          <button
+            onClick={() => setActiveTab("attendance")}
+            style={{
+              padding: "8px 18px",
+              borderRadius: 8,
+              fontSize: 12.5,
+              fontWeight: 700,
+              cursor: "pointer",
+              border: activeTab === "attendance" ? "none" : "1px solid #E2E8F0",
+              background: activeTab === "attendance" ? "#534AB7" : "#FFFFFF",
+              color: activeTab === "attendance" ? "#FFFFFF" : "#64748B"
+            }}
+          >
+            Staff Register & Leave
+          </button>
+          <button
+            onClick={() => setActiveTab("sessions")}
+            style={{
+              padding: "8px 18px",
+              borderRadius: 8,
+              fontSize: 12.5,
+              fontWeight: 700,
+              cursor: "pointer",
+              border: activeTab === "sessions" ? "none" : "1px solid #E2E8F0",
+              background: activeTab === "sessions" ? "#534AB7" : "#FFFFFF",
+              color: activeTab === "sessions" ? "#FFFFFF" : "#64748B",
+              display: "flex",
+              alignItems: "center",
+              gap: 8
+            }}
+          >
+            User Login Sessions & Usage Hours
+            <span style={{ fontSize: 11, padding: "2px 7px", borderRadius: 999, background: activeTab === "sessions" ? "rgba(255,255,255,0.25)" : "#E0E7FF", color: activeTab === "sessions" ? "#fff" : "#4338CA" }}>
+              {userSessions.length}
+            </span>
+          </button>
+        </div>
+      )}
+
+      {activeTab === "sessions" ? (
+        <div>
+          {/* KPI Metrics */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 16 }}>
+            <Card style={{ padding: "16px 18px" }}>
+              <div style={{ fontSize: 12, color: "#8A8D98" }}>Active Online Users</div>
+              <div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: "#10B981", display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#10B981", boxShadow: "0 0 8px #10B981" }} />
+                {userSessions.filter(s => s.active).length} online
+              </div>
+            </Card>
+            <Card style={{ padding: "16px 18px" }}>
+              <div style={{ fontSize: 12, color: "#8A8D98" }}>Total Logins Recorded</div>
+              <div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: "#534AB7" }}>
+                {userSessions.length} sessions
+              </div>
+            </Card>
+            <Card style={{ padding: "16px 18px" }}>
+              <div style={{ fontSize: 12, color: "#8A8D98" }}>Total Hours Used (All Users)</div>
+              <div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: "#378ADD" }}>
+                {userSessions.reduce((acc, s) => acc + (Number(s.hoursUsed) || 0), 0).toFixed(1)} hrs
+              </div>
+            </Card>
+            <Card style={{ padding: "16px 18px" }}>
+              <div style={{ fontSize: 12, color: "#8A8D98" }}>Avg Session Duration</div>
+              <div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: "#E2A83B" }}>
+                {userSessions.length > 0 ? (userSessions.reduce((acc, s) => acc + (Number(s.hoursUsed) || 0), 0) / userSessions.length).toFixed(1) : 0} hrs
+              </div>
+            </Card>
+          </div>
+
+          {/* Sessions Table Card */}
+          <Card>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 0 14px", borderBottom: "1px solid #F1F5F9", marginBottom: 12, flexWrap: "wrap", gap: 10 }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#1E293B" }}>User Login & Logout Session History</div>
+                <div style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>
+                  Every login automatically marks attendance as Present and tracks session duration.
+                </div>
+              </div>
+              <input
+                type="text"
+                value={sessionSearch}
+                onChange={e => setSessionSearch(e.target.value)}
+                placeholder="Filter by user or department..."
+                style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid #CBD5E1", fontSize: 12.5, width: 220 }}
+              />
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr 1.2fr 1.2fr 1fr 1.2fr", fontSize: 11.5, fontWeight: 700, color: "#64748B", padding: "6px 4px 10px", borderBottom: "1px solid #E2E8F0" }}>
+              <div>User / Name</div>
+              <div>Username</div>
+              <div>Department</div>
+              <div>Login Time</div>
+              <div>Logout Time</div>
+              <div>Hours Used</div>
+              <div style={{ textAlign: "right" }}>Daily Attendance</div>
+            </div>
+
+            {filteredSessions.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "30px 0", color: "#94A3B8", fontSize: 13 }}>
+                No login session records found.
+              </div>
+            ) : (
+              filteredSessions.map(s => {
+                const loginDate = s.loginTime ? new Date(s.loginTime) : null;
+                const logoutDate = s.logoutTime ? new Date(s.logoutTime) : null;
+                const hoursNum = Number(s.hoursUsed) || 0;
+                const hoursFormatted = hoursNum < 1
+                  ? `${Math.max(1, Math.round(hoursNum * 60))} mins`
+                  : `${Math.floor(hoursNum)}h ${Math.round((hoursNum % 1) * 60)}m (${hoursNum.toFixed(2)}h)`;
+
+                return (
+                  <div
+                    key={s.id}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1.5fr 1fr 1fr 1.2fr 1.2fr 1fr 1.2fr",
+                      alignItems: "center",
+                      fontSize: 12.5,
+                      padding: "11px 4px",
+                      borderBottom: "1px solid #F1F5F9"
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                      <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#EEF2FF", color: "#4F46E5", fontWeight: 700, fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        {(s.name || s.username || "U").slice(0, 1).toUpperCase()}
+                      </div>
+                      <div style={{ fontWeight: 600, color: "#1E293B" }}>{s.name || "User"}</div>
+                    </div>
+                    <div style={{ color: "#64748B", fontFamily: "monospace", fontSize: 12 }}>@{s.username || "—"}</div>
+                    <div style={{ color: "#64748B" }}>{s.dept || "—"}</div>
+                    <div style={{ color: "#334155", fontSize: 12 }}>
+                      {loginDate ? loginDate.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
+                    </div>
+                    <div>
+                      {s.active ? (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 8px", borderRadius: 999, background: "#ECFDF5", color: "#059669", fontSize: 11, fontWeight: 700 }}>
+                          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#10B981" }} />
+                          Online Now
+                        </span>
+                      ) : (
+                        <span style={{ color: "#64748B", fontSize: 12 }}>
+                          {logoutDate ? logoutDate.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <span style={{ fontWeight: 700, color: s.active ? "#059669" : "#1E293B", background: s.active ? "#F0FDF4" : "#F8FAFC", padding: "2px 7px", borderRadius: 6, border: `1px solid ${s.active ? "#BBF7D0" : "#E2E8F0"}` }}>
+                        {hoursFormatted}
+                      </span>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "#059669", background: "#ECFDF5", padding: "3px 8px", borderRadius: 999, fontSize: 11, fontWeight: 600 }}>
+                        <Check size={12} /> Present
+                      </span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </Card>
+        </div>
+      ) : (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 16 }}>
+            <Card style={{ padding: "16px 18px" }}><div style={{ fontSize: 12, color: "#8A8D98" }}>Present today</div><div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: "#1F9E8D" }}>{counts.present}</div></Card>
+            <Card style={{ padding: "16px 18px" }}><div style={{ fontSize: 12, color: "#8A8D98" }}>Absent today</div><div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: "#D64545" }}>{counts.absent}</div></Card>
+            <Card style={{ padding: "16px 18px" }}><div style={{ fontSize: 12, color: "#8A8D98" }}>On leave today</div><div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: "#E2A83B" }}>{counts.leave}</div></Card>
+          </div>
 
       <Card style={{ marginBottom: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 0 12px" }}>
@@ -3245,6 +3674,8 @@ export function AttendancePage({ roster, attendance, onCycle, leaveRequests, onA
           );
         })}
       </Card>
+      </>
+      )}
     </div>
   );
 }
@@ -4238,4 +4669,480 @@ export function DepartmentDetail({
   );
 }
 
+export function OrderStageAlignmentModal({
+  order,
+  isOpen,
+  onClose,
+  onSaveStages
+}) {
+  if (!isOpen || !order) return null;
 
+  const currentTemplate = order.template || "90";
+  const [selectedTemplate, setSelectedTemplate] = useState(currentTemplate);
+  const [stages, setStages] = useState(() => {
+    if (Array.isArray(order.stages) && order.stages.length > 0) {
+      return JSON.parse(JSON.stringify(order.stages));
+    }
+    return makeStages(currentTemplate, 0, null);
+  });
+
+  const [draggedIdx, setDraggedIdx] = useState(null);
+  const [dragOverIdx, setDragOverIdx] = useState(null);
+
+  const handleTemplateChange = (tmpl) => {
+    setSelectedTemplate(tmpl);
+    setStages(makeStages(tmpl, 0, null));
+  };
+
+  const moveStage = (index, direction) => {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= stages.length) return;
+    const nextStages = [...stages];
+    const temp = nextStages[index];
+    nextStages[index] = nextStages[targetIndex];
+    nextStages[targetIndex] = temp;
+    setStages(nextStages);
+  };
+
+  const removeStage = (index) => {
+    if (stages.length <= 1) {
+      alert("At least one T&A stage is required.");
+      return;
+    }
+    setStages(stages.filter((_, i) => i !== index));
+  };
+
+  const handleDragStart = (e, index) => {
+    setDraggedIdx(index);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", "" + index);
+  };
+
+  const handleDragOver = (e, index) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dragOverIdx !== index) {
+      setDragOverIdx(index);
+    }
+  };
+
+  const handleDragLeave = (e, index) => {
+    if (dragOverIdx === index) {
+      setDragOverIdx(null);
+    }
+  };
+
+  const handleDrop = (e, targetIndex) => {
+    e.preventDefault();
+    if (draggedIdx !== null && draggedIdx !== targetIndex) {
+      const nextStages = [...stages];
+      const [movedItem] = nextStages.splice(draggedIdx, 1);
+      nextStages.splice(targetIndex, 0, movedItem);
+      setStages(nextStages);
+    }
+    setDraggedIdx(null);
+    setDragOverIdx(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIdx(null);
+    setDragOverIdx(null);
+  };
+
+  const [customStageName, setCustomStageName] = useState("");
+  const [customStageDept, setCustomStageDept] = useState("Merchandising");
+  const [customStageDay, setCustomStageDay] = useState("Day 10");
+
+  const addCustomStage = (e) => {
+    e.preventDefault();
+    if (!customStageName.trim()) return;
+    const newStage = {
+      name: customStageName.trim(),
+      dept: customStageDept,
+      status: "pending",
+      assignee: firstNamedAssignee(customStageDept),
+      reason: null,
+      planned: customStageDay.trim() || "Day 1",
+      completedAt: null,
+      completedOn: null,
+      updatedAt: null,
+      flaggedAt: null
+    };
+    setStages([...stages, newStage]);
+    setCustomStageName("");
+  };
+
+  const handleSave = () => {
+    onSaveStages(order.id, stages, selectedTemplate);
+    onClose();
+  };
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(15, 23, 42, 0.6)",
+        backdropFilter: "blur(4px)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 10000,
+        padding: 16
+      }}
+    >
+      <div
+        style={{
+          background: "#FFFFFF",
+          borderRadius: 14,
+          width: "100%",
+          maxWidth: 820,
+          maxHeight: "90vh",
+          display: "flex",
+          flexDirection: "column",
+          boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+          overflow: "hidden"
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div style={{ padding: "18px 24px", borderBottom: "1px solid #E5E7EB", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#FAF8FE" }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ background: "#534AB7", color: "#fff", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 6 }}>
+                T&A WORKFLOW ALIGNMENT
+              </span>
+              <span style={{ fontSize: 12, color: "#6B7280", fontFamily: "monospace", fontWeight: 600 }}>PO #{order.id}</span>
+            </div>
+            <h3 style={{ fontSize: 17, fontWeight: 700, color: "#111827", margin: "4px 0 0" }}>
+              Align & Prioritize T&A Stages: {order.style} ({order.buyer})
+            </h3>
+            <p style={{ fontSize: 12, color: "#6B7280", margin: "3px 0 0" }}>
+              Reorder stages 1 to {stages.length} to match client's actual production flow, or switch between 90-day and 120-day templates.
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            style={{ background: "none", border: "none", color: "#9CA3AF", cursor: "pointer", padding: 4 }}
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Template Selector Bar */}
+        <div style={{ padding: "12px 24px", background: "#F3F4F6", borderBottom: "1px solid #E5E7EB", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: "#374151" }}>T&A Template:</span>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button
+                type="button"
+                onClick={() => handleTemplateChange("90")}
+                style={{
+                  padding: "5px 14px",
+                  borderRadius: 6,
+                  border: selectedTemplate === "90" ? "2px solid #534AB7" : "1px solid #D1D5DB",
+                  background: selectedTemplate === "90" ? "#EDE9FE" : "#FFFFFF",
+                  color: selectedTemplate === "90" ? "#4338CA" : "#4B5563",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: "pointer"
+                }}
+              >
+                90-Day Standard ({TA_STAGES_90.length} stages)
+              </button>
+              <button
+                type="button"
+                onClick={() => handleTemplateChange("120")}
+                style={{
+                  padding: "5px 14px",
+                  borderRadius: 6,
+                  border: selectedTemplate === "120" ? "2px solid #534AB7" : "1px solid #D1D5DB",
+                  background: selectedTemplate === "120" ? "#EDE9FE" : "#FFFFFF",
+                  color: selectedTemplate === "120" ? "#4338CA" : "#4B5563",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: "pointer"
+                }}
+              >
+                120-Day Extended Dye/Print ({TA_STAGES_120.length} stages)
+              </button>
+            </div>
+          </div>
+          <div style={{ fontSize: 12, color: "#6B7280", fontWeight: 600 }}>
+            Total Pipeline Steps: <b style={{ color: "#1F2937" }}>{stages.length}</b>
+          </div>
+        </div>
+
+        {/* Stages List */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "16px 24px" }}>
+          {/* Drag & Drop Instruction Banner */}
+          <div style={{
+            padding: "9px 14px",
+            background: "#F5F3FF",
+            border: "1px solid #DDD6FE",
+            borderRadius: 8,
+            marginBottom: 12,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            fontSize: 12,
+            color: "#5B21B6"
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Layers size={16} color="#7C3AED" />
+              <span><b>Drag & Drop Pipeline:</b> Grab any stage by the handle (<GripVertical size={13} style={{ display: "inline", verticalAlign: "middle" }} />) and drop to realign priority 1 to {stages.length}.</span>
+            </div>
+            <span style={{ fontSize: 11, color: "#7C3AED", fontWeight: 600 }}>Up / Down buttons also supported</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {stages.map((stage, idx) => (
+              <div
+                key={`${stage.name}-${idx}`}
+                draggable
+                onDragStart={(e) => handleDragStart(e, idx)}
+                onDragOver={(e) => handleDragOver(e, idx)}
+                onDragLeave={(e) => handleDragLeave(e, idx)}
+                onDrop={(e) => handleDrop(e, idx)}
+                onDragEnd={handleDragEnd}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "10px 14px",
+                  background: draggedIdx === idx ? "#EDE9FE" : dragOverIdx === idx ? "#F3E8FF" : (idx % 2 === 0 ? "#F9FAFB" : "#FFFFFF"),
+                  border: dragOverIdx === idx ? "2px dashed #7C3AED" : draggedIdx === idx ? "2px dashed #A78BFA" : "1px solid #E5E7EB",
+                  borderRadius: 8,
+                  gap: 12,
+                  opacity: draggedIdx === idx ? 0.45 : 1,
+                  transform: dragOverIdx === idx ? "scale(1.01)" : "none",
+                  transition: "background 0.15s ease, border 0.15s ease, transform 0.15s ease",
+                  boxShadow: dragOverIdx === idx ? "0 4px 12px rgba(124, 58, 237, 0.15)" : "none"
+                }}
+              >
+                {/* Priority / Order Index & Drag Handle */}
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
+                  <div
+                    title="Drag to reorder"
+                    style={{
+                      cursor: "grab",
+                      color: "#9CA3AF",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: "2px 4px",
+                      borderRadius: 4
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.color = "#534AB7"}
+                    onMouseLeave={e => e.currentTarget.style.color = "#9CA3AF"}
+                  >
+                    <GripVertical size={17} />
+                  </div>
+                  <div
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: 999,
+                      background: "#534AB7",
+                      color: "#FFFFFF",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      flexShrink: 0
+                    }}
+                  >
+                    {idx + 1}
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#111827", display: "flex", alignItems: "center", gap: 8 }}>
+                      <span>{stage.name}</span>
+                      {stage.name.toLowerCase().includes("approval") && (
+                        <span style={{ fontSize: 10, background: "#FEF3C7", color: "#92400E", padding: "1px 6px", borderRadius: 4, fontWeight: 700 }}>
+                          Gating Approval
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 11.5, color: "#6B7280", marginTop: 2, display: "flex", gap: 10 }}>
+                      <span>Department: <b style={{ color: "#374151" }}>{stage.dept}</b></span>
+                      <span>Target: <b style={{ color: "#374151" }}>{stage.planned || `Day ${idx + 1}`}</b></span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Reorder Buttons (Move Up / Down / Remove) */}
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                  <button
+                    type="button"
+                    disabled={idx === 0}
+                    onClick={() => moveStage(idx, -1)}
+                    title="Prioritize higher (Move Up)"
+                    style={{
+                      padding: "5px 8px",
+                      borderRadius: 6,
+                      border: "1px solid #D1D5DB",
+                      background: idx === 0 ? "#F3F4F6" : "#FFFFFF",
+                      color: idx === 0 ? "#9CA3AF" : "#374151",
+                      cursor: idx === 0 ? "not-allowed" : "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 2,
+                      fontSize: 11,
+                      fontWeight: 600
+                    }}
+                  >
+                    <ArrowUp size={13} /> Up
+                  </button>
+                  <button
+                    type="button"
+                    disabled={idx === stages.length - 1}
+                    onClick={() => moveStage(idx, 1)}
+                    title="Prioritize lower (Move Down)"
+                    style={{
+                      padding: "5px 8px",
+                      borderRadius: 6,
+                      border: "1px solid #D1D5DB",
+                      background: idx === stages.length - 1 ? "#F3F4F6" : "#FFFFFF",
+                      color: idx === stages.length - 1 ? "#9CA3AF" : "#374151",
+                      cursor: idx === stages.length - 1 ? "not-allowed" : "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 2,
+                      fontSize: 11,
+                      fontWeight: 600
+                    }}
+                  >
+                    <ArrowDown size={13} /> Down
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeStage(idx)}
+                    title="Remove stage from this order"
+                    style={{
+                      padding: "5px 8px",
+                      borderRadius: 6,
+                      border: "1px solid #FECACA",
+                      background: "#FEF2F2",
+                      color: "#DC2626",
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      fontSize: 11,
+                      fontWeight: 600
+                    }}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Add custom stage */}
+          <div style={{ marginTop: 16, padding: "14px 16px", background: "#F9FAFB", border: "1px dashed #D1D5DB", borderRadius: 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 8 }}>
+              + Insert Custom Stage to this Pipeline
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr auto", gap: 10, alignItems: "center" }}>
+              <input
+                type="text"
+                placeholder="Stage Name (e.g. Special Foil Print)"
+                value={customStageName}
+                onChange={e => setCustomStageName(e.target.value)}
+                style={{ padding: "7px 10px", borderRadius: 6, border: "1px solid #D1D5DB", fontSize: 12 }}
+              />
+              <select
+                value={customStageDept}
+                onChange={e => setCustomStageDept(e.target.value)}
+                style={{ padding: "7px 10px", borderRadius: 6, border: "1px solid #D1D5DB", fontSize: 12 }}
+              >
+                {Object.keys(ORG_STRUCTURE).map(dept => (
+                  <option key={dept} value={dept}>{dept}</option>
+                ))}
+              </select>
+              <input
+                type="text"
+                placeholder="Target Day (e.g. Day 22)"
+                value={customStageDay}
+                onChange={e => setCustomStageDay(e.target.value)}
+                style={{ padding: "7px 10px", borderRadius: 6, border: "1px solid #D1D5DB", fontSize: 12 }}
+              />
+              <button
+                type="button"
+                onClick={addCustomStage}
+                style={{
+                  padding: "7px 14px",
+                  borderRadius: 6,
+                  border: "none",
+                  background: "#534AB7",
+                  color: "#FFFFFF",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: "pointer"
+                }}
+              >
+                Add Stage
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: "14px 24px", borderTop: "1px solid #E5E7EB", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#FAF8FE" }}>
+          <button
+            type="button"
+            onClick={() => handleTemplateChange(selectedTemplate)}
+            style={{
+              background: "none",
+              border: "none",
+              color: "#6B7280",
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4
+            }}
+          >
+            <RotateCcw size={13} /> Reset to Default Template Order
+          </button>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                padding: "8px 18px",
+                borderRadius: 7,
+                border: "1px solid #D1D5DB",
+                background: "#FFFFFF",
+                fontSize: 13,
+                fontWeight: 600,
+                color: "#4B5563",
+                cursor: "pointer"
+              }}
+            >
+              Skip / Keep Default
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              style={{
+                padding: "8px 22px",
+                borderRadius: 7,
+                border: "none",
+                background: "#1F9E8D",
+                fontSize: 13,
+                fontWeight: 700,
+                color: "#FFFFFF",
+                cursor: "pointer",
+                boxShadow: "0 2px 4px rgba(31, 158, 141, 0.2)"
+              }}
+            >
+              Confirm & Save T&A Pipeline
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

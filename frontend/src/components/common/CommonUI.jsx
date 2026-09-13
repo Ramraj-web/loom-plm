@@ -73,9 +73,25 @@ export function BackLink({ onClick, label }) {
 
 export function renderWithMentions(text) {
   if (!text) return "";
-  const parts = text.split(/(@\w+)/g);
+  const parts = text.split(/(@[a-zA-Z0-9_.-]+)/g);
   return parts.map((part, i) =>
-    part.startsWith("@") ? <span key={i} style={{ color: "#378ADD", fontWeight: 600 }}>{part}</span> : part
+    part.startsWith("@") ? (
+      <span
+        key={i}
+        style={{
+          color: "#2563EB",
+          background: "#EFF6FF",
+          padding: "1px 5px",
+          borderRadius: 4,
+          fontWeight: 600,
+          border: "1px solid #BFDBFE",
+          display: "inline-block",
+          margin: "0 1px"
+        }}
+      >
+        {part}
+      </span>
+    ) : part
   );
 }
 

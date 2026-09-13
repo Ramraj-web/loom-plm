@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 
 import { ORG_STRUCTURE } from "../constants/loomData.js";
 
@@ -41,6 +42,7 @@ export const DEFAULT_USERS = [
 export function LoginPage({ users, onLogin }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const submit = event => {
     event.preventDefault();
@@ -54,7 +56,37 @@ export function LoginPage({ users, onLogin }) {
       <h1 style={{ margin: "0 0 6px", color: "#151B2E", fontSize: 26 }}>Welcome back</h1>
       <p style={{ margin: "0 0 22px", color: "#8A8D98", fontSize: 13 }}>Sign in to your workspace</p>
       <label style={labelStyle}>Username<input value={username} onChange={e => setUsername(e.target.value)} autoFocus required style={inputStyle} /></label>
-      <label style={{ ...labelStyle, marginTop: 14 }}>Password<input type="password" value={password} onChange={e => setPassword(e.target.value)} required style={inputStyle} /></label>
+      <label style={{ ...labelStyle, marginTop: 14 }}>
+        Password
+        <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+          <input
+            type={showPassword ? "text" : "password"}
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            required
+            style={{ ...inputStyle, paddingRight: 38 }}
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            style={{
+              position: "absolute",
+              right: 10,
+              background: "none",
+              border: "none",
+              padding: 0,
+              cursor: "pointer",
+              color: "#64748B",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center"
+            }}
+            title={showPassword ? "Hide password" : "Show password"}
+          >
+            {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+          </button>
+        </div>
+      </label>
       {error && <div style={{ color: "#B42318", fontSize: 12, marginTop: 12 }}>{error}</div>}
       <button type="submit" style={primaryButtonStyle}>Sign in</button>
       {/* <div style={{ color: "#8A8D98", fontSize: 11, marginTop: 16 }}>Initial administrator: admin / admin123 · MD: md / md123</div> */}
@@ -65,10 +97,11 @@ export function LoginPage({ users, onLogin }) {
 export function UserAccessPage({ users, teams, onChangeUsers, onChangeTeams, rotation, onChangeRotation }) {
   const [tab, setTab] = useState("users");
   const [editing, setEditing] = useState(null);
-  const [userForm, setUserForm] = useState({ name: "", employeeId: "", email: "", username: "", password: "", teamId: teams[0]?.id || "" });
+  const [showUserFormPassword, setShowUserFormPassword] = useState(false);
+  const [userForm, setUserForm] = useState({ name: "", employeeId: "", email: "", username: "", password: "", teamId: teams[0]?.id || "", teamIds: [teams[0]?.id || ""] });
   const [teamName, setTeamName] = useState("");
   const teamMap = useMemo(() => Object.fromEntries(teams.map(team => [team.id, team])), [teams]);
-  const resetUser = () => { setEditing(null); setUserForm({ name: "", employeeId: "", email: "", username: "", password: "", teamId: teams[0]?.id || "" }); };
+  const resetUser = () => { setEditing(null); setShowUserFormPassword(false); setUserForm({ name: "", employeeId: "", email: "", username: "", password: "", teamId: teams[0]?.id || "", teamIds: [teams[0]?.id || ""] }); };
   const submitUser = event => {
     event.preventDefault();
     const next = { ...userForm, id: editing?.id || makeId("user"), active: editing?.active !== false };
@@ -149,32 +182,102 @@ export function UserAccessPage({ users, teams, onChangeUsers, onChangeTeams, rot
             ].map(([key, label]) => (
               <label key={key} style={labelStyle}>
                 {label}
-                <input
-                  required={key !== "email"}
-                  type={key === "password" ? "password" : "text"}
-                  value={userForm[key]}
-                  onChange={e => setUserForm({ ...userForm, [key]: e.target.value })}
-                  style={inputStyle}
-                  placeholder={`Enter ${label.toLowerCase()}`}
-                />
+                {key === "password" ? (
+                  <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                    <input
+                      required
+                      type={showUserFormPassword ? "text" : "password"}
+                      value={userForm[key]}
+                      onChange={e => setUserForm({ ...userForm, [key]: e.target.value })}
+                      style={{ ...inputStyle, paddingRight: 38 }}
+                      placeholder={`Enter ${label.toLowerCase()}`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowUserFormPassword(!showUserFormPassword)}
+                      style={{
+                        position: "absolute",
+                        right: 10,
+                        background: "none",
+                        border: "none",
+                        padding: 0,
+                        cursor: "pointer",
+                        color: "#64748B",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center"
+                      }}
+                      title={showUserFormPassword ? "Hide password" : "Show password"}
+                    >
+                      {showUserFormPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                ) : (
+                  <input
+                    required={key !== "email"}
+                    type="text"
+                    value={userForm[key]}
+                    onChange={e => setUserForm({ ...userForm, [key]: e.target.value })}
+                    style={inputStyle}
+                    placeholder={`Enter ${label.toLowerCase()}`}
+                  />
+                )}
               </label>
             ))}
-            <label style={labelStyle}>
-              Team / Department
-              <select
-                value={userForm.teamId}
-                onChange={e => setUserForm({ ...userForm, teamId: e.target.value })}
-                style={inputStyle}
-              >
-                {teams.map(team => (
-                  <option key={team.id} value={team.id}>
-                    {team.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={labelStyle}>
+                Assigned Departments / Teams (Select one or more)
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 6, padding: "10px 12px", background: "#F9FAFB", border: "1px solid #D1D5DB", borderRadius: 8, maxHeight: 150, overflowY: "auto" }}>
+                  {teams.map(team => {
+                    const selectedTeams = Array.isArray(userForm.teamIds) && userForm.teamIds.length > 0
+                      ? userForm.teamIds
+                      : (userForm.teamId ? [userForm.teamId] : []);
+                    const isChecked = selectedTeams.includes(team.id);
+                    return (
+                      <label
+                        key={team.id}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          background: isChecked ? "#EDE9FE" : "#FFFFFF",
+                          color: isChecked ? "#534AB7" : "#374151",
+                          border: `1px solid ${isChecked ? "#C4B5FD" : "#D1D5DB"}`,
+                          borderRadius: 6,
+                          padding: "5px 10px",
+                          fontSize: 12,
+                          fontWeight: isChecked ? 600 : 500,
+                          cursor: "pointer",
+                          userSelect: "none"
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            let next = [...selectedTeams];
+                            if (e.target.checked) {
+                              if (!next.includes(team.id)) next.push(team.id);
+                            } else {
+                              next = next.filter(id => id !== team.id);
+                            }
+                            if (next.length === 0) next = [team.id];
+                            setUserForm({
+                              ...userForm,
+                              teamId: next[0] || "",
+                              teamIds: next
+                            });
+                          }}
+                        />
+                        {team.name}
+                      </label>
+                    );
+                  })}
+                </div>
+              </label>
+            </div>
           </div>
-          <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+          <div style={{ display: "flex", gap: 8, marginTop: 16, alignItems: "center" }}>
             <button type="submit" style={primaryButtonStyle}>{editing ? "Save user" : "Create user"}</button>
             {editing && <button type="button" onClick={resetUser} style={secondaryButtonStyle}>Cancel</button>}
           </div>
@@ -182,19 +285,51 @@ export function UserAccessPage({ users, teams, onChangeUsers, onChangeTeams, rot
 
         <div style={panelStyle}>
           <div style={panelTitle}>Users</div>
-          {users.map(user => (
-            <div key={user.id} style={rowStyle}>
-              <div style={avatarStyle}>{user.name.slice(0, 1).toUpperCase()}</div>
-              <div style={{ flex: 1 }}>
-                <b>{user.name}</b>
-                <div style={{ color: "#8A8D98", fontSize: 12 }}>
-                  {user.email || user.username} · <span style={{ fontWeight: 600, color: "#1F9E8D" }}>{teamMap[user.teamId]?.name || "No team"}</span>
+          {users.map(user => {
+            const userTeamIds = Array.isArray(user.teamIds) && user.teamIds.length > 0
+              ? user.teamIds
+              : (user.teamId ? [user.teamId] : []);
+            const userTeams = userTeamIds.map(id => teamMap[id]?.name).filter(Boolean);
+            return (
+              <div key={user.id} style={rowStyle}>
+                <div style={avatarStyle}>{user.name.slice(0, 1).toUpperCase()}</div>
+                <div style={{ flex: 1 }}>
+                  <b>{user.name}</b>
+                  <div style={{ color: "#8A8D98", fontSize: 12, marginTop: 3 }}>
+                    {user.email || user.username}
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 4 }}>
+                    {userTeams.length > 0 ? (
+                      userTeams.map(tName => (
+                        <span key={tName} style={{ fontWeight: 600, color: "#1F9E8D", background: "#E1F5EE", padding: "1px 7px", borderRadius: 4, fontSize: 11 }}>
+                          {tName}
+                        </span>
+                      ))
+                    ) : (
+                      <span style={{ color: "#9CA3AF", fontSize: 11 }}>No team</span>
+                    )}
+                  </div>
                 </div>
+                <button
+                  onClick={() => {
+                    const uTeams = Array.isArray(user.teamIds) && user.teamIds.length > 0
+                      ? user.teamIds
+                      : (user.teamId ? [user.teamId] : [teams[0]?.id || ""]);
+                    setEditing(user);
+                    setUserForm({
+                      ...user,
+                      teamId: uTeams[0] || "",
+                      teamIds: uTeams
+                    });
+                  }}
+                  style={secondaryButtonStyle}
+                >
+                  Edit
+                </button>
+                <button onClick={() => onChangeUsers(users.filter(item => item.id !== user.id))} style={dangerButtonStyle}>Delete</button>
               </div>
-              <button onClick={() => { setEditing(user); setUserForm(user); }} style={secondaryButtonStyle}>Edit</button>
-              <button onClick={() => onChangeUsers(users.filter(item => item.id !== user.id))} style={dangerButtonStyle}>Delete</button>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </>
     )}
@@ -292,7 +427,7 @@ export function UserAccessPage({ users, teams, onChangeUsers, onChangeTeams, rot
 
 const inputStyle = { width: "100%", boxSizing: "border-box", border: "1px solid #D1D5DB", borderRadius: 7, padding: "10px 11px", fontSize: 13, color: "#151B2E" };
 const primaryButtonStyle = { border: 0, borderRadius: 7, padding: "10px 14px", marginTop: 16, background: "#151B2E", color: "#fff", fontWeight: 700, cursor: "pointer" };
-const secondaryButtonStyle = { border: "1px solid #D1D5DB", background: "#fff", borderRadius: 6, padding: "7px 11px", color: "#4B5563", cursor: "pointer" };
+const secondaryButtonStyle = { height: "fit-content", marginTop: 16,   border: "1px solid #D1D5DB", background: "#fff", borderRadius: 6, padding: "7px 11px", color: "#4B5563", cursor: "pointer" };
 const dangerButtonStyle = { ...secondaryButtonStyle, color: "#B42318", borderColor: "#FECACA" };
 const labelStyle = { display: "flex", flexDirection: "column", gap: 6, color: "#64748B", fontSize: 11.5, fontWeight: 600 };
 const panelStyle = { background: "#fff", border: "1px solid #ECEDF1", borderRadius: 12, padding: 18, marginBottom: 16 };
