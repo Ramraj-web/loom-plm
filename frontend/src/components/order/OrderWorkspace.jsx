@@ -18,6 +18,7 @@ import { OutsourcingQuotationPanel } from "./OutsourcingQuotationPanel.jsx";
 import { ProductionTab } from "./ProductionTab.jsx";
 import { InspectionTab } from "./InspectionTab.jsx";
 import { CertificatesTab } from "./CertificatesTab.jsx";
+import { scanPOSheetFile } from "../../utils/poDocumentScanner.js";
 
 export function DisputeStageModal({
   isOpen,
@@ -402,11 +403,44 @@ function PreProductionTab({ order, role, onFieldChange, onSubmit, onApprove }) {
   const [uploadedFiles, setUploadedFiles] = useState({});
   const [ppMeetingDone, setPpMeetingDone] = useState(false);
   const [sizeSetDone, setSizeSetDone] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanMessage, setScanMessage] = useState(null);
 
-  const handleFileUpload = (docKey, e) => {
+  const handleFileUpload = async (docKey, e) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setUploadedFiles(prev => ({ ...prev, [docKey]: file.name }));
+    if (!file) return;
+
+    setUploadedFiles(prev => ({ ...prev, [docKey]: file.name }));
+
+    // Auto-scan if PO Sheet or PO document uploaded!
+    if (docKey === "poSheet" || file.name.toLowerCase().includes("po") || file.name.toLowerCase().includes("order")) {
+      setIsScanning(true);
+      setScanMessage("Scanning document for PO #, Qty, FOB Rate & Order Value...");
+      try {
+        const extracted = await scanPOSheetFile(file);
+        if (extracted && (extracted.fobPrice || extracted.orderValue || extracted.poQty || extracted.poNumber)) {
+          if (extracted.poNumber) onFieldChange("poSheet", "poNumber", extracted.poNumber);
+          if (extracted.poQty) onFieldChange("poSheet", "poQty", extracted.poQty);
+          if (extracted.fobPrice) onFieldChange("poSheet", "fobPrice", extracted.fobPrice);
+          if (extracted.orderValue) onFieldChange("poSheet", "orderValue", extracted.orderValue);
+
+          const summaryParts = [];
+          if (extracted.poNumber) summaryParts.push(`PO #${extracted.poNumber}`);
+          if (extracted.poQty) summaryParts.push(`Qty: ${extracted.poQty.toLocaleString()}`);
+          if (extracted.fobPrice) summaryParts.push(`FOB: ₹${extracted.fobPrice}`);
+          if (extracted.orderValue) summaryParts.push(`Order Value: ₹${extracted.orderValue.toLocaleString()}`);
+
+          setScanMessage(`✓ Extracted from ${file.name}: ${summaryParts.join(" · ")}`);
+        } else {
+          setScanMessage(`Attached ${file.name}. (You can also review or enter values manually below)`);
+        }
+      } catch (err) {
+        console.warn("Scan failed:", err);
+        setScanMessage(`Attached ${file.name}`);
+      } finally {
+        setIsScanning(false);
+        setTimeout(() => setScanMessage(null), 8000);
+      }
     }
   };
 
@@ -418,6 +452,24 @@ function PreProductionTab({ order, role, onFieldChange, onSubmit, onApprove }) {
           <CheckCircle2 size={15} /> All sign-off documents approved — PP Meeting can now be held.
         </div>
       ) : null}
+
+      {/* Auto-scan notification toast / banner */}
+      {scanMessage && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 10,
+          background: isScanning ? "#EFF6FF" : "#F0FDF4",
+          border: `1px solid ${isScanning ? "#BFDBFE" : "#BBF7D0"}`,
+          borderRadius: 8, padding: "10px 14px", marginBottom: 16,
+          fontSize: 12.5, color: isScanning ? "#1D4ED8" : "#15803D", fontWeight: 600
+        }}>
+          {isScanning ? (
+            <span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid #3B82F6", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+          ) : (
+            <CheckCircle2 size={16} />
+          )}
+          <span>{scanMessage}</span>
+        </div>
+      )}
 
       {/* Header section */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
@@ -542,29 +594,33 @@ function PreProductionTab({ order, role, onFieldChange, onSubmit, onApprove }) {
                   ))}
                 </div>
 
-                {/* Row 2: 3rd field if present */}
+                {/* Remaining fields if more than 2 */}
                 {doc.fields.length > 2 && (
-                  <div style={{ width: doc.fields[2].fullWidth ? "100%" : "calc(50% - 6px)" }}>
-                    <label style={{ fontSize: 11.5, fontWeight: 500, color: "#6B7280", display: "block", marginBottom: 4 }}>
-                      {doc.fields[2].label}
-                    </label>
-                    <input
-                      type={doc.fields[2].type || "text"}
-                      value={state.values[doc.fields[2].key] || ""}
-                      disabled={isApproved}
-                      onChange={e => onFieldChange(doc.key, doc.fields[2].key, e.target.value)}
-                      style={{
-                        width: "100%",
-                        fontSize: 12.5,
-                        padding: "7px 10px",
-                        borderRadius: 6,
-                        border: "1px solid #D1D5DB",
-                        background: isApproved ? "#F9FAFB" : "#FFFFFF",
-                        color: "#111827",
-                        boxSizing: "border-box",
-                        outline: "none"
-                      }}
-                    />
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12 }}>
+                    {doc.fields.slice(2).map(f => (
+                      <div key={f.key} style={{ gridColumn: f.fullWidth ? "1 / -1" : undefined }}>
+                        <label style={{ fontSize: 11.5, fontWeight: 500, color: "#6B7280", display: "block", marginBottom: 4 }}>
+                          {f.label}
+                        </label>
+                        <input
+                          type={f.type || "text"}
+                          value={state.values[f.key] ?? ""}
+                          disabled={isApproved}
+                          onChange={e => onFieldChange(doc.key, f.key, e.target.value)}
+                          style={{
+                            width: "100%",
+                            fontSize: 12.5,
+                            padding: "7px 10px",
+                            borderRadius: 6,
+                            border: "1px solid #D1D5DB",
+                            background: isApproved ? "#F9FAFB" : "#FFFFFF",
+                            color: "#111827",
+                            boxSizing: "border-box",
+                            outline: "none"
+                          }}
+                        />
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -1351,7 +1407,8 @@ function DocumentsPanel({
   order, role, costingContent, preProdContent, quotationContent, complianceContent,
   onUpdateShippedQty, onAddProductionLog, onDeleteProductionLog, onUpdateInspectionData, onUpdateCertificates,
   people = [],
-  onPushNotification
+  onPushNotification,
+  onPreProdField
 }) {
   const [activeTab, setActiveTab] = useState("Files");
   const [docs, setDocs] = useState({});
@@ -1363,6 +1420,7 @@ function DocumentsPanel({
   const [draft, setDraft] = useState("");
   const [mentionQuery, setMentionQuery] = useState(null);
   const [previewDoc, setPreviewDoc] = useState(null);
+  const [scanStatus, setScanStatus] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -1425,6 +1483,37 @@ function DocumentsPanel({
       }
     };
     reader.readAsDataURL(file);
+
+    // Auto-scan PO Sheet or order files for FOB and Order Value
+    if (docType === "PO Sheet" || file.name.toLowerCase().includes("po") || file.name.toLowerCase().includes("order")) {
+      setScanStatus({ text: `Scanning ${file.name} for PO & FOB values...`, loading: true });
+      try {
+        const extracted = await scanPOSheetFile(file);
+        if (extracted && (extracted.fobPrice || extracted.orderValue || extracted.poQty || extracted.poNumber)) {
+          if (onPreProdField) {
+            if (extracted.poNumber) onPreProdField(order.id, "poSheet", "poNumber", extracted.poNumber);
+            if (extracted.poQty) onPreProdField(order.id, "poSheet", "poQty", extracted.poQty);
+            if (extracted.fobPrice) onPreProdField(order.id, "poSheet", "fobPrice", extracted.fobPrice);
+            if (extracted.orderValue) onPreProdField(order.id, "poSheet", "orderValue", extracted.orderValue);
+          }
+
+          const details = [];
+          if (extracted.poNumber) details.push(`PO #${extracted.poNumber}`);
+          if (extracted.poQty) details.push(`Qty: ${extracted.poQty.toLocaleString()}`);
+          if (extracted.fobPrice) details.push(`FOB: ₹${extracted.fobPrice}`);
+          if (extracted.orderValue) details.push(`Order Value: ₹${extracted.orderValue.toLocaleString()}`);
+
+          setScanStatus({ text: `✓ Auto-scanned & synced to Order Value: ${details.join(" · ")}`, loading: false });
+        } else {
+          setScanStatus({ text: `✓ Attached ${file.name}. (Values can also be reviewed in Pre-Production tab)`, loading: false });
+        }
+      } catch (err) {
+        console.warn("Scan failed:", err);
+        setScanStatus({ text: `Attached ${file.name}`, loading: false });
+      } finally {
+        setTimeout(() => setScanStatus(null), 8000);
+      }
+    }
   }
 
   async function deleteDoc(docType) {
@@ -1622,11 +1711,27 @@ function DocumentsPanel({
             <div style={{ fontSize: 14, fontWeight: 700, color: "#1B2130" }}>{activeTab}</div>
           </div>
           <div style={{ fontSize: 11.5, color: "#8A8D98", marginBottom: 16, marginLeft: 34 }}>
-            {activeTab === "Files" ? "Source documents for this order" : "Upload proof once this T&A action is complete"}
+            {activeTab === "Files" ? "Source documents for this order — uploading PO Sheet automatically extracts FOB & PO Values" : "Upload proof once this T&A action is complete"}
             {!canUploadHere && allowedDepts.length > 0 && (
               <span style={{ color: "#B0812E", fontWeight: 600 }}> · Attaching here is owned by {allowedDepts.join(" / ")}</span>
             )}
           </div>
+          {scanStatus && (
+            <div style={{
+              display: "flex", alignItems: "center", gap: 10,
+              background: scanStatus.loading ? "#EFF6FF" : "#F0FDF4",
+              border: `1px solid ${scanStatus.loading ? "#BFDBFE" : "#BBF7D0"}`,
+              borderRadius: 8, padding: "10px 14px", marginBottom: 14,
+              fontSize: 12.5, color: scanStatus.loading ? "#1D4ED8" : "#15803D", fontWeight: 600
+            }}>
+              {scanStatus.loading ? (
+                <span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid #3B82F6", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+              ) : (
+                <CheckCircle2 size={16} />
+              )}
+              <span>{scanStatus.text}</span>
+            </div>
+          )}
           {activeTab === "Final OCR" && (
             <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#F7F7F9", border: "1px solid #ECEDF1", borderRadius: 10, padding: "12px 14px", marginBottom: 14 }}>
               <div style={{ flex: 1 }}>
@@ -2238,6 +2343,7 @@ export function OrderWorkspace({
         onUpdateCertificates={onUpdateCertificates}
         people={people}
         onPushNotification={onPushNotification}
+        onPreProdField={onPreProdField}
       />
 
       {showAssignModal && (

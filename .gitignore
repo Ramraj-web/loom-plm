@@ -5,3 +5,4 @@ node_modules/
 dist/
 backend/data/storage.json
 .DS_Store
+*.traineddata

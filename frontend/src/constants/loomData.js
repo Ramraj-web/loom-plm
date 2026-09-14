@@ -1068,11 +1068,14 @@ export const PRE_PROD_DOC_TYPES = [
   {
     key: "poSheet",
     label: "PO Sheet",
-    hint: 'Upload "PO Sheet" in the Files tab — it will link here automatically.',
-    hasUpload: false,
+    hint: 'Upload "PO Sheet" in the Files tab or below — auto-scans PDF, Excel & Images to extract PO #, Qty, FOB Rate & Order Value.',
+    hasUpload: true,
+    uploadLabel: "Upload PO Sheet (Excel / PDF / Image)",
     fields: [
       { key: "poNumber", label: "PO Number" },
-      { key: "poQty", label: "PO Qty", type: "number" },
+      { key: "poQty", label: "PO Qty (pcs)", type: "number" },
+      { key: "fobPrice", label: "FOB Rate / pc (₹ / $)", type: "number" },
+      { key: "orderValue", label: "Total Order Value (FOB)", type: "number" },
       { key: "poDate", label: "PO Date", halfWidth: true }
     ]
   },

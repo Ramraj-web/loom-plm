@@ -3330,6 +3330,87 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
     return stages.every(s => s.status === "done" || s.status === "completed");
   });
   const shippedPcs = completedOrdersList.reduce((sum, o) => sum + (Number(o.qty) || 0), 0);
+
+  // Calculate financial overview metrics from orders & finances:
+  // 1) Order Value: Total value across orders from scanned PO Sheet / FOB / costing / order revenue
+  const totalCalculatedOrderValue = useMemo(() => {
+    let sum = 0;
+    orders.forEach(o => {
+      if (o.isDeleted) return;
+      const qty = Number(o.qty) || Number(o.preProd?.poSheet?.values?.poQty) || 0;
+      
+      // 1. First priority: Uploaded / Scanned PO Sheet values
+      const poSheetValues = o.preProd?.poSheet?.values || {};
+      if (poSheetValues.orderValue && Number(poSheetValues.orderValue) > 0) {
+        sum += Number(poSheetValues.orderValue);
+        return;
+      }
+      if (poSheetValues.fobPrice && Number(poSheetValues.fobPrice) > 0) {
+        sum += Number(poSheetValues.fobPrice) * (Number(poSheetValues.poQty) || qty || 1);
+        return;
+      }
+
+      // 2. Direct order FOB or orderValue fields
+      if (o.orderValue && Number(o.orderValue) > 0) {
+        sum += Number(o.orderValue);
+        return;
+      }
+      if (o.fobPrice || o.fob || o.fobRate) {
+        sum += (Number(o.fobPrice || o.fob || o.fobRate) || 0) * (qty || 1);
+        return;
+      }
+
+      // 3. Approved Costing / Costing Rows
+      if (o.costingApproval?.grandTotal) {
+        sum += Number(o.costingApproval.grandTotal) * (qty || 1);
+        return;
+      }
+      if (Array.isArray(o.costingRows) && o.costingRows.length > 0) {
+        const perPc = o.costingRows.reduce((acc, r) => acc + (r.isHeader ? 0 : (Number(r.price) || 0) * (Number(r.qty) || 0)), 0);
+        if (perPc > 0) {
+          sum += perPc * (qty || 1);
+          return;
+        }
+      }
+    });
+    return sum > 0 ? sum : (financials?.revenue || 0);
+  }, [orders, financials?.revenue]);
+
+  // 2) Planned Cost & 3) Actual Cost from all active orders
+  const financialTotals = useMemo(() => {
+    const planned = orders.reduce((sum, o) => sum + (o.isDeleted ? 0 : (Number(o.plannedCost) || 0)), 0);
+    const actual = orders.reduce((sum, o) => sum + (o.isDeleted ? 0 : (Number(o.actualCost) || 0)), 0);
+    return {
+      plannedCost: planned > 0 ? planned : (financials?.cogs || 0),
+      actualCost: actual > 0 ? actual : (financials?.cogs || 0),
+    };
+  }, [orders, financials?.cogs]);
+
+  // 4) Profit: Difference between Order Value and Actual Cost (or Planned Cost if actual is 0)
+  const overallProfitVal = totalCalculatedOrderValue - financialTotals.actualCost;
+
+  // 5) & 6) Variances across categories:
+  // Overall Variance Raw Material: Fabric / Raw Material + Trims & Accessories
+  // Overall Variance in Development: Production / CMT + VAP + Logistics + Other / Overheads & Margin
+  const varianceAggregates = useMemo(() => {
+    let rawMaterialVariance = 0;
+    let devVariance = 0;
+
+    orders.forEach(o => {
+      if (o.isDeleted) return;
+      const breakdown = computeOrderVarianceBreakdown(o);
+      (breakdown.categories || []).forEach(cat => {
+        if (cat.key === "fabric" || cat.key === "trims") {
+          rawMaterialVariance += (cat.variance || 0);
+        } else {
+          devVariance += (cat.variance || 0);
+        }
+      });
+    });
+
+    return { rawMaterialVariance, devVariance };
+  }, [orders]);
+
   const grossProfit = (financials?.revenue || 0) - (financials?.cogs || 0);
   const grossMargin = financials?.revenue > 0 ? Math.round((grossProfit / financials.revenue) * 1000) / 10 : 0;
 
@@ -3828,12 +3909,20 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
           <CardHeader title="FINANCIAL OVERVIEW" sub="YTD (INR) — entered by Finance team" />
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
             {[
-              ["Total Revenue", formatInr(financials?.revenue || 0), "#0F172A"],
-              ["Total COGS", formatInr(financials?.cogs || 0), "#0F172A"],
-              ["Gross Profit", formatInr(grossProfit || 0), "#10B981"],
-              ["Gross Margin", `${grossMargin}%`, "#10B981"],
-              ["EBITDA", formatInr(financials?.ebitda || 0), "#0F172A"],
-              ["Stock Value", formatInr(financials?.stockValue || 0), "#0F172A"],
+              ["Order Value", formatInr(totalCalculatedOrderValue), "#0F172A"],
+              ["Planned Cost", formatInr(financialTotals.plannedCost), "#0F172A"],
+              ["Actual Cost", formatInr(financialTotals.actualCost), "#0F172A"],
+              ["Profit", formatInr(overallProfitVal), overallProfitVal >= 0 ? "#10B981" : "#EF4444"],
+              [
+                "Overall Variance Raw Material",
+                `${varianceAggregates.rawMaterialVariance > 0 ? "+" : varianceAggregates.rawMaterialVariance < 0 ? "-" : ""}${formatInr(Math.abs(varianceAggregates.rawMaterialVariance))}`,
+                varianceAggregates.rawMaterialVariance > 0 ? "#DC2626" : varianceAggregates.rawMaterialVariance < 0 ? "#059669" : "#0F172A"
+              ],
+              [
+                "Overall Variance in Development",
+                `${varianceAggregates.devVariance > 0 ? "+" : varianceAggregates.devVariance < 0 ? "-" : ""}${formatInr(Math.abs(varianceAggregates.devVariance))}`,
+                varianceAggregates.devVariance > 0 ? "#DC2626" : varianceAggregates.devVariance < 0 ? "#059669" : "#0F172A"
+              ],
             ].map(([label, val, color]) => (
               <div key={label} style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 8, padding: "10px 12px" }}>
                 <div style={{ fontSize: 10.5, color: "#64748B", marginBottom: 4 }}>{label}</div>
