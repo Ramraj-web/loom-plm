@@ -3321,6 +3321,7 @@ export default function LoomPLM() {
     content = (
       <AuditLoggerPage
         auditLogs={auditLogs}
+        userSessions={userSessions}
         onClearAuditLogs={() => {
           setAuditLogs([]);
           try {

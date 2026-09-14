@@ -5418,16 +5418,254 @@ export function OrderStageAlignmentModal({
 
 export function AuditLoggerPage({
   auditLogs = [],
+  userSessions = [],
   onClearAuditLogs,
   users = [],
   teams = []
 }) {
+  const [activeTab, setActiveTab] = useState("userDurations"); // "userDurations" | "events"
+  const [durationFormat, setDurationFormat] = useState("both"); // "both" | "mins" | "hours"
+  const [deptFilter, setDeptFilter] = useState("ALL");
+  const [userSearch, setUserSearch] = useState("");
+  const [selectedUserForDetail, setSelectedUserForDetail] = useState(null);
+
+  // Filter state for Audit Events tab
   const [searchTerm, setSearchTerm] = useState("");
   const [eventTypeFilter, setEventTypeFilter] = useState("ALL");
   const [userFilter, setUserFilter] = useState("ALL");
   const [dateFilter, setDateFilter] = useState("");
 
   const todayStr = new Date().toISOString().slice(0, 10);
+
+  // Compute dates: today start, week start (Monday), month start (1st)
+  const dateRanges = useMemo(() => {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const dayOfWeek = (now.getDay() + 6) % 7; // 0 = Monday, 6 = Sunday
+    const weekStart = new Date(todayStart);
+    weekStart.setDate(weekStart.getDate() - dayOfWeek);
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+
+    return {
+      nowMs: now.getTime(),
+      todayStartMs: todayStart.getTime(),
+      weekStartMs: weekStart.getTime(),
+      monthStartMs: monthStart.getTime()
+    };
+  }, []);
+
+  // Consolidate per-user session minutes: today, this week, this month, overall
+  const userDurationStats = useMemo(() => {
+    const userMap = new Map();
+
+    // 1. Seed from registered users list
+    (users || []).forEach(u => {
+      const userTeamIds = Array.isArray(u.teamIds) && u.teamIds.length > 0 ? u.teamIds : (u.teamId ? [u.teamId] : []);
+      const userDepts = Array.isArray(teams) ? teams.filter(t => userTeamIds.includes(t.id)).map(t => t.name) : [];
+      const primaryDept = userDepts[0] || (u.teamId === "team-admin" ? "Administrators" : "General");
+      const key = (u.username || u.name || u.id).toLowerCase();
+
+      userMap.set(key, {
+        id: u.id,
+        username: u.username || "",
+        name: u.name || u.username || "User",
+        dept: primaryDept,
+        departments: userDepts,
+        sessions: [],
+        todayMinutes: 0,
+        weekMinutes: 0,
+        monthMinutes: 0,
+        overallMinutes: 0,
+        isOnline: false,
+        totalLogins: 0,
+        lastLoginTime: null,
+        lastDevice: null,
+        lastLocation: null
+      });
+    });
+
+    // 2. Aggregate from userSessions
+    (userSessions || []).forEach(sess => {
+      const userKey = (sess.username || sess.name || sess.userId || "").toLowerCase();
+      if (!userKey) return;
+
+      if (!userMap.has(userKey)) {
+        userMap.set(userKey, {
+          id: sess.userId || userKey,
+          username: sess.username || userKey,
+          name: sess.name || sess.username || "User",
+          dept: sess.dept || "General",
+          departments: [sess.dept || "General"],
+          sessions: [],
+          todayMinutes: 0,
+          weekMinutes: 0,
+          monthMinutes: 0,
+          overallMinutes: 0,
+          isOnline: false,
+          totalLogins: 0,
+          lastLoginTime: null,
+          lastDevice: null,
+          lastLocation: null
+        });
+      }
+
+      const rec = userMap.get(userKey);
+      rec.sessions.push(sess);
+      rec.totalLogins += 1;
+
+      // Calculate session duration in minutes
+      let sMins = 0;
+      const loginMs = sess.loginTime ? new Date(sess.loginTime).getTime() : 0;
+      const logoutMs = sess.logoutTime ? new Date(sess.logoutTime).getTime() : 0;
+
+      if (sess.active) {
+        rec.isOnline = true;
+        sMins = loginMs ? Math.max(1, Math.round((dateRanges.nowMs - loginMs) / 60000)) : 1;
+      } else if (logoutMs && loginMs && logoutMs >= loginMs) {
+        sMins = Math.max(1, Math.round((logoutMs - loginMs) / 60000));
+      } else if (sess.hoursUsed) {
+        sMins = Math.max(1, Math.round(Number(sess.hoursUsed) * 60));
+      }
+
+      rec.overallMinutes += sMins;
+
+      if (loginMs >= dateRanges.todayStartMs) {
+        rec.todayMinutes += sMins;
+      }
+      if (loginMs >= dateRanges.weekStartMs) {
+        rec.weekMinutes += sMins;
+      }
+      if (loginMs >= dateRanges.monthStartMs) {
+        rec.monthMinutes += sMins;
+      }
+
+      // Track last login info
+      if (!rec.lastLoginTime || (loginMs && loginMs > new Date(rec.lastLoginTime).getTime())) {
+        rec.lastLoginTime = sess.loginTime;
+        rec.lastDevice = sess.device || sess.deviceType;
+        rec.lastLocation = sess.location;
+      }
+    });
+
+    return Array.from(userMap.values()).sort((a, b) => {
+      if (a.isOnline !== b.isOnline) return a.isOnline ? -1 : 1;
+      if (b.todayMinutes !== a.todayMinutes) return b.todayMinutes - a.todayMinutes;
+      return b.overallMinutes - a.overallMinutes;
+    });
+  }, [users, teams, userSessions, dateRanges]);
+
+  // Filtered user stats based on search and department
+  const filteredUserStats = useMemo(() => {
+    return userDurationStats.filter(u => {
+      if (deptFilter !== "ALL" && u.dept.toLowerCase() !== deptFilter.toLowerCase()) {
+        const matchesAny = (u.departments || []).some(d => d.toLowerCase() === deptFilter.toLowerCase());
+        if (!matchesAny) return false;
+      }
+      if (userSearch.trim()) {
+        const q = userSearch.toLowerCase();
+        const matches =
+          (u.name && u.name.toLowerCase().includes(q)) ||
+          (u.username && u.username.toLowerCase().includes(q)) ||
+          (u.dept && u.dept.toLowerCase().includes(q));
+        if (!matches) return false;
+      }
+      return true;
+    });
+  }, [userDurationStats, deptFilter, userSearch]);
+
+  // Overall totals across all users
+  const totalSummary = useMemo(() => {
+    let today = 0;
+    let week = 0;
+    let month = 0;
+    let overall = 0;
+    let onlineCount = 0;
+
+    userDurationStats.forEach(u => {
+      today += u.todayMinutes;
+      week += u.weekMinutes;
+      month += u.monthMinutes;
+      overall += u.overallMinutes;
+      if (u.isOnline) onlineCount += 1;
+    });
+
+    return { today, week, month, overall, onlineCount };
+  }, [userDurationStats]);
+
+  // Formatting helper for duration
+  const formatTime = (minutes) => {
+    if (!minutes || minutes <= 0) return "0 mins";
+    const m = Math.round(minutes);
+    const h = Math.floor(m / 60);
+    const remM = m % 60;
+
+    if (durationFormat === "mins") {
+      return `${m} mins`;
+    }
+    if (durationFormat === "hours") {
+      if (h === 0) return `${remM}m`;
+      return remM > 0 ? `${h}h ${remM}m` : `${h}h`;
+    }
+    // "both" (e.g. "45 mins" or "135 mins (2h 15m)")
+    if (h === 0) return `${m} mins`;
+    return `${m} mins (${h}h ${remM > 0 ? `${remM}m` : ""})`.replace("  ", " ");
+  };
+
+  // Export User Usage Duration CSV
+  const exportUserUsageCsv = () => {
+    if (filteredUserStats.length === 0) {
+      alert("No user duration records to export.");
+      return;
+    }
+    const headers = [
+      "User Name",
+      "Username",
+      "Department",
+      "Status",
+      "Today (Minutes)",
+      "Today (Formatted)",
+      "This Week (Minutes)",
+      "This Week (Formatted)",
+      "This Month (Minutes)",
+      "This Month (Formatted)",
+      "Overall (Minutes)",
+      "Overall (Formatted)",
+      "Total Logins",
+      "Last Login Time",
+      "Last Device",
+      "Last Location"
+    ];
+
+    const rows = filteredUserStats.map(u => [
+      `"${(u.name || "").replace(/"/g, '""')}"`,
+      `"${(u.username || "").replace(/"/g, '""')}"`,
+      `"${(u.dept || "").replace(/"/g, '""')}"`,
+      `"${u.isOnline ? "Online" : "Offline"}"`,
+      u.todayMinutes,
+      `"${formatTime(u.todayMinutes)}"`,
+      u.weekMinutes,
+      `"${formatTime(u.weekMinutes)}"`,
+      u.monthMinutes,
+      `"${formatTime(u.monthMinutes)}"`,
+      u.overallMinutes,
+      `"${formatTime(u.overallMinutes)}"`,
+      u.totalLogins,
+      `"${u.lastLoginTime || "Never"}"`,
+      `"${(u.lastDevice || "").replace(/"/g, '""')}"`,
+      `"${(sanitizeLocationString(u.lastLocation) || "").replace(/"/g, '""')}"`
+    ]);
+
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `user_login_durations_${todayStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Metrics for Audit Events tab
   const loginsToday = useMemo(() => {
     return auditLogs.filter(l => l.eventType === "LOGIN" && (l.timestamp || "").startsWith(todayStr)).length;
   }, [auditLogs, todayStr]);
@@ -5465,7 +5703,7 @@ export function AuditLoggerPage({
     });
   }, [auditLogs, eventTypeFilter, userFilter, dateFilter, searchTerm]);
 
-  const exportCsv = () => {
+  const exportEventsCsv = () => {
     if (filteredLogs.length === 0) {
       alert("No logs available to export.");
       return;
@@ -5486,11 +5724,11 @@ export function AuditLoggerPage({
         `"${(l.action || "").replace(/"/g, '""')}"`,
         `"${(l.device || "").replace(/"/g, '""')}"`,
         `"${(l.deviceType || "").replace(/"/g, '""')}"`,
-        `"${(l.location || "").replace(/"/g, '""')}"`,
+        `"${(sanitizeLocationString(l.location) || "").replace(/"/g, '""')}"`,
         `"${(l.targetId || "").replace(/"/g, '""')}"`
       ].join(",");
     });
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows].join("\n");
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.join("\n")].join("\n");
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
@@ -5512,282 +5750,1032 @@ export function AuditLoggerPage({
     SYSTEM: { bg: "#F3F4F6", color: "#374151", border: "#E5E7EB" }
   };
 
+  const allDepts = useMemo(() => {
+    const set = new Set();
+    userDurationStats.forEach(u => {
+      if (u.dept) set.add(u.dept);
+      (u.departments || []).forEach(d => set.add(d));
+    });
+    return Array.from(set).sort();
+  }, [userDurationStats]);
+
   return (
     <div>
       <PageHeader
-        title="Audit & Event Logger"
-        sub="Comprehensive administrative audit trail tracking user logins, clicks, updates, and events with device & location telemetry."
+        title="Event Logger & Screen Time Tracking"
+        sub="Administrative dashboard tracking user login minutes (per day, week, month, and overall) alongside telemetry and system audit actions."
       />
 
-      {/* KPI Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
-        <Card style={{ padding: "16px 18px" }}>
-          <div style={{ fontSize: 12, color: "#8A8D98" }}>Total Recorded Events</div>
-          <div style={{ fontSize: 24, fontWeight: 700, marginTop: 6, color: "#1F2937" }}>
+      {/* Top Navigation Tabs */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18, borderBottom: "1px solid #E2E8F0", paddingBottom: 12 }}>
+        <button
+          type="button"
+          onClick={() => setActiveTab("userDurations")}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "9px 18px",
+            borderRadius: 8,
+            border: activeTab === "userDurations" ? "1.5px solid #534AB7" : "1px solid #CBD5E1",
+            background: activeTab === "userDurations" ? "#534AB7" : "#FFFFFF",
+            color: activeTab === "userDurations" ? "#FFFFFF" : "#475569",
+            fontSize: 13,
+            fontWeight: 700,
+            cursor: "pointer",
+            boxShadow: activeTab === "userDurations" ? "0 2px 4px rgba(83, 74, 183, 0.25)" : "none",
+            transition: "all 0.15s ease"
+          }}
+        >
+          <Clock size={16} />
+          User Login & Screen Time Breakdown
+          <span style={{
+            fontSize: 11,
+            fontWeight: 700,
+            background: activeTab === "userDurations" ? "rgba(255,255,255,0.25)" : "#E2E8F0",
+            color: activeTab === "userDurations" ? "#FFFFFF" : "#334155",
+            padding: "1px 7px",
+            borderRadius: 999
+          }}>
+            {filteredUserStats.length} Users
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("events")}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "9px 18px",
+            borderRadius: 8,
+            border: activeTab === "events" ? "1.5px solid #534AB7" : "1px solid #CBD5E1",
+            background: activeTab === "events" ? "#534AB7" : "#FFFFFF",
+            color: activeTab === "events" ? "#FFFFFF" : "#475569",
+            fontSize: 13,
+            fontWeight: 700,
+            cursor: "pointer",
+            boxShadow: activeTab === "events" ? "0 2px 4px rgba(83, 74, 183, 0.25)" : "none",
+            transition: "all 0.15s ease"
+          }}
+        >
+          <Activity size={16} />
+          All Audit Events & Activity Trail
+          <span style={{
+            fontSize: 11,
+            fontWeight: 700,
+            background: activeTab === "events" ? "rgba(255,255,255,0.25)" : "#E2E8F0",
+            color: activeTab === "events" ? "#FFFFFF" : "#334155",
+            padding: "1px 7px",
+            borderRadius: 999
+          }}>
             {auditLogs.length}
-          </div>
-          <div style={{ fontSize: 11, color: "#6B7280", marginTop: 4 }}>Full administrative history</div>
-        </Card>
-        <Card style={{ padding: "16px 18px" }}>
-          <div style={{ fontSize: 12, color: "#8A8D98" }}>Logins Today</div>
-          <div style={{ fontSize: 24, fontWeight: 700, marginTop: 6, color: "#059669", display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#059669", boxShadow: "0 0 6px #059669" }} />
-            {loginsToday}
-          </div>
-          <div style={{ fontSize: 11, color: "#6B7280", marginTop: 4 }}>Daily present verifications</div>
-        </Card>
-        <Card style={{ padding: "16px 18px" }}>
-          <div style={{ fontSize: 12, color: "#8A8D98" }}>T&A Stage Clicks</div>
-          <div style={{ fontSize: 24, fontWeight: 700, marginTop: 6, color: "#D97706" }}>
-            {stageClicks}
-          </div>
-          <div style={{ fontSize: 11, color: "#6B7280", marginTop: 4 }}>Pipeline updates recorded</div>
-        </Card>
-        <Card style={{ padding: "16px 18px" }}>
-          <div style={{ fontSize: 12, color: "#8A8D98" }}>Unique Active Users</div>
-          <div style={{ fontSize: 24, fontWeight: 700, marginTop: 6, color: "#534AB7" }}>
-            {uniqueActiveUsers}
-          </div>
-          <div style={{ fontSize: 11, color: "#6B7280", marginTop: 4 }}>Across all departments</div>
-        </Card>
+          </span>
+        </button>
       </div>
 
-      {/* Main Table Card */}
-      <Card>
-        {/* Controls Bar */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 0 16px", borderBottom: "1px solid #F1F5F9", marginBottom: 14, flexWrap: "wrap", gap: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <div style={{ position: "relative", minWidth: 240 }}>
-              <input
-                type="text"
-                placeholder="Search action, user, PO, device..."
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
+      {/* KPI Cards based on Active Tab */}
+      {activeTab === "userDurations" ? (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 20 }}>
+          <Card style={{ padding: "16px 18px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontSize: 12, color: "#64748B", fontWeight: 600 }}>Today's Total Time</div>
+              <span style={{ fontSize: 11, color: "#059669", background: "#ECFDF5", padding: "1px 7px", borderRadius: 6, fontWeight: 700 }}>Per Day</span>
+            </div>
+            <div style={{ fontSize: 24, fontWeight: 800, marginTop: 6, color: "#059669" }}>
+              {formatTime(totalSummary.today)}
+            </div>
+            <div style={{ fontSize: 11, color: "#6B7280", marginTop: 4 }}>
+              Active today across all logged-in staff
+            </div>
+          </Card>
+
+          <Card style={{ padding: "16px 18px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontSize: 12, color: "#64748B", fontWeight: 600 }}>This Week's Time</div>
+              <span style={{ fontSize: 11, color: "#2563EB", background: "#EFF6FF", padding: "1px 7px", borderRadius: 6, fontWeight: 700 }}>Per Week</span>
+            </div>
+            <div style={{ fontSize: 24, fontWeight: 800, marginTop: 6, color: "#2563EB" }}>
+              {formatTime(totalSummary.week)}
+            </div>
+            <div style={{ fontSize: 11, color: "#6B7280", marginTop: 4 }}>
+              Since Monday 00:00 AM
+            </div>
+          </Card>
+
+          <Card style={{ padding: "16px 18px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontSize: 12, color: "#64748B", fontWeight: 600 }}>This Month's Time</div>
+              <span style={{ fontSize: 11, color: "#7C3AED", background: "#F5F3FF", padding: "1px 7px", borderRadius: 6, fontWeight: 700 }}>Per Month</span>
+            </div>
+            <div style={{ fontSize: 24, fontWeight: 800, marginTop: 6, color: "#7C3AED" }}>
+              {formatTime(totalSummary.month)}
+            </div>
+            <div style={{ fontSize: 11, color: "#6B7280", marginTop: 4 }}>
+              Cumulative for current calendar month
+            </div>
+          </Card>
+
+          <Card style={{ padding: "16px 18px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontSize: 12, color: "#64748B", fontWeight: 600 }}>Overall Total Time</div>
+              <span style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                fontSize: 11,
+                color: "#059669",
+                background: "#ECFDF5",
+                padding: "2px 7px",
+                borderRadius: 999,
+                fontWeight: 700
+              }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#10B981" }} />
+                {totalSummary.onlineCount} Online
+              </span>
+            </div>
+            <div style={{ fontSize: 24, fontWeight: 800, marginTop: 6, color: "#1E293B" }}>
+              {formatTime(totalSummary.overall)}
+            </div>
+            <div style={{ fontSize: 11, color: "#6B7280", marginTop: 4 }}>
+              All-time logged usage hours
+            </div>
+          </Card>
+        </div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 20 }}>
+          <Card style={{ padding: "16px 18px" }}>
+            <div style={{ fontSize: 12, color: "#8A8D98" }}>Total Recorded Events</div>
+            <div style={{ fontSize: 24, fontWeight: 700, marginTop: 6, color: "#1F2937" }}>
+              {auditLogs.length}
+            </div>
+            <div style={{ fontSize: 11, color: "#6B7280", marginTop: 4 }}>Full administrative history</div>
+          </Card>
+          <Card style={{ padding: "16px 18px" }}>
+            <div style={{ fontSize: 12, color: "#8A8D98" }}>Logins Today</div>
+            <div style={{ fontSize: 24, fontWeight: 700, marginTop: 6, color: "#059669", display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#059669", boxShadow: "0 0 6px #059669" }} />
+              {loginsToday}
+            </div>
+            <div style={{ fontSize: 11, color: "#6B7280", marginTop: 4 }}>Daily present verifications</div>
+          </Card>
+          <Card style={{ padding: "16px 18px" }}>
+            <div style={{ fontSize: 12, color: "#8A8D98" }}>T&A Stage Clicks</div>
+            <div style={{ fontSize: 24, fontWeight: 700, marginTop: 6, color: "#D97706" }}>
+              {stageClicks}
+            </div>
+            <div style={{ fontSize: 11, color: "#6B7280", marginTop: 4 }}>Pipeline updates recorded</div>
+          </Card>
+          <Card style={{ padding: "16px 18px" }}>
+            <div style={{ fontSize: 12, color: "#8A8D98" }}>Unique Active Users</div>
+            <div style={{ fontSize: 24, fontWeight: 700, marginTop: 6, color: "#534AB7" }}>
+              {uniqueActiveUsers}
+            </div>
+            <div style={{ fontSize: 11, color: "#6B7280", marginTop: 4 }}>Across all departments</div>
+          </Card>
+        </div>
+      )}
+
+      {/* TAB 1: User Login & Screen Time Breakdown */}
+      {activeTab === "userDurations" && (
+        <Card>
+          {/* Controls Bar */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 0 16px", borderBottom: "1px solid #F1F5F9", marginBottom: 14, flexWrap: "wrap", gap: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              {/* Search */}
+              <div style={{ position: "relative", minWidth: 220 }}>
+                <input
+                  type="text"
+                  placeholder="Search user name or username..."
+                  value={userSearch}
+                  onChange={e => setUserSearch(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "7px 12px 7px 30px",
+                    borderRadius: 7,
+                    border: "1px solid #D1D5DB",
+                    fontSize: 12.5,
+                    boxSizing: "border-box"
+                  }}
+                />
+                <Search size={14} color="#9CA3AF" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
+              </div>
+
+              {/* Department Filter */}
+              <select
+                value={deptFilter}
+                onChange={e => setDeptFilter(e.target.value)}
                 style={{
-                  width: "100%",
-                  padding: "7px 12px 7px 30px",
+                  padding: "7px 10px",
                   borderRadius: 7,
                   border: "1px solid #D1D5DB",
                   fontSize: 12.5,
-                  boxSizing: "border-box"
+                  background: "#FFFFFF",
+                  color: "#374151"
                 }}
-              />
-              <Search size={14} color="#9CA3AF" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
+              >
+                <option value="ALL">All Departments</option>
+                {allDepts.map(d => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+
+              {/* Format Toggle */}
+              <div style={{ display: "inline-flex", alignItems: "center", background: "#F1F5F9", padding: "3px", borderRadius: 8, border: "1px solid #E2E8F0" }}>
+                <button
+                  type="button"
+                  onClick={() => setDurationFormat("both")}
+                  style={{
+                    padding: "4px 10px",
+                    fontSize: 11.5,
+                    fontWeight: 600,
+                    borderRadius: 6,
+                    border: "none",
+                    background: durationFormat === "both" ? "#FFFFFF" : "transparent",
+                    color: durationFormat === "both" ? "#534AB7" : "#64748B",
+                    boxShadow: durationFormat === "both" ? "0 1px 2px rgba(0,0,0,0.08)" : "none",
+                    cursor: "pointer"
+                  }}
+                >
+                  Both (Mins + Hours)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDurationFormat("mins")}
+                  style={{
+                    padding: "4px 10px",
+                    fontSize: 11.5,
+                    fontWeight: 600,
+                    borderRadius: 6,
+                    border: "none",
+                    background: durationFormat === "mins" ? "#FFFFFF" : "transparent",
+                    color: durationFormat === "mins" ? "#534AB7" : "#64748B",
+                    boxShadow: durationFormat === "mins" ? "0 1px 2px rgba(0,0,0,0.08)" : "none",
+                    cursor: "pointer"
+                  }}
+                >
+                  Minutes Only (mins)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDurationFormat("hours")}
+                  style={{
+                    padding: "4px 10px",
+                    fontSize: 11.5,
+                    fontWeight: 600,
+                    borderRadius: 6,
+                    border: "none",
+                    background: durationFormat === "hours" ? "#FFFFFF" : "transparent",
+                    color: durationFormat === "hours" ? "#534AB7" : "#64748B",
+                    boxShadow: durationFormat === "hours" ? "0 1px 2px rgba(0,0,0,0.08)" : "none",
+                    cursor: "pointer"
+                  }}
+                >
+                  Hours & Mins
+                </button>
+              </div>
             </div>
 
-            <select
-              value={eventTypeFilter}
-              onChange={e => setEventTypeFilter(e.target.value)}
-              style={{ padding: "7px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 12.5, background: "#FFFFFF", color: "#374151" }}
-            >
-              <option value="ALL">All Event Types</option>
-              <option value="LOGIN">Logins</option>
-              <option value="LOGOUT">Logouts</option>
-              <option value="ORDER">Orders</option>
-              <option value="STAGE">T&A Stages</option>
-              <option value="TASK">Tasks</option>
-              <option value="ATTENDANCE">Attendance</option>
-              <option value="LEAVE">Leaves</option>
-              <option value="ADMIN">Admin & Access</option>
-            </select>
-
-            <select
-              value={userFilter}
-              onChange={e => setUserFilter(e.target.value)}
-              style={{ padding: "7px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 12.5, background: "#FFFFFF", color: "#374151" }}
-            >
-              <option value="ALL">All Users</option>
-              {Array.isArray(users) && users.map(u => (
-                <option key={u.id || u.username} value={u.username || u.name}>{u.name} ({u.username})</option>
-              ))}
-            </select>
-
-            <input
-              type="date"
-              value={dateFilter}
-              onChange={e => setDateFilter(e.target.value)}
-              style={{ padding: "6px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 12.5, color: "#374151" }}
-            />
-
-            {(searchTerm || eventTypeFilter !== "ALL" || userFilter !== "ALL" || dateFilter) && (
+            {/* Export CSV */}
+            <div>
               <button
                 type="button"
-                onClick={() => { setSearchTerm(""); setEventTypeFilter("ALL"); setUserFilter("ALL"); setDateFilter(""); }}
-                style={{ padding: "6px 10px", borderRadius: 6, border: "none", background: "#F3F4F6", color: "#4B5563", fontSize: 12, cursor: "pointer" }}
-              >
-                Reset Filters
-              </button>
-            )}
-          </div>
-
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <button
-              type="button"
-              onClick={exportCsv}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "7px 14px",
-                borderRadius: 7,
-                border: "1px solid #D1D5DB",
-                background: "#FFFFFF",
-                fontSize: 12.5,
-                fontWeight: 600,
-                color: "#374151",
-                cursor: "pointer"
-              }}
-            >
-              <Download size={14} /> Export CSV ({filteredLogs.length})
-            </button>
-
-            {onClearAuditLogs && (
-              <button
-                type="button"
-                onClick={() => {
-                  if (confirm("Are you sure you want to clear all audit log records? This cannot be undone.")) {
-                    onClearAuditLogs();
-                  }
-                }}
+                onClick={exportUserUsageCsv}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
-                  gap: 5,
-                  padding: "7px 12px",
+                  gap: 6,
+                  padding: "7px 14px",
                   borderRadius: 7,
-                  border: "1px solid #FECACA",
-                  background: "#FEF2F2",
+                  border: "1px solid #D1D5DB",
+                  background: "#FFFFFF",
                   fontSize: 12,
                   fontWeight: 600,
-                  color: "#DC2626",
+                  color: "#374151",
                   cursor: "pointer"
                 }}
               >
-                <Trash2 size={13} /> Clear
+                <Download size={13} /> Export Usage CSV
               </button>
-            )}
+            </div>
+          </div>
+
+          {/* User Screen Time Table */}
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", minWidth: 980 }}>
+              <thead>
+                <tr style={{ borderBottom: "2px solid #E5E7EB", background: "#F8FAFC" }}>
+                  <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "170px" }}>User / Staff</th>
+                  <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "130px" }}>Department</th>
+                  <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "95px" }}>Live Status</th>
+                  <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#059669", width: "140px" }}>Per Day (Today)</th>
+                  <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#2563EB", width: "145px" }}>Per Week (This Week)</th>
+                  <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#7C3AED", width: "150px" }}>Per Month (This Month)</th>
+                  <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#1E293B", width: "150px" }}>Overall (All-Time)</th>
+                  <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "80px", textAlign: "center" }}>Logins</th>
+                  <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "100px", textAlign: "center" }}>History</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredUserStats.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} style={{ padding: "40px 0", textAlign: "center", color: "#9CA3AF", fontSize: 13 }}>
+                      No user records found matching your filters.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredUserStats.map(u => {
+                    return (
+                      <tr
+                        key={u.id || u.username}
+                        style={{
+                          borderBottom: "1px solid #F1F5F9",
+                          transition: "background 0.1s ease",
+                          verticalAlign: "middle"
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = "#F9FAFB"}
+                        onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                      >
+                        {/* User Profile */}
+                        <td style={{ padding: "12px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <div style={{
+                              width: 30,
+                              height: 30,
+                              borderRadius: "50%",
+                              background: u.isOnline ? "#ECFDF5" : "#EEF2FF",
+                              color: u.isOnline ? "#059669" : "#4F46E5",
+                              fontWeight: 700,
+                              fontSize: 12,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              flexShrink: 0,
+                              border: u.isOnline ? "2px solid #10B981" : "1px solid #E0E7FF"
+                            }}>
+                              {(u.name || u.username || "U").slice(0, 1).toUpperCase()}
+                            </div>
+                            <div>
+                              <div style={{ fontWeight: 600, color: "#1E293B", fontSize: 13 }}>{u.name}</div>
+                              <div style={{ fontSize: 11, color: "#64748B", fontFamily: "monospace" }}>@{u.username || "—"}</div>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Department */}
+                        <td style={{ padding: "12px" }}>
+                          <span style={{
+                            display: "inline-block",
+                            padding: "2px 7px",
+                            borderRadius: 6,
+                            fontSize: 11,
+                            fontWeight: 600,
+                            background: "#F1F5F9",
+                            color: "#475569",
+                            border: "1px solid #E2E8F0"
+                          }}>
+                            {u.dept || "General"}
+                          </span>
+                        </td>
+
+                        {/* Live Status */}
+                        <td style={{ padding: "12px" }}>
+                          {u.isOnline ? (
+                            <span style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 5,
+                              padding: "3px 8px",
+                              borderRadius: 999,
+                              background: "#ECFDF5",
+                              color: "#059669",
+                              fontSize: 11,
+                              fontWeight: 700
+                            }}>
+                              <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#10B981", boxShadow: "0 0 5px #10B981" }} />
+                              Online
+                            </span>
+                          ) : (
+                            <span style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 4,
+                              padding: "2px 6px",
+                              borderRadius: 999,
+                              background: "#F8FAFC",
+                              color: "#94A3B8",
+                              fontSize: 11,
+                              fontWeight: 500
+                            }}>
+                              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#CBD5E1" }} />
+                              Offline
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Today's Time (Per Day) */}
+                        <td style={{ padding: "12px" }}>
+                          {u.todayMinutes > 0 ? (
+                            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                              <span style={{
+                                fontWeight: 700,
+                                color: "#059669",
+                                background: "#ECFDF5",
+                                padding: "2px 8px",
+                                borderRadius: 6,
+                                border: "1px solid #A7F3D0",
+                                fontSize: 12
+                              }}>
+                                {formatTime(u.todayMinutes)}
+                              </span>
+                            </div>
+                          ) : (
+                            <span style={{ color: "#94A3B8", fontSize: 12 }}>—</span>
+                          )}
+                        </td>
+
+                        {/* This Week (Per Week) */}
+                        <td style={{ padding: "12px" }}>
+                          {u.weekMinutes > 0 ? (
+                            <span style={{
+                              fontWeight: 700,
+                              color: "#2563EB",
+                              background: "#EFF6FF",
+                              padding: "2px 8px",
+                              borderRadius: 6,
+                              border: "1px solid #BFDBFE",
+                              fontSize: 12
+                            }}>
+                              {formatTime(u.weekMinutes)}
+                            </span>
+                          ) : (
+                            <span style={{ color: "#94A3B8", fontSize: 12 }}>—</span>
+                          )}
+                        </td>
+
+                        {/* This Month (Per Month) */}
+                        <td style={{ padding: "12px" }}>
+                          {u.monthMinutes > 0 ? (
+                            <span style={{
+                              fontWeight: 700,
+                              color: "#7C3AED",
+                              background: "#F5F3FF",
+                              padding: "2px 8px",
+                              borderRadius: 6,
+                              border: "1px solid #DDD6FE",
+                              fontSize: 12
+                            }}>
+                              {formatTime(u.monthMinutes)}
+                            </span>
+                          ) : (
+                            <span style={{ color: "#94A3B8", fontSize: 12 }}>—</span>
+                          )}
+                        </td>
+
+                        {/* Overall Time */}
+                        <td style={{ padding: "12px" }}>
+                          <span style={{
+                            fontWeight: 700,
+                            color: "#1E293B",
+                            background: "#F8FAFC",
+                            padding: "2px 8px",
+                            borderRadius: 6,
+                            border: "1px solid #E2E8F0",
+                            fontSize: 12
+                          }}>
+                            {formatTime(u.overallMinutes)}
+                          </span>
+                        </td>
+
+                        {/* Total Logins */}
+                        <td style={{ padding: "12px", textAlign: "center" }}>
+                          <span style={{
+                            fontSize: 11.5,
+                            fontWeight: 700,
+                            color: "#475569",
+                            background: "#F1F5F9",
+                            padding: "2px 7px",
+                            borderRadius: 999
+                          }}>
+                            {u.totalLogins}
+                          </span>
+                        </td>
+
+                        {/* View History Button */}
+                        <td style={{ padding: "12px", textAlign: "center" }}>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedUserForDetail(u)}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 4,
+                              padding: "4px 8px",
+                              borderRadius: 6,
+                              border: "1px solid #CBD5E1",
+                              background: "#FFFFFF",
+                              color: "#534AB7",
+                              fontSize: 11.5,
+                              fontWeight: 600,
+                              cursor: "pointer"
+                            }}
+                            title="View full login history"
+                          >
+                            <Eye size={12} /> View
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* TAB 2: All Audit Events & Action Trail */}
+      {activeTab === "events" && (
+        <Card>
+          {/* Controls Bar */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 0 16px", borderBottom: "1px solid #F1F5F9", marginBottom: 14, flexWrap: "wrap", gap: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <div style={{ position: "relative", minWidth: 240 }}>
+                <input
+                  type="text"
+                  placeholder="Search action, user, PO, device..."
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "7px 12px 7px 30px",
+                    borderRadius: 7,
+                    border: "1px solid #D1D5DB",
+                    fontSize: 12.5,
+                    boxSizing: "border-box"
+                  }}
+                />
+                <Search size={14} color="#9CA3AF" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
+              </div>
+
+              <select
+                value={eventTypeFilter}
+                onChange={e => setEventTypeFilter(e.target.value)}
+                style={{
+                  padding: "7px 10px",
+                  borderRadius: 7,
+                  border: "1px solid #D1D5DB",
+                  fontSize: 12.5,
+                  background: "#FFFFFF",
+                  color: "#374151"
+                }}
+              >
+                <option value="ALL">All Event Types</option>
+                <option value="LOGIN">Logins</option>
+                <option value="LOGOUT">Logouts</option>
+                <option value="ORDER">Order Actions</option>
+                <option value="STAGE">T&A Stages</option>
+                <option value="TASK">Tasks</option>
+                <option value="ATTENDANCE">Attendance</option>
+                <option value="LEAVE">Leaves</option>
+                <option value="ADMIN">Admin / Settings</option>
+              </select>
+
+              <select
+                value={userFilter}
+                onChange={e => setUserFilter(e.target.value)}
+                style={{
+                  padding: "7px 10px",
+                  borderRadius: 7,
+                  border: "1px solid #D1D5DB",
+                  fontSize: 12.5,
+                  background: "#FFFFFF",
+                  color: "#374151"
+                }}
+              >
+                <option value="ALL">All Users</option>
+                {Array.from(new Set(auditLogs.map(l => l.userName).filter(Boolean))).map(u => (
+                  <option key={u} value={u}>{u}</option>
+                ))}
+              </select>
+
+              <input
+                type="date"
+                value={dateFilter}
+                onChange={e => setDateFilter(e.target.value)}
+                style={{
+                  padding: "6px 10px",
+                  borderRadius: 7,
+                  border: "1px solid #D1D5DB",
+                  fontSize: 12.5,
+                  color: "#374151"
+                }}
+              />
+
+              {(searchTerm || eventTypeFilter !== "ALL" || userFilter !== "ALL" || dateFilter) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchTerm("");
+                    setEventTypeFilter("ALL");
+                    setUserFilter("ALL");
+                    setDateFilter("");
+                  }}
+                  style={{
+                    padding: "6px 10px",
+                    borderRadius: 6,
+                    border: "1px solid #E5E7EB",
+                    background: "#F9FAFB",
+                    fontSize: 11.5,
+                    color: "#4B5563",
+                    cursor: "pointer"
+                  }}
+                >
+                  Clear Filters
+                </button>
+              )}
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <button
+                type="button"
+                onClick={exportEventsCsv}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "7px 14px",
+                  borderRadius: 7,
+                  border: "1px solid #D1D5DB",
+                  background: "#FFFFFF",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: "#374151",
+                  cursor: "pointer"
+                }}
+              >
+                <Download size={13} /> Export Events CSV
+              </button>
+
+              {onClearAuditLogs && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm("Are you sure you want to clear all audit logs? This action cannot be undone.")) {
+                      onClearAuditLogs();
+                    }
+                  }}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "7px 12px",
+                    borderRadius: 7,
+                    border: "1px solid #FCA5A5",
+                    background: "#FEF2F2",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: "#DC2626",
+                    cursor: "pointer"
+                  }}
+                >
+                  <Trash2 size={13} /> Clear
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Table Container with Overflow & Semantic Table */}
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", minWidth: 920 }}>
+              <thead>
+                <tr style={{ borderBottom: "2px solid #E5E7EB", background: "#F8FAFC" }}>
+                  <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "140px", whiteSpace: "nowrap" }}>Date & Time</th>
+                  <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "95px", whiteSpace: "nowrap" }}>Event Type</th>
+                  <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "170px" }}>User & Department</th>
+                  <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#475569" }}>Action / Clicks</th>
+                  <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "195px" }}>Device Telemetry</th>
+                  <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "230px" }}>Location (GPS / Region)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredLogs.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ padding: "40px 0", textAlign: "center", color: "#9CA3AF", fontSize: 13 }}>
+                      No audit events found matching the selected criteria.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredLogs.map(log => {
+                    const dt = log.timestamp ? new Date(log.timestamp) : new Date();
+                    const dateStr = dt.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+                    const timeStr = dt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true });
+                    const badgeStyle = eventBadgeStyles[log.eventType] || eventBadgeStyles.SYSTEM;
+                    const isMobile = log.deviceType === "Mobile" || (log.device && /Mobile|Android|iPhone/i.test(log.device));
+
+                    return (
+                      <tr
+                        key={log.id}
+                        style={{
+                          borderBottom: "1px solid #F1F5F9",
+                          transition: "background 0.1s ease",
+                          verticalAlign: "middle"
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = "#F9FAFB"}
+                        onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                      >
+                        <td style={{ padding: "12px", whiteSpace: "nowrap" }}>
+                          <div style={{ fontWeight: 600, color: "#1F2937", fontSize: 12.5 }}>{dateStr}</div>
+                          <div style={{ fontSize: 11, color: "#6B7280", fontFamily: "monospace", marginTop: 2 }}>{timeStr}</div>
+                        </td>
+
+                        <td style={{ padding: "12px", whiteSpace: "nowrap" }}>
+                          <span style={{
+                            display: "inline-block",
+                            padding: "3px 8px",
+                            borderRadius: 6,
+                            fontSize: 11,
+                            fontWeight: 700,
+                            background: badgeStyle.bg,
+                            color: badgeStyle.color,
+                            border: `1px solid ${badgeStyle.border}`,
+                            letterSpacing: 0.3
+                          }}>
+                            {log.eventType}
+                          </span>
+                        </td>
+
+                        <td style={{ padding: "12px" }}>
+                          <div style={{ fontWeight: 600, color: "#111827", display: "flex", alignItems: "center", gap: 7 }}>
+                            <span style={{
+                              width: 22,
+                              height: 22,
+                              borderRadius: "50%",
+                              background: "#534AB7",
+                              color: "#FFFFFF",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: 10,
+                              fontWeight: 700,
+                              flexShrink: 0
+                            }}>
+                              {(log.userName || "U").charAt(0).toUpperCase()}
+                            </span>
+                            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12.5 }}>{log.userName}</span>
+                          </div>
+                          <div style={{ fontSize: 11, color: "#6B7280", marginTop: 2, paddingLeft: 29 }}>
+                            {log.userDept || "General"}
+                          </div>
+                        </td>
+
+                        <td style={{ padding: "12px", color: "#374151" }}>
+                          <div style={{ lineHeight: 1.45, fontSize: 12.5 }}>{log.action}</div>
+                          {log.targetId && (
+                            <span style={{ display: "inline-block", marginTop: 2, fontSize: 10.5, fontFamily: "monospace", color: "#534AB7", background: "#F5F3FF", padding: "1px 6px", borderRadius: 4 }}>
+                              Ref: {log.targetId}
+                            </span>
+                          )}
+                        </td>
+
+                        <td style={{ padding: "12px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 5, color: "#1F2937", fontWeight: 600, fontSize: 12 }}>
+                            {isMobile ? <Smartphone size={14} color="#534AB7" /> : <Laptop size={14} color="#1F9E8D" />}
+                            <span>{log.deviceType || (isMobile ? "Mobile" : "Laptop / Desktop")}</span>
+                          </div>
+                          <div style={{ fontSize: 11, color: "#6B7280", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={log.device}>
+                            {log.device || "Browser Client"}
+                          </div>
+                        </td>
+
+                        <td style={{ padding: "12px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 5, color: "#1F2937", fontSize: 12 }}>
+                            <MapPin size={13} color="#DC2626" style={{ flexShrink: 0 }} />
+                            <span style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={sanitizeLocationString(log.location)}>
+                              {sanitizeLocationString(log.location) || "Local Office"}
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* Individual User Sessions Detail Modal */}
+      {selectedUserForDetail && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 23, 42, 0.6)",
+            backdropFilter: "blur(3px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: 16
+          }}
+          onClick={() => setSelectedUserForDetail(null)}
+        >
+          <div
+            style={{
+              background: "#FFFFFF",
+              borderRadius: 12,
+              width: "100%",
+              maxWidth: 820,
+              maxHeight: "85vh",
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)"
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div style={{ padding: "16px 20px", borderBottom: "1px solid #E2E8F0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: "50%",
+                  background: selectedUserForDetail.isOnline ? "#ECFDF5" : "#EEF2FF",
+                  color: selectedUserForDetail.isOnline ? "#059669" : "#4F46E5",
+                  fontWeight: 700,
+                  fontSize: 14,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  border: selectedUserForDetail.isOnline ? "2px solid #10B981" : "1px solid #CBD5E1"
+                }}>
+                  {(selectedUserForDetail.name || "U").slice(0, 1).toUpperCase()}
+                </div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 16, color: "#1E293B" }}>
+                    {selectedUserForDetail.name}
+                    <span style={{ fontSize: 12, fontWeight: 500, color: "#64748B", marginLeft: 8 }}>
+                      @{selectedUserForDetail.username || "—"}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 11.5, color: "#64748B", display: "flex", alignItems: "center", gap: 8, marginTop: 2 }}>
+                    <span>Dept: <strong>{selectedUserForDetail.dept}</strong></span>
+                    <span>·</span>
+                    <span>Status: {selectedUserForDetail.isOnline ? <strong style={{ color: "#059669" }}>● Online Now</strong> : "Offline"}</span>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedUserForDetail(null)}
+                style={{
+                  border: "none",
+                  background: "#F1F5F9",
+                  borderRadius: 6,
+                  width: 30,
+                  height: 30,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  color: "#64748B"
+                }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Modal Summary Badges */}
+            <div style={{ padding: "12px 20px", background: "#F8FAFC", borderBottom: "1px solid #E2E8F0", display: "flex", gap: 12, flexWrap: "wrap" }}>
+              <div style={{ background: "#FFFFFF", padding: "6px 12px", borderRadius: 8, border: "1px solid #E2E8F0", fontSize: 12 }}>
+                <span style={{ color: "#64748B" }}>Today: </span>
+                <strong style={{ color: "#059669" }}>{formatTime(selectedUserForDetail.todayMinutes)}</strong>
+              </div>
+              <div style={{ background: "#FFFFFF", padding: "6px 12px", borderRadius: 8, border: "1px solid #E2E8F0", fontSize: 12 }}>
+                <span style={{ color: "#64748B" }}>This Week: </span>
+                <strong style={{ color: "#2563EB" }}>{formatTime(selectedUserForDetail.weekMinutes)}</strong>
+              </div>
+              <div style={{ background: "#FFFFFF", padding: "6px 12px", borderRadius: 8, border: "1px solid #E2E8F0", fontSize: 12 }}>
+                <span style={{ color: "#64748B" }}>This Month: </span>
+                <strong style={{ color: "#7C3AED" }}>{formatTime(selectedUserForDetail.monthMinutes)}</strong>
+              </div>
+              <div style={{ background: "#FFFFFF", padding: "6px 12px", borderRadius: 8, border: "1px solid #E2E8F0", fontSize: 12 }}>
+                <span style={{ color: "#64748B" }}>Overall: </span>
+                <strong style={{ color: "#1E293B" }}>{formatTime(selectedUserForDetail.overallMinutes)}</strong>
+              </div>
+              <div style={{ background: "#FFFFFF", padding: "6px 12px", borderRadius: 8, border: "1px solid #E2E8F0", fontSize: 12 }}>
+                <span style={{ color: "#64748B" }}>Total Sessions: </span>
+                <strong style={{ color: "#475569" }}>{selectedUserForDetail.sessions.length}</strong>
+              </div>
+            </div>
+
+            {/* Sessions Table */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "12px 20px" }}>
+              {selectedUserForDetail.sessions.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "30px 0", color: "#94A3B8", fontSize: 13 }}>
+                  No recorded login sessions for this user yet.
+                </div>
+              ) : (
+                <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ borderBottom: "2px solid #E2E8F0", color: "#475569" }}>
+                      <th style={{ padding: "8px 6px" }}>Login Time</th>
+                      <th style={{ padding: "8px 6px" }}>Logout Time</th>
+                      <th style={{ padding: "8px 6px" }}>Duration (Minutes)</th>
+                      <th style={{ padding: "8px 6px" }}>Device</th>
+                      <th style={{ padding: "8px 6px" }}>Location</th>
+                      <th style={{ padding: "8px 6px", textAlign: "center" }}>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedUserForDetail.sessions.map((sess, idx) => {
+                      const loginDate = sess.loginTime ? new Date(sess.loginTime) : null;
+                      const logoutDate = sess.logoutTime ? new Date(sess.logoutTime) : null;
+                      const loginMs = loginDate ? loginDate.getTime() : 0;
+                      const logoutMs = logoutDate ? logoutDate.getTime() : 0;
+                      let sMins = 0;
+                      if (sess.active) {
+                        sMins = loginMs ? Math.max(1, Math.round((Date.now() - loginMs) / 60000)) : 1;
+                      } else if (logoutMs && loginMs) {
+                        sMins = Math.max(1, Math.round((logoutMs - loginMs) / 60000));
+                      } else if (sess.hoursUsed) {
+                        sMins = Math.max(1, Math.round(Number(sess.hoursUsed) * 60));
+                      }
+
+                      return (
+                        <tr key={sess.id || idx} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                          <td style={{ padding: "9px 6px", color: "#1E293B", fontWeight: 600 }}>
+                            {loginDate ? loginDate.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
+                          </td>
+                          <td style={{ padding: "9px 6px", color: "#64748B" }}>
+                            {sess.active ? (
+                              <span style={{ color: "#059669", fontWeight: 700 }}>In Progress...</span>
+                            ) : logoutDate ? (
+                              logoutDate.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+                            ) : "—"}
+                          </td>
+                          <td style={{ padding: "9px 6px" }}>
+                            <span style={{
+                              fontWeight: 700,
+                              color: sess.active ? "#059669" : "#1E293B",
+                              background: sess.active ? "#ECFDF5" : "#F1F5F9",
+                              padding: "2px 7px",
+                              borderRadius: 6
+                            }}>
+                              {formatTime(sMins)}
+                            </span>
+                          </td>
+                          <td style={{ padding: "9px 6px", color: "#475569" }}>
+                            {sess.device || sess.deviceType || "Laptop"}
+                          </td>
+                          <td style={{ padding: "9px 6px", color: "#475569" }}>
+                            {sanitizeLocationString(sess.location) || "Office"}
+                          </td>
+                          <td style={{ padding: "9px 6px", textAlign: "center" }}>
+                            {sess.active ? (
+                              <span style={{ display: "inline-block", padding: "2px 7px", borderRadius: 999, background: "#ECFDF5", color: "#059669", fontSize: 11, fontWeight: 700 }}>
+                                Online Now
+                              </span>
+                            ) : (
+                              <span style={{ display: "inline-block", padding: "2px 7px", borderRadius: 999, background: "#F1F5F9", color: "#64748B", fontSize: 11 }}>
+                                Completed
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{ padding: "12px 20px", borderTop: "1px solid #E2E8F0", display: "flex", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                onClick={() => setSelectedUserForDetail(null)}
+                style={{
+                  padding: "6px 16px",
+                  borderRadius: 6,
+                  border: "1px solid #CBD5E1",
+                  background: "#FFFFFF",
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  color: "#475569",
+                  cursor: "pointer"
+                }}
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
-
-        {/* Table Container with Overflow & Semantic Table */}
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", minWidth: 920 }}>
-            <thead>
-              <tr style={{ borderBottom: "2px solid #E5E7EB", background: "#F8FAFC" }}>
-                <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "140px", whiteSpace: "nowrap" }}>Date & Time</th>
-                <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "95px", whiteSpace: "nowrap" }}>Event Type</th>
-                <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "170px" }}>User & Department</th>
-                <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#475569" }}>Action / Clicks</th>
-                <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "195px" }}>Device Telemetry</th>
-                <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "230px" }}>Location (GPS / Region)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredLogs.length === 0 ? (
-                <tr>
-                  <td colSpan={6} style={{ padding: "40px 0", textAlign: "center", color: "#9CA3AF", fontSize: 13 }}>
-                    No audit events found matching the selected criteria.
-                  </td>
-                </tr>
-              ) : (
-                filteredLogs.map(log => {
-                  const dt = log.timestamp ? new Date(log.timestamp) : new Date();
-                  const dateStr = dt.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
-                  const timeStr = dt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true });
-                  const badgeStyle = eventBadgeStyles[log.eventType] || eventBadgeStyles.SYSTEM;
-                  const isMobile = log.deviceType === "Mobile" || (log.device && /Mobile|Android|iPhone/i.test(log.device));
-
-                  return (
-                    <tr
-                      key={log.id}
-                      style={{
-                        borderBottom: "1px solid #F1F5F9",
-                        transition: "background 0.1s ease",
-                        verticalAlign: "middle"
-                      }}
-                      onMouseEnter={e => e.currentTarget.style.background = "#F9FAFB"}
-                      onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-                    >
-                      <td style={{ padding: "12px", whiteSpace: "nowrap" }}>
-                        <div style={{ fontWeight: 600, color: "#1F2937", fontSize: 12.5 }}>{dateStr}</div>
-                        <div style={{ fontSize: 11, color: "#6B7280", fontFamily: "monospace", marginTop: 2 }}>{timeStr}</div>
-                      </td>
-
-                      <td style={{ padding: "12px", whiteSpace: "nowrap" }}>
-                        <span style={{
-                          display: "inline-block",
-                          padding: "3px 8px",
-                          borderRadius: 6,
-                          fontSize: 11,
-                          fontWeight: 700,
-                          background: badgeStyle.bg,
-                          color: badgeStyle.color,
-                          border: `1px solid ${badgeStyle.border}`,
-                          letterSpacing: 0.3
-                        }}>
-                          {log.eventType}
-                        </span>
-                      </td>
-
-                      <td style={{ padding: "12px" }}>
-                        <div style={{ fontWeight: 600, color: "#111827", display: "flex", alignItems: "center", gap: 7 }}>
-                          <span style={{
-                            width: 22,
-                            height: 22,
-                            borderRadius: "50%",
-                            background: "#534AB7",
-                            color: "#FFFFFF",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            fontSize: 10,
-                            fontWeight: 700,
-                            flexShrink: 0
-                          }}>
-                            {(log.userName || "U").charAt(0).toUpperCase()}
-                          </span>
-                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12.5 }}>{log.userName}</span>
-                        </div>
-                        <div style={{ fontSize: 11, color: "#6B7280", marginTop: 2, paddingLeft: 29 }}>
-                          {log.userDept || "General"}
-                        </div>
-                      </td>
-
-                      <td style={{ padding: "12px", color: "#374151" }}>
-                        <div style={{ lineHeight: 1.45, fontSize: 12.5 }}>{log.action}</div>
-                        {log.targetId && (
-                          <span style={{ display: "inline-block", marginTop: 3, fontSize: 10.5, fontFamily: "monospace", color: "#534AB7", background: "#F5F3FF", padding: "1px 6px", borderRadius: 4 }}>
-                            Ref: {log.targetId}
-                          </span>
-                        )}
-                      </td>
-
-                      <td style={{ padding: "12px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 5, color: "#1F2937", fontWeight: 600, fontSize: 12 }}>
-                          {isMobile ? <Smartphone size={14} color="#534AB7" /> : <Laptop size={14} color="#1F9E8D" />}
-                          <span>{log.deviceType || (isMobile ? "Mobile" : "Laptop / Desktop")}</span>
-                        </div>
-                        <div style={{ fontSize: 11, color: "#6B7280", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={log.device}>
-                          {log.device || "Browser Client"}
-                        </div>
-                      </td>
-
-                      <td style={{ padding: "12px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 5, color: "#1F2937", fontSize: 12 }}>
-                          <MapPin size={13} color="#DC2626" style={{ flexShrink: 0 }} />
-                          <span style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={sanitizeLocationString(log.location)}>
-                            {sanitizeLocationString(log.location) || "Local Office"}
-                          </span>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      )}
     </div>
   );
 }
