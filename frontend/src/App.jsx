@@ -4,9 +4,10 @@ import {
   ChevronDown, Search, Bell, Moon, Sun, ClipboardList,
   Calendar, TriangleAlert, ArrowDownRight, Award,
   Users, ShieldCheck, ClipboardCheck, Lightbulb, UserCheck, TrendingUp, Landmark, Factory, RefreshCw,
-  PanelLeftClose, PanelLeftOpen
+  PanelLeftClose, PanelLeftOpen, Activity
 } from "lucide-react";
 import { resourcesApi } from "./api.js";
+import { getDeviceInfo, getLocationInfo, sanitizeLocationString } from "./utils/deviceLocation.js";
 import {
   ORG_STRUCTURE, ROLE_OPTIONS, STAFF_LIST, seedAttendance, INITIAL_LEAVE_REQUESTS,
   INITIAL_FINANCIALS, INITIAL_CERTIFICATIONS, INITIAL_COMPLIANCES, INITIAL_DEBIT_NOTES, INITIAL_CAPAS,
@@ -19,7 +20,7 @@ import { OrderWorkspace } from "./components/order/OrderWorkspace.jsx";
 import { Dashboard, MyDepartmentDashboard } from "./components/views/DashboardView.jsx";
 import {
   OrdersPage, MyTasksPage, CalendarPage, ApprovalsPage, ProductionPage,
-  QualityPage, CompliancePage, AttendancePage, DepartmentsPage, DepartmentDetail
+  QualityPage, CompliancePage, AttendancePage, DepartmentsPage, DepartmentDetail, AuditLoggerPage
 } from "./components/views/OperationsViews.jsx";
 import {
   FinanceEntryPage, ReportsPage, InsightsPage, SupplierPerformancePage,
@@ -208,6 +209,16 @@ export default function LoomPLM() {
     } catch (e) {
       return false;
     }
+  });
+  const [auditLogs, setAuditLogs] = useState(() => {
+    try {
+      const saved = localStorage.getItem("loom_audit_logs");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return (parsed || []).map(l => ({ ...l, location: sanitizeLocationString(l.location) }));
+      }
+    } catch (e) {}
+    return [];
   });
   const [users, setUsers] = useState(DEFAULT_USERS);
   const [teams, setTeams] = useState(DEFAULT_TEAMS);
@@ -628,7 +639,23 @@ export default function LoomPLM() {
         if (sessRes && sessRes.value) {
           try {
             const parsed = JSON.parse(sessRes.value);
-            if (Array.isArray(parsed)) setUserSessions(parsed);
+            if (Array.isArray(parsed)) {
+              const cleaned = parsed.map(s => ({ ...s, location: sanitizeLocationString(s.location) }));
+              setUserSessions(cleaned);
+              if (window.storage) window.storage.set("user_sessions", JSON.stringify(cleaned), true);
+            }
+          } catch (e) { }
+        }
+
+        const auditRes = await window.storage.get("audit_logs", true);
+        if (auditRes && auditRes.value) {
+          try {
+            const parsed = JSON.parse(auditRes.value);
+            if (Array.isArray(parsed)) {
+              const cleaned = parsed.map(l => ({ ...l, location: sanitizeLocationString(l.location) }));
+              setAuditLogs(cleaned);
+              if (window.storage) window.storage.set("audit_logs", JSON.stringify(cleaned), true);
+            }
           } catch (e) { }
         }
       }
@@ -1155,6 +1182,35 @@ export default function LoomPLM() {
     if (window.storage) window.storage.set("currentRole", JSON.stringify(newRole), true);
   };
 
+    const logEvent = useCallback(async ({ eventType, action, targetId = null, metadata = {} }) => {
+    const dev = getDeviceInfo();
+    const loc = await getLocationInfo();
+    const resolvedLocation = sanitizeLocationString(loc.location);
+    const newEntry = {
+      id: `log_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      timestamp: new Date().toISOString(),
+      eventType: eventType || "SYSTEM",
+      action: action || "Action performed",
+      userName: activeUser?.name || role?.label?.split(" (")[0] || "System User",
+      username: activeUser?.username || "user",
+      userDept: role?.dept || "General",
+      device: dev.deviceSummary,
+      deviceType: dev.deviceType,
+      location: resolvedLocation,
+      targetId: targetId || null,
+      metadata
+    };
+
+    setAuditLogs(prev => {
+      const updated = [newEntry, ...prev.slice(0, 499)];
+      try {
+        localStorage.setItem("loom_audit_logs", JSON.stringify(updated));
+        if (window.storage?.set) window.storage.set("audit_logs", JSON.stringify(updated), true);
+      } catch (e) {}
+      return updated;
+    });
+  }, [activeUser, role]);
+
   const handleLogin = (user) => {
     const nextRole = roleForUser(user, teams);
     setActiveUser(user);
@@ -1179,6 +1235,8 @@ export default function LoomPLM() {
     // 1. Automatically mark attendance as present for today upon login
     const nowIso = new Date().toISOString();
     const todayStr = nowIso.slice(0, 10);
+    const dev = getDeviceInfo();
+
     setAttendance(prev => {
       const updated = {
         ...prev,
@@ -1189,7 +1247,7 @@ export default function LoomPLM() {
       return updated;
     });
 
-    // 2. Start a new user login session record for usage tracking
+    // 2. Start a new user login session record for usage tracking with device & location
     const sessId = `sess_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const newSession = {
       id: sessId,
@@ -1201,7 +1259,10 @@ export default function LoomPLM() {
       logoutTime: null,
       hoursUsed: 0.01,
       active: true,
-      date: todayStr
+      date: todayStr,
+      device: dev.deviceSummary,
+      deviceType: dev.deviceType,
+      location: "Detecting..."
     };
     setCurrentSessionId(sessId);
     try { sessionStorage.setItem("loom_active_session_id", sessId); } catch (e) {}
@@ -1210,6 +1271,39 @@ export default function LoomPLM() {
       const updated = [newSession, ...prev];
       if (window.storage) window.storage.set("user_sessions", JSON.stringify(updated), true);
       return updated;
+    });
+
+    // Asynchronously resolve location and record login audit log
+    getLocationInfo().then(loc => {
+      const resolvedLocation = sanitizeLocationString(loc.location);
+      setUserSessions(prev => {
+        const enriched = prev.map(s => s.id === sessId ? { ...s, location: resolvedLocation } : s);
+        if (window.storage) window.storage.set("user_sessions", JSON.stringify(enriched), true);
+        return enriched;
+      });
+
+      const logEntry = {
+        id: `log_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        timestamp: nowIso,
+        eventType: "LOGIN",
+        action: `${user.name} logged into the application from ${dev.deviceType} (${dev.os} · ${dev.browser})`,
+        userName: user.name,
+        username: user.username,
+        userDept: nextRole.dept,
+        device: dev.deviceSummary,
+        deviceType: dev.deviceType,
+        location: resolvedLocation,
+        targetId: user.id
+      };
+
+      setAuditLogs(prevLogs => {
+        const updatedLogs = [logEntry, ...prevLogs.slice(0, 499)];
+        try {
+          localStorage.setItem("loom_audit_logs", JSON.stringify(updatedLogs));
+          if (window.storage?.set) window.storage.set("audit_logs", JSON.stringify(updatedLogs), true);
+        } catch (e) {}
+        return updatedLogs;
+      });
     });
   };
 
@@ -1231,18 +1325,46 @@ export default function LoomPLM() {
   const handleLogout = () => {
     const sessId = currentSessionId || (typeof sessionStorage !== "undefined" ? sessionStorage.getItem("loom_active_session_id") : null);
     const nowIso = new Date().toISOString();
+    const dev = getDeviceInfo();
     if (sessId) {
       setUserSessions(prev => {
+        let loggedOutSess = null;
         const updated = prev.map(s => {
           if (s.id === sessId && s.active) {
             const loginMs = new Date(s.loginTime).getTime();
             const logoutMs = new Date(nowIso).getTime();
             const hours = Math.max(0.01, Number(((logoutMs - loginMs) / (1000 * 60 * 60)).toFixed(2)));
-            return { ...s, logoutTime: nowIso, hoursUsed: hours, active: false };
+            loggedOutSess = { ...s, logoutTime: nowIso, hoursUsed: hours, active: false };
+            return loggedOutSess;
           }
           return s;
         });
         if (window.storage) window.storage.set("user_sessions", JSON.stringify(updated), true);
+
+        const durationText = loggedOutSess ? ` (Session duration: ${loggedOutSess.hoursUsed} hrs)` : "";
+        const logEntry = {
+          id: `log_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          timestamp: nowIso,
+          eventType: "LOGOUT",
+          action: `${activeUser?.name || "User"} logged out of application${durationText}`,
+          userName: activeUser?.name || "User",
+          username: activeUser?.username || "user",
+          userDept: role?.dept || "General",
+          device: dev.deviceSummary,
+          deviceType: dev.deviceType,
+          location: loggedOutSess?.location || "Local Office",
+          targetId: activeUser?.id || null
+        };
+
+        setAuditLogs(prevLogs => {
+          const updatedLogs = [logEntry, ...prevLogs.slice(0, 499)];
+          try {
+            localStorage.setItem("loom_audit_logs", JSON.stringify(updatedLogs));
+            if (window.storage?.set) window.storage.set("audit_logs", JSON.stringify(updatedLogs), true);
+          } catch (e) {}
+          return updatedLogs;
+        });
+
         return updated;
       });
       try { sessionStorage.removeItem("loom_active_session_id"); } catch (e) {}
@@ -1536,6 +1658,13 @@ export default function LoomPLM() {
       relatedId: newTask.id,
       priority: newTask.priority || "medium"
     });
+
+    logEvent({
+      eventType: "TASK",
+      action: `Created task "${newTask.title}" assigned to ${newTask.assignee || "Unassigned"}`,
+      targetId: newTask.id,
+      metadata: { taskId: newTask.id, dept: newTask.dept }
+    });
   };
 
   const updateTask = (id, updates) => {
@@ -1560,6 +1689,13 @@ export default function LoomPLM() {
           relatedId: id,
           priority: "low"
         });
+
+        logEvent({
+          eventType: "TASK",
+          action: `Completed task "${t.title}"`,
+          targetId: id,
+          metadata: { taskId: id }
+        });
       }
       return updated;
     }));
@@ -1568,6 +1704,12 @@ export default function LoomPLM() {
   const deleteTask = (id) => {
     setCustomTasks(prev => prev.filter(t => t.id !== id));
     try { resourcesApi.remove("tasks", id); } catch (e) { }
+    logEvent({
+      eventType: "TASK",
+      action: `Deleted task #${id}`,
+      targetId: id,
+      metadata: { taskId: id }
+    });
   };
 
   const handleAddChecklistItem = (dept, item) => {
@@ -1636,6 +1778,13 @@ export default function LoomPLM() {
       relatedId: fullOrder.id,
       priority: fullOrder.risk === "high" ? "high" : "medium"
     });
+
+    logEvent({
+      eventType: "ORDER",
+      action: `Created new order #${fullOrder.id} (${fullOrder.style || "Style"}) for ${fullOrder.buyer || "Buyer"} (Qty: ${fullOrder.qty || 0})`,
+      targetId: fullOrder.id,
+      metadata: { orderId: fullOrder.id, buyer: fullOrder.buyer, style: fullOrder.style, qty: fullOrder.qty }
+    });
   };
 
   const completeOrder = (primaryKey) => {
@@ -1660,6 +1809,13 @@ export default function LoomPLM() {
       relatedId: orderNum,
       priority: "low"
     });
+
+    logEvent({
+      eventType: "ORDER",
+      action: `Marked order #${orderNum} as Completed`,
+      targetId: orderNum,
+      metadata: { orderId: orderNum, primaryId: primId }
+    });
   };
 
   const uncompleteOrder = (primaryKey) => {
@@ -1672,6 +1828,13 @@ export default function LoomPLM() {
         console.warn("Error reopening order:", err.message);
       });
     } catch (e) { }
+
+    logEvent({
+      eventType: "ORDER",
+      action: `Reopened order #${targetOrder?.id || primaryKey}`,
+      targetId: targetOrder?.id || primaryKey,
+      metadata: { orderId: targetOrder?.id || primaryKey }
+    });
   };
 
   const deleteOrder = (primaryKey) => {
@@ -1708,6 +1871,13 @@ export default function LoomPLM() {
       relatedModule: "orders",
       relatedId: orderNum,
       priority: "medium"
+    });
+
+    logEvent({
+      eventType: "ORDER",
+      action: `Deleted order #${orderNum}`,
+      targetId: orderNum,
+      metadata: { orderId: orderNum, primaryId: primId }
     });
   };
 
@@ -1894,6 +2064,17 @@ export default function LoomPLM() {
       const isCompleted = allDone;
       const completedAt = isCompleted ? (o.completedAt || new Date().toISOString()) : null;
 
+      const prevOrder = (o.stages || []).map(s => s.name).join(",");
+      const newOrder = stages.map(s => s.name).join(",");
+      if (prevOrder && newOrder && prevOrder !== newOrder) {
+        logEvent({
+          eventType: "STAGE",
+          action: `Realigned T&A workflow stages for order #${o.id}`,
+          targetId: o.id,
+          metadata: { orderId: o.id }
+        });
+      }
+
       // Detect stage completions / delays and attach timestamps
       const nowIso = new Date().toISOString();
       const currentUserName = role?.label || activeUser?.name || "User";
@@ -1921,6 +2102,12 @@ export default function LoomPLM() {
       updatedStages.forEach((s, idx) => {
         const prevStage = o.stages?.[idx];
         if (s.status === "done" && prevStage?.status !== "done") {
+          logEvent({
+            eventType: "STAGE",
+            action: `Marked stage "${s.name}" as Done on order #${id}`,
+            targetId: id,
+            metadata: { orderId: id, stageName: s.name, dept: s.dept }
+          });
           // Find next pending stage after this completed stage
           for (let j = idx + 1; j < updatedStages.length; j++) {
             if (updatedStages[j].status === "pending") {
@@ -1942,6 +2129,12 @@ export default function LoomPLM() {
           });
         }
         if (s.reason && (!prevStage?.reason || prevStage.reason !== s.reason)) {
+          logEvent({
+            eventType: "STAGE",
+            action: `Flagged delay on stage "${s.name}" for order #${id}: "${s.reason}"`,
+            targetId: id,
+            metadata: { orderId: id, stageName: s.name, reason: s.reason }
+          });
           pushNotification({
             eventKey: `tna-stage-delay-${id}-${s.name}-${s.reason}`,
             type: "tna",
@@ -2472,6 +2665,7 @@ export default function LoomPLM() {
       section: "Management",
       items: [
         { key: "attendance", label: "Attendance & leave", icon: UserCheck },
+        { key: "auditLogs", label: "Event Logger", icon: Activity },
         { key: "debitNotes", label: "Debit notes", icon: ArrowDownRight },
         { key: "finance", label: "Finance", icon: Landmark },
         { key: "reports", label: "Reports", icon: BarChart3 },
@@ -2513,6 +2707,7 @@ export default function LoomPLM() {
     },
     {
       section: null, items: [
+        ...(isAdmin || role?.dept === "Administrators" ? [{ key: "auditLogs", label: "Event Logger", icon: Activity }] : []),
         ...(canAccess("settings") ? [{ key: "settings", label: "Settings", icon: SettingsIcon }] : []),
       ]
     },
@@ -2953,6 +3148,10 @@ export default function LoomPLM() {
           onUpdateDepartment={handleUpdateDepartment}
           suppliers={suppliers}
           onAssignWork={handleAssignWork}
+          users={users}
+          teams={teams}
+          attendance={attendance}
+          userSessions={userSessions}
         />
       );
     }
@@ -2991,6 +3190,10 @@ export default function LoomPLM() {
           onUpdateDepartment={handleUpdateDepartment}
           suppliers={suppliers}
           onAssignWork={handleAssignWork}
+          users={users}
+          teams={teams}
+          attendance={attendance}
+          userSessions={userSessions}
         />
       );
     }
@@ -3051,6 +3254,8 @@ export default function LoomPLM() {
         onOpenDept={openDept}
         orgStructure={orgStructure}
         deptDescriptions={deptDescriptions}
+        users={users}
+        teams={teams}
       />
     );
   } else if (view === "production" && (canSeeAll || ["Cutting", "Production"].includes(role.dept))) {
@@ -3112,22 +3317,54 @@ export default function LoomPLM() {
     content = <DebitNotesPage orders={orders} notes={debitNotes} onAdd={addDebitNote} />;
   } else if (view === "capas" && canSeeAll) {
     content = <CapasPage orders={orders} capas={capas} onAdd={addCapa} onCycleStatus={cycleCapaStatus} />;
+  } else if (view === "auditLogs" && (isAdmin || isExecutive || role?.dept === "Administrators")) {
+    content = (
+      <AuditLoggerPage
+        auditLogs={auditLogs}
+        onClearAuditLogs={() => {
+          setAuditLogs([]);
+          try {
+            localStorage.removeItem("loom_audit_logs");
+            if (window.storage?.set) window.storage.set("audit_logs", JSON.stringify([]), true);
+          } catch (e) {}
+        }}
+        users={users}
+        teams={teams}
+      />
+    );
   } else if (view === "attendance") {
     content = (
       <AttendancePage
         roster={roster}
         attendance={attendance}
-        onCycle={cycleAttendance}
+        onCycle={(staffName) => {
+          cycleAttendance(staffName);
+          const next = attendance[staffName] === "present" ? "leave" : attendance[staffName] === "leave" ? "absent" : "present";
+          logEvent({ eventType: "ATTENDANCE", action: `Updated attendance status for ${staffName} to ${next}`, targetId: staffName });
+        }}
         leaveRequests={leaveRequests}
-        onApprove={approveLeave}
-        onReject={rejectLeave}
+        onApprove={(id) => {
+          approveLeave(id);
+          const found = leaveRequests.find(l => l.id === id);
+          logEvent({ eventType: "LEAVE", action: `Approved leave request for ${found?.name || id}`, targetId: id });
+        }}
+        onReject={(id) => {
+          rejectLeave(id);
+          const found = leaveRequests.find(l => l.id === id);
+          logEvent({ eventType: "LEAVE", action: `Rejected leave request for ${found?.name || id}`, targetId: id });
+        }}
         onAddStaff={addStaff}
         onEditStaff={editStaff}
         onRemoveStaff={removeStaff}
-        onAddLeaveRequest={addLeaveRequest}
+        onAddLeaveRequest={(req) => {
+          addLeaveRequest(req);
+          logEvent({ eventType: "LEAVE", action: `Submitted leave request for ${req.name} (${req.from} to ${req.to})`, targetId: req.name });
+        }}
         userSessions={userSessions}
         isAdmin={isAdmin}
         isMD={role?.isMD || role?.dept === "Executive" || role?.dept === "Executive (MD)"}
+        users={users}
+        teams={teams}
       />
     );
   } else if (view === "finance" && (canSeeAll || role.dept === "Finance")) {
@@ -3370,25 +3607,26 @@ export default function LoomPLM() {
               const active = view === item.key || (item.key === "orders" && (view === "order")) || (item.key === "departments" && view === "departmentDetail");
               const itemHref = getRouteHash(item.key);
               return (
-                <a
-                  key={item.key}
-                  href={itemHref}
-                  onClick={(e) => {
-                    if (!e.metaKey && !e.ctrlKey && !e.shiftKey && e.button === 0) {
-                      e.preventDefault();
-                      navigate(item.key);
-                    }
-                  }}
-                  style={{
-                    display: "flex", alignItems: "center", justifyContent: isSidebarCollapsed ? "center" : "flex-start", gap: isSidebarCollapsed ? 0 : 10, padding: "9px 10px", borderRadius: 8,
-                    color: active ? "#fff" : isDarkMode ? "#94A3B8" : "#9498A8", background: active ? (isDarkMode ? "#1F9E8D33" : "#1F9E8D22") : "transparent",
-                    fontSize: 13.5, fontWeight: active ? 600 : 500, cursor: "pointer", marginBottom: 2, textDecoration: "none"
-                  }}
-                  title={isSidebarCollapsed ? item.label : undefined}
-                >
-                  <item.icon size={16} />
-                  {!isSidebarCollapsed && item.label}
-                </a>
+                <React.Fragment key={item.key}>
+                  <a
+                    href={itemHref}
+                    onClick={(e) => {
+                      if (!e.metaKey && !e.ctrlKey && !e.shiftKey && e.button === 0) {
+                        e.preventDefault();
+                        navigate(item.key);
+                      }
+                    }}
+                    style={{
+                      display: "flex", alignItems: "center", justifyContent: isSidebarCollapsed ? "center" : "flex-start", gap: isSidebarCollapsed ? 0 : 10, padding: "9px 10px", borderRadius: 8,
+                      color: active ? "#fff" : isDarkMode ? "#94A3B8" : "#9498A8", background: active ? (isDarkMode ? "#1F9E8D33" : "#1F9E8D22") : "transparent",
+                      fontSize: 13.5, fontWeight: active ? 600 : 500, cursor: "pointer", marginBottom: 2, textDecoration: "none"
+                    }}
+                    title={isSidebarCollapsed ? item.label : undefined}
+                  >
+                    <item.icon size={16} />
+                    {!isSidebarCollapsed && item.label}
+                  </a>
+                </React.Fragment>
               );
             })}
           </div>

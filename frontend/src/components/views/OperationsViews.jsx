@@ -3,7 +3,7 @@ import {
   CheckCircle2, Upload, Plus, Trash2, Check, RotateCcw, Archive, X,
   ShieldCheck, Award, FileText, AlertTriangle, Clock, Eye, Edit,
   Search, Filter, ExternalLink, ChevronRight, CheckCircle, AlertCircle,
-  HelpCircle, Calendar, RefreshCw, ArrowUp, ArrowDown, Layers, GripVertical
+  HelpCircle, Calendar, RefreshCw, ArrowUp, ArrowDown, Layers, GripVertical, Laptop, Smartphone, MapPin, Activity, Download
 } from "lucide-react";
 import {
   TA_STAGES, TA_STAGES_90, TA_STAGES_120, makeStages, DEPT_ICONS, ORG_STRUCTURE, ATTENDANCE_STATUS_STYLE, CERT_STATUS_STYLE,
@@ -14,6 +14,7 @@ import {
   Card, CardHeader, PageHeader, BackLink, statusPill, riskDot, collectTasks, GroupedTaskList, OrgChain, TaskTable
 } from "../common/CommonUI.jsx";
 import { AssignWorkModal } from "./InsightsViews.jsx";
+import { sanitizeLocationString } from "../../utils/deviceLocation.js";
 import { DepartmentPerformanceAndKPI } from "./DepartmentKPISection.jsx";
 
 export function OrdersPage({
@@ -3267,7 +3268,9 @@ export function AttendancePage({
   onAddLeaveRequest,
   userSessions = [],
   isAdmin = false,
-  isMD = false
+  isMD = false,
+  users = [],
+  teams = []
 }) {
   const canViewUsage = isAdmin || isMD;
   const [activeTab, setActiveTab] = useState("attendance");
@@ -3281,9 +3284,87 @@ export function AttendancePage({
   const set = (field, val) => setForm(f => ({ ...f, [field]: val }));
   const setEdit = (field, val) => setEditForm(f => ({ ...f, [field]: val }));
 
-  const counts = { present: 0, absent: 0, leave: 0 };
-  roster.forEach(s => { counts[attendance[s.name] || "present"]++; });
-  const pending = leaveRequests.filter(l => l.status === "pending");
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  // Merge registered system users into roster
+  const unifiedStaff = useMemo(() => {
+    const list = [...(roster || [])];
+    const existingNames = new Set((roster || []).map(r => (r.name || "").toLowerCase()));
+    if (Array.isArray(users)) {
+      users.forEach(u => {
+        if (u.name && !existingNames.has(u.name.toLowerCase())) {
+          const userTeamIds = Array.isArray(u.teamIds) && u.teamIds.length > 0 ? u.teamIds : (u.teamId ? [u.teamId] : []);
+          const deptNames = Array.isArray(teams)
+            ? teams.filter(t => userTeamIds.includes(t.id)).map(t => t.name).join(", ")
+            : "";
+          list.push({
+            id: u.id,
+            name: u.name,
+            username: u.username,
+            email: u.email,
+            title: u.title || (userTeamIds.includes("team-admin") ? "Administrator" : "Team Member"),
+            dept: deptNames || "Merchandising",
+            isSystemUser: true
+          });
+          existingNames.add(u.name.toLowerCase());
+        }
+      });
+    }
+    return list;
+  }, [roster, users, teams]);
+
+  const getStaffAttendance = (person) => {
+    // 1. Check if marked on leave
+    const onLeave = (leaveRequests || []).find(l =>
+      l.status === "approved" &&
+      (l.name.toLowerCase() === (person.name || "").toLowerCase())
+    ) || (attendance[person.name] === "leave");
+
+    if (onLeave) {
+      return {
+        status: "leave",
+        label: "On leave",
+        reason: onLeave.reason || "Approved Leave"
+      };
+    }
+
+    // 2. Check if logged in today
+    const session = userSessions.find(s =>
+      (s.date === todayStr || (s.loginTime && s.loginTime.startsWith(todayStr))) &&
+      ((s.userId && s.userId === person.id) ||
+       (s.username && person.username && s.username.toLowerCase() === person.username.toLowerCase()) ||
+       (s.name && person.name && s.name.toLowerCase() === person.name.toLowerCase()))
+    );
+
+    if (session || attendance[person.name] === "present") {
+      const inTime = session?.loginTime ? new Date(session.loginTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : null;
+      return {
+        status: "present",
+        label: "Present",
+        inTime,
+        device: session?.device,
+        deviceType: session?.deviceType || "Laptop / Desktop",
+        location: session?.location
+      };
+    }
+
+    // 3. Otherwise Absent
+    return {
+      status: "absent",
+      label: "Absent"
+    };
+  };
+
+  const counts = useMemo(() => {
+    const c = { present: 0, absent: 0, leave: 0 };
+    unifiedStaff.forEach(s => {
+      const att = getStaffAttendance(s);
+      if (c[att.status] !== undefined) c[att.status]++;
+    });
+    return c;
+  }, [unifiedStaff, attendance, userSessions, leaveRequests]);
+
+  const pending = (leaveRequests || []).filter(l => l.status === "pending");
 
   const filteredSessions = useMemo(() => {
     if (!sessionSearch.trim()) return userSessions;
@@ -3430,78 +3511,111 @@ export function AttendancePage({
               />
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr 1.2fr 1.2fr 1fr 1.2fr", fontSize: 11.5, fontWeight: 700, color: "#64748B", padding: "6px 4px 10px", borderBottom: "1px solid #E2E8F0" }}>
-              <div>User / Name</div>
-              <div>Username</div>
-              <div>Department</div>
-              <div>Login Time</div>
-              <div>Logout Time</div>
-              <div>Hours Used</div>
-              <div style={{ textAlign: "right" }}>Daily Attendance</div>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", minWidth: 940 }}>
+                <thead>
+                  <tr style={{ borderBottom: "2px solid #E2E8F0", background: "#F8FAFC" }}>
+                    <th style={{ padding: "10px 8px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "155px" }}>User / Name</th>
+                    <th style={{ padding: "10px 8px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "100px" }}>Username</th>
+                    <th style={{ padding: "10px 8px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "120px" }}>Department</th>
+                    <th style={{ padding: "10px 8px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "170px" }}>Device Telemetry</th>
+                    <th style={{ padding: "10px 8px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "190px" }}>Location</th>
+                    <th style={{ padding: "10px 8px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "125px" }}>Login Time</th>
+                    <th style={{ padding: "10px 8px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "120px" }}>Logout Time</th>
+                    <th style={{ padding: "10px 8px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "100px" }}>Hours Used</th>
+                    <th style={{ padding: "10px 8px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "100px", textAlign: "right" }}>Daily Attendance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredSessions.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} style={{ textAlign: "center", padding: "30px 0", color: "#94A3B8", fontSize: 13 }}>
+                        No login session records found.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredSessions.map(s => {
+                      const loginDate = s.loginTime ? new Date(s.loginTime) : null;
+                      const logoutDate = s.logoutTime ? new Date(s.logoutTime) : null;
+                      const hoursNum = Number(s.hoursUsed) || 0;
+                      const hoursFormatted = hoursNum < 1
+                        ? `${Math.max(1, Math.round(hoursNum * 60))} mins`
+                        : `${Math.floor(hoursNum)}h ${Math.round((hoursNum % 1) * 60)}m (${hoursNum.toFixed(2)}h)`;
+
+                      return (
+                        <tr
+                          key={s.id}
+                          style={{
+                            borderBottom: "1px solid #F1F5F9",
+                            fontSize: 12.5,
+                            verticalAlign: "middle"
+                          }}
+                        >
+                          <td style={{ padding: "10px 8px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <div style={{ width: 26, height: 26, borderRadius: "50%", background: "#EEF2FF", color: "#4F46E5", fontWeight: 700, fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                {(s.name || s.username || "U").slice(0, 1).toUpperCase()}
+                              </div>
+                              <span style={{ fontWeight: 600, color: "#1E293B" }}>{s.name || "User"}</span>
+                            </div>
+                          </td>
+                          <td style={{ padding: "10px 8px", color: "#64748B", fontFamily: "monospace", fontSize: 12 }}>
+                            @{s.username || "—"}
+                          </td>
+                          <td style={{ padding: "10px 8px", color: "#64748B" }}>
+                            {s.dept || "—"}
+                          </td>
+                          <td style={{ padding: "10px 8px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 5, color: "#1F2937", fontWeight: 600, fontSize: 11.5 }}>
+                              {s.deviceType === "Mobile" ? <Smartphone size={13} color="#534AB7" /> : <Laptop size={13} color="#1F9E8D" />}
+                              <span>{s.deviceType || "Laptop"}</span>
+                            </div>
+                            {s.device && (
+                              <div style={{ fontSize: 10.5, color: "#64748B", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={s.device}>
+                                {s.device}
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ padding: "10px 8px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 4, color: "#1F2937", fontSize: 11.5 }}>
+                              <MapPin size={12} color="#DC2626" style={{ flexShrink: 0 }} />
+                              <span style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={sanitizeLocationString(s.location)}>
+                                {sanitizeLocationString(s.location) || "Office"}
+                              </span>
+                            </div>
+                          </td>
+                          <td style={{ padding: "10px 8px", color: "#334155", fontSize: 12 }}>
+                            {loginDate ? loginDate.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
+                          </td>
+                          <td style={{ padding: "10px 8px" }}>
+                            {s.active ? (
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "2px 7px", borderRadius: 999, background: "#ECFDF5", color: "#059669", fontSize: 11, fontWeight: 700 }}>
+                                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#10B981" }} />
+                                Online
+                              </span>
+                            ) : (
+                              <span style={{ color: "#64748B", fontSize: 12 }}>
+                                {logoutDate ? logoutDate.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
+                              </span>
+                            )}
+                          </td>
+                          <td style={{ padding: "10px 8px" }}>
+                            <span style={{ fontWeight: 700, color: s.active ? "#059669" : "#1E293B", background: s.active ? "#F0FDF4" : "#F8FAFC", padding: "2px 6px", borderRadius: 6, border: `1px solid ${s.active ? "#BBF7D0" : "#E2E8F0"}` }}>
+                              {hoursFormatted}
+                            </span>
+                          </td>
+                          <td style={{ padding: "10px 8px", textAlign: "right" }}>
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "#059669", background: "#ECFDF5", padding: "2px 7px", borderRadius: 999, fontSize: 11, fontWeight: 600 }}>
+                              <Check size={12} /> Present
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
-
-            {filteredSessions.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "30px 0", color: "#94A3B8", fontSize: 13 }}>
-                No login session records found.
-              </div>
-            ) : (
-              filteredSessions.map(s => {
-                const loginDate = s.loginTime ? new Date(s.loginTime) : null;
-                const logoutDate = s.logoutTime ? new Date(s.logoutTime) : null;
-                const hoursNum = Number(s.hoursUsed) || 0;
-                const hoursFormatted = hoursNum < 1
-                  ? `${Math.max(1, Math.round(hoursNum * 60))} mins`
-                  : `${Math.floor(hoursNum)}h ${Math.round((hoursNum % 1) * 60)}m (${hoursNum.toFixed(2)}h)`;
-
-                return (
-                  <div
-                    key={s.id}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1.5fr 1fr 1fr 1.2fr 1.2fr 1fr 1.2fr",
-                      alignItems: "center",
-                      fontSize: 12.5,
-                      padding: "11px 4px",
-                      borderBottom: "1px solid #F1F5F9"
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                      <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#EEF2FF", color: "#4F46E5", fontWeight: 700, fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        {(s.name || s.username || "U").slice(0, 1).toUpperCase()}
-                      </div>
-                      <div style={{ fontWeight: 600, color: "#1E293B" }}>{s.name || "User"}</div>
-                    </div>
-                    <div style={{ color: "#64748B", fontFamily: "monospace", fontSize: 12 }}>@{s.username || "—"}</div>
-                    <div style={{ color: "#64748B" }}>{s.dept || "—"}</div>
-                    <div style={{ color: "#334155", fontSize: 12 }}>
-                      {loginDate ? loginDate.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
-                    </div>
-                    <div>
-                      {s.active ? (
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 8px", borderRadius: 999, background: "#ECFDF5", color: "#059669", fontSize: 11, fontWeight: 700 }}>
-                          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#10B981" }} />
-                          Online Now
-                        </span>
-                      ) : (
-                        <span style={{ color: "#64748B", fontSize: 12 }}>
-                          {logoutDate ? logoutDate.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
-                        </span>
-                      )}
-                    </div>
-                    <div>
-                      <span style={{ fontWeight: 700, color: s.active ? "#059669" : "#1E293B", background: s.active ? "#F0FDF4" : "#F8FAFC", padding: "2px 7px", borderRadius: 6, border: `1px solid ${s.active ? "#BBF7D0" : "#E2E8F0"}` }}>
-                        {hoursFormatted}
-                      </span>
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "#059669", background: "#ECFDF5", padding: "3px 8px", borderRadius: 999, fontSize: 11, fontWeight: 600 }}>
-                        <Check size={12} /> Present
-                      </span>
-                    </div>
-                  </div>
-                );
-              })
-            )}
           </Card>
         </div>
       ) : (
@@ -3605,21 +3719,21 @@ export function AttendancePage({
 
       <Card>
         <CardHeader title="Today's roster" sub="Click a status pill to cycle it — edit or remove team members" />
-        <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr 0.8fr 0.8fr", fontSize: 11, color: "#8A8D98", padding: "0 4px 8px", borderBottom: "1px solid #F0F0F2" }}>
-          <div>Name</div><div>Title</div><div>Department</div><div>Status</div><div style={{ textAlign: "right" }}>Actions</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr 1.1fr 1.6fr 0.9fr", fontSize: 11, color: "#6B7280", padding: "0 4px 8px", borderBottom: "1px solid #F0F0F2" }}>
+          <div>Name & Account</div><div>Title</div><div>Department</div><div>Today's Attendance Status</div><div style={{ textAlign: "right" }}>Actions</div>
         </div>
-        {roster.length === 0 ? (
+        {unifiedStaff.length === 0 ? (
           <div style={{ padding: "32px 16px", textAlign: "center", color: "#8A8D98", fontSize: 13 }}>
-            No staff members in the roster yet. Use the &quot;Add a joiner&quot; form above to add team members.
+            No staff members in the roster yet. Use the "Add a joiner" form above to add team members.
           </div>
-        ) : roster.map(s => {
+        ) : unifiedStaff.map(s => {
           const isEditing = editingName === s.name;
-          const status = attendance[s.name] || "present";
-          const st = ATTENDANCE_STATUS_STYLE[status] || ATTENDANCE_STATUS_STYLE.present;
+          const att = getStaffAttendance(s);
+          const st = ATTENDANCE_STATUS_STYLE[att.status] || ATTENDANCE_STATUS_STYLE.absent;
 
           if (isEditing) {
             return (
-              <div key={s.name} style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr 0.8fr 0.8fr", alignItems: "center", fontSize: 12.5, padding: "8px 4px", borderBottom: "1px solid #F7F7F9", background: "#FAF9FE" }}>
+              <div key={s.name} style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr 1.1fr 1.6fr 0.9fr", alignItems: "center", fontSize: 12.5, padding: "8px 4px", borderBottom: "1px solid #F7F7F9", background: "#FAF9FE" }}>
                 <div>
                   <input value={editForm.name} onChange={e => setEdit("name", e.target.value)} style={{ width: "90%", padding: "4px 6px", borderRadius: 5, border: "1px solid #D5CEF2", fontSize: 12 }} />
                 </div>
@@ -3643,19 +3757,55 @@ export function AttendancePage({
           }
 
           return (
-            <div key={s.name} style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr 0.8fr 0.8fr", alignItems: "center", fontSize: 12.5, padding: "8px 4px", borderBottom: "1px solid #F7F7F9" }}>
-              <div style={{ fontWeight: 600, color: "#1B2130" }}>{s.name}</div>
+            <div key={s.name} style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr 1.1fr 1.6fr 0.9fr", alignItems: "center", fontSize: 12.5, padding: "9px 4px", borderBottom: "1px solid #F7F7F9" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ width: 26, height: 26, borderRadius: "50%", background: "#F3F4F6", color: "#4B5563", fontWeight: 700, fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {(s.name || "U").slice(0, 1).toUpperCase()}
+                </div>
+                <div>
+                  <div style={{ fontWeight: 600, color: "#1B2130" }}>{s.name}</div>
+                  {s.username && <div style={{ fontSize: 11, color: "#9CA3AF", fontFamily: "monospace" }}>@{s.username}</div>}
+                </div>
+              </div>
               <div style={{ color: "#8A8D98" }}>{s.title}</div>
               <div style={{ color: "#8A8D98" }}>{s.dept}</div>
               <div>
-                <span
-                  onClick={() => onCycle(s.name)}
-                  style={{ cursor: "pointer", background: st.bg, color: st.fg, fontSize: 11.5, fontWeight: 600, padding: "3px 10px", borderRadius: 999 }}
-                >
-                  {st.label}
-                </span>
+                <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
+                  <span
+                    onClick={() => onCycle(s.name)}
+                    title="Click to cycle status (Present / On Leave / Absent)"
+                    style={{ cursor: "pointer", background: st.bg, color: st.fg, fontSize: 11.5, fontWeight: 700, padding: "3px 10px", borderRadius: 999 }}
+                  >
+                    {att.status === "present" ? "✓ Present" : att.status === "leave" ? "🏖 On leave" : "✕ Absent"}
+                  </span>
+                  {att.status === "present" && (
+                    <span style={{ fontSize: 11, color: "#059669", display: "inline-flex", alignItems: "center", gap: 4, background: "#ECFDF5", padding: "2px 7px", borderRadius: 6 }}>
+                      {att.deviceType === "Mobile" ? <Smartphone size={12} color="#534AB7" /> : <Laptop size={12} color="#1F9E8D" />}
+                      {att.inTime && <span>In: {att.inTime}</span>}
+                      {att.location && <span title={sanitizeLocationString(att.location)}>· 📍 {sanitizeLocationString(att.location).split("(")[0].trim()}</span>}
+                    </span>
+                  )}
+                  {att.status === "leave" && att.reason && (
+                    <span style={{ fontSize: 11, color: "#92400E", background: "#FEF3C7", padding: "2px 6px", borderRadius: 4 }}>
+                      {att.reason}
+                    </span>
+                  )}
+                  {att.status === "absent" && (
+                    <span style={{ fontSize: 10.5, color: "#9CA3AF" }}>(No login today)</span>
+                  )}
+                </div>
               </div>
-              <div style={{ textAlign: "right", display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <div style={{ textAlign: "right", display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
+                <button
+                  onClick={() => {
+                    setLeaveForm(f => ({ ...f, name: s.name, dept: s.dept, reason: "Personal" }));
+                    setShowAddLeave(true);
+                  }}
+                  title="Mark or request leave for this staff"
+                  style={{ fontSize: 11, color: "#534AB7", background: "#EDE9FE", border: "none", borderRadius: 5, padding: "3px 7px", cursor: "pointer", fontWeight: 600 }}
+                >
+                  On leave
+                </button>
                 <button
                   onClick={() => startEdit(s)}
                   style={{ fontSize: 11, color: "#378ADD", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
@@ -3673,7 +3823,7 @@ export function AttendancePage({
             </div>
           );
         })}
-      </Card>
+        </Card>
       </>
       )}
     </div>
@@ -4268,7 +4418,7 @@ export function EditDepartmentModal({
   );
 }
 
-export function DepartmentsPage({ orders, onOpenDept, orgStructure, deptDescriptions }) {
+export function DepartmentsPage({ orders, onOpenDept, orgStructure, deptDescriptions, users = [], teams = [] }) {
   const stageLinkedDepts = useMemo(() => new Set(TA_STAGES.map(s => s.dept)), []);
   const coveredCount = stageLinkedDepts.size;
   const deptNames = Object.keys(orgStructure);
@@ -4332,6 +4482,27 @@ export function DepartmentsPage({ orders, onOpenDept, orgStructure, deptDescript
                     {description}
                   </div>
                 )}
+
+                {(() => {
+                  const deptUsers = Array.isArray(users) ? users.filter(u => {
+                    const userTeamIds = Array.isArray(u.teamIds) && u.teamIds.length > 0 ? u.teamIds : (u.teamId ? [u.teamId] : []);
+                    const userDepts = Array.isArray(teams) ? teams.filter(t => userTeamIds.includes(t.id)).map(t => t.name.toLowerCase()) : [];
+                    return userDepts.includes(deptName.toLowerCase()) || (u.teamId === "team-admin" && deptName === "Administrators");
+                  }) : [];
+
+                  return (
+                    <div style={{ marginTop: 10, paddingTop: 8, borderTop: "1px dashed #E5E7EB", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11.5 }}>
+                      <span style={{ color: "#534AB7", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 5 }}>
+                        👥 {deptUsers.length} mapped user{deptUsers.length === 1 ? "" : "s"}
+                      </span>
+                      {deptUsers.length > 0 && (
+                        <span style={{ color: "#6B7280" }}>
+                          {deptUsers.slice(0, 2).map(u => u.name).join(", ")}{deptUsers.length > 2 ? ` +${deptUsers.length - 2}` : ""}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             </Card>
           );
@@ -4350,11 +4521,25 @@ export function DepartmentDetail({
   deptDescriptions,
   onUpdateDepartment,
   suppliers = [],
-  onAssignWork
+  onAssignWork,
+  users = [],
+  teams = [],
+  attendance = {},
+  userSessions = []
 }) {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const roles = orgStructure[deptName] || [];
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const mappedUsers = useMemo(() => {
+    if (!Array.isArray(users)) return [];
+    return users.filter(u => {
+      const userTeamIds = Array.isArray(u.teamIds) && u.teamIds.length > 0 ? u.teamIds : (u.teamId ? [u.teamId] : []);
+      const userDepts = Array.isArray(teams) ? teams.filter(t => userTeamIds.includes(t.id)).map(t => t.name.toLowerCase()) : [];
+      return userDepts.includes(deptName.toLowerCase()) || (u.teamId === "team-admin" && deptName === "Administrators");
+    });
+  }, [users, teams, deptName]);
   const allDeptTasks = useMemo(() => collectTasks(orders, deptName), [orders, deptName]);
   const linkedStages = TA_STAGES.filter(s => s.dept === deptName);
   const description = deptDescriptions?.[deptName] || DEFAULT_DEPT_DESCRIPTIONS[deptName] || (linkedStages.length > 0 ? `Owns T&A step${linkedStages.length > 1 ? "s" : ""}: ${linkedStages.map(s => s.name).join(", ")}` : "Support department — not yet a T&A step owner");
@@ -4452,11 +4637,94 @@ export function DepartmentDetail({
         </div>
       </div>
 
-      {/* Reporting Structure Card */}
+      {/* Assigned Department Members & User Telemetry Card */}
       <Card style={{ marginBottom: 20 }}>
+        <div style={{ padding: "0 0 12px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #F0F0F2", marginBottom: 12 }}>
+          <div>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "#1B2130" }}>Assigned Department Members & Active Status</span>
+            <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 700, background: "#E0DBF5", color: "#3D3878", padding: "2px 8px", borderRadius: 999 }}>
+              {mappedUsers.length} user{mappedUsers.length === 1 ? "" : "s"}
+            </span>
+          </div>
+          <span style={{ fontSize: 12, color: "#8A8D98" }}>
+            Mapped via User Access & Permissions
+          </span>
+        </div>
+
+        {mappedUsers.length === 0 ? (
+          <div style={{ padding: "20px 0", textAlign: "center", color: "#8A8D98", fontSize: 12.5 }}>
+            No users currently mapped to {deptName}. You can assign users to {deptName} in Settings → User Access.
+          </div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
+            {mappedUsers.map(u => {
+              const isOnline = userSessions.some(s => s.active && (s.userId === u.id || s.username === u.username));
+              const sessionToday = userSessions.find(s => (s.userId === u.id || s.username === u.username) && (s.date === todayStr || (s.loginTime && s.loginTime.startsWith(todayStr))));
+              const isPresent = Boolean(sessionToday || attendance[u.name] === "present");
+              const isOnLeave = attendance[u.name] === "leave";
+
+              return (
+                <div key={u.id || u.username} style={{ padding: "12px 14px", border: "1px solid #E5E7EB", borderRadius: 10, background: "#FFFFFF", display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ width: 34, height: 34, borderRadius: 999, background: "#534AB7", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 13, position: "relative" }}>
+                        {(u.name || "U").charAt(0).toUpperCase()}
+                        {isOnline && (
+                          <span style={{ position: "absolute", bottom: 0, right: 0, width: 9, height: 9, borderRadius: "50%", background: "#10B981", border: "1.5px solid #fff" }} title="Online now" />
+                        )}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>{u.name}</div>
+                        <div style={{ fontSize: 11, color: "#6B7280" }}>{u.email || (u.username ? `@${u.username}` : "Staff")}</div>
+                      </div>
+                    </div>
+
+                    {isPresent ? (
+                      <span style={{ fontSize: 10.5, fontWeight: 700, background: "#E1F5EE", color: "#085041", padding: "2px 8px", borderRadius: 999 }}>
+                        ✓ Present
+                      </span>
+                    ) : isOnLeave ? (
+                      <span style={{ fontSize: 10.5, fontWeight: 700, background: "#FAEEDA", color: "#633806", padding: "2px 8px", borderRadius: 999 }}>
+                        🏖 On Leave
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: 10.5, fontWeight: 600, background: "#FCEBEB", color: "#791F1F", padding: "2px 8px", borderRadius: 999 }}>
+                        ✕ Absent
+                      </span>
+                    )}
+                  </div>
+
+                  {sessionToday && (
+                    <div style={{ fontSize: 11, color: "#6B7280", display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, marginTop: 2, paddingTop: 6, borderTop: "1px dashed #F3F4F6" }}>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontWeight: 600, color: "#374151" }}>
+                        {sessionToday.deviceType === "Mobile" ? <Smartphone size={12} color="#534AB7" /> : <Laptop size={12} color="#1F9E8D" />}
+                        {sessionToday.deviceType || "Laptop"}
+                      </span>
+                      {sessionToday.location && (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }} title={sessionToday.location}>
+                          <MapPin size={11} color="#DC2626" />
+                          {sessionToday.location.split("(")[0].trim()}
+                        </span>
+                      )}
+                      {sessionToday.loginTime && (
+                        <span style={{ color: "#059669", fontWeight: 600 }}>
+                          In: {new Date(sessionToday.loginTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
+      {/* Reporting Structure Card */}
+      {/* <Card style={{ marginBottom: 20 }}>
         <CardHeader title="Reporting structure & responsibilities" />
         <OrgChain roles={roles} />
-      </Card>
+      </Card> */}
 
       {/* Department Performance & Employee KPI Tracking */}
       <DepartmentPerformanceAndKPI
@@ -5143,6 +5411,383 @@ export function OrderStageAlignmentModal({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+
+export function AuditLoggerPage({
+  auditLogs = [],
+  onClearAuditLogs,
+  users = [],
+  teams = []
+}) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [eventTypeFilter, setEventTypeFilter] = useState("ALL");
+  const [userFilter, setUserFilter] = useState("ALL");
+  const [dateFilter, setDateFilter] = useState("");
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const loginsToday = useMemo(() => {
+    return auditLogs.filter(l => l.eventType === "LOGIN" && (l.timestamp || "").startsWith(todayStr)).length;
+  }, [auditLogs, todayStr]);
+
+  const stageClicks = useMemo(() => {
+    return auditLogs.filter(l => l.eventType === "STAGE").length;
+  }, [auditLogs]);
+
+  const uniqueActiveUsers = useMemo(() => {
+    const userSet = new Set();
+    auditLogs.forEach(l => {
+      if (l.username) userSet.add(l.username);
+    });
+    return userSet.size;
+  }, [auditLogs]);
+
+  const filteredLogs = useMemo(() => {
+    return auditLogs.filter(log => {
+      if (eventTypeFilter !== "ALL" && log.eventType !== eventTypeFilter) return false;
+      if (userFilter !== "ALL" && log.username !== userFilter && log.userName !== userFilter) return false;
+      if (dateFilter && !((log.timestamp || "").startsWith(dateFilter))) return false;
+      if (searchTerm.trim()) {
+        const q = searchTerm.toLowerCase();
+        const matches =
+          (log.action && log.action.toLowerCase().includes(q)) ||
+          (log.userName && log.userName.toLowerCase().includes(q)) ||
+          (log.username && log.username.toLowerCase().includes(q)) ||
+          (log.userDept && log.userDept.toLowerCase().includes(q)) ||
+          (log.device && log.device.toLowerCase().includes(q)) ||
+          (log.location && log.location.toLowerCase().includes(q)) ||
+          (log.targetId && log.targetId.toLowerCase().includes(q));
+        if (!matches) return false;
+      }
+      return true;
+    });
+  }, [auditLogs, eventTypeFilter, userFilter, dateFilter, searchTerm]);
+
+  const exportCsv = () => {
+    if (filteredLogs.length === 0) {
+      alert("No logs available to export.");
+      return;
+    }
+    const headers = ["Timestamp", "Date", "Time", "Event Type", "User", "Username", "Department", "Action Description", "Device", "Device Type", "Location", "Target ID"];
+    const rows = filteredLogs.map(l => {
+      const dt = l.timestamp ? new Date(l.timestamp) : new Date();
+      const datePart = dt.toLocaleDateString();
+      const timePart = dt.toLocaleTimeString();
+      return [
+        `"${l.timestamp || ""}"`,
+        `"${datePart}"`,
+        `"${timePart}"`,
+        `"${l.eventType || ""}"`,
+        `"${(l.userName || "").replace(/"/g, '""')}"`,
+        `"${(l.username || "").replace(/"/g, '""')}"`,
+        `"${(l.userDept || "").replace(/"/g, '""')}"`,
+        `"${(l.action || "").replace(/"/g, '""')}"`,
+        `"${(l.device || "").replace(/"/g, '""')}"`,
+        `"${(l.deviceType || "").replace(/"/g, '""')}"`,
+        `"${(l.location || "").replace(/"/g, '""')}"`,
+        `"${(l.targetId || "").replace(/"/g, '""')}"`
+      ].join(",");
+    });
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `loom_audit_logs_${todayStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const eventBadgeStyles = {
+    LOGIN: { bg: "#E0F2FE", color: "#0369A1", border: "#BAE6FD" },
+    LOGOUT: { bg: "#F1F5F9", color: "#475569", border: "#CBD5E1" },
+    ORDER: { bg: "#EDE9FE", color: "#534AB7", border: "#DDD6FE" },
+    STAGE: { bg: "#FEF3C7", color: "#92400E", border: "#FDE68A" },
+    TASK: { bg: "#E1F5EE", color: "#085041", border: "#A7F3D0" },
+    ATTENDANCE: { bg: "#ECFDF5", color: "#059669", border: "#A7F3D0" },
+    LEAVE: { bg: "#FAEEDA", color: "#633806", border: "#FED7AA" },
+    ADMIN: { bg: "#FCEBEB", color: "#791F1F", border: "#FECACA" },
+    SYSTEM: { bg: "#F3F4F6", color: "#374151", border: "#E5E7EB" }
+  };
+
+  return (
+    <div>
+      <PageHeader
+        title="Audit & Event Logger"
+        sub="Comprehensive administrative audit trail tracking user logins, clicks, updates, and events with device & location telemetry."
+      />
+
+      {/* KPI Cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
+        <Card style={{ padding: "16px 18px" }}>
+          <div style={{ fontSize: 12, color: "#8A8D98" }}>Total Recorded Events</div>
+          <div style={{ fontSize: 24, fontWeight: 700, marginTop: 6, color: "#1F2937" }}>
+            {auditLogs.length}
+          </div>
+          <div style={{ fontSize: 11, color: "#6B7280", marginTop: 4 }}>Full administrative history</div>
+        </Card>
+        <Card style={{ padding: "16px 18px" }}>
+          <div style={{ fontSize: 12, color: "#8A8D98" }}>Logins Today</div>
+          <div style={{ fontSize: 24, fontWeight: 700, marginTop: 6, color: "#059669", display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#059669", boxShadow: "0 0 6px #059669" }} />
+            {loginsToday}
+          </div>
+          <div style={{ fontSize: 11, color: "#6B7280", marginTop: 4 }}>Daily present verifications</div>
+        </Card>
+        <Card style={{ padding: "16px 18px" }}>
+          <div style={{ fontSize: 12, color: "#8A8D98" }}>T&A Stage Clicks</div>
+          <div style={{ fontSize: 24, fontWeight: 700, marginTop: 6, color: "#D97706" }}>
+            {stageClicks}
+          </div>
+          <div style={{ fontSize: 11, color: "#6B7280", marginTop: 4 }}>Pipeline updates recorded</div>
+        </Card>
+        <Card style={{ padding: "16px 18px" }}>
+          <div style={{ fontSize: 12, color: "#8A8D98" }}>Unique Active Users</div>
+          <div style={{ fontSize: 24, fontWeight: 700, marginTop: 6, color: "#534AB7" }}>
+            {uniqueActiveUsers}
+          </div>
+          <div style={{ fontSize: 11, color: "#6B7280", marginTop: 4 }}>Across all departments</div>
+        </Card>
+      </div>
+
+      {/* Main Table Card */}
+      <Card>
+        {/* Controls Bar */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 0 16px", borderBottom: "1px solid #F1F5F9", marginBottom: 14, flexWrap: "wrap", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ position: "relative", minWidth: 240 }}>
+              <input
+                type="text"
+                placeholder="Search action, user, PO, device..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "7px 12px 7px 30px",
+                  borderRadius: 7,
+                  border: "1px solid #D1D5DB",
+                  fontSize: 12.5,
+                  boxSizing: "border-box"
+                }}
+              />
+              <Search size={14} color="#9CA3AF" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
+            </div>
+
+            <select
+              value={eventTypeFilter}
+              onChange={e => setEventTypeFilter(e.target.value)}
+              style={{ padding: "7px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 12.5, background: "#FFFFFF", color: "#374151" }}
+            >
+              <option value="ALL">All Event Types</option>
+              <option value="LOGIN">Logins</option>
+              <option value="LOGOUT">Logouts</option>
+              <option value="ORDER">Orders</option>
+              <option value="STAGE">T&A Stages</option>
+              <option value="TASK">Tasks</option>
+              <option value="ATTENDANCE">Attendance</option>
+              <option value="LEAVE">Leaves</option>
+              <option value="ADMIN">Admin & Access</option>
+            </select>
+
+            <select
+              value={userFilter}
+              onChange={e => setUserFilter(e.target.value)}
+              style={{ padding: "7px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 12.5, background: "#FFFFFF", color: "#374151" }}
+            >
+              <option value="ALL">All Users</option>
+              {Array.isArray(users) && users.map(u => (
+                <option key={u.id || u.username} value={u.username || u.name}>{u.name} ({u.username})</option>
+              ))}
+            </select>
+
+            <input
+              type="date"
+              value={dateFilter}
+              onChange={e => setDateFilter(e.target.value)}
+              style={{ padding: "6px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 12.5, color: "#374151" }}
+            />
+
+            {(searchTerm || eventTypeFilter !== "ALL" || userFilter !== "ALL" || dateFilter) && (
+              <button
+                type="button"
+                onClick={() => { setSearchTerm(""); setEventTypeFilter("ALL"); setUserFilter("ALL"); setDateFilter(""); }}
+                style={{ padding: "6px 10px", borderRadius: 6, border: "none", background: "#F3F4F6", color: "#4B5563", fontSize: 12, cursor: "pointer" }}
+              >
+                Reset Filters
+              </button>
+            )}
+          </div>
+
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <button
+              type="button"
+              onClick={exportCsv}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "7px 14px",
+                borderRadius: 7,
+                border: "1px solid #D1D5DB",
+                background: "#FFFFFF",
+                fontSize: 12.5,
+                fontWeight: 600,
+                color: "#374151",
+                cursor: "pointer"
+              }}
+            >
+              <Download size={14} /> Export CSV ({filteredLogs.length})
+            </button>
+
+            {onClearAuditLogs && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirm("Are you sure you want to clear all audit log records? This cannot be undone.")) {
+                    onClearAuditLogs();
+                  }
+                }}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                  padding: "7px 12px",
+                  borderRadius: 7,
+                  border: "1px solid #FECACA",
+                  background: "#FEF2F2",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: "#DC2626",
+                  cursor: "pointer"
+                }}
+              >
+                <Trash2 size={13} /> Clear
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Table Container with Overflow & Semantic Table */}
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", minWidth: 920 }}>
+            <thead>
+              <tr style={{ borderBottom: "2px solid #E5E7EB", background: "#F8FAFC" }}>
+                <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "140px", whiteSpace: "nowrap" }}>Date & Time</th>
+                <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "95px", whiteSpace: "nowrap" }}>Event Type</th>
+                <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "170px" }}>User & Department</th>
+                <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#475569" }}>Action / Clicks</th>
+                <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "195px" }}>Device Telemetry</th>
+                <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "230px" }}>Location (GPS / Region)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredLogs.length === 0 ? (
+                <tr>
+                  <td colSpan={6} style={{ padding: "40px 0", textAlign: "center", color: "#9CA3AF", fontSize: 13 }}>
+                    No audit events found matching the selected criteria.
+                  </td>
+                </tr>
+              ) : (
+                filteredLogs.map(log => {
+                  const dt = log.timestamp ? new Date(log.timestamp) : new Date();
+                  const dateStr = dt.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+                  const timeStr = dt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true });
+                  const badgeStyle = eventBadgeStyles[log.eventType] || eventBadgeStyles.SYSTEM;
+                  const isMobile = log.deviceType === "Mobile" || (log.device && /Mobile|Android|iPhone/i.test(log.device));
+
+                  return (
+                    <tr
+                      key={log.id}
+                      style={{
+                        borderBottom: "1px solid #F1F5F9",
+                        transition: "background 0.1s ease",
+                        verticalAlign: "middle"
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = "#F9FAFB"}
+                      onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                    >
+                      <td style={{ padding: "12px", whiteSpace: "nowrap" }}>
+                        <div style={{ fontWeight: 600, color: "#1F2937", fontSize: 12.5 }}>{dateStr}</div>
+                        <div style={{ fontSize: 11, color: "#6B7280", fontFamily: "monospace", marginTop: 2 }}>{timeStr}</div>
+                      </td>
+
+                      <td style={{ padding: "12px", whiteSpace: "nowrap" }}>
+                        <span style={{
+                          display: "inline-block",
+                          padding: "3px 8px",
+                          borderRadius: 6,
+                          fontSize: 11,
+                          fontWeight: 700,
+                          background: badgeStyle.bg,
+                          color: badgeStyle.color,
+                          border: `1px solid ${badgeStyle.border}`,
+                          letterSpacing: 0.3
+                        }}>
+                          {log.eventType}
+                        </span>
+                      </td>
+
+                      <td style={{ padding: "12px" }}>
+                        <div style={{ fontWeight: 600, color: "#111827", display: "flex", alignItems: "center", gap: 7 }}>
+                          <span style={{
+                            width: 22,
+                            height: 22,
+                            borderRadius: "50%",
+                            background: "#534AB7",
+                            color: "#FFFFFF",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: 10,
+                            fontWeight: 700,
+                            flexShrink: 0
+                          }}>
+                            {(log.userName || "U").charAt(0).toUpperCase()}
+                          </span>
+                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12.5 }}>{log.userName}</span>
+                        </div>
+                        <div style={{ fontSize: 11, color: "#6B7280", marginTop: 2, paddingLeft: 29 }}>
+                          {log.userDept || "General"}
+                        </div>
+                      </td>
+
+                      <td style={{ padding: "12px", color: "#374151" }}>
+                        <div style={{ lineHeight: 1.45, fontSize: 12.5 }}>{log.action}</div>
+                        {log.targetId && (
+                          <span style={{ display: "inline-block", marginTop: 3, fontSize: 10.5, fontFamily: "monospace", color: "#534AB7", background: "#F5F3FF", padding: "1px 6px", borderRadius: 4 }}>
+                            Ref: {log.targetId}
+                          </span>
+                        )}
+                      </td>
+
+                      <td style={{ padding: "12px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 5, color: "#1F2937", fontWeight: 600, fontSize: 12 }}>
+                          {isMobile ? <Smartphone size={14} color="#534AB7" /> : <Laptop size={14} color="#1F9E8D" />}
+                          <span>{log.deviceType || (isMobile ? "Mobile" : "Laptop / Desktop")}</span>
+                        </div>
+                        <div style={{ fontSize: 11, color: "#6B7280", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={log.device}>
+                          {log.device || "Browser Client"}
+                        </div>
+                      </td>
+
+                      <td style={{ padding: "12px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 5, color: "#1F2937", fontSize: 12 }}>
+                          <MapPin size={13} color="#DC2626" style={{ flexShrink: 0 }} />
+                          <span style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={sanitizeLocationString(log.location)}>
+                            {sanitizeLocationString(log.location) || "Local Office"}
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
     </div>
   );
 }
