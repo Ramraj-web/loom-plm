@@ -1,7 +1,5 @@
-import * as XLSX from "xlsx";
-import { createWorker } from "tesseract.js";
-
 /**
+ * PO Document Scanner (Excel, Images, PDFs)
  * Parses text using regex to find FOB price, Unit Price, PO Qty, PO Number, and Total Order Value.
  */
 export function extractPOFieldsFromText(rawText) {
@@ -145,56 +143,62 @@ export function extractPOFieldsFromText(rawText) {
  * Reads an Excel file (xlsx/xls/csv) and extracts text/values
  */
 export async function parseExcelFile(file) {
-  const data = await file.arrayBuffer();
-  const workbook = XLSX.read(data, { type: "array" });
-  let fullText = "";
-  let extractedFob = null;
-  let extractedQty = null;
-  let extractedTotal = null;
-  let extractedPoNo = null;
+  try {
+    const XLSX = await import("xlsx");
+    const data = await file.arrayBuffer();
+    const workbook = XLSX.read(data, { type: "array" });
+    let fullText = "";
+    let extractedFob = null;
+    let extractedQty = null;
+    let extractedTotal = null;
+    let extractedPoNo = null;
 
-  for (const sheetName of workbook.SheetNames) {
-    const sheet = workbook.Sheets[sheetName];
-    const jsonRows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-    
-    // Scan rows for FOB, Qty, Total headers and cells
-    for (let r = 0; r < jsonRows.length; r++) {
-      const row = jsonRows[r] || [];
-      const rowStr = row.map(c => String(c || "")).join(" | ");
-      fullText += rowStr + "\n";
+    for (const sheetName of workbook.SheetNames) {
+      const sheet = workbook.Sheets[sheetName];
+      const jsonRows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+      
+      // Scan rows for FOB, Qty, Total headers and cells
+      for (let r = 0; r < jsonRows.length; r++) {
+        const row = jsonRows[r] || [];
+        const rowStr = row.map(c => String(c || "")).join(" | ");
+        fullText += rowStr + "\n";
 
-      for (let c = 0; c < row.length; c++) {
-        const cell = String(row[c] || "").trim().toLowerCase();
-        const nextCellVal = parseFloat(String(row[c + 1] || "").replace(/[^0-9.-]/g, ""));
-        
-        if (cell.includes("fob") || cell.includes("unit price") || cell.includes("rate/pc")) {
-          if (!isNaN(nextCellVal) && nextCellVal > 0) extractedFob = nextCellVal;
-        }
-        if (cell.includes("po qty") || cell.includes("total qty") || (cell === "qty" && !extractedQty)) {
-          if (!isNaN(nextCellVal) && nextCellVal > 0) extractedQty = Math.round(nextCellVal);
-        }
-        if (cell.includes("total amount") || cell.includes("po value") || cell.includes("grand total")) {
-          if (!isNaN(nextCellVal) && nextCellVal > 0) extractedTotal = nextCellVal;
-        }
-        if (cell.includes("po no") || cell.includes("po #") || cell.includes("purchase order")) {
-          const poVal = String(row[c + 1] || "").trim();
-          if (poVal) extractedPoNo = poVal;
+        for (let c = 0; c < row.length; c++) {
+          const cell = String(row[c] || "").trim().toLowerCase();
+          const nextCellVal = parseFloat(String(row[c + 1] || "").replace(/[^0-9.-]/g, ""));
+          
+          if (cell.includes("fob") || cell.includes("unit price") || cell.includes("rate/pc")) {
+            if (!isNaN(nextCellVal) && nextCellVal > 0) extractedFob = nextCellVal;
+          }
+          if (cell.includes("po qty") || cell.includes("total qty") || (cell === "qty" && !extractedQty)) {
+            if (!isNaN(nextCellVal) && nextCellVal > 0) extractedQty = Math.round(nextCellVal);
+          }
+          if (cell.includes("total amount") || cell.includes("po value") || cell.includes("grand total")) {
+            if (!isNaN(nextCellVal) && nextCellVal > 0) extractedTotal = nextCellVal;
+          }
+          if (cell.includes("po no") || cell.includes("po #") || cell.includes("purchase order")) {
+            const poVal = String(row[c + 1] || "").trim();
+            if (poVal) extractedPoNo = poVal;
+          }
         }
       }
     }
+
+    const fields = extractPOFieldsFromText(fullText);
+    if (extractedFob) fields.fobPrice = extractedFob;
+    if (extractedQty) fields.poQty = extractedQty;
+    if (extractedTotal) fields.orderValue = extractedTotal;
+    if (extractedPoNo) fields.poNumber = extractedPoNo;
+
+    if (!fields.orderValue && fields.fobPrice && fields.poQty) {
+      fields.orderValue = Math.round(fields.fobPrice * fields.poQty * 100) / 100;
+    }
+
+    return fields;
+  } catch (err) {
+    console.warn("Excel parsing error:", err);
+    return {};
   }
-
-  const fields = extractPOFieldsFromText(fullText);
-  if (extractedFob) fields.fobPrice = extractedFob;
-  if (extractedQty) fields.poQty = extractedQty;
-  if (extractedTotal) fields.orderValue = extractedTotal;
-  if (extractedPoNo) fields.poNumber = extractedPoNo;
-
-  if (!fields.orderValue && fields.fobPrice && fields.poQty) {
-    fields.orderValue = Math.round(fields.fobPrice * fields.poQty * 100) / 100;
-  }
-
-  return fields;
 }
 
 /**
@@ -203,9 +207,10 @@ export async function parseExcelFile(file) {
 export async function parseImageFile(file) {
   let worker = null;
   try {
+    const { createWorker } = await import("tesseract.js");
     worker = await createWorker("eng");
     const ret = await worker.recognize(file);
-    const text = ret.data.text || "";
+    const text = ret.data?.text || "";
     await worker.terminate();
     return extractPOFieldsFromText(text);
   } catch (err) {

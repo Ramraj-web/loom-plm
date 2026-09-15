@@ -4,10 +4,11 @@ import {
   ChevronDown, Search, Bell, Moon, Sun, ClipboardList,
   Calendar, TriangleAlert, ArrowDownRight, Award,
   Users, ShieldCheck, ClipboardCheck, Lightbulb, UserCheck, TrendingUp, Landmark, Factory, RefreshCw,
-  PanelLeftClose, PanelLeftOpen, Activity
+  PanelLeftClose, PanelLeftOpen, Activity, Volume2, VolumeX
 } from "lucide-react";
 import { resourcesApi } from "./api.js";
 import { getDeviceInfo, getLocationInfo, sanitizeLocationString } from "./utils/deviceLocation.js";
+import { playNotificationSound, isSoundEnabled, setSoundEnabled } from "./utils/soundAlert.js";
 import {
   ORG_STRUCTURE, ROLE_OPTIONS, STAFF_LIST, seedAttendance, INITIAL_LEAVE_REQUESTS,
   INITIAL_FINANCIALS, INITIAL_CERTIFICATIONS, INITIAL_COMPLIANCES, INITIAL_DEBIT_NOTES, INITIAL_CAPAS,
@@ -178,6 +179,15 @@ export default function LoomPLM() {
   const [capas, setCapas] = useState(INITIAL_CAPAS);
   const [customTasks, setCustomTasks] = useState(() => JSON.parse(JSON.stringify(INITIAL_CUSTOM_TASKS)));
   const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
+  const [soundEnabled, setSoundEnabledState] = useState(() => isSoundEnabled());
+  const toggleSound = () => {
+    setSoundEnabledState(prev => {
+      const next = !prev;
+      setSoundEnabled(next);
+      if (next) playNotificationSound("medium", true);
+      return next;
+    });
+  };
 
   const [departmentChecklists, setDepartmentChecklists] = useState(() => {
     try {
@@ -984,6 +994,7 @@ export default function LoomPLM() {
       if (prev.some(n => (n.eventKey === eventKey || n.id === id) && n.isDeleted !== true)) {
         return prev;
       }
+      playNotificationSound(newNotif.priority);
       const updated = [newNotif, ...prev];
       if (window.storage) window.storage.set("notifications", JSON.stringify(updated), true);
       return updated;
@@ -3861,14 +3872,38 @@ export default function LoomPLM() {
                         </span>
                       )}
                     </div>
-                    {unreadNotifCount > 0 && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <button
-                        onClick={markAllNotificationsAsRead}
-                        style={{ background: "none", border: "none", color: isDarkMode ? "#A5B4FC" : "#534AB7", fontSize: 11.5, fontWeight: 600, cursor: "pointer", padding: 0 }}
+                        type="button"
+                        onClick={toggleSound}
+                        title={soundEnabled ? "Mute notification sounds" : "Enable notification sounds"}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 4,
+                          padding: "3px 8px",
+                          borderRadius: 6,
+                          border: `1px solid ${soundEnabled ? "#BBF7D0" : (isDarkMode ? "#334155" : "#E2E8F0")}`,
+                          background: soundEnabled ? (isDarkMode ? "#064E3B" : "#ECFDF5") : (isDarkMode ? "#1E293B" : "#F8FAFC"),
+                          color: soundEnabled ? "#059669" : (isDarkMode ? "#94A3B8" : "#64748B"),
+                          fontSize: 11,
+                          fontWeight: 600,
+                          cursor: "pointer"
+                        }}
                       >
-                        Mark all as read
+                        {soundEnabled ? <Volume2 size={12} /> : <VolumeX size={12} />}
+                        <span>{soundEnabled ? "Sound ON" : "Muted"}</span>
                       </button>
-                    )}
+                      {unreadNotifCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={markAllNotificationsAsRead}
+                          style={{ background: "none", border: "none", color: isDarkMode ? "#A5B4FC" : "#534AB7", fontSize: 11.5, fontWeight: 600, cursor: "pointer", padding: 0 }}
+                        >
+                          Mark all as read
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {/* Panel Content */}
