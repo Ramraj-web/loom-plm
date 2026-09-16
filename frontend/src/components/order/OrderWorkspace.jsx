@@ -118,7 +118,7 @@ export function DisputeStageModal({
           <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 12 }}>
             <div style={{ color: "#64748B" }}>Owning Department: <b style={{ color: "#1E293B" }}>{stage.dept}</b></div>
             <div style={{ color: "#64748B", marginTop: 4 }}>
-              Completed By: <b style={{ color: "#1E293B" }}>{stage.completedBy || "Unassigned"}</b> {stage.completedAt && `on ${new Date(stage.completedAt).toLocaleDateString()}`}
+              Completed By: <b style={{ color: "#1E293B" }}>{stage.completedBy || "Unassigned"}</b> {stage.completedAt && `on ${formatStageDoneDate(stage.completedAt)}`}
             </div>
           </div>
 
@@ -326,6 +326,22 @@ export function formatStagePlannedDate(planned, orderStartDate) {
   }
 
   return d1Str;
+}
+
+export function formatStageDoneDate(completedAt) {
+  if (!completedAt) return "";
+  try {
+    const d = new Date(completedAt);
+    if (isNaN(d.getTime())) return String(completedAt);
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const now = new Date();
+    const isSameYear = d.getFullYear() === now.getFullYear();
+    return isSameYear
+      ? `${d.getDate()} ${monthNames[d.getMonth()]}`
+      : `${d.getDate()} ${monthNames[d.getMonth()]} ${d.getFullYear()}`;
+  } catch (e) {
+    return "";
+  }
 }
 
 export function StageColourwayModal({
@@ -761,6 +777,8 @@ function StageNode({ stage, idx, onCycle, onReason, onSupplierChange, onOpenDisp
   // Colourways breakdown: ONLY for the 16 stages specified!
   const hasColourways = Array.isArray(orderColourways) && orderColourways.length > 0 && isColourwayStage(stage.name);
   const displayPlannedDate = formatStagePlannedDate(stage.planned, orderStartDate);
+  const rawDoneDate = stage.completedAt || stage.completedOn || stage.doneDate || stage.updatedAt || (Array.isArray(stage.colourways) ? stage.colourways.find(c => c.completedAt)?.completedAt : null);
+  const displayDoneDate = formatStageDoneDate(rawDoneDate);
   const currentColourways = (Array.isArray(stage.colourways) && stage.colourways.length > 0)
     ? stage.colourways
     : (orderColourways.length > 0 ? orderColourways.map(c => ({
@@ -892,11 +910,18 @@ function StageNode({ stage, idx, onCycle, onReason, onSupplierChange, onOpenDisp
       )}
       {!locked && stage.status === "done" && (
         <div style={{ marginTop: 4 }}>
-          <div style={{ fontSize: 10, color: "#1F9E8D", fontWeight: 600, display: "flex", alignItems: "center", gap: 3 }}>
-            <CheckCircle2 size={10} color="#1F9E8D" /> Done
+          <div style={{ fontSize: 10, color: "#1F9E8D", fontWeight: 600, display: "flex", alignItems: "center", gap: 3, flexWrap: "wrap" }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+              <CheckCircle2 size={10} color="#1F9E8D" /> Done
+            </span>
+            {displayDoneDate && (
+              <span style={{ color: "#0D9488", fontWeight: 500 }}>
+                • {displayDoneDate}
+              </span>
+            )}
           </div>
           {stage.completedBy && (
-            <div style={{ fontSize: 9.5, color: "#64748B", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={`Completed by ${stage.completedBy}`}>
+            <div style={{ fontSize: 9.5, color: "#64748B", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={`Completed by ${stage.completedBy}${displayDoneDate ? ` on ${displayDoneDate}` : ""}`}>
               by {stage.completedBy}
             </div>
           )}
@@ -2737,11 +2762,15 @@ export function OrderWorkspace({
         const found = firstNamedAssignee(s.dept);
         assignee = found !== "Unassigned" ? found : "Assigned";
       }
+      const nowIso = new Date().toISOString();
+      const currentUserName = role?.label || "User";
       return {
         ...s,
         status: next,
         assignee: assignee || s.assignee,
-        reason: next === "done" ? null : s.reason
+        reason: next === "done" ? null : s.reason,
+        completedAt: next === "done" ? (s.completedAt || nowIso) : s.completedAt,
+        completedBy: next === "done" ? (s.completedBy || currentUserName) : s.completedBy
       };
     });
     onUpdateStages(order.primaryId || order.id, stages);

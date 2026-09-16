@@ -597,11 +597,21 @@ export default function LoomPLM() {
               shippedQty: bo.shippedQty ?? existing?.shippedQty ?? 0,
               plannedCost: bo.plannedCost ?? existing?.plannedCost ?? 0,
               actualCost: bo.actualCost ?? existing?.actualCost ?? 0,
-              stages: (bo.stages && bo.stages.length === 34)
+              stages: ((bo.stages && bo.stages.length === 34)
                 ? bo.stages
                 : (existing?.stages && existing.stages.length === 34)
                   ? existing.stages
-                  : makeStages(bo.template || existing?.template || "90", 0, null),
+                  : makeStages(bo.template || existing?.template || "90", 0, null)).map((s, sIdx) => {
+                    const existingStage = existing?.stages?.[sIdx];
+                    if (s.status === "done" && !s.completedAt) {
+                      return {
+                        ...s,
+                        completedAt: existingStage?.completedAt || bo.completedAt || bo.createdAt || new Date().toISOString(),
+                        completedBy: s.completedBy || existingStage?.completedBy || undefined
+                      };
+                    }
+                    return s;
+                  }),
               preProd: bo.preProd || existing?.preProd || initPreProd(),
             };
           });
@@ -895,11 +905,21 @@ export default function LoomPLM() {
                 shippedQty: bo.shippedQty ?? existing?.shippedQty ?? 0,
                 plannedCost: bo.plannedCost ?? existing?.plannedCost ?? 0,
                 actualCost: bo.actualCost ?? existing?.actualCost ?? 0,
-                stages: (bo.stages && bo.stages.length === 34)
+                stages: ((bo.stages && bo.stages.length === 34)
                   ? bo.stages
                   : (existing?.stages && existing.stages.length === 34)
                     ? existing.stages
-                    : makeStages(bo.template || existing?.template || "90", 0, null),
+                    : makeStages(bo.template || existing?.template || "90", 0, null)).map((s, sIdx) => {
+                      const existingStage = existing?.stages?.[sIdx];
+                      if (s.status === "done" && !s.completedAt) {
+                        return {
+                          ...s,
+                          completedAt: existingStage?.completedAt || bo.completedAt || bo.createdAt || new Date().toISOString(),
+                          completedBy: s.completedBy || existingStage?.completedBy || undefined
+                        };
+                      }
+                      return s;
+                    }),
                 preProd: bo.preProd || existing?.preProd || initPreProd(),
               };
             });
@@ -2199,9 +2219,9 @@ export default function LoomPLM() {
       const updatedStages = stages.map((s, idx) => {
         const prevStage = o.stages?.[idx];
         const res = { ...s };
-        if (s.status === "done" && (!prevStage || prevStage.status !== "done")) {
-          res.completedAt = s.completedAt || nowIso;
-          res.completedBy = res.completedBy || currentUserName;
+        if (s.status === "done") {
+          res.completedAt = s.completedAt || prevStage?.completedAt || nowIso;
+          res.completedBy = res.completedBy || prevStage?.completedBy || currentUserName;
         }
         if (s.reason && (!prevStage || prevStage.reason !== s.reason)) {
           res.flaggedAt = s.flaggedAt || nowIso;
