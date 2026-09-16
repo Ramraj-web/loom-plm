@@ -17,6 +17,15 @@ import { AssignWorkModal } from "./InsightsViews.jsx";
 import { sanitizeLocationString } from "../../utils/deviceLocation.js";
 import { DepartmentPerformanceAndKPI } from "./DepartmentKPISection.jsx";
 
+
+function formatDisplayShipDate(isoDateStr) {
+  if (!isoDateStr) return "";
+  const d = new Date(isoDateStr);
+  if (isNaN(d.getTime())) return isoDateStr;
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+}
+
 export function OrdersPage({
   orders = [],
   isAdmin = false,
@@ -32,6 +41,9 @@ export function OrdersPage({
   const [showDeletedSection, setShowDeletedSection] = useState(false);
   const [alignModalOrder, setAlignModalOrder] = useState(null);
 
+  const todayIso = new Date().toISOString().split("T")[0];
+  const defaultShipIso = new Date(Date.now() + 90 * 86400000).toISOString().split("T")[0];
+
   const [form, setForm] = useState({
     id: "",
     style: "",
@@ -39,7 +51,8 @@ export function OrdersPage({
     country: "Spain",
     season: "AW26",
     qty: "",
-    ship: "25 May",
+    orderDate: todayIso,
+    ship: defaultShipIso,
     risk: "low",
     status: "On Track",
     colorBreakdown: [
@@ -108,6 +121,9 @@ export function OrdersPage({
     const totalBreakdownQty = validBreakdown.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
     const finalQty = totalBreakdownQty > 0 ? totalBreakdownQty : (Number(form.qty) || 0);
 
+    const finalShipDate = form.ship || defaultShipIso;
+    const finalOrderDate = form.orderDate || todayIso;
+
     const newOrder = {
       primaryId: "ord_" + Date.now() + "_" + Math.random().toString(36).slice(2, 9),
       id: form.id.trim().toUpperCase(),
@@ -116,7 +132,9 @@ export function OrdersPage({
       country: form.country.trim(),
       season: form.season.trim(),
       qty: finalQty,
-      ship: form.ship.trim() || "15 Jun",
+      orderDate: finalOrderDate,
+      shipDate: finalShipDate,
+      ship: formatDisplayShipDate(finalShipDate) || finalShipDate,
       color: summaryColorStr,
       colors: distinctColors,
       colorBreakdown: validBreakdown,
@@ -126,6 +144,7 @@ export function OrdersPage({
       isDeleted: false,
       completedAt: null,
       deletedAt: null,
+      createdAt: new Date().toISOString()
     };
 
     if (onAddOrder) onAddOrder(newOrder);
@@ -140,7 +159,8 @@ export function OrdersPage({
       country: "Spain",
       season: "AW26",
       qty: "",
-      ship: "25 May",
+      orderDate: new Date().toISOString().split("T")[0],
+      ship: new Date(Date.now() + 90 * 86400000).toISOString().split("T")[0],
       risk: "low",
       status: "On Track",
       colorBreakdown: [
@@ -161,7 +181,12 @@ export function OrdersPage({
           </div>
         </div>
         <button
-          onClick={() => setShowAddModal(true)}
+          onClick={() => {
+              const nowIso = new Date().toISOString().split("T")[0];
+              const shipIso = new Date(Date.now() + 90 * 86400000).toISOString().split("T")[0];
+              setForm(prev => ({ ...prev, orderDate: nowIso, ship: shipIso }));
+              setShowAddModal(true);
+            }}
           style={{
             display: "inline-flex",
             alignItems: "center",
@@ -209,22 +234,22 @@ export function OrdersPage({
               onMouseEnter={e => e.currentTarget.style.background = "#FAFAFB"}
               onMouseLeave={e => e.currentTarget.style.background = "transparent"}
             >
-              <div onClick={() => onOpenOrder && onOpenOrder(o.id)} style={{ cursor: "pointer" }}>
+              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer" }}>
                 <div style={{ fontFamily: "monospace", fontSize: 12, color: "#8A8D98" }}>{o.id}</div>
                 <div style={{ fontWeight: 600, color: "#1B2130" }}>{o.style}</div>
               </div>
-              <div onClick={() => onOpenOrder && onOpenOrder(o.id)} style={{ cursor: "pointer" }}>{o.buyer}</div>
-              <div onClick={() => onOpenOrder && onOpenOrder(o.id)} style={{ cursor: "pointer" }}>{o.country}</div>
-              <div onClick={() => onOpenOrder && onOpenOrder(o.id)} style={{ cursor: "pointer" }}>{o.season || "SS26"}</div>
-              <div onClick={() => onOpenOrder && onOpenOrder(o.id)} style={{ cursor: "pointer" }}>{Number(o.qty || 0).toLocaleString()}</div>
-              <div onClick={() => onOpenOrder && onOpenOrder(o.id)} style={{ cursor: "pointer" }}>{o.ship}</div>
-              <div onClick={() => onOpenOrder && onOpenOrder(o.id)} style={{ cursor: "pointer", display: "flex", alignItems: "center", textTransform: "capitalize" }}>
+              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer" }}>{o.buyer}</div>
+              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer" }}>{o.country}</div>
+              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer" }}>{o.season || "SS26"}</div>
+              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer" }}>{Number(o.qty || 0).toLocaleString()}</div>
+              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer" }}>{o.ship}</div>
+              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer", display: "flex", alignItems: "center", textTransform: "capitalize" }}>
                 {riskDot(o.risk)}{o.risk}
               </div>
-              <div onClick={() => onOpenOrder && onOpenOrder(o.id)} style={{ cursor: "pointer" }}>
+              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer" }}>
                 {statusPill(o.status)}
               </div>
-              <div onClick={() => onOpenOrder && onOpenOrder(o.id)} style={{ cursor: "pointer" }}>
+              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer" }}>
                 {Array.isArray(o.colorBreakdown) && o.colorBreakdown.length > 0 ? (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
                     {o.colorBreakdown.slice(0, 2).map((b, bi) => (
@@ -316,7 +341,7 @@ export function OrdersPage({
               key={o.primaryId || o.id}
               style={{ display: "grid", gridTemplateColumns: "1.2fr 0.9fr 0.9fr 0.7fr 0.8fr 0.8fr 0.8fr 0.8fr 1.1fr", alignItems: "center", fontSize: 13, padding: "12px 4px", borderBottom: "1px solid #F5F5F7", background: "#FAFDFB" }}
             >
-              <div onClick={() => onOpenOrder && onOpenOrder(o.id)} style={{ cursor: "pointer" }}>
+              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer" }}>
                 <div style={{ fontFamily: "monospace", fontSize: 12, color: "#8A8D98" }}>{o.id}</div>
                 <div style={{ fontWeight: 600, color: "#1B2130" }}>{o.style}</div>
               </div>
@@ -529,7 +554,7 @@ export function OrdersPage({
               background: "#FFFFFF",
               borderRadius: 12,
               width: "100%",
-              maxWidth: 520,
+              maxWidth: 624,
               padding: "24px",
               boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
               position: "relative"
@@ -702,15 +727,23 @@ export function OrdersPage({
                 </div>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 20 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, marginBottom: 20 }}>
+                <div>
+                  <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#4B5563", marginBottom: 4 }}>Order Date (Default Today)</label>
+                  <input
+                    type="date"
+                    value={form.orderDate || todayIso}
+                    onChange={e => setForm({ ...form, orderDate: e.target.value })}
+                    style={{ width: "90%", padding: "7px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 12.5 }}
+                  />
+                </div>
                 <div>
                   <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#4B5563", marginBottom: 4 }}>Ship Date</label>
                   <input
-                    type="text"
-                    placeholder="e.g. 25 May"
-                    value={form.ship}
+                    type="date"
+                    value={form.ship || defaultShipIso}
                     onChange={e => setForm({ ...form, ship: e.target.value })}
-                    style={{ width: "90%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13 }}
+                    style={{ width: "90%", padding: "7px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 12.5 }}
                   />
                 </div>
                 <div>
@@ -718,7 +751,7 @@ export function OrdersPage({
                   <select
                     value={form.risk}
                     onChange={e => setForm({ ...form, risk: e.target.value })}
-                    style={{ width: "95%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13 }}
+                    style={{ width: "95%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 12.5 }}
                   >
                     <option value="low">Low Risk</option>
                     <option value="medium">Medium Risk</option>
@@ -730,7 +763,7 @@ export function OrdersPage({
                   <select
                     value={form.status}
                     onChange={e => setForm({ ...form, status: e.target.value })}
-                    style={{ width: "95%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13 }}
+                    style={{ width: "95%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 12.5 }}
                   >
                     <option value="On Track">On Track</option>
                     <option value="At Risk">At Risk</option>

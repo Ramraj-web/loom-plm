@@ -254,6 +254,80 @@ export function DisputeStageModal({
 }
 
 
+
+// 1. Stages that require colours pop up (Exact 16 stages requested by user)
+export const COLOURWAY_REQUIRED_STAGES = [
+  "lab dip approval",
+  "artwork approval",
+  "dyeing",
+  "fabric ih",
+  "lot card approval",
+  "shrinkage closure",
+  "cutting",
+  "vap send",
+  "testing",
+  "print / emb / hotfix complete",
+  "print/emb/ hotfix complete",
+  "print / emb complete",
+  "print/emb complete",
+  "vap complete",
+  "reshape & feeding",
+  "reshape and feeding",
+  "production",
+  "cip start",
+  "fi",
+  "final inspection",
+  "garment ocr",
+  "ex-fty",
+  "ex - fty",
+  "ex fty"
+];
+
+export function isColourwayStage(stageName) {
+  if (!stageName) return false;
+  const norm = stageName.trim().toLowerCase().replace(/\s+/g, " ");
+  return COLOURWAY_REQUIRED_STAGES.some(s => {
+    if (norm === s) return true;
+    if (norm.replace(/[^a-z0-9]/g, "") === s.replace(/[^a-z0-9]/g, "")) return true;
+    return false;
+  });
+}
+
+// 2. Bind actual calendar dates instead of Day 1, Day 2
+export function formatStagePlannedDate(planned, orderStartDate) {
+  if (!planned || typeof planned !== "string") return planned || "";
+  const trimmed = planned.trim();
+  if (!trimmed.toLowerCase().startsWith("day")) {
+    return trimmed; // Already a real calendar date (e.g. "23 Apr")
+  }
+
+  const match = trimmed.match(/day\s*(\d+)(?:\s*-\s*(\d+))?/i);
+  if (!match) return trimmed;
+
+  const startDayOffset = Math.max(0, parseInt(match[1], 10) - 1);
+  const endDayOffset = match[2] ? Math.max(0, parseInt(match[2], 10) - 1) : null;
+
+  let baseDate = new Date();
+  if (orderStartDate) {
+    const parsed = new Date(orderStartDate);
+    if (!isNaN(parsed.getTime())) baseDate = parsed;
+  }
+
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const d1 = new Date(baseDate.getTime() + startDayOffset * 24 * 60 * 60 * 1000);
+  const d1Str = `${d1.getDate()} ${monthNames[d1.getMonth()]}`;
+
+  if (endDayOffset !== null) {
+    const d2 = new Date(baseDate.getTime() + endDayOffset * 24 * 60 * 60 * 1000);
+    if (d1.getMonth() === d2.getMonth()) {
+      return `${d1.getDate()}-${d2.getDate()} ${monthNames[d1.getMonth()]}`;
+    }
+    return `${d1Str} - ${d2.getDate()} ${monthNames[d2.getMonth()]}`;
+  }
+
+  return d1Str;
+}
+
 export function StageColourwayModal({
   isOpen,
   onClose,
@@ -262,7 +336,8 @@ export function StageColourwayModal({
   order,
   orderColourways = [],
   onUpdateStageColourways,
-  canEdit = true
+  canEdit = true,
+  onOpenDispute
 }) {
   if (!isOpen || !stage) return null;
 
@@ -605,25 +680,54 @@ export function StageColourwayModal({
         </div>
 
         {/* Footer */}
-        <div style={{ padding: "12px 24px", borderTop: "1px solid #F3F4F6", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#fff" }}>
-          {canEdit && doneCount < colourways.length ? (
-            <button
-              type="button"
-              onClick={handleMarkAllDone}
-              style={{
-                fontSize: 12,
-                color: "#059669",
-                background: "#ECFDF5",
-                border: "1px solid #A7F3D0",
-                padding: "6px 14px",
-                borderRadius: 8,
-                fontWeight: 600,
-                cursor: "pointer"
-              }}
-            >
-              Mark All Done
-            </button>
-          ) : <div />}
+        <div style={{ padding: "12px 24px", borderTop: "1px solid #F3F4F6", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#fff", flexWrap: "wrap", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {canEdit && doneCount < colourways.length && (
+              <button
+                type="button"
+                onClick={handleMarkAllDone}
+                style={{
+                  fontSize: 12,
+                  color: "#059669",
+                  background: "#ECFDF5",
+                  border: "1px solid #A7F3D0",
+                  padding: "6px 14px",
+                  borderRadius: 8,
+                  fontWeight: 600,
+                  cursor: "pointer"
+                }}
+              >
+                Mark All Done
+              </button>
+            )}
+            {/* Report False / Dispute button inside modal for completed stages */}
+            {stage.status === "done" && onOpenDispute && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenDispute(stage, stageIdx);
+                }}
+                style={{
+                  fontSize: 11.5,
+                  color: stage.disputed ? "#DC2626" : "#C2410C",
+                  background: stage.disputed ? "#FEF2F2" : "#FFF7ED",
+                  border: `1px solid ${stage.disputed ? "#FCA5A5" : "#FDBA74"}`,
+                  padding: "6px 12px",
+                  borderRadius: 8,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 4
+                }}
+                title="Report false stage completion to MD & Admin"
+              >
+                <AlertTriangle size={12} />
+                {stage.disputed ? "Disputed" : "Report False"}
+              </button>
+            )}
+          </div>
           <button
             type="button"
             onClick={onClose}
@@ -646,16 +750,17 @@ export function StageColourwayModal({
   );
 }
 
-function StageNode({ stage, idx, onCycle, onReason, onSupplierChange, onOpenDispute, lockedBy, suppliers = [], canEdit = true, roleDept = "", orderColourways = [], onOpenColourways }) {
+function StageNode({ stage, idx, onCycle, onReason, onSupplierChange, onOpenDispute, lockedBy, suppliers = [], canEdit = true, roleDept = "", orderColourways = [], onOpenColourways, orderStartDate }) {
   const [open, setOpen] = useState(false);
-  const locked = !lockedBy;
+  const locked = !!lockedBy;
   const isAllowedToEdit = !locked && canEdit;
   const supplierOptions = suppliers.length > 0
     ? suppliers.filter(s => !s.isDeleted).map(s => s.name || s)
     : VAP_SUPPLIERS;
 
-  // Colourways breakdown
-  const hasColourways = Array.isArray(orderColourways) && orderColourways.length > 0;
+  // Colourways breakdown: ONLY for the 16 stages specified!
+  const hasColourways = Array.isArray(orderColourways) && orderColourways.length > 0 && isColourwayStage(stage.name);
+  const displayPlannedDate = formatStagePlannedDate(stage.planned, orderStartDate);
   const currentColourways = (Array.isArray(stage.colourways) && stage.colourways.length > 0)
     ? stage.colourways
     : (orderColourways.length > 0 ? orderColourways.map(c => ({
@@ -729,7 +834,7 @@ function StageNode({ stage, idx, onCycle, onReason, onSupplierChange, onOpenDisp
         {stage.name}
       </div>
 
-      <div style={{ fontSize: 10.5, color: "#8A8D98", marginTop: 2 }}>{stage.planned}</div>
+      <div style={{ fontSize: 10.5, color: "#8A8D98", marginTop: 2, fontWeight: 500 }} title={`Planned date: ${displayPlannedDate}`}>{displayPlannedDate}</div>
       <div style={{ fontSize: 10, color: canEdit ? "#1F9E8D" : "#B0B2BA", marginTop: 2, fontWeight: canEdit ? 600 : 400 }}>
         {stage.dept} {!canEdit && "(Read-only)"}
       </div>
@@ -1363,13 +1468,13 @@ function CostingTab({ order, role = {}, onSetTemplate, onUpdateRow, onAddRow, on
 
   const handleSubmitApproval = () => {
     if (onSubmitCosting) {
-      onSubmitCosting(order.id, { grandTotal, currency: "INR" });
+      onSubmitCosting(order.primaryId || order.id, { grandTotal, currency: "INR" });
     }
   };
 
   const handleApprove = () => {
     if (onApproveCosting) {
-      onApproveCosting(order.id, role?.label || "Managing Director (MD)");
+      onApproveCosting(order.primaryId || order.id, role?.label || "Managing Director (MD)");
     }
   };
 
@@ -1377,7 +1482,7 @@ function CostingTab({ order, role = {}, onSetTemplate, onUpdateRow, onAddRow, on
     if (onRejectCosting) {
       const reason = window.prompt("Reason for rejecting costing?", "Needs review / price adjustment");
       if (reason !== null) {
-        onRejectCosting(order.id, reason);
+        onRejectCosting(order.primaryId || order.id, reason);
       }
     }
   };
@@ -1388,7 +1493,7 @@ function CostingTab({ order, role = {}, onSetTemplate, onUpdateRow, onAddRow, on
         <div style={{ fontSize: 14, fontWeight: 700, color: "#1B2130" }}>Costing — {tmpl.label}</div>
         <select
           value={order.costingTemplate || "fabric"}
-          onChange={e => onSetTemplate(order.id, e.target.value)}
+          onChange={e => onSetTemplate(order.primaryId || order.id, e.target.value)}
           style={{ fontSize: 12, padding: "5px 8px", borderRadius: 7, border: "1px solid #E7E8ED" }}
         >
           <option value="fabric">Fabric to Garment</option>
@@ -1794,7 +1899,7 @@ function OrderHighlightsCard({ order, role }) {
           onChange={e => setPasteText(e.target.value)}
           placeholder="Paste the tech pack's comments / buyer notes section here…"
           rows={3}
-          style={{ width: "100%", fontSize: 12.5, padding: "8px 10px", borderRadius: 8, border: "1px solid #EBD9A0", resize: "vertical", fontFamily: "inherit" }}
+          style={{ width: "98%", fontSize: 12.5, padding: "8px 10px", borderRadius: 8, border: "1px solid #EBD9A0", resize: "vertical", fontFamily: "inherit" }}
         />
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
           <button
@@ -1962,10 +2067,10 @@ function DocumentsPanel({
         const extracted = await scanPOSheetFile(file);
         if (extracted && (extracted.fobPrice || extracted.orderValue || extracted.poQty || extracted.poNumber)) {
           if (onPreProdField) {
-            if (extracted.poNumber) onPreProdField(order.id, "poSheet", "poNumber", extracted.poNumber);
-            if (extracted.poQty) onPreProdField(order.id, "poSheet", "poQty", extracted.poQty);
-            if (extracted.fobPrice) onPreProdField(order.id, "poSheet", "fobPrice", extracted.fobPrice);
-            if (extracted.orderValue) onPreProdField(order.id, "poSheet", "orderValue", extracted.orderValue);
+            if (extracted.poNumber) onPreProdField(order.primaryId || order.id, "poSheet", "poNumber", extracted.poNumber);
+            if (extracted.poQty) onPreProdField(order.primaryId || order.id, "poSheet", "poQty", extracted.poQty);
+            if (extracted.fobPrice) onPreProdField(order.primaryId || order.id, "poSheet", "fobPrice", extracted.fobPrice);
+            if (extracted.orderValue) onPreProdField(order.primaryId || order.id, "poSheet", "orderValue", extracted.orderValue);
           }
 
           const details = [];
@@ -2213,7 +2318,7 @@ function DocumentsPanel({
                 type="number"
                 value={order.shippedQty || 0}
                 disabled={!canUploadHere}
-                onChange={e => onUpdateShippedQty(order.id, Number(e.target.value))}
+                onChange={e => onUpdateShippedQty(order.primaryId || order.id, Number(e.target.value))}
                 style={{ width: 110, fontSize: 13, fontWeight: 600, padding: "7px 10px", borderRadius: 8, border: "1px solid #E7E8ED", textAlign: "right" }}
               />
               <span style={{ fontSize: 11.5, color: "#8A8D98" }}>/ {order.qty.toLocaleString()} pcs ordered</span>
@@ -2613,7 +2718,7 @@ export function OrderWorkspace({
       };
     });
 
-    onUpdateStages(order.id, stages);
+    onUpdateStages(order.primaryId || order.id, stages);
   };
 
   const cycle = (idx) => {
@@ -2639,20 +2744,20 @@ export function OrderWorkspace({
         reason: next === "done" ? null : s.reason
       };
     });
-    onUpdateStages(order.id, stages);
+    onUpdateStages(order.primaryId || order.id, stages);
   };
 
   const setReason = (idx, reason) => {
     const stages = order.stages.map((s, i) => i === idx ? { ...s, reason } : s);
-    onUpdateStages(order.id, stages);
+    onUpdateStages(order.primaryId || order.id, stages);
   };
 
   const setSupplier = (idx, supplier) => {
     const stages = order.stages.map((s, i) => i === idx ? { ...s, supplier } : s);
     if (onAssignSupplier) {
-      onAssignSupplier(order.id, idx, supplier);
+      onAssignSupplier(order.primaryId || order.id, idx, supplier);
     }
-    onUpdateStages(order.id, stages);
+    onUpdateStages(order.primaryId || order.id, stages);
   };
 
   const doneCount = (order.stages || []).filter(s => s.status === "done").length;
@@ -2671,7 +2776,7 @@ export function OrderWorkspace({
           <span style={{ fontSize: 11, color: "#8A8D98" }}>Template:</span>
           <select
             value={order.template || "90"}
-            onChange={e => onSetTemplate(order.id, e.target.value)}
+            onChange={e => onSetTemplate(order.primaryId || order.id, e.target.value)}
             style={{ fontSize: 12, padding: "5px 8px", borderRadius: 7, border: "1px solid #E7E8ED" }}
           >
             <option value="90">90-day (standard)</option>
@@ -2736,6 +2841,7 @@ export function OrderWorkspace({
               roleDept={role?.dept || "User"}
               orderColourways={orderColourways}
               onOpenColourways={(index) => setColourwayModalStageIdx(index)}
+              orderStartDate={order.orderDate || order.createdAt || order.ship}
             />
           );
         })}
@@ -2766,9 +2872,9 @@ export function OrderWorkspace({
     <PreProductionTab
       order={order}
       role={role}
-      onFieldChange={(docKey, fieldKey, value) => onPreProdField(order.id, docKey, fieldKey, value)}
-      onSubmit={(docKey) => onPreProdSubmit(order.id, docKey)}
-      onApprove={(docKey) => onPreProdApprove(order.id, docKey, role.label.split(" (")[0])}
+      onFieldChange={(docKey, fieldKey, value) => onPreProdField(order.primaryId || order.id, docKey, fieldKey, value)}
+      onSubmit={(docKey) => onPreProdSubmit(order.primaryId || order.id, docKey)}
+      onApprove={(docKey) => onPreProdApprove(order.primaryId || order.id, docKey, role.label.split(" (")[0])}
     />
   );
 
@@ -2938,6 +3044,7 @@ export function OrderWorkspace({
           order={order}
           orderColourways={orderColourways}
           onUpdateStageColourways={handleUpdateStageColourways}
+          onOpenDispute={(st, index) => setDisputeModalData({ isOpen: true, stage: st, stageIdx: index })}
           canEdit={
             Boolean(
               role?.fullAccess ||

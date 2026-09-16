@@ -1,3 +1,4 @@
+import { subscribeLiveSync, broadcastLiveUpdate } from "./utils/liveSync.js";
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   LayoutDashboard, Package, CheckSquare, BarChart3, Settings as SettingsIcon,
@@ -150,7 +151,16 @@ function getRouteHash(view, selectedId = null, selectedDept = null) {
 }
 
 export default function LoomPLM() {
-  const [orders, setOrders] = useState([]);
+  const [orders, setOrders] = useState(() => {
+    try {
+      const cached = localStorage.getItem("loom_orders_cache");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  });
 
   const initialRoute = useMemo(() => {
     if (typeof window !== "undefined" && window.location.hash) {
@@ -172,13 +182,76 @@ export default function LoomPLM() {
   const [suppliers, setSuppliers] = useState(() => JSON.parse(JSON.stringify(INITIAL_SUPPLIERS)));
   const [supplierWork, setSupplierWork] = useState(() => JSON.parse(JSON.stringify(INITIAL_SUPPLIER_WORK)));
 
-  const [financials, setFinancials] = useState(INITIAL_FINANCIALS);
-  const [certifications, setCertifications] = useState(INITIAL_CERTIFICATIONS);
-  const [compliances, setCompliances] = useState(INITIAL_COMPLIANCES);
-  const [debitNotes, setDebitNotes] = useState(INITIAL_DEBIT_NOTES);
-  const [capas, setCapas] = useState(INITIAL_CAPAS);
-  const [customTasks, setCustomTasks] = useState(() => JSON.parse(JSON.stringify(INITIAL_CUSTOM_TASKS)));
-  const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
+  const [financials, setFinancials] = useState(() => {
+    try {
+      const cached = localStorage.getItem("loom_financials_cache");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && typeof parsed === "object") return parsed;
+      }
+    } catch (e) {}
+    return INITIAL_FINANCIALS;
+  });
+  const [certifications, setCertifications] = useState(() => {
+    try {
+      const cached = localStorage.getItem("loom_certifications_cache");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return INITIAL_CERTIFICATIONS;
+  });
+  const [compliances, setCompliances] = useState(() => {
+    try {
+      const cached = localStorage.getItem("loom_compliances_cache");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return INITIAL_COMPLIANCES;
+  });
+  const [debitNotes, setDebitNotes] = useState(() => {
+    try {
+      const cached = localStorage.getItem("loom_debit_notes_cache");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return INITIAL_DEBIT_NOTES;
+  });
+  const [capas, setCapas] = useState(() => {
+    try {
+      const cached = localStorage.getItem("loom_capas_cache");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return INITIAL_CAPAS;
+  });
+  const [customTasks, setCustomTasks] = useState(() => {
+    try {
+      const cached = localStorage.getItem("loom_custom_tasks_cache");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return JSON.parse(JSON.stringify(INITIAL_CUSTOM_TASKS));
+  });
+  const [notifications, setNotifications] = useState(() => {
+    try {
+      const cached = localStorage.getItem("loom_notifications_cache");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return INITIAL_NOTIFICATIONS;
+  });
   const [soundEnabled, setSoundEnabledState] = useState(() => isSoundEnabled());
   const toggleSound = () => {
     setSoundEnabledState(prev => {
@@ -203,9 +276,77 @@ export default function LoomPLM() {
     } catch (e) { }
   }, [departmentChecklists]);
 
+  // Instant local persistence for fast rendering without 0-flash on page refresh
+  useEffect(() => {
+    try {
+      if (Array.isArray(orders) && orders.length > 0) {
+        localStorage.setItem("loom_orders_cache", JSON.stringify(orders));
+      }
+    } catch (e) { }
+  }, [orders]);
+
+  useEffect(() => {
+    try {
+      if (financials) localStorage.setItem("loom_financials_cache", JSON.stringify(financials));
+    } catch (e) { }
+  }, [financials]);
+
+  useEffect(() => {
+    try {
+      if (Array.isArray(customTasks)) localStorage.setItem("loom_custom_tasks_cache", JSON.stringify(customTasks));
+    } catch (e) { }
+  }, [customTasks]);
+
+  useEffect(() => {
+    try {
+      if (Array.isArray(debitNotes)) localStorage.setItem("loom_debit_notes_cache", JSON.stringify(debitNotes));
+    } catch (e) { }
+  }, [debitNotes]);
+
+  useEffect(() => {
+    try {
+      if (Array.isArray(capas)) localStorage.setItem("loom_capas_cache", JSON.stringify(capas));
+    } catch (e) { }
+  }, [capas]);
+
+  useEffect(() => {
+    try {
+      if (Array.isArray(certifications)) localStorage.setItem("loom_certifications_cache", JSON.stringify(certifications));
+    } catch (e) { }
+  }, [certifications]);
+
+  useEffect(() => {
+    try {
+      if (Array.isArray(compliances)) localStorage.setItem("loom_compliances_cache", JSON.stringify(compliances));
+    } catch (e) { }
+  }, [compliances]);
+
+  useEffect(() => {
+    try {
+      if (Array.isArray(notifications)) localStorage.setItem("loom_notifications_cache", JSON.stringify(notifications));
+    } catch (e) { }
+  }, [notifications]);
+
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [searchQuery, setSearchQuery] = useState("");
   const [notifOpen, setNotifOpen] = useState(false);
+  const notifRef = useRef(null);
+
+  // Close notification panel when clicking outside
+  useEffect(() => {
+    if (!notifOpen) return;
+    const handleClickOutside = (e) => {
+      if (notifRef.current && !notifRef.current.contains(e.target)) {
+        setNotifOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
+  }, [notifOpen]);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
     try {
       return localStorage.getItem("loom_sidebar_collapsed") === "true";
@@ -409,15 +550,36 @@ export default function LoomPLM() {
   const refreshAllData = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      await loadAccessState();
+      // 1. Concurrently fetch access state, orders, debit notes, capas, tasks, certs, compliances, notifs, financials, and staff
+      const [
+        accessRes,
+        ordersRes,
+        debitRes,
+        capasRes,
+        tasksRes,
+        certsRes,
+        compliancesRes,
+        notifsRes,
+        financialsRes,
+        staffRes,
+      ] = await Promise.allSettled([
+        loadAccessState(),
+        resourcesApi.list("orders", "?all=true"),
+        resourcesApi.list("debitNotes"),
+        resourcesApi.list("capas"),
+        resourcesApi.list("tasks"),
+        resourcesApi.list("certifications", "?all=true"),
+        resourcesApi.list("compliances", "?all=true"),
+        resourcesApi.list("notifications", "?all=true"),
+        resourcesApi.list("financials"),
+        resourcesApi.list("staff"),
+      ]);
 
-      const backendOrders = await resourcesApi.list("orders", "?all=true");
-      if (Array.isArray(backendOrders)) {
-        // Filter out dummy demo seeds
-        const realOrders = backendOrders.filter(bo => !["GKT-1054", "ST-7788", "JKT-2231", "TR-8899", "DR-5566", "PL-3321"].includes(bo.id));
+      if (ordersRes.status === "fulfilled" && Array.isArray(ordersRes.value)) {
+        const realOrders = ordersRes.value.filter(bo => !["GKT-1054", "ST-7788", "JKT-2231", "TR-8899", "DR-5566", "PL-3321"].includes(bo.id));
         setOrders(prev => {
-          return realOrders.map((bo) => {
-            const existing = prev.find(p => p.id === bo.id || (p.primaryId && p.primaryId === bo.primaryId));
+          const mapped = realOrders.map((bo) => {
+            const existing = prev.find(p => (bo.primaryId && p.primaryId === bo.primaryId) || p.id === bo.id);
             const primaryId = bo.primaryId || bo._id || existing?.primaryId || `ord_${bo.id}_${Math.random().toString(36).slice(2, 7)}`;
             return {
               ...existing,
@@ -443,51 +605,34 @@ export default function LoomPLM() {
               preProd: bo.preProd || existing?.preProd || initPreProd(),
             };
           });
+          return Array.from(new Map(mapped.map(item => [item.primaryId || item.id, item])).values());
         });
       }
-    } catch (e) { }
 
-    try {
-      const dbDebit = await resourcesApi.list("debitNotes");
-      if (Array.isArray(dbDebit) && dbDebit.length > 0) {
-        setDebitNotes(dbDebit.filter(d => d.isDeleted !== true));
+      if (debitRes.status === "fulfilled" && Array.isArray(debitRes.value) && debitRes.value.length > 0) {
+        setDebitNotes(debitRes.value.filter(d => d.isDeleted !== true));
       }
-    } catch (e) { }
 
-    try {
-      const dbCapas = await resourcesApi.list("capas");
-      if (Array.isArray(dbCapas) && dbCapas.length > 0) {
-        setCapas(dbCapas.filter(c => c.isDeleted !== true));
+      if (capasRes.status === "fulfilled" && Array.isArray(capasRes.value) && capasRes.value.length > 0) {
+        setCapas(capasRes.value.filter(c => c.isDeleted !== true));
       }
-    } catch (e) { }
 
-    try {
-      const dbTasks = await resourcesApi.list("tasks");
-      if (Array.isArray(dbTasks) && dbTasks.length > 0) {
-        setCustomTasks(dbTasks.filter(t => t.isDeleted !== true));
+      if (tasksRes.status === "fulfilled" && Array.isArray(tasksRes.value) && tasksRes.value.length > 0) {
+        setCustomTasks(tasksRes.value.filter(t => t.isDeleted !== true));
       }
-    } catch (e) { }
 
-    try {
-      const dbCerts = await resourcesApi.list("certifications", "?all=true");
-      if (Array.isArray(dbCerts) && dbCerts.length > 0) {
-        setCertifications(dbCerts);
+      if (certsRes.status === "fulfilled" && Array.isArray(certsRes.value) && certsRes.value.length > 0) {
+        setCertifications(certsRes.value);
       }
-    } catch (e) { }
 
-    try {
-      const dbCompliances = await resourcesApi.list("compliances", "?all=true");
-      if (Array.isArray(dbCompliances) && dbCompliances.length > 0) {
-        setCompliances(dbCompliances.filter(c => c.id !== "comp-2" && !c.name?.toLowerCase().includes("buyer chemical restriction")));
+      if (compliancesRes.status === "fulfilled" && Array.isArray(compliancesRes.value) && compliancesRes.value.length > 0) {
+        setCompliances(compliancesRes.value.filter(c => c.id !== "comp-2" && !c.name?.toLowerCase().includes("buyer chemical restriction")));
       }
-    } catch (e) { }
 
-    try {
-      const dbNotifs = await resourcesApi.list("notifications", "?all=true");
-      if (Array.isArray(dbNotifs) && dbNotifs.length > 0) {
+      if (notifsRes.status === "fulfilled" && Array.isArray(notifsRes.value) && notifsRes.value.length > 0) {
         setNotifications(prev => {
           const map = new Map();
-          dbNotifs.forEach(n => {
+          notifsRes.value.forEach(n => {
             const key = n.id || n.eventKey;
             if (key) map.set(key, n);
           });
@@ -498,184 +643,117 @@ export default function LoomPLM() {
           return Array.from(map.values()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         });
       }
-    } catch (e) { }
 
-    try {
+      if (financialsRes.status === "fulfilled" && Array.isArray(financialsRes.value) && financialsRes.value.length > 0) {
+        const fin = financialsRes.value[0];
+        if (fin) setFinancials(prev => ({ ...prev, ...fin }));
+      }
+
+      // 2. Concurrently load all storage items if available
       if (window.storage && window.storage.get) {
-        // Load staff roster from storage or backend
-        let baseRoster = null;
-        try {
-          const rosterRes = await window.storage.get("staff_roster", true);
-          if (rosterRes && rosterRes.value) {
-            baseRoster = JSON.parse(rosterRes.value);
+        const storageKeys = [
+          "staff_roster", "org_structure", "dept_descriptions", "attendance",
+          "certifications", "compliances", "notifications", "leaveRequests",
+          "suppliers", "supplierWork", "stage_complaints", "user_sessions", "audit_logs"
+        ];
+        const storageResults = await Promise.allSettled(storageKeys.map(k => window.storage.get(k, true)));
+        const storageMap = {};
+        storageKeys.forEach((key, idx) => {
+          if (storageResults[idx].status === "fulfilled" && storageResults[idx].value?.value) {
+            try {
+              storageMap[key] = JSON.parse(storageResults[idx].value.value);
+            } catch (e) {}
           }
-        } catch (e) { }
+        });
 
-        try {
-          const dbStaff = await resourcesApi.list("staff");
-          if (Array.isArray(dbStaff) && dbStaff.length > 0) {
-            const active = dbStaff.filter(s => s.isDeleted !== true);
-            const merged = [...(baseRoster || STAFF_LIST)];
-            active.forEach(as => {
-              if (!merged.some(m => m.name === as.name)) {
-                merged.push({ name: as.name, title: as.title || "Staff", dept: as.dept || "Merchandising" });
-              }
-            });
-            baseRoster = merged;
-          }
-        } catch (e) { }
-
+        let baseRoster = storageMap.staff_roster || null;
+        if (staffRes.status === "fulfilled" && Array.isArray(staffRes.value) && staffRes.value.length > 0) {
+          const active = staffRes.value.filter(s => s.isDeleted !== true);
+          const merged = [...(baseRoster || STAFF_LIST)];
+          active.forEach(as => {
+            if (!merged.some(m => m.name === as.name)) {
+              merged.push({ name: as.name, title: as.title || "Staff", dept: as.dept || "Merchandising" });
+            }
+          });
+          baseRoster = merged;
+        }
         const DEMO_NAMES = new Set(["Arasinth Raja", "Suresh", "Durai", "Praveen Kumar", "Gopal", "Sezhiyan", "Murugan", "Karthik", "Ravi", "Kavitha", "Selva Kumar", "Ramesh", "Priya", "Anand", "Rajesh"]);
         if (Array.isArray(baseRoster)) {
           const cleanRoster = baseRoster.filter(s => s.name && s.name !== "—" && !DEMO_NAMES.has(s.name));
           setRoster(cleanRoster);
         }
 
-        // Load org structure
-        const orgRes = await window.storage.get("org_structure", true);
-        if (orgRes && orgRes.value) {
-          try { setOrgStructure(JSON.parse(orgRes.value)); } catch (e) { }
+        if (storageMap.org_structure) setOrgStructure(storageMap.org_structure);
+        if (storageMap.dept_descriptions && typeof storageMap.dept_descriptions === "object") {
+          setDeptDescriptions(prev => ({ ...prev, ...storageMap.dept_descriptions }));
         }
-
-        // Load dept descriptions
-        const descRes = await window.storage.get("dept_descriptions", true);
-        if (descRes && descRes.value) {
-          try {
-            const parsed = JSON.parse(descRes.value);
-            if (parsed && typeof parsed === "object") {
-              setDeptDescriptions(prev => ({ ...prev, ...parsed }));
-            }
-          } catch (e) { }
+        if (storageMap.attendance && typeof storageMap.attendance === "object") {
+          const cleanAtt = {};
+          Object.keys(storageMap.attendance).forEach(k => {
+            if (!DEMO_NAMES.has(k) && k !== "—") cleanAtt[k] = storageMap.attendance[k];
+          });
+          setAttendance(cleanAtt);
         }
-
-        const attRes = await window.storage.get("attendance", true);
-        if (attRes && attRes.value) {
-          try {
-            const parsed = JSON.parse(attRes.value);
-            if (parsed && typeof parsed === "object") {
-              const cleanAtt = {};
-              Object.keys(parsed).forEach(k => {
-                if (!DEMO_NAMES.has(k) && k !== "—") cleanAtt[k] = parsed[k];
-              });
-              setAttendance(cleanAtt);
-            }
-          } catch (e) { }
+        if (Array.isArray(storageMap.certifications) && storageMap.certifications.length > 0) {
+          setCertifications(prev => {
+            const map = new Map(prev.map(item => [item.id || item.key, item]));
+            storageMap.certifications.forEach(item => map.set(item.id || item.key, { ...map.get(item.id || item.key), ...item }));
+            return Array.from(map.values());
+          });
         }
-        const certRes = await window.storage.get("certifications", true);
-        if (certRes && certRes.value) {
-          try {
-            const parsed = JSON.parse(certRes.value);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              setCertifications(prev => {
-                const map = new Map(prev.map(item => [item.id || item.key, item]));
-                parsed.forEach(item => map.set(item.id || item.key, { ...map.get(item.id || item.key), ...item }));
-                return Array.from(map.values());
-              });
-            }
-          } catch (e) { }
+        if (Array.isArray(storageMap.compliances) && storageMap.compliances.length > 0) {
+          setCompliances(prev => {
+            const map = new Map(prev.map(item => [item.id, item]));
+            storageMap.compliances.forEach(item => map.set(item.id, { ...map.get(item.id), ...item }));
+            return Array.from(map.values());
+          });
         }
-        const compRes = await window.storage.get("compliances", true);
-        if (compRes && compRes.value) {
-          try {
-            const parsed = JSON.parse(compRes.value);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              setCompliances(prev => {
-                const map = new Map(prev.map(item => [item.id, item]));
-                parsed.forEach(item => map.set(item.id, { ...map.get(item.id), ...item }));
-                return Array.from(map.values());
-              });
-            }
-          } catch (e) { }
+        if (Array.isArray(storageMap.notifications) && storageMap.notifications.length > 0) {
+          setNotifications(prev => {
+            const map = new Map(prev.map(item => [item.id || item.eventKey, item]));
+            storageMap.notifications.forEach(item => {
+              const key = item.id || item.eventKey;
+              if (key) map.set(key, { ...map.get(key), ...item });
+            });
+            return Array.from(map.values()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+          });
         }
-        const notifRes = await window.storage.get("notifications", true);
-        if (notifRes && notifRes.value) {
-          try {
-            const parsed = JSON.parse(notifRes.value);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              setNotifications(prev => {
-                const map = new Map(prev.map(item => [item.id || item.eventKey, item]));
-                parsed.forEach(item => {
-                  const key = item.id || item.eventKey;
-                  if (key) map.set(key, { ...map.get(key), ...item });
-                });
-                return Array.from(map.values()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-              });
-            }
-          } catch (e) { }
+        if (Array.isArray(storageMap.leaveRequests)) {
+          setLeaveRequests(storageMap.leaveRequests.filter(l => !DEMO_NAMES.has(l.name)));
         }
-        const leaveRes = await window.storage.get("leaveRequests", true);
-        if (leaveRes && leaveRes.value) {
-          try {
-            const parsed = JSON.parse(leaveRes.value);
-            if (Array.isArray(parsed)) {
-              setLeaveRequests(parsed.filter(l => !DEMO_NAMES.has(l.name)));
-            }
-          } catch (e) { }
+        if (Array.isArray(storageMap.suppliers) && storageMap.suppliers.length > 0) {
+          setSuppliers(prev => {
+            const map = new Map(prev.map(item => [item.id || item.name, item]));
+            storageMap.suppliers.forEach(item => map.set(item.id || item.name, { ...map.get(item.id || item.name), ...item }));
+            return Array.from(map.values());
+          });
         }
-        const supRes = await window.storage.get("suppliers", true);
-        if (supRes && supRes.value) {
-          try {
-            const parsed = JSON.parse(supRes.value);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              setSuppliers(prev => {
-                const map = new Map(prev.map(item => [item.id || item.name, item]));
-                parsed.forEach(item => map.set(item.id || item.name, { ...map.get(item.id || item.name), ...item }));
-                return Array.from(map.values());
-              });
-            }
-          } catch (e) { }
+        if (Array.isArray(storageMap.supplierWork) && storageMap.supplierWork.length > 0) {
+          setSupplierWork(prev => {
+            const map = new Map(prev.map(item => [item.id, item]));
+            storageMap.supplierWork.forEach(item => map.set(item.id, { ...map.get(item.id), ...item }));
+            return Array.from(map.values());
+          });
         }
-        const workRes = await window.storage.get("supplierWork", true);
-        if (workRes && workRes.value) {
-          try {
-            const parsed = JSON.parse(workRes.value);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              setSupplierWork(prev => {
-                const map = new Map(prev.map(item => [item.id, item]));
-                parsed.forEach(item => map.set(item.id, { ...map.get(item.id), ...item }));
-                return Array.from(map.values());
-              });
-            }
-          } catch (e) { }
+        if (Array.isArray(storageMap.stage_complaints)) {
+          setStageComplaints(storageMap.stage_complaints);
         }
-
-        const stageCompRes = await window.storage.get("stage_complaints", true);
-        if (stageCompRes && stageCompRes.value) {
-          try {
-            const parsed = JSON.parse(stageCompRes.value);
-            if (Array.isArray(parsed)) setStageComplaints(parsed);
-          } catch (e) { }
+        if (Array.isArray(storageMap.user_sessions)) {
+          const cleaned = storageMap.user_sessions.map(s => ({ ...s, location: sanitizeLocationString(s.location) }));
+          setUserSessions(cleaned);
         }
-
-        const sessRes = await window.storage.get("user_sessions", true);
-        if (sessRes && sessRes.value) {
-          try {
-            const parsed = JSON.parse(sessRes.value);
-            if (Array.isArray(parsed)) {
-              const cleaned = parsed.map(s => ({ ...s, location: sanitizeLocationString(s.location) }));
-              setUserSessions(cleaned);
-              if (window.storage) window.storage.set("user_sessions", JSON.stringify(cleaned), true);
-            }
-          } catch (e) { }
-        }
-
-        const auditRes = await window.storage.get("audit_logs", true);
-        if (auditRes && auditRes.value) {
-          try {
-            const parsed = JSON.parse(auditRes.value);
-            if (Array.isArray(parsed)) {
-              const cleaned = parsed.map(l => ({ ...l, location: sanitizeLocationString(l.location) }));
-              setAuditLogs(cleaned);
-              if (window.storage) window.storage.set("audit_logs", JSON.stringify(cleaned), true);
-            }
-          } catch (e) { }
+        if (Array.isArray(storageMap.audit_logs)) {
+          const cleaned = storageMap.audit_logs.map(l => ({ ...l, location: sanitizeLocationString(l.location) }));
+          setAuditLogs(cleaned);
         }
       }
-    } catch (e) { } finally {
+    } catch (e) {
+      console.warn("refreshAllData error:", e);
+    } finally {
       setLastRefreshedAt(new Date());
       setIsRefreshing(false);
     }
-  }, []);
+  }, [loadAccessState]);
 
   // Heartbeat & unload handler to accurately track session hours used
   useEffect(() => {
@@ -793,7 +871,7 @@ export default function LoomPLM() {
     lastViewFetchRef.current[targetView] = now;
 
     try {
-      if (["dashboard", "orders", "tasks", "approvals", "departments", "calendar", "reports", "compliance", "supplierPerformance", "finance", "myDepartment"].includes(targetView)) {
+      if (["dashboard", "orders", "tasks", "approvals", "departments", "calendar", "reports", "compliance", "supplierPerformance", "finance", "myDepartment", "executiveOverview"].includes(targetView)) {
         const backendOrders = await resourcesApi.list("orders", "?all=true");
         if (Array.isArray(backendOrders)) {
           const realOrders = backendOrders.filter(bo => !["GKT-1054", "ST-7788", "JKT-2231", "TR-8899", "DR-5566", "PL-3321"].includes(bo.id));
@@ -933,10 +1011,10 @@ export default function LoomPLM() {
     }
 
     if (accessLoaded && !initialViewLoadRef.current) {
-      loadViewData(view);
+      refreshAllData();
       initialViewLoadRef.current = true;
     }
-  }, [accessLoaded, activeUser, loadViewData, view]);
+  }, [accessLoaded, activeUser, refreshAllData]);
 
   // Route Synchronization: listen to window.location.hash changes (browser back/forward or manual hash change)
   useEffect(() => {
@@ -1871,12 +1949,18 @@ export default function LoomPLM() {
       return;
     }
     const deletedAt = new Date().toISOString();
-    const targetOrder = orders.find(o => o.primaryId === primaryKey || o.id === primaryKey || o._id === primaryKey);
-    const primId = targetOrder?.primaryId || primaryKey;
+    // Prioritize matching by unique primaryId or _id first
+    const targetOrder = orders.find(o => (o.primaryId && o.primaryId === primaryKey) || (o._id && o._id === primaryKey) || o.id === primaryKey);
+    const primId = targetOrder?.primaryId || targetOrder?._id || primaryKey;
     const orderNum = targetOrder?.id || primaryKey;
 
-    // 1. Soft-delete the order matching primaryId
-    setOrders(prev => prev.map(o => (o.primaryId === primId || o.id === primId || o.id === orderNum || o._id === primId) ? { ...o, isDeleted: true, deletedAt } : o));
+    // 1. Soft-delete ONLY the single order matching this exact primaryKey!
+    setOrders(prev => prev.map(o => {
+      const isTarget = targetOrder?.primaryId
+        ? (o.primaryId === targetOrder.primaryId)
+        : (o._id ? o._id === targetOrder._id : o === targetOrder);
+      return isTarget ? { ...o, isDeleted: true, deletedAt } : o;
+    }));
 
     // 2. Automatically delete/cleanup all tasks related to this order!
     setCustomTasks(prev => {
@@ -1914,13 +1998,18 @@ export default function LoomPLM() {
       alert("Permission denied: Only Administrators can permanently delete orders.");
       return;
     }
-    const targetOrder = orders.find(o => o.primaryId === primaryKey || o.id === primaryKey || o._id === primaryKey);
-    const primId = targetOrder?.primaryId || primaryKey;
+    const targetOrder = orders.find(o => (o.primaryId && o.primaryId === primaryKey) || (o._id && o._id === primaryKey) || o.id === primaryKey);
+    const primId = targetOrder?.primaryId || targetOrder?._id || primaryKey;
     const orderNum = targetOrder?.id || primaryKey;
 
-    // 1. Completely purge order from state & storage by primaryId
+    // 1. Completely purge ONLY the single order matching this primaryKey
     setOrders(prev => {
-      const remaining = prev.filter(o => o.primaryId !== primId && o.id !== primId && o._id !== primId);
+      const remaining = prev.filter(o => {
+        const isTarget = targetOrder?.primaryId
+          ? (o.primaryId === targetOrder.primaryId)
+          : (o._id ? o._id === targetOrder._id : o === targetOrder);
+        return !isTarget;
+      });
       if (window.storage) window.storage.set("orders", JSON.stringify(remaining), true);
       return remaining;
     });
@@ -2083,7 +2172,8 @@ export default function LoomPLM() {
 
   const updateStages = (id, stages) => {
     setOrders(prev => prev.map(o => {
-      if (o.id !== id) return o;
+      const isTarget = (o.primaryId && o.primaryId === id) || (o._id && o._id === id) || o.id === id;
+      if (!isTarget) return o;
       const doneCount = stages.filter(s => s.status === "done").length;
       const allDone = stages.length > 0 && doneCount === stages.length;
       const hasFlag = stages.some(s => s.reason);
@@ -2246,11 +2336,12 @@ export default function LoomPLM() {
         completedAt
       };
 
+      const primId = o.primaryId || o._id || o.id;
       try {
-        resourcesApi.update("orders", o.id, updated).catch(err => {
+        resourcesApi.update("orders", primId, updated).catch(err => {
           console.warn("Error updating order stages:", err.message);
         });
-        resourcesApi.patch("orders", o.id, {
+        resourcesApi.patch("orders", primId, {
           stages,
           status,
           completed: isCompleted,
@@ -2258,62 +2349,81 @@ export default function LoomPLM() {
         }).catch(() => { });
       } catch (e) { }
 
+      // Broadcast stage update to all other connected users in real time
+      try {
+        broadcastLiveUpdate({
+          type: "ORDER_STAGE_UPDATE",
+          orderId: id,
+          stages: updatedStages,
+          status,
+          completed: isCompleted,
+          completedAt,
+          updatedBy: currentUserName
+        });
+      } catch (err) {}
+
       return updated;
     }));
   };
 
   const setOrderTemplate = (id, tmpl) => {
     setOrders(prev => prev.map(o => {
-      if (o.id !== id) return o;
+      const isTarget = (o.primaryId && o.primaryId === id) || (o._id && o._id === id) || o.id === id;
+      if (!isTarget) return o;
       const updated = { ...o, template: tmpl, stages: makeStages(tmpl, 0, null), status: "On Track" };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
+      try { resourcesApi.update("orders", o.primaryId || o._id || o.id, updated); } catch (e) { }
       return updated;
     }));
   };
 
   const setOrderCostingTemplate = (id, tmpl) => {
     setOrders(prev => prev.map(o => {
-      if (o.id !== id) return o;
+      const isTarget = (o.primaryId && o.primaryId === id) || (o._id && o._id === id) || o.id === id;
+      if (!isTarget) return o;
       const updated = { ...o, costingTemplate: tmpl, costingRows: buildCostingRows(tmpl) };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
+      try { resourcesApi.update("orders", o.primaryId || o._id || o.id, updated); } catch (e) { }
       return updated;
     }));
   };
 
   const updateCostingRow = (id, idx, field, value) => {
     setOrders(prev => prev.map(o => {
-      if (o.id !== id) return o;
+      const isTarget = (o.primaryId && o.primaryId === id) || (o._id && o._id === id) || o.id === id;
+      if (!isTarget) return o;
       const rows = [...(o.costingRows || [])];
       rows[idx] = { ...rows[idx], [field]: value };
       const updated = { ...o, costingRows: rows };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
+      try { resourcesApi.update("orders", o.primaryId || o._id || o.id, updated); } catch (e) { }
       return updated;
     }));
   };
 
   const addCostingRow = (id) => {
     setOrders(prev => prev.map(o => {
-      if (o.id !== id) return o;
+      const isTarget = (o.primaryId && o.primaryId === id) || (o._id && o._id === id) || o.id === id;
+      if (!isTarget) return o;
       const updated = { ...o, costingRows: [...(o.costingRows || []), { label: "", section: "Other", isHeader: false, price: 0, qty: 1, custom: true }] };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
+      try { resourcesApi.update("orders", o.primaryId || o._id || o.id, updated); } catch (e) { }
       return updated;
     }));
   };
 
   const updateShippedQty = (id, qty) => {
     setOrders(prev => prev.map(o => {
-      if (o.id !== id) return o;
+      const isTarget = (o.primaryId && o.primaryId === id) || (o._id && o._id === id) || o.id === id;
+      if (!isTarget) return o;
       const updated = { ...o, shippedQty: qty };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
+      try { resourcesApi.update("orders", o.primaryId || o._id || o.id, updated); } catch (e) { }
       return updated;
     }));
   };
 
   const updateOrderCost = (id, field, value) => {
     setOrders(prev => prev.map(o => {
-      if (o.id !== id) return o;
+      const isTarget = (o.primaryId && o.primaryId === id) || (o._id && o._id === id) || o.id === id;
+      if (!isTarget) return o;
       const updated = { ...o, [field]: value };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
+      try { resourcesApi.update("orders", o.primaryId || o._id || o.id, updated); } catch (e) { }
       return updated;
     }));
   };
@@ -2323,7 +2433,7 @@ export default function LoomPLM() {
       if (o.id !== id) return o;
       const doc = (o.preProd && o.preProd[docKey]) || { values: {}, status: "draft" };
       const updated = { ...o, preProd: { ...(o.preProd || {}), [docKey]: { ...doc, values: { ...doc.values, [fieldKey]: value } } } };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
+      try { resourcesApi.update("orders", o.primaryId || o._id || o.id, updated); } catch (e) { }
       return updated;
     }));
   };
@@ -2332,7 +2442,7 @@ export default function LoomPLM() {
     setOrders(prev => prev.map(o => {
       if (o.id !== id) return o;
       const updated = { ...o, preProd: { ...(o.preProd || {}), [docKey]: { ...(o.preProd[docKey]), status: "submitted" } } };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
+      try { resourcesApi.update("orders", o.primaryId || o._id || o.id, updated); } catch (e) { }
       return updated;
     }));
 
@@ -2362,7 +2472,7 @@ export default function LoomPLM() {
           },
         },
       };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
+      try { resourcesApi.update("orders", o.primaryId || o._id || o.id, updated); } catch (e) { }
       return updated;
     }));
 
@@ -2392,14 +2502,15 @@ export default function LoomPLM() {
       ];
       const updatedLogs = [logEntry, ...currentLogs];
       const updated = { ...o, productionLogs: updatedLogs };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
+      try { resourcesApi.update("orders", o.primaryId || o._id || o.id, updated); } catch (e) { }
       return updated;
     }));
   };
 
   const deleteOrderProductionLog = (id, logId) => {
     setOrders(prev => prev.map(o => {
-      if (o.id !== id) return o;
+      const isTarget = (o.primaryId && o.primaryId === id) || (o._id && o._id === id) || o.id === id;
+      if (!isTarget) return o;
       const currentLogs = o.productionLogs || [
         {
           id: "init-log-1",
@@ -2412,16 +2523,17 @@ export default function LoomPLM() {
       ];
       const updatedLogs = currentLogs.filter(l => l.id !== logId);
       const updated = { ...o, productionLogs: updatedLogs };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
+      try { resourcesApi.update("orders", o.primaryId || o._id || o.id, updated); } catch (e) { }
       return updated;
     }));
   };
 
   const updateOrderInspectionData = (id, inspectionData) => {
     setOrders(prev => prev.map(o => {
-      if (o.id !== id) return o;
+      const isTarget = (o.primaryId && o.primaryId === id) || (o._id && o._id === id) || o.id === id;
+      if (!isTarget) return o;
       const updated = { ...o, inspectionData: { ...(o.inspectionData || {}), ...inspectionData } };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
+      try { resourcesApi.update("orders", o.primaryId || o._id || o.id, updated); } catch (e) { }
       return updated;
     }));
   };
@@ -2430,7 +2542,7 @@ export default function LoomPLM() {
     setOrders(prev => prev.map(o => {
       if (o.id !== id) return o;
       const updated = { ...o, certificatesData: { ...(o.certificatesData || {}), ...certificatesData } };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
+      try { resourcesApi.update("orders", o.primaryId || o._id || o.id, updated); } catch (e) { }
       return updated;
     }));
   };
@@ -2439,14 +2551,15 @@ export default function LoomPLM() {
     setOrders(prev => prev.map(o => {
       if (o.id !== id) return o;
       const updated = { ...o, quotation: { ...(o.quotation || {}), ...quotationData } };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
+      try { resourcesApi.update("orders", o.primaryId || o._id || o.id, updated); } catch (e) { }
       return updated;
     }));
   };
 
   const submitOrderQuotation = (id, quotationData) => {
     setOrders(prev => prev.map(o => {
-      if (o.id !== id) return o;
+      const isTarget = (o.primaryId && o.primaryId === id) || (o._id && o._id === id) || o.id === id;
+      if (!isTarget) return o;
       const updated = {
         ...o,
         quotation: {
@@ -2456,7 +2569,7 @@ export default function LoomPLM() {
           submittedAt: new Date().toISOString()
         }
       };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
+      try { resourcesApi.update("orders", o.primaryId || o._id || o.id, updated); } catch (e) { }
       return updated;
     }));
 
@@ -2483,7 +2596,7 @@ export default function LoomPLM() {
           approvedAt: new Date().toISOString()
         }
       };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
+      try { resourcesApi.update("orders", o.primaryId || o._id || o.id, updated); } catch (e) { }
       return updated;
     }));
 
@@ -2508,7 +2621,7 @@ export default function LoomPLM() {
           status: "draft"
         }
       };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
+      try { resourcesApi.update("orders", o.primaryId || o._id || o.id, updated); } catch (e) { }
       return updated;
     }));
   };
@@ -2534,7 +2647,7 @@ export default function LoomPLM() {
           submittedBy: role.label || "Merchandiser"
         }
       };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
+      try { resourcesApi.update("orders", o.primaryId || o._id || o.id, updated); } catch (e) { }
       return updated;
     }));
 
@@ -2574,7 +2687,7 @@ export default function LoomPLM() {
           approvedDate: timestamp
         }
       };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
+      try { resourcesApi.update("orders", o.primaryId || o._id || o.id, updated); } catch (e) { }
       return updated;
     }));
 
@@ -2591,7 +2704,8 @@ export default function LoomPLM() {
 
   const rejectOrderCosting = (id, reason) => {
     setOrders(prev => prev.map(o => {
-      if (o.id !== id) return o;
+      const isTarget = (o.primaryId && o.primaryId === id) || (o._id && o._id === id) || o.id === id;
+      if (!isTarget) return o;
       const updated = {
         ...o,
         costingApproval: {
@@ -2602,7 +2716,7 @@ export default function LoomPLM() {
           reason: reason || "Costing revisions required"
         }
       };
-      try { resourcesApi.update("orders", o.id, updated); } catch (e) { }
+      try { resourcesApi.update("orders", o.primaryId || o._id || o.id, updated); } catch (e) { }
       return updated;
     }));
 
@@ -3161,6 +3275,7 @@ export default function LoomPLM() {
             onRefresh={refreshAllData}
             isRefreshing={isRefreshing}
             lastRefreshedAt={lastRefreshedAt}
+            onOpenDept={openDept}
           />
         </div>
       );
@@ -3204,6 +3319,7 @@ export default function LoomPLM() {
           onRefresh={refreshAllData}
           isRefreshing={isRefreshing}
           lastRefreshedAt={lastRefreshedAt}
+          onOpenDept={openDept}
         />
       );
     } else {
@@ -3436,6 +3552,7 @@ export default function LoomPLM() {
         onRefresh={refreshAllData}
         isRefreshing={isRefreshing}
         lastRefreshedAt={lastRefreshedAt}
+        onOpenDept={openDept}
       />
     );
   } else if (view === "settings") {
@@ -3463,6 +3580,7 @@ export default function LoomPLM() {
         onRefresh={refreshAllData}
         isRefreshing={isRefreshing}
         lastRefreshedAt={lastRefreshedAt}
+        onOpenDept={openDept}
       />
     );
   } else if (canSeeAll) {
@@ -3485,6 +3603,7 @@ export default function LoomPLM() {
         onApproveCosting={approveOrderCosting}
         onRejectCosting={rejectOrderCosting}
         role={role}
+        onOpenDept={openDept}
       />
     );
   } else {
@@ -3818,7 +3937,7 @@ export default function LoomPLM() {
           {/* Right Controls: 3. Notification → 4. Dark Mode (Moon/Sun) → 5. User Profile */}
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
             {/* 3. Notification */}
-            <div style={{ position: "relative" }}>
+            <div ref={notifRef} style={{ position: "relative" }}>
               <div
                 style={{ position: "relative", cursor: "pointer", display: "flex", alignItems: "center" }}
                 onClick={() => setNotifOpen(!notifOpen)}
@@ -3898,7 +4017,7 @@ export default function LoomPLM() {
                           display: "inline-flex",
                           alignItems: "center",
                           gap: 4,
-                          padding: "3px 8px",
+                          padding: "3px 1px",
                           borderRadius: 6,
                           border: `1px solid ${soundEnabled ? "#BBF7D0" : (isDarkMode ? "#334155" : "#E2E8F0")}`,
                           background: soundEnabled ? (isDarkMode ? "#064E3B" : "#ECFDF5") : (isDarkMode ? "#1E293B" : "#F8FAFC"),

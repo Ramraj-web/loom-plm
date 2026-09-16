@@ -12,6 +12,144 @@ export const SHIPMENT_PERFORMANCE = [
   { month: "May", onTime: 82.3, target: 75 },
 ];
 
+/**
+ * Dynamically computes 6-month shipment performance trend from active orders.
+ * Evaluates orders by delivery date, completion date, and stage gate status.
+ */
+export function computeMonthlyShipmentPerformance(orders = [], options = {}) {
+  const targetPct = options.target || 75;
+  const activeOrders = (orders || []).filter(o => !o.isDeleted);
+
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth(); // 0 - 11
+
+  // 1. Find latest relevant date among active orders
+  let latestDate = new Date(currentYear, currentMonth, 1);
+  activeOrders.forEach(o => {
+    const raw = o.shipDate || (o.completed && o.completedAt ? o.completedAt : null) || o.ship;
+    if (raw) {
+      let d = new Date(raw);
+      if (isNaN(d.getTime()) && typeof raw === "string") {
+        d = new Date(`${raw} ${currentYear}`);
+      }
+      if (!isNaN(d.getTime()) && d.getTime() > latestDate.getTime()) {
+        latestDate = d;
+      }
+    }
+  });
+
+  let endYear = latestDate.getFullYear();
+  let endMonth = latestDate.getMonth();
+
+  // Cap window from pushing more than 3 months into the future
+  const maxAllowedEnd = new Date(currentYear, currentMonth + 3, 1);
+  if (new Date(endYear, endMonth, 1) > maxAllowedEnd) {
+    endYear = maxAllowedEnd.getFullYear();
+    endMonth = maxAllowedEnd.getMonth();
+  }
+
+  // Ensure end month is at least current month
+  if (new Date(endYear, endMonth, 1) < new Date(currentYear, currentMonth, 1)) {
+    endYear = currentYear;
+    endMonth = currentMonth;
+  }
+
+  // Generate 6 consecutive calendar months
+  const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const windowMonths = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(endYear, endMonth - i, 1);
+    const y = d.getFullYear();
+    const m = d.getMonth();
+    windowMonths.push({
+      year: y,
+      monthIdx: m,
+      monthKey: `${y}-${String(m + 1).padStart(2, "0")}`,
+      month: MONTH_NAMES[m],
+      fullLabel: `${MONTH_NAMES[m]} ${y}`,
+      start: new Date(y, m, 1).getTime(),
+      end: new Date(y, m + 1, 0, 23, 59, 59, 999).getTime()
+    });
+  }
+
+  // Criteria to check if an order is On-Time
+  const isOrderOnTime = (order) => {
+    if (order.status === "Delayed") return false;
+    if (order.risk === "high") return false;
+    const stages = order.stages || [];
+    const hasDelay = stages.some(s => s.reason || s.status === "delayed" || s.disputed);
+    if (hasDelay) return false;
+    if (order.completed && order.completedAt && order.shipDate) {
+      const c = new Date(order.completedAt).getTime();
+      const s = new Date(order.shipDate).getTime();
+      if (!isNaN(c) && !isNaN(s) && c > s + 86400000) return false;
+    }
+    return true;
+  };
+
+  const getOrderDates = (order) => {
+    let start = null;
+    let end = null;
+    if (order.orderDate) start = new Date(order.orderDate);
+    else if (order.createdAt) start = new Date(order.createdAt);
+
+    if (order.shipDate) end = new Date(order.shipDate);
+    else if (order.completed && order.completedAt) end = new Date(order.completedAt);
+    else if (order.ship) {
+      let d = new Date(order.ship);
+      if (isNaN(d.getTime())) d = new Date(`${order.ship} ${currentYear}`);
+      if (!isNaN(d.getTime())) end = d;
+    }
+
+    if (!start && end) start = new Date(end.getTime() - 90 * 86400000);
+    if (!end && start) end = new Date(start.getTime() + 90 * 86400000);
+    if (!start && !end) {
+      start = new Date();
+      end = new Date(Date.now() + 90 * 86400000);
+    }
+    return {
+      startTime: start.getTime(),
+      endTime: end.getTime(),
+      shipTime: end.getTime()
+    };
+  };
+
+  const result = windowMonths.map(wm => {
+    const matchingOrders = activeOrders.filter(o => {
+      const dates = getOrderDates(o);
+      const shipInMonth = dates.shipTime >= wm.start && dates.shipTime <= wm.end;
+      const activeInMonth = dates.startTime <= wm.end && dates.endTime >= wm.start;
+      return shipInMonth || activeInMonth;
+    });
+
+    const totalOrders = matchingOrders.length;
+    const onTimeOrders = matchingOrders.filter(isOrderOnTime).length;
+    const delayedOrders = totalOrders - onTimeOrders;
+    const onTimePct = totalOrders > 0 ? Math.round((onTimeOrders / totalOrders) * 1000) / 10 : null;
+
+    return {
+      month: wm.month,
+      fullLabel: wm.fullLabel,
+      year: wm.year,
+      onTime: onTimePct,
+      target: targetPct,
+      totalOrders,
+      onTimeOrders,
+      delayedOrders
+    };
+  });
+
+  const startMonth = windowMonths[0];
+  const endMonthObj = windowMonths[windowMonths.length - 1];
+  const rangeLabel = startMonth.year === endMonthObj.year
+    ? `${startMonth.month} – ${endMonthObj.month} ${endMonthObj.year}`
+    : `${startMonth.fullLabel} – ${endMonthObj.fullLabel}`;
+
+  result.rangeLabel = rangeLabel;
+  return result;
+}
+
 export const REASONS = [
   "Buyer approval delay", "Fabric delay", "Trims shortage",
   "Capacity shortage", "Quality rework", "Logistics", "Others"

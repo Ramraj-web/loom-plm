@@ -184,22 +184,32 @@ router.put("/:resource/:id(*)", async (req, res, next) => {
   try {
     const collection = getResourceCollection();
     if (collection) {
-      const existing = await collection.findOne({ resource, $or: [{ primaryId: id }, { id }] });
-      const record = { ...(existing || {}), ...req.body, id: existing?.id || id, resource };
+      const existing = await collection.findOne({ resource, $or: [{ primaryId: id }, { _id: id }, { id }] });
+      const record = {
+        ...(existing || {}),
+        ...req.body,
+        id: existing?.id || req.body.id || id,
+        primaryId: existing?.primaryId || req.body.primaryId || id,
+        resource
+      };
       delete record._id;
-      await collection.replaceOne({ resource, _id: existing?._id || { $exists: false } }, { resource, ...record }, { upsert: true });
+      if (existing?._id) {
+        await collection.replaceOne({ resource, _id: existing._id }, { resource, ...record });
+      } else {
+        await collection.insertOne({ resource, ...record });
+      }
       return res.json(record);
     } else {
       const db = readDB();
       if (!db[resource]) db[resource] = [];
-      const index = db[resource].findIndex(item => String(item.primaryId) === id || String(item.id) === id);
+      const index = db[resource].findIndex(item => (id && String(item.primaryId) === id) || (id && String(item._id) === id) || String(item.id) === id);
       if (index < 0) {
-        const record = { ...req.body, id, resource };
+        const record = { ...req.body, id, primaryId: req.body.primaryId || id, resource };
         db[resource].push(record);
         writeDB(db);
         return res.json(record);
       }
-      const record = { ...db[resource][index], ...req.body, id: db[resource][index].id || id };
+      const record = { ...db[resource][index], ...req.body, id: db[resource][index].id || id, primaryId: db[resource][index].primaryId || id };
       db[resource][index] = record;
       writeDB(db);
       return res.json(record);
@@ -214,18 +224,25 @@ router.patch("/:resource/:id(*)", async (req, res, next) => {
   try {
     const collection = getResourceCollection();
     if (collection) {
-      const existing = await collection.findOne({ resource, $or: [{ primaryId: id }, { id }] });
+      const existing = await collection.findOne({ resource, $or: [{ primaryId: id }, { _id: id }, { id }] });
       if (!existing) return res.status(404).json({ error: "Record not found" });
-      const record = { ...existing, ...req.body, id: existing.id || id, resource };
+      const record = {
+        ...existing,
+        ...req.body,
+        id: existing.id || id,
+        primaryId: existing.primaryId || req.body.primaryId || id,
+        resource
+      };
       delete record._id;
-      await collection.replaceOne({ resource, id: existing.id }, { resource, ...record }, { upsert: true });
+      // Strictly update by unique MongoDB _id so other orders sharing the same id (e.g. PO-123) are never overwritten!
+      await collection.replaceOne({ resource, _id: existing._id }, { resource, ...record }, { upsert: false });
       return res.json(record);
     } else {
       const db = readDB();
       if (!db[resource]) db[resource] = [];
-      const index = db[resource].findIndex(item => String(item.primaryId) === id || String(item.id) === id);
+      const index = db[resource].findIndex(item => (id && String(item.primaryId) === id) || (id && String(item._id) === id) || String(item.id) === id);
       if (index < 0) return res.status(404).json({ error: "Record not found" });
-      const record = { ...db[resource][index], ...req.body, id: db[resource][index].id || id };
+      const record = { ...db[resource][index], ...req.body, id: db[resource][index].id || id, primaryId: db[resource][index].primaryId || id };
       db[resource][index] = record;
       writeDB(db);
       return res.json(record);

@@ -117,9 +117,9 @@ export function TaskTable({ rows, onOpenOrder, emptyText }) {
       <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1.3fr 0.9fr 0.9fr 1fr", fontSize: 11, color: "#8A8D98", padding: "0 4px 8px", borderBottom: "1px solid #F0F0F2" }}>
         <div>Order / Style</div><div>Task / stage</div><div>Due</div><div>Status</div><div>Flag</div>
       </div>
-      {rows.map(({ order, stage, stageIdx }) => (
+      {rows.map(({ order, stage, stageIdx }, itemIdx) => (
         <div
-          key={order.id + stageIdx}
+          key={`${order?.id || "ord"}-${stage?.name || ""}-${stageIdx ?? itemIdx}-${itemIdx}`}
           onClick={() => onOpenOrder(order.id)}
           style={{ display: "grid", gridTemplateColumns: "1.1fr 1.3fr 0.9fr 0.9fr 1fr", alignItems: "center", fontSize: 12.5, padding: "10px 4px", borderBottom: "1px solid #F5F5F7", cursor: "pointer" }}
           onMouseEnter={e => e.currentTarget.style.background = "#FAFAFB"}
@@ -219,9 +219,9 @@ export function GroupedTaskList({ rows, onOpenOrder, emptyText }) {
               <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1.3fr 0.9fr 0.9fr", fontSize: 10.5, color: "#B0B2BA", padding: "8px 10px 4px" }}>
                 <div>Order / Style</div><div>Task / stage</div><div>Due</div><div>Status</div>
               </div>
-              {groupItems.map(({ order, stage, stageIdx }) => (
+              {groupItems.map(({ order, stage, stageIdx }, itemIdx) => (
                 <div
-                  key={order.id + stageIdx}
+                  key={`${order?.id || "ord"}-${stage?.name || ""}-${stageIdx ?? itemIdx}-${itemIdx}`}
                   onClick={() => onOpenOrder(order.id)}
                   style={{ display: "grid", gridTemplateColumns: "1.1fr 1.3fr 0.9fr 0.9fr", alignItems: "center", fontSize: 12.5, padding: "9px 10px", borderBottom: "1px solid #F5F5F7", cursor: "pointer" }}
                   onMouseEnter={e => e.currentTarget.style.background = "#FAFAFB"}
