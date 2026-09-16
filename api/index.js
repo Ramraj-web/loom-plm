@@ -461,16 +461,10 @@ async function getMongoCollections() {
     const storage = cachedDb.collection("storage");
     const resources = cachedDb.collection("resources");
 
-    const existingIndexes = await resources.listIndexes().toArray();
-    for (const index of existingIndexes) {
-      if (index.name === "_id_") continue;
-      try {
-        await resources.dropIndex(index.name);
-      } catch (e) {
-        // Ignore stale or missing indexes.
-      }
+    if (!global._indexesInitialized) {
+      global._indexesInitialized = true;
+      resources.createIndex({ resource: 1, id: 1 }).catch(() => {});
     }
-    await resources.createIndex({ resource: 1, id: 1 });
     
     return { resources, storage };
   } catch (err) {
