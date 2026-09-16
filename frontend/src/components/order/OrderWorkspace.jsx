@@ -253,13 +253,420 @@ export function DisputeStageModal({
   );
 }
 
-function StageNode({ stage, idx, onCycle, onReason, onSupplierChange, onOpenDispute, lockedBy, suppliers = [], canEdit = true, roleDept = "" }) {
+
+export function StageColourwayModal({
+  isOpen,
+  onClose,
+  stage,
+  stageIdx,
+  order,
+  orderColourways = [],
+  onUpdateStageColourways,
+  canEdit = true
+}) {
+  if (!isOpen || !stage) return null;
+
+  // Initialize local colourways state from stage.colourways or orderColourways
+  const initialColourways = useMemo(() => {
+    if (Array.isArray(stage.colourways) && stage.colourways.length > 0) {
+      return stage.colourways.map(c => {
+        const qty = Number(c.qty) || 0;
+        const status = c.status || (stage.status === "done" ? "done" : stage.status === "in_progress" ? "in_progress" : "pending");
+        const completedQty = c.completedQty != null ? Number(c.completedQty) : (status === "done" ? qty : 0);
+        return {
+          color: c.color,
+          qty,
+          status,
+          completedQty,
+          reason: c.reason || "",
+          customReason: c.customReason || ""
+        };
+      });
+    }
+    const baseList = orderColourways.length > 0 ? orderColourways : [{ color: order.color || "Standard", qty: Number(order.qty) || 0 }];
+    return baseList.map(c => {
+      const qty = Number(c.qty) || 0;
+      const status = stage.status === "done" ? "done" : stage.status === "in_progress" ? "in_progress" : "pending";
+      return {
+        color: c.color,
+        qty,
+        status,
+        completedQty: status === "done" ? qty : 0,
+        reason: stage.reason || "",
+        customReason: ""
+      };
+    });
+  }, [stage, orderColourways, order]);
+
+  const [colourways, setColourways] = useState(initialColourways);
+
+  useEffect(() => {
+    setColourways(initialColourways);
+  }, [initialColourways]);
+
+  const totalPieces = colourways.reduce((sum, c) => sum + (Number(c.qty) || 0), 0);
+  const completedPieces = colourways.reduce((sum, c) => sum + (Number(c.completedQty) || 0), 0);
+  const pendingPieces = Math.max(0, totalPieces - completedPieces);
+  const doneCount = colourways.filter(c => c.status === "done").length;
+
+  const commitUpdates = (nextList) => {
+    setColourways(nextList);
+    if (onUpdateStageColourways) {
+      onUpdateStageColourways(stageIdx, nextList);
+    }
+  };
+
+  const handleStatusToggle = (index) => {
+    if (!canEdit) return;
+    const nextList = colourways.map((c, i) => {
+      if (i !== index) return c;
+      const nextStatus = c.status === "pending" ? "in_progress" : c.status === "in_progress" ? "done" : "pending";
+      const nextCompleted = nextStatus === "done" ? c.qty : nextStatus === "pending" ? 0 : (c.completedQty || 0);
+      return {
+        ...c,
+        status: nextStatus,
+        completedQty: nextCompleted,
+        reason: nextStatus === "done" ? "" : c.reason
+      };
+    });
+    commitUpdates(nextList);
+  };
+
+  const handleQtyChange = (index, val) => {
+    if (!canEdit) return;
+    const num = Math.max(0, Math.min(Number(val) || 0, colourways[index].qty));
+    const nextList = colourways.map((c, i) => {
+      if (i !== index) return c;
+      let nextStatus = c.status;
+      if (num >= c.qty) nextStatus = "done";
+      else if (num > 0) nextStatus = "in_progress";
+      return {
+        ...c,
+        completedQty: num,
+        status: nextStatus
+      };
+    });
+    commitUpdates(nextList);
+  };
+
+  const handleReasonChange = (index, val) => {
+    if (!canEdit) return;
+    const nextList = colourways.map((c, i) => {
+      if (i !== index) return c;
+      return {
+        ...c,
+        reason: val,
+        customReason: val === "Others" ? c.customReason : ""
+      };
+    });
+    commitUpdates(nextList);
+  };
+
+  const handleCustomReasonChange = (index, val) => {
+    if (!canEdit) return;
+    const nextList = colourways.map((c, i) => {
+      if (i !== index) return c;
+      return {
+        ...c,
+        customReason: val
+      };
+    });
+    commitUpdates(nextList);
+  };
+
+  const handleMarkAllDone = () => {
+    if (!canEdit) return;
+    const nextList = colourways.map(c => ({
+      ...c,
+      status: "done",
+      completedQty: c.qty,
+      reason: ""
+    }));
+    commitUpdates(nextList);
+  };
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        backgroundColor: "rgba(15, 23, 42, 0.45)",
+        backdropFilter: "blur(2px)",
+        zIndex: 1000,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 16
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: "#FFFFFF",
+          borderRadius: 16,
+          width: "100%",
+          maxWidth: 480,
+          boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
+          border: "1px solid #E5E7EB",
+          overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
+          maxHeight: "90vh"
+        }}
+      >
+        {/* Header matching user reference image */}
+        <div style={{ padding: "20px 24px 14px", borderBottom: "1px solid #F3F4F6", position: "relative" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: "#111827", lineHeight: 1.2 }}>
+                {stage.name}
+              </div>
+              <div style={{ fontSize: 13, color: "#6B7280", marginTop: 4, fontWeight: 500 }}>
+                {doneCount}/{colourways.length} colourways done
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                background: "transparent",
+                border: "none",
+                padding: 6,
+                borderRadius: 8,
+                cursor: "pointer",
+                color: "#9CA3AF",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center"
+              }}
+              onMouseEnter={e => e.currentTarget.style.color = "#111827"}
+              onMouseLeave={e => e.currentTarget.style.color = "#9CA3AF"}
+            >
+              <X size={18} />
+            </button>
+          </div>
+          <div style={{ fontSize: 12, color: "#9CA3AF", marginTop: 6, lineHeight: 1.4 }}>
+            This stage completes automatically once every colourway below is marked Done.
+          </div>
+        </div>
+
+        {/* Quantity Summary: Completed vs Pending Pieces */}
+        <div style={{ padding: "10px 24px", background: "#F9FAFB", borderBottom: "1px solid #F3F4F6", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12 }}>
+          <div style={{ display: "flex", gap: 14 }}>
+            <span>Total: <strong style={{ color: "#111827" }}>{totalPieces.toLocaleString()} pcs</strong></span>
+            <span style={{ color: "#16A34A" }}>Completed: <strong>{completedPieces.toLocaleString()} pcs</strong></span>
+            <span style={{ color: "#DC2626" }}>Pending: <strong>{pendingPieces.toLocaleString()} pcs</strong></span>
+          </div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: doneCount === colourways.length ? "#16A34A" : "#6366F1" }}>
+            {totalPieces > 0 ? Math.round((completedPieces / totalPieces) * 100) : 0}% Done
+          </div>
+        </div>
+
+        {/* Colourways List */}
+        <div style={{ padding: "16px 24px", overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
+          {colourways.map((c, i) => {
+            const isDone = c.status === "done";
+            const isInProgress = c.status === "in_progress";
+            const isPending = !isDone && !isInProgress;
+            const cCompleted = c.completedQty != null ? Number(c.completedQty) : (isDone ? c.qty : 0);
+            const cPending = Math.max(0, c.qty - cCompleted);
+            const hasDelay = Boolean(c.reason && c.reason !== "No delay flagged");
+
+            return (
+              <div
+                key={i}
+                style={{
+                  border: `1px solid ${hasDelay ? "#FED7AA" : isDone ? "#BBF7D0" : "#E5E7EB"}`,
+                  borderRadius: 12,
+                  padding: "14px 16px",
+                  background: hasDelay ? "#FFFDF9" : isDone ? "#F0FDF4" : "#FFFFFF",
+                  transition: "all 0.15s ease"
+                }}
+              >
+                {/* Top Row: Color name & qty on left, status pill on right */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                  <div>
+                    <div style={{ fontSize: 13.5, fontWeight: 700, color: "#111827", letterSpacing: "0.02em" }}>
+                      {c.color}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#6B7280", marginTop: 2 }}>
+                      {c.qty.toLocaleString()} pcs
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={!canEdit}
+                    onClick={() => handleStatusToggle(i)}
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      borderRadius: 999,
+                      padding: "4px 14px",
+                      border: `1px solid ${isDone ? "#86EFAC" : isInProgress ? "#FDE68A" : "#E5E7EB"}`,
+                      background: isDone ? "#DCFCE7" : isInProgress ? "#FEF3C7" : "#F3F4F6",
+                      color: isDone ? "#15803D" : isInProgress ? "#B45309" : "#4B5563",
+                      cursor: canEdit ? "pointer" : "default",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4
+                    }}
+                    title={canEdit ? "Click to toggle status: Pending → In progress → Done" : "Read-only"}
+                  >
+                    {isDone && <Check size={12} />}
+                    {isDone ? "Done" : isInProgress ? "In progress" : "Pending"}
+                  </button>
+                </div>
+
+                {/* Pieces breakdown: Completed vs Pending */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#F9FAFB", padding: "6px 10px", borderRadius: 8, fontSize: 11.5, marginBottom: 10 }}>
+                  <div style={{ color: "#4B5563" }}>
+                    Completed: <strong style={{ color: "#16A34A" }}>{cCompleted.toLocaleString()}</strong> pcs
+                  </div>
+                  <div style={{ color: "#4B5563" }}>
+                    Pending: <strong style={{ color: "#DC2626" }}>{cPending.toLocaleString()}</strong> pcs
+                  </div>
+                  {canEdit && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      <span style={{ fontSize: 10.5, color: "#9CA3AF" }}>Set done:</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max={c.qty}
+                        value={cCompleted}
+                        onChange={(e) => handleQtyChange(i, e.target.value)}
+                        style={{
+                          width: 60,
+                          padding: "2px 4px",
+                          fontSize: 11,
+                          border: "1px solid #D1D5DB",
+                          borderRadius: 4,
+                          textAlign: "right"
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Delay Selector (Why delayed) */}
+                <div>
+                  <select
+                    value={c.reason || ""}
+                    disabled={!canEdit}
+                    onChange={(e) => handleReasonChange(i, e.target.value)}
+                    style={{
+                      width: "100%",
+                      fontSize: 12.5,
+                      padding: "7px 10px",
+                      borderRadius: 8,
+                      border: `1px solid ${hasDelay ? "#FDBA74" : "#E5E7EB"}`,
+                      background: hasDelay ? "#FFF7ED" : "#FFFFFF",
+                      color: hasDelay ? "#9A3412" : "#374151",
+                      cursor: canEdit ? "pointer" : "default"
+                    }}
+                  >
+                    <option value="">No delay flagged</option>
+                    <option value="Buyer approval delay">Buyer approval delay</option>
+                    <option value="Fabric delay">Fabric delay / IH pending</option>
+                    <option value="Yarn shortage">Yarn shortage</option>
+                    <option value="Dyeing defect">Dyeing defect / Shade mismatch</option>
+                    <option value="Lab dip pending">Lab dip approval pending</option>
+                    <option value="Printing / Embroidery delay">Printing / Embroidery delay</option>
+                    <option value="Trims shortage">Trims shortage</option>
+                    <option value="Quality rework">Quality rework / Inspection failure</option>
+                    <option value="Capacity shortage">Capacity shortage</option>
+                    <option value="Supplier delay">Supplier / Vendor delay</option>
+                    <option value="Logistics">Logistics / Freight delay</option>
+                    <option value="Others">Others (Custom reason...)</option>
+                  </select>
+                  {c.reason === "Others" && (
+                    <input
+                      type="text"
+                      placeholder="Specify custom delay reason..."
+                      value={c.customReason || ""}
+                      disabled={!canEdit}
+                      onChange={(e) => handleCustomReasonChange(i, e.target.value)}
+                      style={{
+                        width: "100%",
+                        marginTop: 6,
+                        fontSize: 12,
+                        padding: "6px 10px",
+                        borderRadius: 6,
+                        border: "1px solid #FDBA74",
+                        background: "#FFFBEB"
+                      }}
+                    />
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: "12px 24px", borderTop: "1px solid #F3F4F6", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#fff" }}>
+          {canEdit && doneCount < colourways.length ? (
+            <button
+              type="button"
+              onClick={handleMarkAllDone}
+              style={{
+                fontSize: 12,
+                color: "#059669",
+                background: "#ECFDF5",
+                border: "1px solid #A7F3D0",
+                padding: "6px 14px",
+                borderRadius: 8,
+                fontWeight: 600,
+                cursor: "pointer"
+              }}
+            >
+              Mark All Done
+            </button>
+          ) : <div />}
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              fontSize: 12.5,
+              fontWeight: 600,
+              color: "#fff",
+              background: "#534AB7",
+              border: "none",
+              padding: "7px 18px",
+              borderRadius: 8,
+              cursor: "pointer"
+            }}
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StageNode({ stage, idx, onCycle, onReason, onSupplierChange, onOpenDispute, lockedBy, suppliers = [], canEdit = true, roleDept = "", orderColourways = [], onOpenColourways }) {
   const [open, setOpen] = useState(false);
-  const locked = !!lockedBy;
+  const locked = !lockedBy;
   const isAllowedToEdit = !locked && canEdit;
   const supplierOptions = suppliers.length > 0
     ? suppliers.filter(s => !s.isDeleted).map(s => s.name || s)
     : VAP_SUPPLIERS;
+
+  // Colourways breakdown
+  const hasColourways = Array.isArray(orderColourways) && orderColourways.length > 0;
+  const currentColourways = (Array.isArray(stage.colourways) && stage.colourways.length > 0)
+    ? stage.colourways
+    : (orderColourways.length > 0 ? orderColourways.map(c => ({
+        color: c.color,
+        qty: c.qty,
+        status: stage.status === "done" ? "done" : stage.status === "in_progress" ? "in_progress" : "pending",
+        reason: stage.reason || "",
+        completedQty: stage.status === "done" ? c.qty : 0
+      })) : []);
+  const doneColourwaysCount = currentColourways.filter(c => c.status === "done").length;
+  const totalColourwaysCount = currentColourways.length;
 
   const icon =
     stage.status === "done" ? <CheckCircle2 size={17} color="#1F9E8D" /> :
@@ -271,17 +678,28 @@ function StageNode({ stage, idx, onCycle, onReason, onSupplierChange, onOpenDisp
     ? `Locked until ${lockedBy} is approved`
     : !canEdit
     ? `Only ${stage.dept} department can complete this stage (You are in: ${roleDept})`
+    : hasColourways
+    ? "Click to open colorway breakdown & delay tracking"
     : stage.status === "done"
     ? "Stage completed (Stays completed; use 'Report False' to dispute)"
     : stage.status === "in_progress"
     ? "Click to mark as Done"
     : "Click to start (Pending → In Progress)";
 
+  const handleStageClick = () => {
+    if (!isAllowedToEdit) return;
+    if (hasColourways && onOpenColourways) {
+      onOpenColourways(idx);
+    } else {
+      onCycle(idx);
+    }
+  };
+
   return (
     <div style={{ flex: "0 0 134px", minWidth: 134, position: "relative", opacity: locked ? 0.6 : !canEdit ? 0.75 : 1 }}>
       <div style={{ display: "flex", alignItems: "center" }}>
         <div
-          onClick={isAllowedToEdit ? () => onCycle(idx) : undefined}
+          onClick={handleStageClick}
           title={tooltipTitle}
           style={{
             width: 30, height: 30, borderRadius: 999, background: "#fff",
@@ -294,11 +712,64 @@ function StageNode({ stage, idx, onCycle, onReason, onSupplierChange, onOpenDisp
         </div>
         <div style={{ flex: 1, height: 2, background: stage.status === "done" ? "#1F9E8D" : "#E7E8ED" }} />
       </div>
-      <div style={{ marginTop: 8, fontSize: 11.5, fontWeight: 600, color: locked ? "#B0B2BA" : "#1B2130", lineHeight: 1.3 }}>{stage.name}</div>
+
+      {/* Stage Name - Clickable when colourways are present */}
+      <div
+        onClick={handleStageClick}
+        style={{
+          marginTop: 8,
+          fontSize: 11.5,
+          fontWeight: 600,
+          color: locked ? "#B0B2BA" : "#1B2130",
+          lineHeight: 1.3,
+          cursor: isAllowedToEdit ? "pointer" : "default"
+        }}
+        title={hasColourways ? "Click to open colorway tracking popup" : ""}
+      >
+        {stage.name}
+      </div>
+
       <div style={{ fontSize: 10.5, color: "#8A8D98", marginTop: 2 }}>{stage.planned}</div>
       <div style={{ fontSize: 10, color: canEdit ? "#1F9E8D" : "#B0B2BA", marginTop: 2, fontWeight: canEdit ? 600 : 400 }}>
         {stage.dept} {!canEdit && "(Read-only)"}
       </div>
+
+      {/* Prominent Colorway Badge button */}
+      {hasColourways && (
+        <div style={{ marginTop: 5 }}>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenColourways && onOpenColourways(idx);
+            }}
+            style={{
+              background: doneColourwaysCount === totalColourwaysCount && totalColourwaysCount > 0 ? "#ECFDF5" : doneColourwaysCount > 0 ? "#FEF3C7" : "#EEF2FF",
+              color: doneColourwaysCount === totalColourwaysCount && totalColourwaysCount > 0 ? "#047857" : doneColourwaysCount > 0 ? "#B45309" : "#4338CA",
+              border: `1px solid ${doneColourwaysCount === totalColourwaysCount && totalColourwaysCount > 0 ? "#A7F3D0" : doneColourwaysCount > 0 ? "#FDE68A" : "#C7D2FE"}`,
+              borderRadius: 999,
+              padding: "2.5px 8px",
+              fontSize: 10,
+              fontWeight: 600,
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 3,
+              whiteSpace: "nowrap",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.04)"
+            }}
+            title="Click to view & update colorway pieces, status, and delay reasons"
+          >
+            {doneColourwaysCount === totalColourwaysCount && totalColourwaysCount > 0 ? (
+              <CheckCircle2 size={10} color="#047857" />
+            ) : (
+              <Layers size={10} />
+            )}
+            <span>{doneColourwaysCount}/{totalColourwaysCount} colours</span>
+          </button>
+        </div>
+      )}
+
       {stage.dept === "VAP" && (
         <select
           value={stage.supplier || ""}
@@ -2076,8 +2547,74 @@ export function OrderWorkspace({
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showAlignModal, setShowAlignModal] = useState(false);
   const [disputeModalData, setDisputeModalData] = useState(null);
+  const [colourwayModalStageIdx, setColourwayModalStageIdx] = useState(null);
   const cuttingIdx = order.stages.findIndex(s => s.name === "Cutting");
   const bulkGateOpen = allPreProdApproved(order);
+
+  // Derive colourways ONLY if this order has color breakdown or multiple colors configured
+  const orderColourways = useMemo(() => {
+    // 1. Color breakdown array with valid entries (e.g. from Add Order multi-color table)
+    if (Array.isArray(order.colorBreakdown) && order.colorBreakdown.length > 0) {
+      const map = new Map();
+      for (const item of order.colorBreakdown) {
+        const cName = (item.color || "").trim();
+        if (!cName) continue;
+        const qty = Number(item.qty) || 0;
+        if (!map.has(cName)) {
+          map.set(cName, { color: cName, qty: 0 });
+        }
+        map.get(cName).qty += qty;
+      }
+      const list = Array.from(map.values());
+      if (list.length > 0) return list;
+    }
+    // 2. Explicit multiple colors in order.colors
+    if (Array.isArray(order.colors) && order.colors.length > 1) {
+      const perColorQty = Math.round((Number(order.qty) || 0) / order.colors.length);
+      return order.colors.map(c => ({ color: c, qty: perColorQty }));
+    }
+    // 3. If an order does NOT have colors added, return [] so old orders do not bind colors and remain completely unaffected!
+    return [];
+  }, [order.colorBreakdown, order.colors, order.qty]);
+
+  const handleUpdateStageColourways = (stageIdx, updatedColourways) => {
+    const currentStage = order.stages[stageIdx];
+    if (!currentStage) return;
+
+    const allDone = updatedColourways.length > 0 && updatedColourways.every(c => c.status === "done");
+    const anyInProgress = updatedColourways.some(c => c.status === "in_progress" || c.status === "done");
+
+    let nextStatus = allDone ? "done" : anyInProgress ? "in_progress" : "pending";
+
+    let assignee = currentStage.assignee;
+    if (nextStatus !== "pending" && (!assignee || assignee === "Unassigned")) {
+      const found = firstNamedAssignee(currentStage.dept);
+      assignee = found !== "Unassigned" ? found : "Assigned";
+    }
+
+    const flagged = updatedColourways
+      .filter(c => c.reason && c.reason !== "No delay flagged")
+      .map(c => {
+        const rText = c.reason === "Others" && c.customReason ? c.customReason : c.reason;
+        return `${c.color}: ${rText}`;
+      });
+    const nextReason = flagged.length > 0 ? flagged.join(" · ") : null;
+
+    const stages = order.stages.map((s, i) => {
+      if (i !== stageIdx) return s;
+      return {
+        ...s,
+        colourways: updatedColourways,
+        status: nextStatus,
+        assignee: assignee || s.assignee,
+        reason: nextReason,
+        completedBy: allDone ? (s.completedBy || role?.label || "User") : (nextStatus === "done" ? s.completedBy : null),
+        completedAt: allDone ? (s.completedAt || new Date().toISOString()) : (nextStatus === "done" ? s.completedAt : null)
+      };
+    });
+
+    onUpdateStages(order.id, stages);
+  };
 
   const cycle = (idx) => {
     if (gatingApproval(order.stages, idx)) return;
@@ -2163,7 +2700,7 @@ export function OrderWorkspace({
         </div>
       </div>
       <div style={{ fontSize: 11, color: "#B0B2BA", margin: "6px 0 16px" }}>
-        {(order.stages || []).length} steps from the {order.template || "90"}-day T&A template — pick 120-day for styles with a longer delivery window that need garment dye or heavier print/embroidery. Switching templates resets stage progress on this order. Stages after an approval step stay locked until that approval is marked done, and bulk production stays locked until Pre-Production sign-off is complete.
+        {(order.stages || []).length} steps from the {order.template || "90"}-day T&A template — pick 120-day for styles with a longer delivery window.{orderColourways.length > 0 ? " Click any stage circle or colour badge (e.g. \"0/2 colours\") to manage color-wise pieces & delays." : " Click any stage circle to advance progress."} Stages after an approval step stay locked until approved.
       </div>
       <div style={{ display: "flex", gap: 2, overflowX: "auto", paddingBottom: 8 }}>
         {(order.stages || []).map((s, i) => {
@@ -2197,6 +2734,8 @@ export function OrderWorkspace({
               suppliers={suppliers}
               canEdit={canEditThisStage}
               roleDept={role?.dept || "User"}
+              orderColourways={orderColourways}
+              onOpenColourways={(index) => setColourwayModalStageIdx(index)}
             />
           );
         })}
@@ -2387,6 +2926,34 @@ export function OrderWorkspace({
               onReportComplaint(complaint);
             }
           }}
+        />
+      )}
+
+      {colourwayModalStageIdx !== null && order.stages && order.stages[colourwayModalStageIdx] && (
+        <StageColourwayModal
+          isOpen={true}
+          onClose={() => setColourwayModalStageIdx(null)}
+          stage={order.stages[colourwayModalStageIdx]}
+          stageIdx={colourwayModalStageIdx}
+          order={order}
+          orderColourways={orderColourways}
+          onUpdateStageColourways={handleUpdateStageColourways}
+          canEdit={
+            Boolean(
+              role?.fullAccess ||
+              role?.dept === "Executive" ||
+              role?.dept === "Administrators" ||
+              (order.stages[colourwayModalStageIdx]?.dept &&
+                (Array.isArray(role?.departments) && role.departments.length > 0
+                  ? role.departments.map(d => d.toLowerCase())
+                  : [(role?.dept || "").toLowerCase()]
+                ).includes(order.stages[colourwayModalStageIdx].dept.toLowerCase())
+              )
+            ) && !(
+              gatingApproval(order.stages, colourwayModalStageIdx) ||
+              (cuttingIdx !== -1 && colourwayModalStageIdx >= cuttingIdx && !bulkGateOpen)
+            )
+          }
         />
       )}
     </div>
