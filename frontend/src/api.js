@@ -17,28 +17,51 @@ const API_BASE_URL = (() => {
 
 console.log("📡 API Base URL:", API_BASE_URL);
 
+// In-flight GET request deduplication map to prevent multiple parallel calls to same endpoint
+const pendingRequests = new Map();
+
 async function request(path, options = {}) {
+  const method = (options.method || "GET").toUpperCase();
   const url = `${API_BASE_URL}${path}`;
-  console.log(`${options.method || "GET"} ${url}`);
 
-  const response = await fetch(url, {
-    cache: "no-store",
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
-    ...options,
-  });
-
-  const payload = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    if (response.status === 404) {
-      return [];
-    }
-    const errorMsg = payload.error || `HTTP ${response.status}: ${response.statusText || "Request failed"}`;
-    console.error(`API Error on ${options.method || "GET"} ${path}:`, errorMsg, payload);
-    throw new Error(errorMsg);
+  // If a GET request to the exact same URL is already in-flight, return the existing Promise
+  if (method === "GET" && pendingRequests.has(url)) {
+    return pendingRequests.get(url);
   }
 
-  return payload;
+  const executeRequest = async () => {
+    try {
+      const response = await fetch(url, {
+        cache: "no-store",
+        headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+        ...options,
+      });
+
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          return [];
+        }
+        const errorMsg = payload.error || `HTTP ${response.status}: ${response.statusText || "Request failed"}`;
+        console.error(`API Error on ${method} ${path}:`, errorMsg, payload);
+        throw new Error(errorMsg);
+      }
+
+      return payload;
+    } finally {
+      if (method === "GET") {
+        pendingRequests.delete(url);
+      }
+    }
+  };
+
+  const reqPromise = executeRequest();
+  if (method === "GET") {
+    pendingRequests.set(url, reqPromise);
+  }
+
+  return reqPromise;
 }
 
 // ===== STORAGE API =====

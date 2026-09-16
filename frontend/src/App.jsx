@@ -105,6 +105,8 @@ export default function LoomPLM() {
   const [teams, setTeams] = useState(DEFAULT_TEAMS);
   const [accessLoaded, setAccessLoaded] = useState(false);
   const initialViewLoadRef = useRef(false);
+  const lastViewFetchRef = useRef({});
+  const isSyncingNotifsRef = useRef(false);
   const [activeUser, setActiveUser] = useState(() => {
     try {
       const saved = localStorage.getItem("loom_active_user");
@@ -514,9 +516,14 @@ export default function LoomPLM() {
     let cancelled = false;
 
     const syncNotifications = async () => {
+      // Don't poll if browser tab is hidden or a sync is already running
+      if (typeof document !== "undefined" && document.hidden) return;
+      if (isSyncingNotifsRef.current) return;
+      isSyncingNotifsRef.current = true;
+
       try {
         const dbNotifs = await resourcesApi.list("notifications", "?all=true");
-        if (!Array.isArray(dbNotifs)) return;
+        if (!Array.isArray(dbNotifs) || cancelled) return;
 
         setNotifications(prev => {
           const map = new Map();
@@ -536,11 +543,13 @@ export default function LoomPLM() {
         if (!cancelled) {
           console.warn("Notification polling failed:", e.message);
         }
+      } finally {
+        isSyncingNotifsRef.current = false;
       }
     };
 
     syncNotifications();
-    const pollInterval = setInterval(syncNotifications, 15000);
+    const pollInterval = setInterval(syncNotifications, 25000);
 
     return () => {
       cancelled = true;
@@ -549,7 +558,15 @@ export default function LoomPLM() {
   }, [activeUser]);
 
   const loadViewData = useCallback(async (targetView) => {
-    if (!activeUser) return;
+    if (!activeUser || !targetView) return;
+
+    // Throttle: don't reload the same view data if loaded in the last 30 seconds
+    const now = Date.now();
+    const lastFetch = lastViewFetchRef.current[targetView] || 0;
+    if (now - lastFetch < 30000) {
+      return;
+    }
+    lastViewFetchRef.current[targetView] = now;
 
     try {
       if (["dashboard", "orders", "tasks", "approvals", "departments", "calendar", "reports", "compliance", "supplierPerformance", "finance", "myDepartment"].includes(targetView)) {
