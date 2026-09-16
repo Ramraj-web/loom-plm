@@ -1628,12 +1628,6 @@ export default function LoomPLM() {
         resourcesApi.update("orders", o.id, updated).catch(err => {
           console.warn("Error updating order stages:", err.message);
         });
-        resourcesApi.patch("orders", o.id, {
-          stages,
-          status,
-          completed: isCompleted,
-          completedAt
-        }).catch(() => { });
       } catch (e) { }
 
       return updated;

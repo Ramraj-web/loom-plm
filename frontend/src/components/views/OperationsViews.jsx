@@ -602,7 +602,8 @@ export function MyTasksPage({
   // Strict Department Tasks: Show active & pending stage tasks specifically assigned to this department
   const tnaRows = useMemo(() => {
     return collectTasks(orders, role?.dept).filter(r => {
-      if (r.stage.status === "done") return false;
+      if (r.order?.isDeleted) return false;
+      if (r.stage.status === "done" || r.stage.status === "completed") return false;
       // If user has full access / admin, show all active stages
       if (role?.fullAccess || role?.dept === "Administrators" || role?.dept === "Executive") {
         return true;
