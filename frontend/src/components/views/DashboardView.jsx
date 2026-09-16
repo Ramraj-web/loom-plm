@@ -7,7 +7,7 @@ import {
   LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Legend, PieChart, Pie, Cell
 } from "recharts";
 import {
-  SHIPMENT_PERFORMANCE, TA_STAGES, STAGE_ICON_SET_BASE, ORG_STRUCTURE, RISK_DELAY_DAYS,
+  SHIPMENT_PERFORMANCE, computeMonthlyShipmentPerformance, TA_STAGES, STAGE_ICON_SET_BASE, ORG_STRUCTURE, RISK_DELAY_DAYS,
   collectActivitiesForDate, formatDisplayDate, isSameDay
 } from "../../constants/loomData.js";
 import {
@@ -322,11 +322,15 @@ export function Dashboard({
   capas = [],
   onApproveCosting,
   onRejectCosting,
-  role = {}
+  role = {},
+  onOpenDept
 }) {
   const activeOrders = useMemo(() => orders.filter(o => o.isDeleted !== true && o.completed !== true), [orders]);
   const completedOrders = useMemo(() => orders.filter(o => o.completed === true && o.isDeleted !== true), [orders]);
   const deletedOrders = useMemo(() => orders.filter(o => o.isDeleted === true), [orders]);
+
+  // Dynamic 6-month Shipment Performance Trend computed directly from orders
+  const shipmentTrendData = useMemo(() => computeMonthlyShipmentPerformance(activeOrders), [activeOrders]);
 
   const stats = useMemo(() => {
     const total = activeOrders.length;
@@ -488,9 +492,28 @@ export function Dashboard({
             const max = Math.max(...departmentCounts.map(x => x.count), 1);
             const dotColor = ["#D64545", "#E2A83B", "#378ADD", "#1F9E8D", "#7F77DD", "#B0812E"][i % 6];
             return (
-              <div key={d.dept} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+              <div
+                key={d.dept}
+                onClick={() => onOpenDept && onOpenDept(d.dept)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  marginBottom: 10,
+                  cursor: "pointer",
+                  padding: "4px 6px",
+                  borderRadius: 6,
+                  transition: "background 0.15s ease"
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = "#F4F4F6"}
+                onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                title={`Click to open ${d.dept} department page`}
+              >
                 <span style={{ width: 7, height: 7, borderRadius: 999, background: dotColor, flexShrink: 0 }} />
-                <div style={{ width: 76, fontSize: 11.5, color: "#565A66", flexShrink: 0 }}>{d.dept}</div>
+                <div style={{ width: 85, fontSize: 11.5, color: "#1E293B", fontWeight: 600, flexShrink: 0, display: "flex", alignItems: "center", gap: 4 }}>
+                  <span>{d.dept}</span>
+                  <span style={{ fontSize: 10, color: "#6366F1" }}>→</span>
+                </div>
                 <div style={{ flex: 1, height: 7, background: "#F0F0F2", borderRadius: 999 }}>
                   <div style={{ height: 7, width: `${(d.count / max) * 100}%`, background: dotColor, borderRadius: 999 }} />
                 </div>
@@ -507,17 +530,46 @@ export function Dashboard({
         </Card>
 
         <Card>
-          <CardHeader title="Shipment performance" sub="Last 6 months" />
+          <CardHeader
+            title="Shipment performance"
+            sub={shipmentTrendData.rangeLabel ? `${shipmentTrendData.rangeLabel} (Based on Orders)` : "Last 6 months"}
+          />
           <div style={{ width: "100%", height: 170 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={SHIPMENT_PERFORMANCE} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+              <LineChart data={shipmentTrendData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F2" vertical={false} />
                 <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#8A8D98" }} axisLine={{ stroke: "#F0F0F2" }} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: "#8A8D98" }} axisLine={false} tickLine={false} domain={[0, 100]} />
-                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #ECEDF1" }} />
+                <Tooltip
+                  content={({ active, payload, label }) => {
+                    if (!active || !payload || !payload.length) return null;
+                    const pt = payload[0]?.payload;
+                    if (!pt) return null;
+                    return (
+                      <div style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: 8, padding: "8px 12px", boxShadow: "0 4px 12px rgba(0,0,0,0.08)", fontSize: 11.5 }}>
+                        <div style={{ fontWeight: 700, color: "#0F172A", marginBottom: 4 }}>{pt.fullLabel || label}</div>
+                        {pt.totalOrders > 0 ? (
+                          <>
+                            <div style={{ color: "#534AB7", fontWeight: 700 }}>
+                              On-time: <span style={{ fontSize: 13 }}>{pt.onTime !== null ? `${pt.onTime}%` : "—"}</span>
+                            </div>
+                            <div style={{ color: "#475569", marginTop: 2 }}>
+                              Orders: {pt.onTimeOrders} on-track / {pt.totalOrders} total {pt.delayedOrders > 0 ? `(${pt.delayedOrders} delayed)` : ""}
+                            </div>
+                          </>
+                        ) : (
+                          <div style={{ color: "#94A3B8" }}>No active order activity</div>
+                        )}
+                        <div style={{ color: "#64748B", marginTop: 4, fontSize: 10.5, borderTop: "1px dashed #E2E8F0", paddingTop: 4 }}>
+                          🎯 Target Benchmark: <b>{pt.target}%</b> (Industry KPI Goal)
+                        </div>
+                      </div>
+                    );
+                  }}
+                />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Line type="monotone" dataKey="onTime" name="On-time %" stroke="#534AB7" strokeWidth={2} dot={{ r: 3 }} />
-                <Line type="monotone" dataKey="target" name="Target %" stroke="#B0B2BA" strokeWidth={1.5} strokeDasharray="4 4" dot={false} />
+                <Line type="monotone" dataKey="onTime" name="Actual On-time %" stroke="#534AB7" strokeWidth={2} dot={{ r: 3 }} connectNulls={true} />
+                <Line type="monotone" dataKey="target" name="Target Goal % (75% Benchmark)" stroke="#B0B2BA" strokeWidth={1.5} strokeDasharray="4 4" dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>

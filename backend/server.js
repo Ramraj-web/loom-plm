@@ -1,3 +1,5 @@
+import { initWebSocket } from "./wsHandler.js";
+import http from "http";
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -54,8 +56,10 @@ async function startServer() {
   } else {
     console.log("MONGODB_URI not set; using local JSON storage");
   }
-  app.listen(PORT, () => {
-    console.log(`Loom PLM backend listening on port ${PORT}`);
+  const server = http.createServer(app);
+  initWebSocket(server);
+  server.listen(PORT, () => {
+    console.log(`Loom PLM backend with WebSockets listening on port ${PORT}`);
   });
 }
 

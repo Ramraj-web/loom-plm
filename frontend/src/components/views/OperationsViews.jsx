@@ -3,10 +3,10 @@ import {
   CheckCircle2, Upload, Plus, Trash2, Check, RotateCcw, Archive, X,
   ShieldCheck, Award, FileText, AlertTriangle, Clock, Eye, Edit,
   Search, Filter, ExternalLink, ChevronRight, CheckCircle, AlertCircle,
-  HelpCircle, Calendar, RefreshCw, ArrowUp, ArrowDown, Layers
+  HelpCircle, Calendar, RefreshCw, ArrowUp, ArrowDown, Layers, GripVertical, Laptop, Smartphone, MapPin, Activity, Download
 } from "lucide-react";
 import {
-  TA_STAGES, DEPT_ICONS, ORG_STRUCTURE, ATTENDANCE_STATUS_STYLE, CERT_STATUS_STYLE,
+  TA_STAGES, TA_STAGES_90, TA_STAGES_120, makeStages, DEPT_ICONS, ORG_STRUCTURE, ATTENDANCE_STATUS_STYLE, CERT_STATUS_STYLE,
   COMPLIANCE_STATUS_STYLE, COMPLIANCE_PRIORITY_STYLE, CERT_NAME_OPTIONS, BUYER_LIST, COMPLIANCE_CATEGORIES,
   DEFAULT_DEPT_DESCRIPTIONS, firstNamedAssignee
 } from "../../constants/loomData.js";
@@ -14,10 +14,21 @@ import {
   Card, CardHeader, PageHeader, BackLink, statusPill, riskDot, collectTasks, GroupedTaskList, OrgChain, TaskTable
 } from "../common/CommonUI.jsx";
 import { AssignWorkModal } from "./InsightsViews.jsx";
+import { sanitizeLocationString } from "../../utils/deviceLocation.js";
 import { DepartmentPerformanceAndKPI } from "./DepartmentKPISection.jsx";
+
+
+function formatDisplayShipDate(isoDateStr) {
+  if (!isoDateStr) return "";
+  const d = new Date(isoDateStr);
+  if (isNaN(d.getTime())) return isoDateStr;
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+}
 
 export function OrdersPage({
   orders = [],
+  isAdmin = false,
   onOpenOrder,
   onAddOrder,
   onCompleteOrder,
@@ -28,56 +39,133 @@ export function OrdersPage({
 }) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDeletedSection, setShowDeletedSection] = useState(false);
+  const [alignModalOrder, setAlignModalOrder] = useState(null);
+
+  const todayIso = new Date().toISOString().split("T")[0];
+  const defaultShipIso = new Date(Date.now() + 90 * 86400000).toISOString().split("T")[0];
+
   const [form, setForm] = useState({
     id: "",
     style: "",
     buyer: "Zara",
     country: "Spain",
     season: "AW26",
-    qty: 10000,
-    ship: "25 May",
-    color: "",
+    qty: "",
+    orderDate: todayIso,
+    ship: defaultShipIso,
     risk: "low",
-    status: "On Track"
+    status: "On Track",
+    colorBreakdown: [
+      { color: "", size: "M", qty: "" }
+    ]
   });
 
   const activeOrders = useMemo(() => orders.filter(o => o.isDeleted !== true && o.completed !== true), [orders]);
   const completedOrders = useMemo(() => orders.filter(o => o.completed === true && o.isDeleted !== true), [orders]);
   const deletedOrders = useMemo(() => orders.filter(o => o.isDeleted === true), [orders]);
 
+  const addColorBreakdownRow = () => {
+    setForm(prev => ({
+      ...prev,
+      colorBreakdown: [
+        ...prev.colorBreakdown,
+        { color: "", size: "M", qty: "" }
+      ]
+    }));
+  };
+
+  const removeColorBreakdownRow = (index) => {
+    setForm(prev => {
+      let next = prev.colorBreakdown.filter((_, i) => i !== index);
+      if (next.length === 0) {
+        next = [{ color: "", size: "M", qty: "" }];
+      }
+      const totalQty = next.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
+      return {
+        ...prev,
+        colorBreakdown: next,
+        qty: totalQty > 0 ? totalQty : ""
+      };
+    });
+  };
+
+  const updateColorBreakdownRow = (index, field, value) => {
+    setForm(prev => {
+      const next = [...prev.colorBreakdown];
+      next[index] = {
+        ...next[index],
+        [field]: field === "qty" ? (value === "" ? "" : Math.max(0, Number(value) || 0)) : value
+      };
+      // Auto sum quantities
+      const totalQty = next.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
+      return {
+        ...prev,
+        colorBreakdown: next,
+        qty: totalQty > 0 ? totalQty : (field === "qty" && value === "" ? "" : prev.qty)
+      };
+    });
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!form.id.trim() || !form.style.trim()) return;
 
+    // Filter to valid non-empty breakdown rows
+    const validBreakdown = form.colorBreakdown.filter(
+      b => (b.color && b.color.trim()) || (b.qty && Number(b.qty) > 0)
+    );
+    const distinctColors = Array.from(new Set(
+      validBreakdown.map(b => b.color.trim()).filter(Boolean)
+    ));
+    const summaryColorStr = distinctColors.join(", ") || "";
+    const totalBreakdownQty = validBreakdown.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
+    const finalQty = totalBreakdownQty > 0 ? totalBreakdownQty : (Number(form.qty) || 0);
+
+    const finalShipDate = form.ship || defaultShipIso;
+    const finalOrderDate = form.orderDate || todayIso;
+
     const newOrder = {
+      primaryId: "ord_" + Date.now() + "_" + Math.random().toString(36).slice(2, 9),
       id: form.id.trim().toUpperCase(),
       style: form.style.trim(),
       buyer: form.buyer.trim(),
       country: form.country.trim(),
       season: form.season.trim(),
-      qty: Number(form.qty) || 5000,
-      ship: form.ship.trim() || "15 Jun",
-      color: form.color.trim(),
+      qty: finalQty,
+      orderDate: finalOrderDate,
+      shipDate: finalShipDate,
+      ship: formatDisplayShipDate(finalShipDate) || finalShipDate,
+      color: summaryColorStr,
+      colors: distinctColors,
+      colorBreakdown: validBreakdown,
       risk: form.risk,
       status: form.status,
       completed: false,
       isDeleted: false,
       completedAt: null,
       deletedAt: null,
+      createdAt: new Date().toISOString()
     };
 
     if (onAddOrder) onAddOrder(newOrder);
+
+    // Open T&A Stage Alignment Dialog for this newly created order
+    setAlignModalOrder(newOrder);
+
     setForm({
       id: "",
       style: "",
       buyer: "Zara",
       country: "Spain",
       season: "AW26",
-      qty: 10000,
-      ship: "25 May",
-      color: "",
+      qty: "",
+      orderDate: new Date().toISOString().split("T")[0],
+      ship: new Date(Date.now() + 90 * 86400000).toISOString().split("T")[0],
       risk: "low",
-      status: "On Track"
+      status: "On Track",
+      colorBreakdown: [
+        { color: "", size: "M", qty: "" }
+      ]
     });
     setShowAddModal(false);
   };
@@ -93,7 +181,12 @@ export function OrdersPage({
           </div>
         </div>
         <button
-          onClick={() => setShowAddModal(true)}
+          onClick={() => {
+              const nowIso = new Date().toISOString().split("T")[0];
+              const shipIso = new Date(Date.now() + 90 * 86400000).toISOString().split("T")[0];
+              setForm(prev => ({ ...prev, orderDate: nowIso, ship: shipIso }));
+              setShowAddModal(true);
+            }}
           style={{
             display: "inline-flex",
             alignItems: "center",
@@ -136,50 +229,86 @@ export function OrdersPage({
         ) : (
           activeOrders.map(o => (
             <div
-              key={o.id}
+              key={o.primaryId || o.id}
               style={{ display: "grid", gridTemplateColumns: "1.2fr 0.9fr 0.9fr 0.7fr 0.8fr 0.8fr 0.7fr 0.9fr 0.8fr 0.7fr", alignItems: "center", fontSize: 13, padding: "12px 4px", borderBottom: "1px solid #F5F5F7" }}
               onMouseEnter={e => e.currentTarget.style.background = "#FAFAFB"}
               onMouseLeave={e => e.currentTarget.style.background = "transparent"}
             >
-              <div onClick={() => onOpenOrder && onOpenOrder(o.id)} style={{ cursor: "pointer" }}>
+              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer" }}>
                 <div style={{ fontFamily: "monospace", fontSize: 12, color: "#8A8D98" }}>{o.id}</div>
                 <div style={{ fontWeight: 600, color: "#1B2130" }}>{o.style}</div>
               </div>
-              <div onClick={() => onOpenOrder && onOpenOrder(o.id)} style={{ cursor: "pointer" }}>{o.buyer}</div>
-              <div onClick={() => onOpenOrder && onOpenOrder(o.id)} style={{ cursor: "pointer" }}>{o.country}</div>
-              <div onClick={() => onOpenOrder && onOpenOrder(o.id)} style={{ cursor: "pointer" }}>{o.season || "SS26"}</div>
-              <div onClick={() => onOpenOrder && onOpenOrder(o.id)} style={{ cursor: "pointer" }}>{Number(o.qty || 0).toLocaleString()}</div>
-              <div onClick={() => onOpenOrder && onOpenOrder(o.id)} style={{ cursor: "pointer" }}>{o.ship}</div>
-              <div onClick={() => onOpenOrder && onOpenOrder(o.id)} style={{ cursor: "pointer", display: "flex", alignItems: "center", textTransform: "capitalize" }}>
+              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer" }}>{o.buyer}</div>
+              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer" }}>{o.country}</div>
+              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer" }}>{o.season || "SS26"}</div>
+              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer" }}>{Number(o.qty || 0).toLocaleString()}</div>
+              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer" }}>{o.ship}</div>
+              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer", display: "flex", alignItems: "center", textTransform: "capitalize" }}>
                 {riskDot(o.risk)}{o.risk}
               </div>
-              <div onClick={() => onOpenOrder && onOpenOrder(o.id)} style={{ cursor: "pointer" }}>
+              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer" }}>
                 {statusPill(o.status)}
               </div>
-              <div onClick={() => onOpenOrder && onOpenOrder(o.id)} style={{ cursor: "pointer", color: o.color ? "#1B2130" : "#9CA3AF" }}>
-                {o.color || "—"}
+              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer" }}>
+                {Array.isArray(o.colorBreakdown) && o.colorBreakdown.length > 0 ? (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+                    {o.colorBreakdown.slice(0, 2).map((b, bi) => (
+                      <span
+                        key={bi}
+                        style={{
+                          fontSize: 10.5,
+                          background: "#F0EFFB",
+                          color: "#534AB7",
+                          padding: "1px 5px",
+                          borderRadius: 4,
+                          fontWeight: 600,
+                          whiteSpace: "nowrap"
+                        }}
+                      >
+                        {b.color} {b.size && `(${b.size})`} {b.qty && `· ${b.qty}`}
+                      </span>
+                    ))}
+                    {o.colorBreakdown.length > 2 && (
+                      <span style={{ fontSize: 10, color: "#6B7280", alignSelf: "center", fontWeight: 700 }}>
+                        +{o.colorBreakdown.length - 2}
+                      </span>
+                    )}
+                  </div>
+                ) : Array.isArray(o.colors) && o.colors.length > 0 ? (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+                    {o.colors.map((c, ci) => (
+                      <span key={ci} style={{ fontSize: 10.5, background: "#F3F4F6", color: "#374151", padding: "1px 5px", borderRadius: 4, fontWeight: 500 }}>
+                        {c}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <span style={{ color: o.color ? "#1B2130" : "#9CA3AF" }}>{o.color || "—"}</span>
+                )}
               </div>
               <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
-                <button
-                  onClick={(e) => { e.stopPropagation(); onDeleteOrder && onDeleteOrder(o.id); }}
-                  title="Delete order (move to history)"
-                  style={{
-                    background: "#FCEBEB",
-                    color: "#791F1F",
-                    border: "none",
-                    borderRadius: 6,
-                    padding: "4px 8px",
-                    fontSize: 11.5,
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 3
-                  }}
-                >
-                  <Trash2 size={12} />
-                  Delete
-                </button>
+                {isAdmin && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onDeleteOrder && onDeleteOrder(o.primaryId || o.id); }}
+                    title="Delete order (Admin only)"
+                    style={{
+                      background: "#FCEBEB",
+                      color: "#791F1F",
+                      border: "none",
+                      borderRadius: 6,
+                      padding: "4px 8px",
+                      fontSize: 11.5,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 3
+                    }}
+                  >
+                    <Trash2 size={12} />
+                    Delete
+                  </button>
+                )}
               </div>
             </div>
           ))
@@ -209,10 +338,10 @@ export function OrdersPage({
         ) : (
           completedOrders.map(o => (
             <div
-              key={o.id}
+              key={o.primaryId || o.id}
               style={{ display: "grid", gridTemplateColumns: "1.2fr 0.9fr 0.9fr 0.7fr 0.8fr 0.8fr 0.8fr 0.8fr 1.1fr", alignItems: "center", fontSize: 13, padding: "12px 4px", borderBottom: "1px solid #F5F5F7", background: "#FAFDFB" }}
             >
-              <div onClick={() => onOpenOrder && onOpenOrder(o.id)} style={{ cursor: "pointer" }}>
+              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer" }}>
                 <div style={{ fontFamily: "monospace", fontSize: 12, color: "#8A8D98" }}>{o.id}</div>
                 <div style={{ fontWeight: 600, color: "#1B2130" }}>{o.style}</div>
               </div>
@@ -221,7 +350,35 @@ export function OrdersPage({
               <div>{o.season || "SS26"}</div>
               <div>{Number(o.qty || 0).toLocaleString()}</div>
               <div>{o.ship}</div>
-              <div style={{ color: o.color ? "#1B2130" : "#9CA3AF" }}>{o.color || "—"}</div>
+              <div>
+                {Array.isArray(o.colorBreakdown) && o.colorBreakdown.length > 0 ? (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+                    {o.colorBreakdown.slice(0, 2).map((b, bi) => (
+                      <span
+                        key={bi}
+                        style={{
+                          fontSize: 10.5,
+                          background: "#F0EFFB",
+                          color: "#534AB7",
+                          padding: "1px 5px",
+                          borderRadius: 4,
+                          fontWeight: 600,
+                          whiteSpace: "nowrap"
+                        }}
+                      >
+                        {b.color} {b.size && `(${b.size})`}
+                      </span>
+                    ))}
+                    {o.colorBreakdown.length > 2 && (
+                      <span style={{ fontSize: 10, color: "#6B7280", alignSelf: "center", fontWeight: 700 }}>
+                        +{o.colorBreakdown.length - 2}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <span style={{ color: o.color ? "#1B2130" : "#9CA3AF" }}>{o.color || "—"}</span>
+                )}
+              </div>
               <div>
                 <span style={{ background: "#E1F5EE", color: "#085041", fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 999 }}>
                   Completed
@@ -229,7 +386,7 @@ export function OrdersPage({
               </div>
               <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
                 <button
-                  onClick={() => onUncompleteOrder && onUncompleteOrder(o.id)}
+                  onClick={() => onUncompleteOrder && onUncompleteOrder(o.primaryId || o.id)}
                   title="Move back to Active orders"
                   style={{
                     background: "#F5F3FF",
@@ -248,33 +405,36 @@ export function OrdersPage({
                   <RotateCcw size={12} />
                   Reopen
                 </button>
-                <button
-                  onClick={() => onDeleteOrder && onDeleteOrder(o.id)}
-                  title="Delete order"
-                  style={{
-                    background: "#FCEBEB",
-                    color: "#791F1F",
-                    border: "none",
-                    borderRadius: 6,
-                    padding: "4px 8px",
-                    fontSize: 11.5,
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 3
-                  }}
-                >
-                  <Trash2 size={12} />
-                  Delete
-                </button>
+                {isAdmin && (
+                  <button
+                    onClick={() => onDeleteOrder && onDeleteOrder(o.primaryId || o.id)}
+                    title="Delete order (Admin only)"
+                    style={{
+                      background: "#FCEBEB",
+                      color: "#791F1F",
+                      border: "none",
+                      borderRadius: 6,
+                      padding: "4px 8px",
+                      fontSize: 11.5,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 3
+                    }}
+                  >
+                    <Trash2 size={12} />
+                    Delete
+                  </button>
+                )}
               </div>
             </div>
           ))
         )}
       </Card>
 
-      {/* 3. Deleted Orders / History Section */}
+      {/* 3. Deleted Orders / History Section (Admin Only) */}
+      {isAdmin && (
       <Card>
         <div style={{ padding: "0 0 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
@@ -304,7 +464,7 @@ export function OrdersPage({
             ) : (
               deletedOrders.map(o => (
                 <div
-                  key={o.id}
+                  key={o.primaryId || o.id}
                   style={{ display: "grid", gridTemplateColumns: "1.2fr 0.9fr 0.9fr 0.7fr 0.8fr 0.8fr 0.8fr 1fr 0.8fr", alignItems: "center", fontSize: 13, padding: "12px 4px", borderBottom: "1px solid #F5F5F7", opacity: 0.85 }}
                 >
                   <div>
@@ -322,7 +482,7 @@ export function OrdersPage({
                   </div>
                   <div style={{ textAlign: "right", display: "flex", justifyContent: "flex-end", gap: 6, alignItems: "center" }}>
                     <button
-                      onClick={() => onRestoreOrder && onRestoreOrder(o.id)}
+                      onClick={() => onRestoreOrder && onRestoreOrder(o.primaryId || o.id)}
                       title="Restore order back to active list"
                       style={{
                         background: "#E1F5EE",
@@ -344,7 +504,7 @@ export function OrdersPage({
                     <button
                       onClick={() => {
                         if (window.confirm(`Are you sure you want to PERMANENTLY delete order ${o.id}? This cannot be undone.`)) {
-                          onPermanentDeleteOrder && onPermanentDeleteOrder(o.id);
+                          onPermanentDeleteOrder && onPermanentDeleteOrder(o.primaryId || o.id);
                         }
                       }}
                       title="Permanently delete order forever"
@@ -372,6 +532,7 @@ export function OrdersPage({
           </>
         )}
       </Card>
+      )}
 
       {/* Add Order Modal */}
       {showAddModal && (
@@ -393,7 +554,7 @@ export function OrdersPage({
               background: "#FFFFFF",
               borderRadius: 12,
               width: "100%",
-              maxWidth: 520,
+              maxWidth: 624,
               padding: "24px",
               boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
               position: "relative"
@@ -486,25 +647,103 @@ export function OrdersPage({
                 </div>
               </div>
 
+              {/* Multi-Colour & Size Quantity Breakdown */}
+              <div style={{ marginBottom: 16, padding: "12px 14px", background: "#F9FAFB", border: "1px solid #E5E7EB", borderRadius: 8 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <div>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "#1F2937" }}>Multi-Colour & Size Breakdown</span>
+                    <span style={{ fontSize: 11, color: "#6B7280", marginLeft: 8 }}>(e.g. Red M - 250 pcs)</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addColorBreakdownRow}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      background: "#EDE9FE",
+                      color: "#534AB7",
+                      border: "none",
+                      borderRadius: 6,
+                      padding: "4px 10px",
+                      fontSize: 11.5,
+                      fontWeight: 600,
+                      cursor: "pointer"
+                    }}
+                  >
+                    <Plus size={12} /> Add Colour / Size
+                  </button>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 160, overflowY: "auto" }}>
+                  {form.colorBreakdown.map((row, idx) => (
+                    <div key={idx} style={{ display: "grid", gridTemplateColumns: "1.4fr 0.9fr 1fr auto", gap: 8, alignItems: "center" }}>
+                      <input
+                        type="text"
+                        placeholder="Colour (e.g. Red, Black)"
+                        value={row.color}
+                        onChange={e => updateColorBreakdownRow(idx, "color", e.target.value)}
+                        style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #D1D5DB", fontSize: 12 }}
+                      />
+                      <select
+                        value={row.size}
+                        onChange={e => updateColorBreakdownRow(idx, "size", e.target.value)}
+                        style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #D1D5DB", fontSize: 12 }}
+                      >
+                        {["XS", "S", "M", "L", "XL", "2XL", "3XL", "Free Size"].map(s => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                      <input
+                        type="number"
+                        min="1"
+                        placeholder="Qty (e.g. 250)"
+                        value={row.qty}
+                        onChange={e => updateColorBreakdownRow(idx, "qty", e.target.value)}
+                        style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #D1D5DB", fontSize: 12, textAlign: "right" }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeColorBreakdownRow(idx)}
+                        title="Remove or clear row"
+                        style={{
+                          background: "none",
+                          border: "none",
+                          color: "#EF4444",
+                          cursor: "pointer",
+                          padding: 4
+                        }}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8, paddingTop: 6, borderTop: "1px dashed #E5E7EB", fontSize: 11.5, color: "#4B5563" }}>
+                  <span>Total Order Quantity: <b style={{ color: "#1F2937" }}>{(form.colorBreakdown.reduce((s, i) => s + (Number(i.qty) || 0), 0) || Number(form.qty) || 0).toLocaleString()} pcs</b></span>
+                  <span style={{ color: "#534AB7", fontWeight: 600 }}>
+                    {form.colorBreakdown.filter(b => b.color || b.qty).length} variant{form.colorBreakdown.filter(b => b.color || b.qty).length !== 1 ? "s" : ""}
+                  </span>
+                </div>
+              </div>
+
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, marginBottom: 20 }}>
                 <div>
-                  <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#4B5563", marginBottom: 4 }}>Ship Date</label>
+                  <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#4B5563", marginBottom: 4 }}>Order Date (Default Today)</label>
                   <input
-                    type="text"
-                    placeholder="e.g. 25 May"
-                    value={form.ship}
-                    onChange={e => setForm({ ...form, ship: e.target.value })}
-                    style={{ width: "92%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13 }}
+                    type="date"
+                    value={form.orderDate || todayIso}
+                    onChange={e => setForm({ ...form, orderDate: e.target.value })}
+                    style={{ width: "90%", padding: "7px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 12.5 }}
                   />
                 </div>
                 <div>
-                  <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#4B5563", marginBottom: 4,marginLeft: 4 }}>Color</label>
+                  <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#4B5563", marginBottom: 4 }}>Ship Date</label>
                   <input
-                    type="text"
-                    placeholder="e.g. Navy Blue"
-                    value={form.color}
-                    onChange={e => setForm({ ...form, color: e.target.value })}
-                    style={{ width: "84%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13,marginLeft: 4 }}
+                    type="date"
+                    value={form.ship || defaultShipIso}
+                    onChange={e => setForm({ ...form, ship: e.target.value })}
+                    style={{ width: "90%", padding: "7px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 12.5 }}
                   />
                 </div>
                 <div>
@@ -512,7 +751,7 @@ export function OrdersPage({
                   <select
                     value={form.risk}
                     onChange={e => setForm({ ...form, risk: e.target.value })}
-                    style={{ width: "92%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13 }}
+                    style={{ width: "95%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 12.5 }}
                   >
                     <option value="low">Low Risk</option>
                     <option value="medium">Medium Risk</option>
@@ -524,7 +763,7 @@ export function OrdersPage({
                   <select
                     value={form.status}
                     onChange={e => setForm({ ...form, status: e.target.value })}
-                    style={{ width: "92%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13 }}
+                    style={{ width: "95%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 12.5 }}
                   >
                     <option value="On Track">On Track</option>
                     <option value="At Risk">At Risk</option>
@@ -563,12 +802,32 @@ export function OrdersPage({
                     cursor: "pointer"
                   }}
                 >
-                  Create Order
+                  Create Order & Realign T&A →
                 </button>
               </div>
             </form>
           </div>
         </div>
+      )}
+
+      {/* Post-Order Creation T&A Stage Alignment Dialog */}
+      {alignModalOrder && (
+        <OrderStageAlignmentModal
+          order={alignModalOrder}
+          isOpen={Boolean(alignModalOrder)}
+          onClose={() => setAlignModalOrder(null)}
+          onSaveStages={(orderId, updatedStages, tmpl) => {
+            if (onAddOrder) {
+              // Also update stages in orders state if onAddOrder/onUpdateStages available
+              const found = orders.find(o => o.id === orderId);
+              if (found) {
+                found.stages = updatedStages;
+                found.template = tmpl;
+              }
+            }
+            setAlignModalOrder(null);
+          }}
+        />
       )}
     </div>
   );
@@ -588,7 +847,7 @@ export function MyTasksPage({
   const [showModal, setShowModal] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [assignPrefill, setAssignPrefill] = useState(null);
-  const [taskTab, setTaskTab] = useState("all"); // "all" | "custom" | "tna"
+  const [taskTab, setTaskTab] = useState("all");
   const [form, setForm] = useState({
     title: "",
     orderId: "",
@@ -599,31 +858,32 @@ export function MyTasksPage({
     notes: ""
   });
 
-  // Strict Department Tasks: Show active & pending stage tasks specifically assigned to this department
   const tnaRows = useMemo(() => {
-    return collectTasks(orders, role?.dept).filter(r => {
-      if (r.order?.isDeleted) return false;
-      if (r.stage.status === "done" || r.stage.status === "completed") return false;
-      // If user has full access / admin, show all active stages
-      if (role?.fullAccess || role?.dept === "Administrators" || role?.dept === "Executive") {
-        return true;
-      }
-      // For specific department: strictly include stages belonging to their department
-      return r.dept && r.dept.toLowerCase() === (role?.dept || "").toLowerCase();
+    const userDeptList = Array.isArray(role?.departments) && role.departments.length > 0
+      ? role.departments.map(d => d.toLowerCase())
+      : [(role?.dept || "").toLowerCase()];
+
+    return collectTasks(orders, null).filter(r => {
+      if (r.stage.status === "done") return false;
+      if (role?.fullAccess || role?.dept === "Administrators" || role?.dept === "Executive") return true;
+      return r.dept && userDeptList.includes(r.dept.toLowerCase());
     });
   }, [orders, role]);
-  
+
   const roleCustomTasks = useMemo(() => {
+    const userDeptList = Array.isArray(role?.departments) && role.departments.length > 0
+      ? role.departments
+      : [role?.dept || ""];
+
     return tasks.filter(t => {
       if (role?.fullAccess || role?.dept === "Administrators" || role?.dept === "Executive") return true;
-      return t.dept === role?.dept || t.dept === "All";
+      return userDeptList.includes(t.dept) || t.dept === "All";
     });
   }, [tasks, role]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!form.title.trim()) return;
-
     const newTask = {
       title: form.title.trim(),
       orderId: form.orderId ? form.orderId.trim().toUpperCase() : null,
@@ -635,9 +895,7 @@ export function MyTasksPage({
       status: "in_progress",
       createdAt: new Date().toISOString()
     };
-
     if (onAddTask) onAddTask(newTask);
-
     setForm({
       title: "",
       orderId: "",
@@ -658,7 +916,6 @@ export function MyTasksPage({
 
   return (
     <div>
-      {/* Page Header with Title and Add Task button */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 700, color: "#151B2E", margin: 0 }}>My tasks</h1>
@@ -915,8 +1172,8 @@ export function MyTasksPage({
                     style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13, boxSizing: "border-box" }}
                   >
                     <option value="">-- General Task / None --</option>
-                    {orders.filter(o => !o.isDeleted).map(o => (
-                      <option key={o.id} value={o.id}>{o.id} - {o.style}</option>
+                    {Array.from(new Map((orders || []).filter(o => !o.isDeleted).map(o => [o.id, o])).values()).map((o, idx) => (
+                      <option key={o.primaryId || `${o.id}-${idx}`} value={o.id}>{o.id} - {o.style}</option>
                     ))}
                   </select>
                 </div>
@@ -1714,7 +1971,9 @@ export function CompliancePage({
                 style={{ padding: "7px 8px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 12.5, color: "#374151" }}
               >
                 <option value="all">All Orders</option>
-                {orders.map(o => <option key={o.id} value={o.id}>{o.id} ({o.buyer})</option>)}
+                {Array.from(new Map((orders || []).filter(o => !o.isDeleted).map(o => [o.id, o])).values()).map((o, idx) => (
+                  <option key={o.primaryId || `${o.id}-${idx}`} value={o.id}>{o.id} ({o.buyer})</option>
+                ))}
               </select>
             </div>
           </Card>
@@ -1925,7 +2184,9 @@ export function CompliancePage({
                 style={{ padding: "7px 8px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 12.5, color: "#374151" }}
               >
                 <option value="all">All Orders</option>
-                {orders.map(o => <option key={o.id} value={o.id}>{o.id}</option>)}
+                {Array.from(new Map((orders || []).filter(o => !o.isDeleted).map(o => [o.id, o])).values()).map((o, idx) => (
+                  <option key={o.primaryId || `${o.id}-${idx}`} value={o.id}>{o.id}</option>
+                ))}
               </select>
             </div>
           </Card>
@@ -2232,7 +2493,9 @@ export function CompliancePage({
                     style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13 }}
                   >
                     <option value="">None (Facility-wide / General)</option>
-                    {orders.map(o => <option key={o.id} value={o.id}>{o.id} ({o.buyer} · {o.style})</option>)}
+                    {Array.from(new Map((orders || []).filter(o => !o.isDeleted).map(o => [o.id, o])).values()).map((o, idx) => (
+                      <option key={o.primaryId || `${o.id}-${idx}`} value={o.id}>{o.id} ({o.buyer} · {o.style})</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -2378,7 +2641,9 @@ export function CompliancePage({
                     style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13 }}
                   >
                     <option value="">None (Factory-wide)</option>
-                    {orders.map(o => <option key={o.id} value={o.id}>{o.id} ({o.buyer} · {o.style})</option>)}
+                    {Array.from(new Map((orders || []).filter(o => !o.isDeleted).map(o => [o.id, o])).values()).map((o, idx) => (
+                      <option key={o.primaryId || `${o.id}-${idx}`} value={o.id}>{o.id} ({o.buyer} · {o.style})</option>
+                    ))}
                   </select>
                 </div>
                 <div>
@@ -3023,7 +3288,26 @@ export function CompliancePage({
   );
 }
 
-export function AttendancePage({ roster, attendance, onCycle, leaveRequests, onApprove, onReject, onAddStaff, onEditStaff, onRemoveStaff, onAddLeaveRequest }) {
+export function AttendancePage({
+  roster,
+  attendance,
+  onCycle,
+  leaveRequests,
+  onApprove,
+  onReject,
+  onAddStaff,
+  onEditStaff,
+  onRemoveStaff,
+  onAddLeaveRequest,
+  userSessions = [],
+  isAdmin = false,
+  isMD = false,
+  users = [],
+  teams = []
+}) {
+  const canViewUsage = isAdmin || isMD;
+  const [activeTab, setActiveTab] = useState("attendance");
+  const [sessionSearch, setSessionSearch] = useState("");
   const [form, setForm] = useState({ name: "", title: "", dept: Object.keys(ORG_STRUCTURE)[0] });
   const [editingName, setEditingName] = useState(null);
   const [editForm, setEditForm] = useState({ name: "", title: "", dept: "" });
@@ -3033,9 +3317,97 @@ export function AttendancePage({ roster, attendance, onCycle, leaveRequests, onA
   const set = (field, val) => setForm(f => ({ ...f, [field]: val }));
   const setEdit = (field, val) => setEditForm(f => ({ ...f, [field]: val }));
 
-  const counts = { present: 0, absent: 0, leave: 0 };
-  roster.forEach(s => { counts[attendance[s.name] || "present"]++; });
-  const pending = leaveRequests.filter(l => l.status === "pending");
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  // Merge registered system users into roster
+  const unifiedStaff = useMemo(() => {
+    const list = [...(roster || [])];
+    const existingNames = new Set((roster || []).map(r => (r.name || "").toLowerCase()));
+    if (Array.isArray(users)) {
+      users.forEach(u => {
+        if (u.name && !existingNames.has(u.name.toLowerCase())) {
+          const userTeamIds = Array.isArray(u.teamIds) && u.teamIds.length > 0 ? u.teamIds : (u.teamId ? [u.teamId] : []);
+          const deptNames = Array.isArray(teams)
+            ? teams.filter(t => userTeamIds.includes(t.id)).map(t => t.name).join(", ")
+            : "";
+          list.push({
+            id: u.id,
+            name: u.name,
+            username: u.username,
+            email: u.email,
+            title: u.title || (userTeamIds.includes("team-admin") ? "Administrator" : "Team Member"),
+            dept: deptNames || "Merchandising",
+            isSystemUser: true
+          });
+          existingNames.add(u.name.toLowerCase());
+        }
+      });
+    }
+    return list;
+  }, [roster, users, teams]);
+
+  const getStaffAttendance = (person) => {
+    // 1. Check if marked on leave
+    const onLeave = (leaveRequests || []).find(l =>
+      l.status === "approved" &&
+      (l.name.toLowerCase() === (person.name || "").toLowerCase())
+    ) || (attendance[person.name] === "leave");
+
+    if (onLeave) {
+      return {
+        status: "leave",
+        label: "On leave",
+        reason: onLeave.reason || "Approved Leave"
+      };
+    }
+
+    // 2. Check if logged in today
+    const session = userSessions.find(s =>
+      (s.date === todayStr || (s.loginTime && s.loginTime.startsWith(todayStr))) &&
+      ((s.userId && s.userId === person.id) ||
+       (s.username && person.username && s.username.toLowerCase() === person.username.toLowerCase()) ||
+       (s.name && person.name && s.name.toLowerCase() === person.name.toLowerCase()))
+    );
+
+    if (session || attendance[person.name] === "present") {
+      const inTime = session?.loginTime ? new Date(session.loginTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : null;
+      return {
+        status: "present",
+        label: "Present",
+        inTime,
+        device: session?.device,
+        deviceType: session?.deviceType || "Laptop / Desktop",
+        location: session?.location
+      };
+    }
+
+    // 3. Otherwise Absent
+    return {
+      status: "absent",
+      label: "Absent"
+    };
+  };
+
+  const counts = useMemo(() => {
+    const c = { present: 0, absent: 0, leave: 0 };
+    unifiedStaff.forEach(s => {
+      const att = getStaffAttendance(s);
+      if (c[att.status] !== undefined) c[att.status]++;
+    });
+    return c;
+  }, [unifiedStaff, attendance, userSessions, leaveRequests]);
+
+  const pending = (leaveRequests || []).filter(l => l.status === "pending");
+
+  const filteredSessions = useMemo(() => {
+    if (!sessionSearch.trim()) return userSessions;
+    const q = sessionSearch.toLowerCase();
+    return userSessions.filter(s =>
+      (s.name && s.name.toLowerCase().includes(q)) ||
+      (s.username && s.username.toLowerCase().includes(q)) ||
+      (s.dept && s.dept.toLowerCase().includes(q))
+    );
+  }, [userSessions, sessionSearch]);
 
   function submitAdd() {
     if (!form.name.trim()) return;
@@ -3077,12 +3449,215 @@ export function AttendancePage({ roster, attendance, onCycle, leaveRequests, onA
 
   return (
     <div>
-      <PageHeader title="Attendance & Leave" sub="Click a staff member's status to cycle Present → Absent → On leave. Add new joiners or edit/remove team members below." />
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 16 }}>
-        <Card style={{ padding: "16px 18px" }}><div style={{ fontSize: 12, color: "#8A8D98" }}>Present today</div><div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: "#1F9E8D" }}>{counts.present}</div></Card>
-        <Card style={{ padding: "16px 18px" }}><div style={{ fontSize: 12, color: "#8A8D98" }}>Absent today</div><div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: "#D64545" }}>{counts.absent}</div></Card>
-        <Card style={{ padding: "16px 18px" }}><div style={{ fontSize: 12, color: "#8A8D98" }}>On leave today</div><div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: "#E2A83B" }}>{counts.leave}</div></Card>
-      </div>
+      <PageHeader
+        title="Attendance & System Usage"
+        sub="Monitor staff attendance, daily leave requests, and user login/logout activity hours."
+      />
+
+      {canViewUsage && (
+        <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
+          <button
+            onClick={() => setActiveTab("attendance")}
+            style={{
+              padding: "8px 18px",
+              borderRadius: 8,
+              fontSize: 12.5,
+              fontWeight: 700,
+              cursor: "pointer",
+              border: activeTab === "attendance" ? "none" : "1px solid #E2E8F0",
+              background: activeTab === "attendance" ? "#534AB7" : "#FFFFFF",
+              color: activeTab === "attendance" ? "#FFFFFF" : "#64748B"
+            }}
+          >
+            Staff Register & Leave
+          </button>
+          <button
+            onClick={() => setActiveTab("sessions")}
+            style={{
+              padding: "8px 18px",
+              borderRadius: 8,
+              fontSize: 12.5,
+              fontWeight: 700,
+              cursor: "pointer",
+              border: activeTab === "sessions" ? "none" : "1px solid #E2E8F0",
+              background: activeTab === "sessions" ? "#534AB7" : "#FFFFFF",
+              color: activeTab === "sessions" ? "#FFFFFF" : "#64748B",
+              display: "flex",
+              alignItems: "center",
+              gap: 8
+            }}
+          >
+            User Login Sessions & Usage Hours
+            <span style={{ fontSize: 11, padding: "2px 7px", borderRadius: 999, background: activeTab === "sessions" ? "rgba(255,255,255,0.25)" : "#E0E7FF", color: activeTab === "sessions" ? "#fff" : "#4338CA" }}>
+              {userSessions.length}
+            </span>
+          </button>
+        </div>
+      )}
+
+      {activeTab === "sessions" ? (
+        <div>
+          {/* KPI Metrics */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 16 }}>
+            <Card style={{ padding: "16px 18px" }}>
+              <div style={{ fontSize: 12, color: "#8A8D98" }}>Active Online Users</div>
+              <div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: "#10B981", display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#10B981", boxShadow: "0 0 8px #10B981" }} />
+                {userSessions.filter(s => s.active).length} online
+              </div>
+            </Card>
+            <Card style={{ padding: "16px 18px" }}>
+              <div style={{ fontSize: 12, color: "#8A8D98" }}>Total Logins Recorded</div>
+              <div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: "#534AB7" }}>
+                {userSessions.length} sessions
+              </div>
+            </Card>
+            <Card style={{ padding: "16px 18px" }}>
+              <div style={{ fontSize: 12, color: "#8A8D98" }}>Total Hours Used (All Users)</div>
+              <div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: "#378ADD" }}>
+                {userSessions.reduce((acc, s) => acc + (Number(s.hoursUsed) || 0), 0).toFixed(1)} hrs
+              </div>
+            </Card>
+            <Card style={{ padding: "16px 18px" }}>
+              <div style={{ fontSize: 12, color: "#8A8D98" }}>Avg Session Duration</div>
+              <div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: "#E2A83B" }}>
+                {userSessions.length > 0 ? (userSessions.reduce((acc, s) => acc + (Number(s.hoursUsed) || 0), 0) / userSessions.length).toFixed(1) : 0} hrs
+              </div>
+            </Card>
+          </div>
+
+          {/* Sessions Table Card */}
+          <Card>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 0 14px", borderBottom: "1px solid #F1F5F9", marginBottom: 12, flexWrap: "wrap", gap: 10 }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#1E293B" }}>User Login & Logout Session History</div>
+                <div style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>
+                  Every login automatically marks attendance as Present and tracks session duration.
+                </div>
+              </div>
+              <input
+                type="text"
+                value={sessionSearch}
+                onChange={e => setSessionSearch(e.target.value)}
+                placeholder="Filter by user or department..."
+                style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid #CBD5E1", fontSize: 12.5, width: 220 }}
+              />
+            </div>
+
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", minWidth: 940 }}>
+                <thead>
+                  <tr style={{ borderBottom: "2px solid #E2E8F0", background: "#F8FAFC" }}>
+                    <th style={{ padding: "10px 8px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "155px" }}>User / Name</th>
+                    <th style={{ padding: "10px 8px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "100px" }}>Username</th>
+                    <th style={{ padding: "10px 8px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "120px" }}>Department</th>
+                    <th style={{ padding: "10px 8px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "170px" }}>Device Telemetry</th>
+                    <th style={{ padding: "10px 8px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "190px" }}>Location</th>
+                    <th style={{ padding: "10px 8px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "125px" }}>Login Time</th>
+                    <th style={{ padding: "10px 8px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "120px" }}>Logout Time</th>
+                    <th style={{ padding: "10px 8px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "100px" }}>Hours Used</th>
+                    <th style={{ padding: "10px 8px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "100px", textAlign: "right" }}>Daily Attendance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredSessions.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} style={{ textAlign: "center", padding: "30px 0", color: "#94A3B8", fontSize: 13 }}>
+                        No login session records found.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredSessions.map(s => {
+                      const loginDate = s.loginTime ? new Date(s.loginTime) : null;
+                      const logoutDate = s.logoutTime ? new Date(s.logoutTime) : null;
+                      const hoursNum = Number(s.hoursUsed) || 0;
+                      const hoursFormatted = hoursNum < 1
+                        ? `${Math.max(1, Math.round(hoursNum * 60))} mins`
+                        : `${Math.floor(hoursNum)}h ${Math.round((hoursNum % 1) * 60)}m (${hoursNum.toFixed(2)}h)`;
+
+                      return (
+                        <tr
+                          key={s.id}
+                          style={{
+                            borderBottom: "1px solid #F1F5F9",
+                            fontSize: 12.5,
+                            verticalAlign: "middle"
+                          }}
+                        >
+                          <td style={{ padding: "10px 8px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <div style={{ width: 26, height: 26, borderRadius: "50%", background: "#EEF2FF", color: "#4F46E5", fontWeight: 700, fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                {(s.name || s.username || "U").slice(0, 1).toUpperCase()}
+                              </div>
+                              <span style={{ fontWeight: 600, color: "#1E293B" }}>{s.name || "User"}</span>
+                            </div>
+                          </td>
+                          <td style={{ padding: "10px 8px", color: "#64748B", fontFamily: "monospace", fontSize: 12 }}>
+                            @{s.username || "—"}
+                          </td>
+                          <td style={{ padding: "10px 8px", color: "#64748B" }}>
+                            {s.dept || "—"}
+                          </td>
+                          <td style={{ padding: "10px 8px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 5, color: "#1F2937", fontWeight: 600, fontSize: 11.5 }}>
+                              {s.deviceType === "Mobile" ? <Smartphone size={13} color="#534AB7" /> : <Laptop size={13} color="#1F9E8D" />}
+                              <span>{s.deviceType || "Laptop"}</span>
+                            </div>
+                            {s.device && (
+                              <div style={{ fontSize: 10.5, color: "#64748B", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={s.device}>
+                                {s.device}
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ padding: "10px 8px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 4, color: "#1F2937", fontSize: 11.5 }}>
+                              <MapPin size={12} color="#DC2626" style={{ flexShrink: 0 }} />
+                              <span style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={sanitizeLocationString(s.location)}>
+                                {sanitizeLocationString(s.location) || "Office"}
+                              </span>
+                            </div>
+                          </td>
+                          <td style={{ padding: "10px 8px", color: "#334155", fontSize: 12 }}>
+                            {loginDate ? loginDate.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
+                          </td>
+                          <td style={{ padding: "10px 8px" }}>
+                            {s.active ? (
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "2px 7px", borderRadius: 999, background: "#ECFDF5", color: "#059669", fontSize: 11, fontWeight: 700 }}>
+                                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#10B981" }} />
+                                Online
+                              </span>
+                            ) : (
+                              <span style={{ color: "#64748B", fontSize: 12 }}>
+                                {logoutDate ? logoutDate.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
+                              </span>
+                            )}
+                          </td>
+                          <td style={{ padding: "10px 8px" }}>
+                            <span style={{ fontWeight: 700, color: s.active ? "#059669" : "#1E293B", background: s.active ? "#F0FDF4" : "#F8FAFC", padding: "2px 6px", borderRadius: 6, border: `1px solid ${s.active ? "#BBF7D0" : "#E2E8F0"}` }}>
+                              {hoursFormatted}
+                            </span>
+                          </td>
+                          <td style={{ padding: "10px 8px", textAlign: "right" }}>
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "#059669", background: "#ECFDF5", padding: "2px 7px", borderRadius: 999, fontSize: 11, fontWeight: 600 }}>
+                              <Check size={12} /> Present
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      ) : (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 16 }}>
+            <Card style={{ padding: "16px 18px" }}><div style={{ fontSize: 12, color: "#8A8D98" }}>Present today</div><div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: "#1F9E8D" }}>{counts.present}</div></Card>
+            <Card style={{ padding: "16px 18px" }}><div style={{ fontSize: 12, color: "#8A8D98" }}>Absent today</div><div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: "#D64545" }}>{counts.absent}</div></Card>
+            <Card style={{ padding: "16px 18px" }}><div style={{ fontSize: 12, color: "#8A8D98" }}>On leave today</div><div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: "#E2A83B" }}>{counts.leave}</div></Card>
+          </div>
 
       <Card style={{ marginBottom: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 0 12px" }}>
@@ -3177,21 +3752,21 @@ export function AttendancePage({ roster, attendance, onCycle, leaveRequests, onA
 
       <Card>
         <CardHeader title="Today's roster" sub="Click a status pill to cycle it — edit or remove team members" />
-        <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr 0.8fr 0.8fr", fontSize: 11, color: "#8A8D98", padding: "0 4px 8px", borderBottom: "1px solid #F0F0F2" }}>
-          <div>Name</div><div>Title</div><div>Department</div><div>Status</div><div style={{ textAlign: "right" }}>Actions</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr 1.1fr 1.6fr 0.9fr", fontSize: 11, color: "#6B7280", padding: "0 4px 8px", borderBottom: "1px solid #F0F0F2" }}>
+          <div>Name & Account</div><div>Title</div><div>Department</div><div>Today's Attendance Status</div><div style={{ textAlign: "right" }}>Actions</div>
         </div>
-        {roster.length === 0 ? (
+        {unifiedStaff.length === 0 ? (
           <div style={{ padding: "32px 16px", textAlign: "center", color: "#8A8D98", fontSize: 13 }}>
-            No staff members in the roster yet. Use the &quot;Add a joiner&quot; form above to add team members.
+            No staff members in the roster yet. Use the "Add a joiner" form above to add team members.
           </div>
-        ) : roster.map(s => {
+        ) : unifiedStaff.map(s => {
           const isEditing = editingName === s.name;
-          const status = attendance[s.name] || "present";
-          const st = ATTENDANCE_STATUS_STYLE[status] || ATTENDANCE_STATUS_STYLE.present;
+          const att = getStaffAttendance(s);
+          const st = ATTENDANCE_STATUS_STYLE[att.status] || ATTENDANCE_STATUS_STYLE.absent;
 
           if (isEditing) {
             return (
-              <div key={s.name} style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr 0.8fr 0.8fr", alignItems: "center", fontSize: 12.5, padding: "8px 4px", borderBottom: "1px solid #F7F7F9", background: "#FAF9FE" }}>
+              <div key={s.name} style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr 1.1fr 1.6fr 0.9fr", alignItems: "center", fontSize: 12.5, padding: "8px 4px", borderBottom: "1px solid #F7F7F9", background: "#FAF9FE" }}>
                 <div>
                   <input value={editForm.name} onChange={e => setEdit("name", e.target.value)} style={{ width: "90%", padding: "4px 6px", borderRadius: 5, border: "1px solid #D5CEF2", fontSize: 12 }} />
                 </div>
@@ -3215,19 +3790,55 @@ export function AttendancePage({ roster, attendance, onCycle, leaveRequests, onA
           }
 
           return (
-            <div key={s.name} style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr 0.8fr 0.8fr", alignItems: "center", fontSize: 12.5, padding: "8px 4px", borderBottom: "1px solid #F7F7F9" }}>
-              <div style={{ fontWeight: 600, color: "#1B2130" }}>{s.name}</div>
+            <div key={s.name} style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr 1.1fr 1.6fr 0.9fr", alignItems: "center", fontSize: 12.5, padding: "9px 4px", borderBottom: "1px solid #F7F7F9" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ width: 26, height: 26, borderRadius: "50%", background: "#F3F4F6", color: "#4B5563", fontWeight: 700, fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {(s.name || "U").slice(0, 1).toUpperCase()}
+                </div>
+                <div>
+                  <div style={{ fontWeight: 600, color: "#1B2130" }}>{s.name}</div>
+                  {s.username && <div style={{ fontSize: 11, color: "#9CA3AF", fontFamily: "monospace" }}>@{s.username}</div>}
+                </div>
+              </div>
               <div style={{ color: "#8A8D98" }}>{s.title}</div>
               <div style={{ color: "#8A8D98" }}>{s.dept}</div>
               <div>
-                <span
-                  onClick={() => onCycle(s.name)}
-                  style={{ cursor: "pointer", background: st.bg, color: st.fg, fontSize: 11.5, fontWeight: 600, padding: "3px 10px", borderRadius: 999 }}
-                >
-                  {st.label}
-                </span>
+                <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
+                  <span
+                    onClick={() => onCycle(s.name)}
+                    title="Click to cycle status (Present / On Leave / Absent)"
+                    style={{ cursor: "pointer", background: st.bg, color: st.fg, fontSize: 11.5, fontWeight: 700, padding: "3px 10px", borderRadius: 999 }}
+                  >
+                    {att.status === "present" ? "✓ Present" : att.status === "leave" ? "🏖 On leave" : "✕ Absent"}
+                  </span>
+                  {att.status === "present" && (
+                    <span style={{ fontSize: 11, color: "#059669", display: "inline-flex", alignItems: "center", gap: 4, background: "#ECFDF5", padding: "2px 7px", borderRadius: 6 }}>
+                      {att.deviceType === "Mobile" ? <Smartphone size={12} color="#534AB7" /> : <Laptop size={12} color="#1F9E8D" />}
+                      {att.inTime && <span>In: {att.inTime}</span>}
+                      {att.location && <span title={sanitizeLocationString(att.location)}>· 📍 {sanitizeLocationString(att.location).split("(")[0].trim()}</span>}
+                    </span>
+                  )}
+                  {att.status === "leave" && att.reason && (
+                    <span style={{ fontSize: 11, color: "#92400E", background: "#FEF3C7", padding: "2px 6px", borderRadius: 4 }}>
+                      {att.reason}
+                    </span>
+                  )}
+                  {att.status === "absent" && (
+                    <span style={{ fontSize: 10.5, color: "#9CA3AF" }}>(No login today)</span>
+                  )}
+                </div>
               </div>
-              <div style={{ textAlign: "right", display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <div style={{ textAlign: "right", display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
+                <button
+                  onClick={() => {
+                    setLeaveForm(f => ({ ...f, name: s.name, dept: s.dept, reason: "Personal" }));
+                    setShowAddLeave(true);
+                  }}
+                  title="Mark or request leave for this staff"
+                  style={{ fontSize: 11, color: "#534AB7", background: "#EDE9FE", border: "none", borderRadius: 5, padding: "3px 7px", cursor: "pointer", fontWeight: 600 }}
+                >
+                  On leave
+                </button>
                 <button
                   onClick={() => startEdit(s)}
                   style={{ fontSize: 11, color: "#378ADD", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
@@ -3245,7 +3856,9 @@ export function AttendancePage({ roster, attendance, onCycle, leaveRequests, onA
             </div>
           );
         })}
-      </Card>
+        </Card>
+      </>
+      )}
     </div>
   );
 }
@@ -3838,7 +4451,7 @@ export function EditDepartmentModal({
   );
 }
 
-export function DepartmentsPage({ orders, onOpenDept, orgStructure, deptDescriptions }) {
+export function DepartmentsPage({ orders, onOpenDept, orgStructure, deptDescriptions, users = [], teams = [] }) {
   const stageLinkedDepts = useMemo(() => new Set(TA_STAGES.map(s => s.dept)), []);
   const coveredCount = stageLinkedDepts.size;
   const deptNames = Object.keys(orgStructure);
@@ -3902,6 +4515,27 @@ export function DepartmentsPage({ orders, onOpenDept, orgStructure, deptDescript
                     {description}
                   </div>
                 )}
+
+                {(() => {
+                  const deptUsers = Array.isArray(users) ? users.filter(u => {
+                    const userTeamIds = Array.isArray(u.teamIds) && u.teamIds.length > 0 ? u.teamIds : (u.teamId ? [u.teamId] : []);
+                    const userDepts = Array.isArray(teams) ? teams.filter(t => userTeamIds.includes(t.id)).map(t => t.name.toLowerCase()) : [];
+                    return userDepts.includes(deptName.toLowerCase()) || (u.teamId === "team-admin" && deptName === "Administrators");
+                  }) : [];
+
+                  return (
+                    <div style={{ marginTop: 10, paddingTop: 8, borderTop: "1px dashed #E5E7EB", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11.5 }}>
+                      <span style={{ color: "#534AB7", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 5 }}>
+                        👥 {deptUsers.length} mapped user{deptUsers.length === 1 ? "" : "s"}
+                      </span>
+                      {deptUsers.length > 0 && (
+                        <span style={{ color: "#6B7280" }}>
+                          {deptUsers.slice(0, 2).map(u => u.name).join(", ")}{deptUsers.length > 2 ? ` +${deptUsers.length - 2}` : ""}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             </Card>
           );
@@ -3920,11 +4554,25 @@ export function DepartmentDetail({
   deptDescriptions,
   onUpdateDepartment,
   suppliers = [],
-  onAssignWork
+  onAssignWork,
+  users = [],
+  teams = [],
+  attendance = {},
+  userSessions = []
 }) {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const roles = orgStructure[deptName] || [];
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const mappedUsers = useMemo(() => {
+    if (!Array.isArray(users)) return [];
+    return users.filter(u => {
+      const userTeamIds = Array.isArray(u.teamIds) && u.teamIds.length > 0 ? u.teamIds : (u.teamId ? [u.teamId] : []);
+      const userDepts = Array.isArray(teams) ? teams.filter(t => userTeamIds.includes(t.id)).map(t => t.name.toLowerCase()) : [];
+      return userDepts.includes(deptName.toLowerCase()) || (u.teamId === "team-admin" && deptName === "Administrators");
+    });
+  }, [users, teams, deptName]);
   const allDeptTasks = useMemo(() => collectTasks(orders, deptName), [orders, deptName]);
   const linkedStages = TA_STAGES.filter(s => s.dept === deptName);
   const description = deptDescriptions?.[deptName] || DEFAULT_DEPT_DESCRIPTIONS[deptName] || (linkedStages.length > 0 ? `Owns T&A step${linkedStages.length > 1 ? "s" : ""}: ${linkedStages.map(s => s.name).join(", ")}` : "Support department — not yet a T&A step owner");
@@ -4022,11 +4670,94 @@ export function DepartmentDetail({
         </div>
       </div>
 
-      {/* Reporting Structure Card */}
+      {/* Assigned Department Members & User Telemetry Card */}
       <Card style={{ marginBottom: 20 }}>
+        <div style={{ padding: "0 0 12px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #F0F0F2", marginBottom: 12 }}>
+          <div>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "#1B2130" }}>Assigned Department Members & Active Status</span>
+            <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 700, background: "#E0DBF5", color: "#3D3878", padding: "2px 8px", borderRadius: 999 }}>
+              {mappedUsers.length} user{mappedUsers.length === 1 ? "" : "s"}
+            </span>
+          </div>
+          <span style={{ fontSize: 12, color: "#8A8D98" }}>
+            Mapped via User Access & Permissions
+          </span>
+        </div>
+
+        {mappedUsers.length === 0 ? (
+          <div style={{ padding: "20px 0", textAlign: "center", color: "#8A8D98", fontSize: 12.5 }}>
+            No users currently mapped to {deptName}. You can assign users to {deptName} in Settings → User Access.
+          </div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
+            {mappedUsers.map(u => {
+              const isOnline = userSessions.some(s => s.active && (s.userId === u.id || s.username === u.username));
+              const sessionToday = userSessions.find(s => (s.userId === u.id || s.username === u.username) && (s.date === todayStr || (s.loginTime && s.loginTime.startsWith(todayStr))));
+              const isPresent = Boolean(sessionToday || attendance[u.name] === "present");
+              const isOnLeave = attendance[u.name] === "leave";
+
+              return (
+                <div key={u.id || u.username} style={{ padding: "12px 14px", border: "1px solid #E5E7EB", borderRadius: 10, background: "#FFFFFF", display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ width: 34, height: 34, borderRadius: 999, background: "#534AB7", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 13, position: "relative" }}>
+                        {(u.name || "U").charAt(0).toUpperCase()}
+                        {isOnline && (
+                          <span style={{ position: "absolute", bottom: 0, right: 0, width: 9, height: 9, borderRadius: "50%", background: "#10B981", border: "1.5px solid #fff" }} title="Online now" />
+                        )}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>{u.name}</div>
+                        <div style={{ fontSize: 11, color: "#6B7280" }}>{u.email || (u.username ? `@${u.username}` : "Staff")}</div>
+                      </div>
+                    </div>
+
+                    {isPresent ? (
+                      <span style={{ fontSize: 10.5, fontWeight: 700, background: "#E1F5EE", color: "#085041", padding: "2px 8px", borderRadius: 999 }}>
+                        ✓ Present
+                      </span>
+                    ) : isOnLeave ? (
+                      <span style={{ fontSize: 10.5, fontWeight: 700, background: "#FAEEDA", color: "#633806", padding: "2px 8px", borderRadius: 999 }}>
+                        🏖 On Leave
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: 10.5, fontWeight: 600, background: "#FCEBEB", color: "#791F1F", padding: "2px 8px", borderRadius: 999 }}>
+                        ✕ Absent
+                      </span>
+                    )}
+                  </div>
+
+                  {sessionToday && (
+                    <div style={{ fontSize: 11, color: "#6B7280", display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, marginTop: 2, paddingTop: 6, borderTop: "1px dashed #F3F4F6" }}>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontWeight: 600, color: "#374151" }}>
+                        {sessionToday.deviceType === "Mobile" ? <Smartphone size={12} color="#534AB7" /> : <Laptop size={12} color="#1F9E8D" />}
+                        {sessionToday.deviceType || "Laptop"}
+                      </span>
+                      {sessionToday.location && (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }} title={sessionToday.location}>
+                          <MapPin size={11} color="#DC2626" />
+                          {sessionToday.location.split("(")[0].trim()}
+                        </span>
+                      )}
+                      {sessionToday.loginTime && (
+                        <span style={{ color: "#059669", fontWeight: 600 }}>
+                          In: {new Date(sessionToday.loginTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
+      {/* Reporting Structure Card */}
+      {/* <Card style={{ marginBottom: 20 }}>
         <CardHeader title="Reporting structure & responsibilities" />
         <OrgChain roles={roles} />
-      </Card>
+      </Card> */}
 
       {/* Department Performance & Employee KPI Tracking */}
       <DepartmentPerformanceAndKPI
@@ -4239,4 +4970,1845 @@ export function DepartmentDetail({
   );
 }
 
+export function OrderStageAlignmentModal({
+  order,
+  isOpen,
+  onClose,
+  onSaveStages
+}) {
+  if (!isOpen || !order) return null;
 
+  const currentTemplate = order.template || "90";
+  const [selectedTemplate, setSelectedTemplate] = useState(currentTemplate);
+  const [stages, setStages] = useState(() => {
+    if (Array.isArray(order.stages) && order.stages.length > 0) {
+      return JSON.parse(JSON.stringify(order.stages));
+    }
+    return makeStages(currentTemplate, 0, null);
+  });
+
+  const [draggedIdx, setDraggedIdx] = useState(null);
+  const [dragOverIdx, setDragOverIdx] = useState(null);
+
+  const handleTemplateChange = (tmpl) => {
+    setSelectedTemplate(tmpl);
+    setStages(makeStages(tmpl, 0, null));
+  };
+
+  const moveStage = (index, direction) => {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= stages.length) return;
+    const nextStages = [...stages];
+    const temp = nextStages[index];
+    nextStages[index] = nextStages[targetIndex];
+    nextStages[targetIndex] = temp;
+    setStages(nextStages);
+  };
+
+  const removeStage = (index) => {
+    if (stages.length <= 1) {
+      alert("At least one T&A stage is required.");
+      return;
+    }
+    setStages(stages.filter((_, i) => i !== index));
+  };
+
+  const handleDragStart = (e, index) => {
+    setDraggedIdx(index);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", "" + index);
+  };
+
+  const handleDragOver = (e, index) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dragOverIdx !== index) {
+      setDragOverIdx(index);
+    }
+  };
+
+  const handleDragLeave = (e, index) => {
+    if (dragOverIdx === index) {
+      setDragOverIdx(null);
+    }
+  };
+
+  const handleDrop = (e, targetIndex) => {
+    e.preventDefault();
+    if (draggedIdx !== null && draggedIdx !== targetIndex) {
+      const nextStages = [...stages];
+      const [movedItem] = nextStages.splice(draggedIdx, 1);
+      nextStages.splice(targetIndex, 0, movedItem);
+      setStages(nextStages);
+    }
+    setDraggedIdx(null);
+    setDragOverIdx(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIdx(null);
+    setDragOverIdx(null);
+  };
+
+  const [customStageName, setCustomStageName] = useState("");
+  const [customStageDept, setCustomStageDept] = useState("Merchandising");
+  const [customStageDay, setCustomStageDay] = useState("Day 10");
+
+  const addCustomStage = (e) => {
+    e.preventDefault();
+    if (!customStageName.trim()) return;
+    const newStage = {
+      name: customStageName.trim(),
+      dept: customStageDept,
+      status: "pending",
+      assignee: firstNamedAssignee(customStageDept),
+      reason: null,
+      planned: customStageDay.trim() || "Day 1",
+      completedAt: null,
+      completedOn: null,
+      updatedAt: null,
+      flaggedAt: null
+    };
+    setStages([...stages, newStage]);
+    setCustomStageName("");
+  };
+
+  const handleSave = () => {
+    onSaveStages(order.id, stages, selectedTemplate);
+    onClose();
+  };
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(15, 23, 42, 0.6)",
+        backdropFilter: "blur(4px)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 10000,
+        padding: 16
+      }}
+    >
+      <div
+        style={{
+          background: "#FFFFFF",
+          borderRadius: 14,
+          width: "100%",
+          maxWidth: 820,
+          maxHeight: "90vh",
+          display: "flex",
+          flexDirection: "column",
+          boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+          overflow: "hidden"
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div style={{ padding: "18px 24px", borderBottom: "1px solid #E5E7EB", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#FAF8FE" }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ background: "#534AB7", color: "#fff", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 6 }}>
+                T&A WORKFLOW ALIGNMENT
+              </span>
+              <span style={{ fontSize: 12, color: "#6B7280", fontFamily: "monospace", fontWeight: 600 }}>PO #{order.id}</span>
+            </div>
+            <h3 style={{ fontSize: 17, fontWeight: 700, color: "#111827", margin: "4px 0 0" }}>
+              Align & Prioritize T&A Stages: {order.style} ({order.buyer})
+            </h3>
+            <p style={{ fontSize: 12, color: "#6B7280", margin: "3px 0 0" }}>
+              Reorder stages 1 to {stages.length} to match client's actual production flow, or switch between 90-day and 120-day templates.
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            style={{ background: "none", border: "none", color: "#9CA3AF", cursor: "pointer", padding: 4 }}
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Template Selector Bar */}
+        <div style={{ padding: "12px 24px", background: "#F3F4F6", borderBottom: "1px solid #E5E7EB", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: "#374151" }}>T&A Template:</span>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button
+                type="button"
+                onClick={() => handleTemplateChange("90")}
+                style={{
+                  padding: "5px 14px",
+                  borderRadius: 6,
+                  border: selectedTemplate === "90" ? "2px solid #534AB7" : "1px solid #D1D5DB",
+                  background: selectedTemplate === "90" ? "#EDE9FE" : "#FFFFFF",
+                  color: selectedTemplate === "90" ? "#4338CA" : "#4B5563",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: "pointer"
+                }}
+              >
+                90-Day Standard ({TA_STAGES_90.length} stages)
+              </button>
+              <button
+                type="button"
+                onClick={() => handleTemplateChange("120")}
+                style={{
+                  padding: "5px 14px",
+                  borderRadius: 6,
+                  border: selectedTemplate === "120" ? "2px solid #534AB7" : "1px solid #D1D5DB",
+                  background: selectedTemplate === "120" ? "#EDE9FE" : "#FFFFFF",
+                  color: selectedTemplate === "120" ? "#4338CA" : "#4B5563",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: "pointer"
+                }}
+              >
+                120-Day Extended Dye/Print ({TA_STAGES_120.length} stages)
+              </button>
+            </div>
+          </div>
+          <div style={{ fontSize: 12, color: "#6B7280", fontWeight: 600 }}>
+            Total Pipeline Steps: <b style={{ color: "#1F2937" }}>{stages.length}</b>
+          </div>
+        </div>
+
+        {/* Stages List */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "16px 24px" }}>
+          {/* Drag & Drop Instruction Banner */}
+          <div style={{
+            padding: "9px 14px",
+            background: "#F5F3FF",
+            border: "1px solid #DDD6FE",
+            borderRadius: 8,
+            marginBottom: 12,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            fontSize: 12,
+            color: "#5B21B6"
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Layers size={16} color="#7C3AED" />
+              <span><b>Drag & Drop Pipeline:</b> Grab any stage by the handle (<GripVertical size={13} style={{ display: "inline", verticalAlign: "middle" }} />) and drop to realign priority 1 to {stages.length}.</span>
+            </div>
+            <span style={{ fontSize: 11, color: "#7C3AED", fontWeight: 600 }}>Up / Down buttons also supported</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {stages.map((stage, idx) => (
+              <div
+                key={`${stage.name}-${idx}`}
+                draggable
+                onDragStart={(e) => handleDragStart(e, idx)}
+                onDragOver={(e) => handleDragOver(e, idx)}
+                onDragLeave={(e) => handleDragLeave(e, idx)}
+                onDrop={(e) => handleDrop(e, idx)}
+                onDragEnd={handleDragEnd}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "10px 14px",
+                  background: draggedIdx === idx ? "#EDE9FE" : dragOverIdx === idx ? "#F3E8FF" : (idx % 2 === 0 ? "#F9FAFB" : "#FFFFFF"),
+                  border: dragOverIdx === idx ? "2px dashed #7C3AED" : draggedIdx === idx ? "2px dashed #A78BFA" : "1px solid #E5E7EB",
+                  borderRadius: 8,
+                  gap: 12,
+                  opacity: draggedIdx === idx ? 0.45 : 1,
+                  transform: dragOverIdx === idx ? "scale(1.01)" : "none",
+                  transition: "background 0.15s ease, border 0.15s ease, transform 0.15s ease",
+                  boxShadow: dragOverIdx === idx ? "0 4px 12px rgba(124, 58, 237, 0.15)" : "none"
+                }}
+              >
+                {/* Priority / Order Index & Drag Handle */}
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
+                  <div
+                    title="Drag to reorder"
+                    style={{
+                      cursor: "grab",
+                      color: "#9CA3AF",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: "2px 4px",
+                      borderRadius: 4
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.color = "#534AB7"}
+                    onMouseLeave={e => e.currentTarget.style.color = "#9CA3AF"}
+                  >
+                    <GripVertical size={17} />
+                  </div>
+                  <div
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: 999,
+                      background: "#534AB7",
+                      color: "#FFFFFF",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      flexShrink: 0
+                    }}
+                  >
+                    {idx + 1}
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#111827", display: "flex", alignItems: "center", gap: 8 }}>
+                      <span>{stage.name}</span>
+                      {stage.name.toLowerCase().includes("approval") && (
+                        <span style={{ fontSize: 10, background: "#FEF3C7", color: "#92400E", padding: "1px 6px", borderRadius: 4, fontWeight: 700 }}>
+                          Gating Approval
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 11.5, color: "#6B7280", marginTop: 2, display: "flex", gap: 10 }}>
+                      <span>Department: <b style={{ color: "#374151" }}>{stage.dept}</b></span>
+                      <span>Target: <b style={{ color: "#374151" }}>{stage.planned || `Day ${idx + 1}`}</b></span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Reorder Buttons (Move Up / Down / Remove) */}
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                  <button
+                    type="button"
+                    disabled={idx === 0}
+                    onClick={() => moveStage(idx, -1)}
+                    title="Prioritize higher (Move Up)"
+                    style={{
+                      padding: "5px 8px",
+                      borderRadius: 6,
+                      border: "1px solid #D1D5DB",
+                      background: idx === 0 ? "#F3F4F6" : "#FFFFFF",
+                      color: idx === 0 ? "#9CA3AF" : "#374151",
+                      cursor: idx === 0 ? "not-allowed" : "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 2,
+                      fontSize: 11,
+                      fontWeight: 600
+                    }}
+                  >
+                    <ArrowUp size={13} /> Up
+                  </button>
+                  <button
+                    type="button"
+                    disabled={idx === stages.length - 1}
+                    onClick={() => moveStage(idx, 1)}
+                    title="Prioritize lower (Move Down)"
+                    style={{
+                      padding: "5px 8px",
+                      borderRadius: 6,
+                      border: "1px solid #D1D5DB",
+                      background: idx === stages.length - 1 ? "#F3F4F6" : "#FFFFFF",
+                      color: idx === stages.length - 1 ? "#9CA3AF" : "#374151",
+                      cursor: idx === stages.length - 1 ? "not-allowed" : "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 2,
+                      fontSize: 11,
+                      fontWeight: 600
+                    }}
+                  >
+                    <ArrowDown size={13} /> Down
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeStage(idx)}
+                    title="Remove stage from this order"
+                    style={{
+                      padding: "5px 8px",
+                      borderRadius: 6,
+                      border: "1px solid #FECACA",
+                      background: "#FEF2F2",
+                      color: "#DC2626",
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      fontSize: 11,
+                      fontWeight: 600
+                    }}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Add custom stage */}
+          <div style={{ marginTop: 16, padding: "14px 16px", background: "#F9FAFB", border: "1px dashed #D1D5DB", borderRadius: 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 8 }}>
+              + Insert Custom Stage to this Pipeline
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr auto", gap: 10, alignItems: "center" }}>
+              <input
+                type="text"
+                placeholder="Stage Name (e.g. Special Foil Print)"
+                value={customStageName}
+                onChange={e => setCustomStageName(e.target.value)}
+                style={{ padding: "7px 10px", borderRadius: 6, border: "1px solid #D1D5DB", fontSize: 12 }}
+              />
+              <select
+                value={customStageDept}
+                onChange={e => setCustomStageDept(e.target.value)}
+                style={{ padding: "7px 10px", borderRadius: 6, border: "1px solid #D1D5DB", fontSize: 12 }}
+              >
+                {Object.keys(ORG_STRUCTURE).map(dept => (
+                  <option key={dept} value={dept}>{dept}</option>
+                ))}
+              </select>
+              <input
+                type="text"
+                placeholder="Target Day (e.g. Day 22)"
+                value={customStageDay}
+                onChange={e => setCustomStageDay(e.target.value)}
+                style={{ padding: "7px 10px", borderRadius: 6, border: "1px solid #D1D5DB", fontSize: 12 }}
+              />
+              <button
+                type="button"
+                onClick={addCustomStage}
+                style={{
+                  padding: "7px 14px",
+                  borderRadius: 6,
+                  border: "none",
+                  background: "#534AB7",
+                  color: "#FFFFFF",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: "pointer"
+                }}
+              >
+                Add Stage
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: "14px 24px", borderTop: "1px solid #E5E7EB", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#FAF8FE" }}>
+          <button
+            type="button"
+            onClick={() => handleTemplateChange(selectedTemplate)}
+            style={{
+              background: "none",
+              border: "none",
+              color: "#6B7280",
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4
+            }}
+          >
+            <RotateCcw size={13} /> Reset to Default Template Order
+          </button>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                padding: "8px 18px",
+                borderRadius: 7,
+                border: "1px solid #D1D5DB",
+                background: "#FFFFFF",
+                fontSize: 13,
+                fontWeight: 600,
+                color: "#4B5563",
+                cursor: "pointer"
+              }}
+            >
+              Skip / Keep Default
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              style={{
+                padding: "8px 22px",
+                borderRadius: 7,
+                border: "none",
+                background: "#1F9E8D",
+                fontSize: 13,
+                fontWeight: 700,
+                color: "#FFFFFF",
+                cursor: "pointer",
+                boxShadow: "0 2px 4px rgba(31, 158, 141, 0.2)"
+              }}
+            >
+              Confirm & Save T&A Pipeline
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+export function AuditLoggerPage({
+  auditLogs = [],
+  userSessions = [],
+  onClearAuditLogs,
+  users = [],
+  teams = []
+}) {
+  const [activeTab, setActiveTab] = useState("userDurations"); // "userDurations" | "events"
+  const [durationFormat, setDurationFormat] = useState("both"); // "both" | "mins" | "hours"
+  const [deptFilter, setDeptFilter] = useState("ALL");
+  const [userSearch, setUserSearch] = useState("");
+  const [selectedUserForDetail, setSelectedUserForDetail] = useState(null);
+
+  // Filter state for Audit Events tab
+  const [searchTerm, setSearchTerm] = useState("");
+  const [eventTypeFilter, setEventTypeFilter] = useState("ALL");
+  const [userFilter, setUserFilter] = useState("ALL");
+  const [dateFilter, setDateFilter] = useState("");
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  // Compute dates: today start, week start (Monday), month start (1st)
+  const dateRanges = useMemo(() => {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const dayOfWeek = (now.getDay() + 6) % 7; // 0 = Monday, 6 = Sunday
+    const weekStart = new Date(todayStart);
+    weekStart.setDate(weekStart.getDate() - dayOfWeek);
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+
+    return {
+      nowMs: now.getTime(),
+      todayStartMs: todayStart.getTime(),
+      weekStartMs: weekStart.getTime(),
+      monthStartMs: monthStart.getTime()
+    };
+  }, []);
+
+  // Consolidate per-user session minutes: today, this week, this month, overall
+  const userDurationStats = useMemo(() => {
+    const userMap = new Map();
+
+    // 1. Seed from registered users list
+    (users || []).forEach(u => {
+      const userTeamIds = Array.isArray(u.teamIds) && u.teamIds.length > 0 ? u.teamIds : (u.teamId ? [u.teamId] : []);
+      const userDepts = Array.isArray(teams) ? teams.filter(t => userTeamIds.includes(t.id)).map(t => t.name) : [];
+      const primaryDept = userDepts[0] || (u.teamId === "team-admin" ? "Administrators" : "General");
+      const key = (u.username || u.name || u.id).toLowerCase();
+
+      userMap.set(key, {
+        id: u.id,
+        username: u.username || "",
+        name: u.name || u.username || "User",
+        dept: primaryDept,
+        departments: userDepts,
+        sessions: [],
+        todayMinutes: 0,
+        weekMinutes: 0,
+        monthMinutes: 0,
+        overallMinutes: 0,
+        isOnline: false,
+        totalLogins: 0,
+        lastLoginTime: null,
+        lastDevice: null,
+        lastLocation: null
+      });
+    });
+
+    // 2. Aggregate from userSessions
+    (userSessions || []).forEach(sess => {
+      const userKey = (sess.username || sess.name || sess.userId || "").toLowerCase();
+      if (!userKey) return;
+
+      if (!userMap.has(userKey)) {
+        userMap.set(userKey, {
+          id: sess.userId || userKey,
+          username: sess.username || userKey,
+          name: sess.name || sess.username || "User",
+          dept: sess.dept || "General",
+          departments: [sess.dept || "General"],
+          sessions: [],
+          todayMinutes: 0,
+          weekMinutes: 0,
+          monthMinutes: 0,
+          overallMinutes: 0,
+          isOnline: false,
+          totalLogins: 0,
+          lastLoginTime: null,
+          lastDevice: null,
+          lastLocation: null
+        });
+      }
+
+      const rec = userMap.get(userKey);
+      rec.sessions.push(sess);
+      rec.totalLogins += 1;
+
+      // Calculate session duration in minutes
+      let sMins = 0;
+      const loginMs = sess.loginTime ? new Date(sess.loginTime).getTime() : 0;
+      const logoutMs = sess.logoutTime ? new Date(sess.logoutTime).getTime() : 0;
+
+      if (sess.active) {
+        rec.isOnline = true;
+        sMins = loginMs ? Math.max(1, Math.round((dateRanges.nowMs - loginMs) / 60000)) : 1;
+      } else if (logoutMs && loginMs && logoutMs >= loginMs) {
+        sMins = Math.max(1, Math.round((logoutMs - loginMs) / 60000));
+      } else if (sess.hoursUsed) {
+        sMins = Math.max(1, Math.round(Number(sess.hoursUsed) * 60));
+      }
+
+      rec.overallMinutes += sMins;
+
+      if (loginMs >= dateRanges.todayStartMs) {
+        rec.todayMinutes += sMins;
+      }
+      if (loginMs >= dateRanges.weekStartMs) {
+        rec.weekMinutes += sMins;
+      }
+      if (loginMs >= dateRanges.monthStartMs) {
+        rec.monthMinutes += sMins;
+      }
+
+      // Track last login info
+      if (!rec.lastLoginTime || (loginMs && loginMs > new Date(rec.lastLoginTime).getTime())) {
+        rec.lastLoginTime = sess.loginTime;
+        rec.lastDevice = sess.device || sess.deviceType;
+        rec.lastLocation = sess.location;
+      }
+    });
+
+    return Array.from(userMap.values()).sort((a, b) => {
+      if (a.isOnline !== b.isOnline) return a.isOnline ? -1 : 1;
+      if (b.todayMinutes !== a.todayMinutes) return b.todayMinutes - a.todayMinutes;
+      return b.overallMinutes - a.overallMinutes;
+    });
+  }, [users, teams, userSessions, dateRanges]);
+
+  // Filtered user stats based on search and department
+  const filteredUserStats = useMemo(() => {
+    return userDurationStats.filter(u => {
+      if (deptFilter !== "ALL" && u.dept.toLowerCase() !== deptFilter.toLowerCase()) {
+        const matchesAny = (u.departments || []).some(d => d.toLowerCase() === deptFilter.toLowerCase());
+        if (!matchesAny) return false;
+      }
+      if (userSearch.trim()) {
+        const q = userSearch.toLowerCase();
+        const matches =
+          (u.name && u.name.toLowerCase().includes(q)) ||
+          (u.username && u.username.toLowerCase().includes(q)) ||
+          (u.dept && u.dept.toLowerCase().includes(q));
+        if (!matches) return false;
+      }
+      return true;
+    });
+  }, [userDurationStats, deptFilter, userSearch]);
+
+  // Overall totals across all users
+  const totalSummary = useMemo(() => {
+    let today = 0;
+    let week = 0;
+    let month = 0;
+    let overall = 0;
+    let onlineCount = 0;
+
+    userDurationStats.forEach(u => {
+      today += u.todayMinutes;
+      week += u.weekMinutes;
+      month += u.monthMinutes;
+      overall += u.overallMinutes;
+      if (u.isOnline) onlineCount += 1;
+    });
+
+    return { today, week, month, overall, onlineCount };
+  }, [userDurationStats]);
+
+  // Formatting helper for duration
+  const formatTime = (minutes) => {
+    if (!minutes || minutes <= 0) return "0 mins";
+    const m = Math.round(minutes);
+    const h = Math.floor(m / 60);
+    const remM = m % 60;
+
+    if (durationFormat === "mins") {
+      return `${m} mins`;
+    }
+    if (durationFormat === "hours") {
+      if (h === 0) return `${remM}m`;
+      return remM > 0 ? `${h}h ${remM}m` : `${h}h`;
+    }
+    // "both" (e.g. "45 mins" or "135 mins (2h 15m)")
+    if (h === 0) return `${m} mins`;
+    return `${m} mins (${h}h ${remM > 0 ? `${remM}m` : ""})`.replace("  ", " ");
+  };
+
+  // Export User Usage Duration CSV
+  const exportUserUsageCsv = () => {
+    if (filteredUserStats.length === 0) {
+      alert("No user duration records to export.");
+      return;
+    }
+    const headers = [
+      "User Name",
+      "Username",
+      "Department",
+      "Status",
+      "Today (Minutes)",
+      "Today (Formatted)",
+      "This Week (Minutes)",
+      "This Week (Formatted)",
+      "This Month (Minutes)",
+      "This Month (Formatted)",
+      "Overall (Minutes)",
+      "Overall (Formatted)",
+      "Total Logins",
+      "Last Login Time",
+      "Last Device",
+      "Last Location"
+    ];
+
+    const rows = filteredUserStats.map(u => [
+      `"${(u.name || "").replace(/"/g, '""')}"`,
+      `"${(u.username || "").replace(/"/g, '""')}"`,
+      `"${(u.dept || "").replace(/"/g, '""')}"`,
+      `"${u.isOnline ? "Online" : "Offline"}"`,
+      u.todayMinutes,
+      `"${formatTime(u.todayMinutes)}"`,
+      u.weekMinutes,
+      `"${formatTime(u.weekMinutes)}"`,
+      u.monthMinutes,
+      `"${formatTime(u.monthMinutes)}"`,
+      u.overallMinutes,
+      `"${formatTime(u.overallMinutes)}"`,
+      u.totalLogins,
+      `"${u.lastLoginTime || "Never"}"`,
+      `"${(u.lastDevice || "").replace(/"/g, '""')}"`,
+      `"${(sanitizeLocationString(u.lastLocation) || "").replace(/"/g, '""')}"`
+    ]);
+
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `user_login_durations_${todayStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Metrics for Audit Events tab
+  const loginsToday = useMemo(() => {
+    return auditLogs.filter(l => l.eventType === "LOGIN" && (l.timestamp || "").startsWith(todayStr)).length;
+  }, [auditLogs, todayStr]);
+
+  const stageClicks = useMemo(() => {
+    return auditLogs.filter(l => l.eventType === "STAGE").length;
+  }, [auditLogs]);
+
+  const uniqueActiveUsers = useMemo(() => {
+    const userSet = new Set();
+    auditLogs.forEach(l => {
+      if (l.username) userSet.add(l.username);
+    });
+    return userSet.size;
+  }, [auditLogs]);
+
+  const filteredLogs = useMemo(() => {
+    return auditLogs.filter(log => {
+      if (eventTypeFilter !== "ALL" && log.eventType !== eventTypeFilter) return false;
+      if (userFilter !== "ALL" && log.username !== userFilter && log.userName !== userFilter) return false;
+      if (dateFilter && !((log.timestamp || "").startsWith(dateFilter))) return false;
+      if (searchTerm.trim()) {
+        const q = searchTerm.toLowerCase();
+        const matches =
+          (log.action && log.action.toLowerCase().includes(q)) ||
+          (log.userName && log.userName.toLowerCase().includes(q)) ||
+          (log.username && log.username.toLowerCase().includes(q)) ||
+          (log.userDept && log.userDept.toLowerCase().includes(q)) ||
+          (log.device && log.device.toLowerCase().includes(q)) ||
+          (log.location && log.location.toLowerCase().includes(q)) ||
+          (log.targetId && log.targetId.toLowerCase().includes(q));
+        if (!matches) return false;
+      }
+      return true;
+    });
+  }, [auditLogs, eventTypeFilter, userFilter, dateFilter, searchTerm]);
+
+  const exportEventsCsv = () => {
+    if (filteredLogs.length === 0) {
+      alert("No logs available to export.");
+      return;
+    }
+    const headers = ["Timestamp", "Date", "Time", "Event Type", "User", "Username", "Department", "Action Description", "Device", "Device Type", "Location", "Target ID"];
+    const rows = filteredLogs.map(l => {
+      const dt = l.timestamp ? new Date(l.timestamp) : new Date();
+      const datePart = dt.toLocaleDateString();
+      const timePart = dt.toLocaleTimeString();
+      return [
+        `"${l.timestamp || ""}"`,
+        `"${datePart}"`,
+        `"${timePart}"`,
+        `"${l.eventType || ""}"`,
+        `"${(l.userName || "").replace(/"/g, '""')}"`,
+        `"${(l.username || "").replace(/"/g, '""')}"`,
+        `"${(l.userDept || "").replace(/"/g, '""')}"`,
+        `"${(l.action || "").replace(/"/g, '""')}"`,
+        `"${(l.device || "").replace(/"/g, '""')}"`,
+        `"${(l.deviceType || "").replace(/"/g, '""')}"`,
+        `"${(sanitizeLocationString(l.location) || "").replace(/"/g, '""')}"`,
+        `"${(l.targetId || "").replace(/"/g, '""')}"`
+      ].join(",");
+    });
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.join("\n")].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `loom_audit_logs_${todayStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const eventBadgeStyles = {
+    LOGIN: { bg: "#E0F2FE", color: "#0369A1", border: "#BAE6FD" },
+    LOGOUT: { bg: "#F1F5F9", color: "#475569", border: "#CBD5E1" },
+    ORDER: { bg: "#EDE9FE", color: "#534AB7", border: "#DDD6FE" },
+    STAGE: { bg: "#FEF3C7", color: "#92400E", border: "#FDE68A" },
+    TASK: { bg: "#E1F5EE", color: "#085041", border: "#A7F3D0" },
+    ATTENDANCE: { bg: "#ECFDF5", color: "#059669", border: "#A7F3D0" },
+    LEAVE: { bg: "#FAEEDA", color: "#633806", border: "#FED7AA" },
+    ADMIN: { bg: "#FCEBEB", color: "#791F1F", border: "#FECACA" },
+    SYSTEM: { bg: "#F3F4F6", color: "#374151", border: "#E5E7EB" }
+  };
+
+  const allDepts = useMemo(() => {
+    const set = new Set();
+    userDurationStats.forEach(u => {
+      if (u.dept) set.add(u.dept);
+      (u.departments || []).forEach(d => set.add(d));
+    });
+    return Array.from(set).sort();
+  }, [userDurationStats]);
+
+  return (
+    <div>
+      <PageHeader
+        title="Event Logger & Screen Time Tracking"
+        sub="Administrative dashboard tracking user login minutes (per day, week, month, and overall) alongside telemetry and system audit actions."
+      />
+
+      {/* Top Navigation Tabs */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18, borderBottom: "1px solid #E2E8F0", paddingBottom: 12 }}>
+        <button
+          type="button"
+          onClick={() => setActiveTab("userDurations")}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "9px 18px",
+            borderRadius: 8,
+            border: activeTab === "userDurations" ? "1.5px solid #534AB7" : "1px solid #CBD5E1",
+            background: activeTab === "userDurations" ? "#534AB7" : "#FFFFFF",
+            color: activeTab === "userDurations" ? "#FFFFFF" : "#475569",
+            fontSize: 13,
+            fontWeight: 700,
+            cursor: "pointer",
+            boxShadow: activeTab === "userDurations" ? "0 2px 4px rgba(83, 74, 183, 0.25)" : "none",
+            transition: "all 0.15s ease"
+          }}
+        >
+          <Clock size={16} />
+          User Login & Screen Time Breakdown
+          <span style={{
+            fontSize: 11,
+            fontWeight: 700,
+            background: activeTab === "userDurations" ? "rgba(255,255,255,0.25)" : "#E2E8F0",
+            color: activeTab === "userDurations" ? "#FFFFFF" : "#334155",
+            padding: "1px 7px",
+            borderRadius: 999
+          }}>
+            {filteredUserStats.length} Users
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("events")}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "9px 18px",
+            borderRadius: 8,
+            border: activeTab === "events" ? "1.5px solid #534AB7" : "1px solid #CBD5E1",
+            background: activeTab === "events" ? "#534AB7" : "#FFFFFF",
+            color: activeTab === "events" ? "#FFFFFF" : "#475569",
+            fontSize: 13,
+            fontWeight: 700,
+            cursor: "pointer",
+            boxShadow: activeTab === "events" ? "0 2px 4px rgba(83, 74, 183, 0.25)" : "none",
+            transition: "all 0.15s ease"
+          }}
+        >
+          <Activity size={16} />
+          All Audit Events & Activity Trail
+          <span style={{
+            fontSize: 11,
+            fontWeight: 700,
+            background: activeTab === "events" ? "rgba(255,255,255,0.25)" : "#E2E8F0",
+            color: activeTab === "events" ? "#FFFFFF" : "#334155",
+            padding: "1px 7px",
+            borderRadius: 999
+          }}>
+            {auditLogs.length}
+          </span>
+        </button>
+      </div>
+
+      {/* KPI Cards based on Active Tab */}
+      {activeTab === "userDurations" ? (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 20 }}>
+          <Card style={{ padding: "16px 18px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontSize: 12, color: "#64748B", fontWeight: 600 }}>Today's Total Time</div>
+              <span style={{ fontSize: 11, color: "#059669", background: "#ECFDF5", padding: "1px 7px", borderRadius: 6, fontWeight: 700 }}>Per Day</span>
+            </div>
+            <div style={{ fontSize: 24, fontWeight: 800, marginTop: 6, color: "#059669" }}>
+              {formatTime(totalSummary.today)}
+            </div>
+            <div style={{ fontSize: 11, color: "#6B7280", marginTop: 4 }}>
+              Active today across all logged-in staff
+            </div>
+          </Card>
+
+          <Card style={{ padding: "16px 18px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontSize: 12, color: "#64748B", fontWeight: 600 }}>This Week's Time</div>
+              <span style={{ fontSize: 11, color: "#2563EB", background: "#EFF6FF", padding: "1px 7px", borderRadius: 6, fontWeight: 700 }}>Per Week</span>
+            </div>
+            <div style={{ fontSize: 24, fontWeight: 800, marginTop: 6, color: "#2563EB" }}>
+              {formatTime(totalSummary.week)}
+            </div>
+            <div style={{ fontSize: 11, color: "#6B7280", marginTop: 4 }}>
+              Since Monday 00:00 AM
+            </div>
+          </Card>
+
+          <Card style={{ padding: "16px 18px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontSize: 12, color: "#64748B", fontWeight: 600 }}>This Month's Time</div>
+              <span style={{ fontSize: 11, color: "#7C3AED", background: "#F5F3FF", padding: "1px 7px", borderRadius: 6, fontWeight: 700 }}>Per Month</span>
+            </div>
+            <div style={{ fontSize: 24, fontWeight: 800, marginTop: 6, color: "#7C3AED" }}>
+              {formatTime(totalSummary.month)}
+            </div>
+            <div style={{ fontSize: 11, color: "#6B7280", marginTop: 4 }}>
+              Cumulative for current calendar month
+            </div>
+          </Card>
+
+          <Card style={{ padding: "16px 18px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontSize: 12, color: "#64748B", fontWeight: 600 }}>Overall Total Time</div>
+              <span style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                fontSize: 11,
+                color: "#059669",
+                background: "#ECFDF5",
+                padding: "2px 7px",
+                borderRadius: 999,
+                fontWeight: 700
+              }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#10B981" }} />
+                {totalSummary.onlineCount} Online
+              </span>
+            </div>
+            <div style={{ fontSize: 24, fontWeight: 800, marginTop: 6, color: "#1E293B" }}>
+              {formatTime(totalSummary.overall)}
+            </div>
+            <div style={{ fontSize: 11, color: "#6B7280", marginTop: 4 }}>
+              All-time logged usage hours
+            </div>
+          </Card>
+        </div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 20 }}>
+          <Card style={{ padding: "16px 18px" }}>
+            <div style={{ fontSize: 12, color: "#8A8D98" }}>Total Recorded Events</div>
+            <div style={{ fontSize: 24, fontWeight: 700, marginTop: 6, color: "#1F2937" }}>
+              {auditLogs.length}
+            </div>
+            <div style={{ fontSize: 11, color: "#6B7280", marginTop: 4 }}>Full administrative history</div>
+          </Card>
+          <Card style={{ padding: "16px 18px" }}>
+            <div style={{ fontSize: 12, color: "#8A8D98" }}>Logins Today</div>
+            <div style={{ fontSize: 24, fontWeight: 700, marginTop: 6, color: "#059669", display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#059669", boxShadow: "0 0 6px #059669" }} />
+              {loginsToday}
+            </div>
+            <div style={{ fontSize: 11, color: "#6B7280", marginTop: 4 }}>Daily present verifications</div>
+          </Card>
+          <Card style={{ padding: "16px 18px" }}>
+            <div style={{ fontSize: 12, color: "#8A8D98" }}>T&A Stage Clicks</div>
+            <div style={{ fontSize: 24, fontWeight: 700, marginTop: 6, color: "#D97706" }}>
+              {stageClicks}
+            </div>
+            <div style={{ fontSize: 11, color: "#6B7280", marginTop: 4 }}>Pipeline updates recorded</div>
+          </Card>
+          <Card style={{ padding: "16px 18px" }}>
+            <div style={{ fontSize: 12, color: "#8A8D98" }}>Unique Active Users</div>
+            <div style={{ fontSize: 24, fontWeight: 700, marginTop: 6, color: "#534AB7" }}>
+              {uniqueActiveUsers}
+            </div>
+            <div style={{ fontSize: 11, color: "#6B7280", marginTop: 4 }}>Across all departments</div>
+          </Card>
+        </div>
+      )}
+
+      {/* TAB 1: User Login & Screen Time Breakdown */}
+      {activeTab === "userDurations" && (
+        <Card>
+          {/* Controls Bar */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 0 16px", borderBottom: "1px solid #F1F5F9", marginBottom: 14, flexWrap: "wrap", gap: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              {/* Search */}
+              <div style={{ position: "relative", minWidth: 220 }}>
+                <input
+                  type="text"
+                  placeholder="Search user name or username..."
+                  value={userSearch}
+                  onChange={e => setUserSearch(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "7px 12px 7px 30px",
+                    borderRadius: 7,
+                    border: "1px solid #D1D5DB",
+                    fontSize: 12.5,
+                    boxSizing: "border-box"
+                  }}
+                />
+                <Search size={14} color="#9CA3AF" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
+              </div>
+
+              {/* Department Filter */}
+              <select
+                value={deptFilter}
+                onChange={e => setDeptFilter(e.target.value)}
+                style={{
+                  padding: "7px 10px",
+                  borderRadius: 7,
+                  border: "1px solid #D1D5DB",
+                  fontSize: 12.5,
+                  background: "#FFFFFF",
+                  color: "#374151"
+                }}
+              >
+                <option value="ALL">All Departments</option>
+                {allDepts.map(d => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+
+              {/* Format Toggle */}
+              <div style={{ display: "inline-flex", alignItems: "center", background: "#F1F5F9", padding: "3px", borderRadius: 8, border: "1px solid #E2E8F0" }}>
+                <button
+                  type="button"
+                  onClick={() => setDurationFormat("both")}
+                  style={{
+                    padding: "4px 10px",
+                    fontSize: 11.5,
+                    fontWeight: 600,
+                    borderRadius: 6,
+                    border: "none",
+                    background: durationFormat === "both" ? "#FFFFFF" : "transparent",
+                    color: durationFormat === "both" ? "#534AB7" : "#64748B",
+                    boxShadow: durationFormat === "both" ? "0 1px 2px rgba(0,0,0,0.08)" : "none",
+                    cursor: "pointer"
+                  }}
+                >
+                  Both (Mins + Hours)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDurationFormat("mins")}
+                  style={{
+                    padding: "4px 10px",
+                    fontSize: 11.5,
+                    fontWeight: 600,
+                    borderRadius: 6,
+                    border: "none",
+                    background: durationFormat === "mins" ? "#FFFFFF" : "transparent",
+                    color: durationFormat === "mins" ? "#534AB7" : "#64748B",
+                    boxShadow: durationFormat === "mins" ? "0 1px 2px rgba(0,0,0,0.08)" : "none",
+                    cursor: "pointer"
+                  }}
+                >
+                  Minutes Only (mins)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDurationFormat("hours")}
+                  style={{
+                    padding: "4px 10px",
+                    fontSize: 11.5,
+                    fontWeight: 600,
+                    borderRadius: 6,
+                    border: "none",
+                    background: durationFormat === "hours" ? "#FFFFFF" : "transparent",
+                    color: durationFormat === "hours" ? "#534AB7" : "#64748B",
+                    boxShadow: durationFormat === "hours" ? "0 1px 2px rgba(0,0,0,0.08)" : "none",
+                    cursor: "pointer"
+                  }}
+                >
+                  Hours & Mins
+                </button>
+              </div>
+            </div>
+
+            {/* Export CSV */}
+            <div>
+              <button
+                type="button"
+                onClick={exportUserUsageCsv}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "7px 14px",
+                  borderRadius: 7,
+                  border: "1px solid #D1D5DB",
+                  background: "#FFFFFF",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: "#374151",
+                  cursor: "pointer"
+                }}
+              >
+                <Download size={13} /> Export Usage CSV
+              </button>
+            </div>
+          </div>
+
+          {/* User Screen Time Table */}
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", minWidth: 980 }}>
+              <thead>
+                <tr style={{ borderBottom: "2px solid #E5E7EB", background: "#F8FAFC" }}>
+                  <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "170px" }}>User / Staff</th>
+                  <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "130px" }}>Department</th>
+                  <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "95px" }}>Live Status</th>
+                  <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#059669", width: "140px" }}>Per Day (Today)</th>
+                  <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#2563EB", width: "145px" }}>Per Week (This Week)</th>
+                  <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#7C3AED", width: "150px" }}>Per Month (This Month)</th>
+                  <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#1E293B", width: "150px" }}>Overall (All-Time)</th>
+                  <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "80px", textAlign: "center" }}>Logins</th>
+                  <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "100px", textAlign: "center" }}>History</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredUserStats.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} style={{ padding: "40px 0", textAlign: "center", color: "#9CA3AF", fontSize: 13 }}>
+                      No user records found matching your filters.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredUserStats.map(u => {
+                    return (
+                      <tr
+                        key={u.id || u.username}
+                        style={{
+                          borderBottom: "1px solid #F1F5F9",
+                          transition: "background 0.1s ease",
+                          verticalAlign: "middle"
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = "#F9FAFB"}
+                        onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                      >
+                        {/* User Profile */}
+                        <td style={{ padding: "12px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <div style={{
+                              width: 30,
+                              height: 30,
+                              borderRadius: "50%",
+                              background: u.isOnline ? "#ECFDF5" : "#EEF2FF",
+                              color: u.isOnline ? "#059669" : "#4F46E5",
+                              fontWeight: 700,
+                              fontSize: 12,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              flexShrink: 0,
+                              border: u.isOnline ? "2px solid #10B981" : "1px solid #E0E7FF"
+                            }}>
+                              {(u.name || u.username || "U").slice(0, 1).toUpperCase()}
+                            </div>
+                            <div>
+                              <div style={{ fontWeight: 600, color: "#1E293B", fontSize: 13 }}>{u.name}</div>
+                              <div style={{ fontSize: 11, color: "#64748B", fontFamily: "monospace" }}>@{u.username || "—"}</div>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Department */}
+                        <td style={{ padding: "12px" }}>
+                          <span style={{
+                            display: "inline-block",
+                            padding: "2px 7px",
+                            borderRadius: 6,
+                            fontSize: 11,
+                            fontWeight: 600,
+                            background: "#F1F5F9",
+                            color: "#475569",
+                            border: "1px solid #E2E8F0"
+                          }}>
+                            {u.dept || "General"}
+                          </span>
+                        </td>
+
+                        {/* Live Status */}
+                        <td style={{ padding: "12px" }}>
+                          {u.isOnline ? (
+                            <span style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 5,
+                              padding: "3px 8px",
+                              borderRadius: 999,
+                              background: "#ECFDF5",
+                              color: "#059669",
+                              fontSize: 11,
+                              fontWeight: 700
+                            }}>
+                              <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#10B981", boxShadow: "0 0 5px #10B981" }} />
+                              Online
+                            </span>
+                          ) : (
+                            <span style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 4,
+                              padding: "2px 6px",
+                              borderRadius: 999,
+                              background: "#F8FAFC",
+                              color: "#94A3B8",
+                              fontSize: 11,
+                              fontWeight: 500
+                            }}>
+                              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#CBD5E1" }} />
+                              Offline
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Today's Time (Per Day) */}
+                        <td style={{ padding: "12px" }}>
+                          {u.todayMinutes > 0 ? (
+                            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                              <span style={{
+                                fontWeight: 700,
+                                color: "#059669",
+                                background: "#ECFDF5",
+                                padding: "2px 8px",
+                                borderRadius: 6,
+                                border: "1px solid #A7F3D0",
+                                fontSize: 12
+                              }}>
+                                {formatTime(u.todayMinutes)}
+                              </span>
+                            </div>
+                          ) : (
+                            <span style={{ color: "#94A3B8", fontSize: 12 }}>—</span>
+                          )}
+                        </td>
+
+                        {/* This Week (Per Week) */}
+                        <td style={{ padding: "12px" }}>
+                          {u.weekMinutes > 0 ? (
+                            <span style={{
+                              fontWeight: 700,
+                              color: "#2563EB",
+                              background: "#EFF6FF",
+                              padding: "2px 8px",
+                              borderRadius: 6,
+                              border: "1px solid #BFDBFE",
+                              fontSize: 12
+                            }}>
+                              {formatTime(u.weekMinutes)}
+                            </span>
+                          ) : (
+                            <span style={{ color: "#94A3B8", fontSize: 12 }}>—</span>
+                          )}
+                        </td>
+
+                        {/* This Month (Per Month) */}
+                        <td style={{ padding: "12px" }}>
+                          {u.monthMinutes > 0 ? (
+                            <span style={{
+                              fontWeight: 700,
+                              color: "#7C3AED",
+                              background: "#F5F3FF",
+                              padding: "2px 8px",
+                              borderRadius: 6,
+                              border: "1px solid #DDD6FE",
+                              fontSize: 12
+                            }}>
+                              {formatTime(u.monthMinutes)}
+                            </span>
+                          ) : (
+                            <span style={{ color: "#94A3B8", fontSize: 12 }}>—</span>
+                          )}
+                        </td>
+
+                        {/* Overall Time */}
+                        <td style={{ padding: "12px" }}>
+                          <span style={{
+                            fontWeight: 700,
+                            color: "#1E293B",
+                            background: "#F8FAFC",
+                            padding: "2px 8px",
+                            borderRadius: 6,
+                            border: "1px solid #E2E8F0",
+                            fontSize: 12
+                          }}>
+                            {formatTime(u.overallMinutes)}
+                          </span>
+                        </td>
+
+                        {/* Total Logins */}
+                        <td style={{ padding: "12px", textAlign: "center" }}>
+                          <span style={{
+                            fontSize: 11.5,
+                            fontWeight: 700,
+                            color: "#475569",
+                            background: "#F1F5F9",
+                            padding: "2px 7px",
+                            borderRadius: 999
+                          }}>
+                            {u.totalLogins}
+                          </span>
+                        </td>
+
+                        {/* View History Button */}
+                        <td style={{ padding: "12px", textAlign: "center" }}>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedUserForDetail(u)}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 4,
+                              padding: "4px 8px",
+                              borderRadius: 6,
+                              border: "1px solid #CBD5E1",
+                              background: "#FFFFFF",
+                              color: "#534AB7",
+                              fontSize: 11.5,
+                              fontWeight: 600,
+                              cursor: "pointer"
+                            }}
+                            title="View full login history"
+                          >
+                            <Eye size={12} /> View
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* TAB 2: All Audit Events & Action Trail */}
+      {activeTab === "events" && (
+        <Card>
+          {/* Controls Bar */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 0 16px", borderBottom: "1px solid #F1F5F9", marginBottom: 14, flexWrap: "wrap", gap: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <div style={{ position: "relative", minWidth: 240 }}>
+                <input
+                  type="text"
+                  placeholder="Search action, user, PO, device..."
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "7px 12px 7px 30px",
+                    borderRadius: 7,
+                    border: "1px solid #D1D5DB",
+                    fontSize: 12.5,
+                    boxSizing: "border-box"
+                  }}
+                />
+                <Search size={14} color="#9CA3AF" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
+              </div>
+
+              <select
+                value={eventTypeFilter}
+                onChange={e => setEventTypeFilter(e.target.value)}
+                style={{
+                  padding: "7px 10px",
+                  borderRadius: 7,
+                  border: "1px solid #D1D5DB",
+                  fontSize: 12.5,
+                  background: "#FFFFFF",
+                  color: "#374151"
+                }}
+              >
+                <option value="ALL">All Event Types</option>
+                <option value="LOGIN">Logins</option>
+                <option value="LOGOUT">Logouts</option>
+                <option value="ORDER">Order Actions</option>
+                <option value="STAGE">T&A Stages</option>
+                <option value="TASK">Tasks</option>
+                <option value="ATTENDANCE">Attendance</option>
+                <option value="LEAVE">Leaves</option>
+                <option value="ADMIN">Admin / Settings</option>
+              </select>
+
+              <select
+                value={userFilter}
+                onChange={e => setUserFilter(e.target.value)}
+                style={{
+                  padding: "7px 10px",
+                  borderRadius: 7,
+                  border: "1px solid #D1D5DB",
+                  fontSize: 12.5,
+                  background: "#FFFFFF",
+                  color: "#374151"
+                }}
+              >
+                <option value="ALL">All Users</option>
+                {Array.from(new Set(auditLogs.map(l => l.userName).filter(Boolean))).map(u => (
+                  <option key={u} value={u}>{u}</option>
+                ))}
+              </select>
+
+              <input
+                type="date"
+                value={dateFilter}
+                onChange={e => setDateFilter(e.target.value)}
+                style={{
+                  padding: "6px 10px",
+                  borderRadius: 7,
+                  border: "1px solid #D1D5DB",
+                  fontSize: 12.5,
+                  color: "#374151"
+                }}
+              />
+
+              {(searchTerm || eventTypeFilter !== "ALL" || userFilter !== "ALL" || dateFilter) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchTerm("");
+                    setEventTypeFilter("ALL");
+                    setUserFilter("ALL");
+                    setDateFilter("");
+                  }}
+                  style={{
+                    padding: "6px 10px",
+                    borderRadius: 6,
+                    border: "1px solid #E5E7EB",
+                    background: "#F9FAFB",
+                    fontSize: 11.5,
+                    color: "#4B5563",
+                    cursor: "pointer"
+                  }}
+                >
+                  Clear Filters
+                </button>
+              )}
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <button
+                type="button"
+                onClick={exportEventsCsv}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "7px 14px",
+                  borderRadius: 7,
+                  border: "1px solid #D1D5DB",
+                  background: "#FFFFFF",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: "#374151",
+                  cursor: "pointer"
+                }}
+              >
+                <Download size={13} /> Export Events CSV
+              </button>
+
+              {onClearAuditLogs && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm("Are you sure you want to clear all audit logs? This action cannot be undone.")) {
+                      onClearAuditLogs();
+                    }
+                  }}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "7px 12px",
+                    borderRadius: 7,
+                    border: "1px solid #FCA5A5",
+                    background: "#FEF2F2",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: "#DC2626",
+                    cursor: "pointer"
+                  }}
+                >
+                  <Trash2 size={13} /> Clear
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Table Container with Overflow & Semantic Table */}
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", minWidth: 920 }}>
+              <thead>
+                <tr style={{ borderBottom: "2px solid #E5E7EB", background: "#F8FAFC" }}>
+                  <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "140px", whiteSpace: "nowrap" }}>Date & Time</th>
+                  <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "95px", whiteSpace: "nowrap" }}>Event Type</th>
+                  <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "170px" }}>User & Department</th>
+                  <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#475569" }}>Action / Clicks</th>
+                  <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "195px" }}>Device Telemetry</th>
+                  <th style={{ padding: "10px 12px", fontSize: 11.5, fontWeight: 700, color: "#475569", width: "230px" }}>Location (GPS / Region)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredLogs.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ padding: "40px 0", textAlign: "center", color: "#9CA3AF", fontSize: 13 }}>
+                      No audit events found matching the selected criteria.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredLogs.map(log => {
+                    const dt = log.timestamp ? new Date(log.timestamp) : new Date();
+                    const dateStr = dt.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+                    const timeStr = dt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true });
+                    const badgeStyle = eventBadgeStyles[log.eventType] || eventBadgeStyles.SYSTEM;
+                    const isMobile = log.deviceType === "Mobile" || (log.device && /Mobile|Android|iPhone/i.test(log.device));
+
+                    return (
+                      <tr
+                        key={log.id}
+                        style={{
+                          borderBottom: "1px solid #F1F5F9",
+                          transition: "background 0.1s ease",
+                          verticalAlign: "middle"
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = "#F9FAFB"}
+                        onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                      >
+                        <td style={{ padding: "12px", whiteSpace: "nowrap" }}>
+                          <div style={{ fontWeight: 600, color: "#1F2937", fontSize: 12.5 }}>{dateStr}</div>
+                          <div style={{ fontSize: 11, color: "#6B7280", fontFamily: "monospace", marginTop: 2 }}>{timeStr}</div>
+                        </td>
+
+                        <td style={{ padding: "12px", whiteSpace: "nowrap" }}>
+                          <span style={{
+                            display: "inline-block",
+                            padding: "3px 8px",
+                            borderRadius: 6,
+                            fontSize: 11,
+                            fontWeight: 700,
+                            background: badgeStyle.bg,
+                            color: badgeStyle.color,
+                            border: `1px solid ${badgeStyle.border}`,
+                            letterSpacing: 0.3
+                          }}>
+                            {log.eventType}
+                          </span>
+                        </td>
+
+                        <td style={{ padding: "12px" }}>
+                          <div style={{ fontWeight: 600, color: "#111827", display: "flex", alignItems: "center", gap: 7 }}>
+                            <span style={{
+                              width: 22,
+                              height: 22,
+                              borderRadius: "50%",
+                              background: "#534AB7",
+                              color: "#FFFFFF",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: 10,
+                              fontWeight: 700,
+                              flexShrink: 0
+                            }}>
+                              {(log.userName || "U").charAt(0).toUpperCase()}
+                            </span>
+                            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12.5 }}>{log.userName}</span>
+                          </div>
+                          <div style={{ fontSize: 11, color: "#6B7280", marginTop: 2, paddingLeft: 29 }}>
+                            {log.userDept || "General"}
+                          </div>
+                        </td>
+
+                        <td style={{ padding: "12px", color: "#374151" }}>
+                          <div style={{ lineHeight: 1.45, fontSize: 12.5 }}>{log.action}</div>
+                          {log.targetId && (
+                            <span style={{ display: "inline-block", marginTop: 2, fontSize: 10.5, fontFamily: "monospace", color: "#534AB7", background: "#F5F3FF", padding: "1px 6px", borderRadius: 4 }}>
+                              Ref: {log.targetId}
+                            </span>
+                          )}
+                        </td>
+
+                        <td style={{ padding: "12px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 5, color: "#1F2937", fontWeight: 600, fontSize: 12 }}>
+                            {isMobile ? <Smartphone size={14} color="#534AB7" /> : <Laptop size={14} color="#1F9E8D" />}
+                            <span>{log.deviceType || (isMobile ? "Mobile" : "Laptop / Desktop")}</span>
+                          </div>
+                          <div style={{ fontSize: 11, color: "#6B7280", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={log.device}>
+                            {log.device || "Browser Client"}
+                          </div>
+                        </td>
+
+                        <td style={{ padding: "12px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 5, color: "#1F2937", fontSize: 12 }}>
+                            <MapPin size={13} color="#DC2626" style={{ flexShrink: 0 }} />
+                            <span style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={sanitizeLocationString(log.location)}>
+                              {sanitizeLocationString(log.location) || "Local Office"}
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* Individual User Sessions Detail Modal */}
+      {selectedUserForDetail && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 23, 42, 0.6)",
+            backdropFilter: "blur(3px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: 16
+          }}
+          onClick={() => setSelectedUserForDetail(null)}
+        >
+          <div
+            style={{
+              background: "#FFFFFF",
+              borderRadius: 12,
+              width: "100%",
+              maxWidth: 820,
+              maxHeight: "85vh",
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)"
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div style={{ padding: "16px 20px", borderBottom: "1px solid #E2E8F0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: "50%",
+                  background: selectedUserForDetail.isOnline ? "#ECFDF5" : "#EEF2FF",
+                  color: selectedUserForDetail.isOnline ? "#059669" : "#4F46E5",
+                  fontWeight: 700,
+                  fontSize: 14,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  border: selectedUserForDetail.isOnline ? "2px solid #10B981" : "1px solid #CBD5E1"
+                }}>
+                  {(selectedUserForDetail.name || "U").slice(0, 1).toUpperCase()}
+                </div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 16, color: "#1E293B" }}>
+                    {selectedUserForDetail.name}
+                    <span style={{ fontSize: 12, fontWeight: 500, color: "#64748B", marginLeft: 8 }}>
+                      @{selectedUserForDetail.username || "—"}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 11.5, color: "#64748B", display: "flex", alignItems: "center", gap: 8, marginTop: 2 }}>
+                    <span>Dept: <strong>{selectedUserForDetail.dept}</strong></span>
+                    <span>·</span>
+                    <span>Status: {selectedUserForDetail.isOnline ? <strong style={{ color: "#059669" }}>● Online Now</strong> : "Offline"}</span>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedUserForDetail(null)}
+                style={{
+                  border: "none",
+                  background: "#F1F5F9",
+                  borderRadius: 6,
+                  width: 30,
+                  height: 30,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  color: "#64748B"
+                }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Modal Summary Badges */}
+            <div style={{ padding: "12px 20px", background: "#F8FAFC", borderBottom: "1px solid #E2E8F0", display: "flex", gap: 12, flexWrap: "wrap" }}>
+              <div style={{ background: "#FFFFFF", padding: "6px 12px", borderRadius: 8, border: "1px solid #E2E8F0", fontSize: 12 }}>
+                <span style={{ color: "#64748B" }}>Today: </span>
+                <strong style={{ color: "#059669" }}>{formatTime(selectedUserForDetail.todayMinutes)}</strong>
+              </div>
+              <div style={{ background: "#FFFFFF", padding: "6px 12px", borderRadius: 8, border: "1px solid #E2E8F0", fontSize: 12 }}>
+                <span style={{ color: "#64748B" }}>This Week: </span>
+                <strong style={{ color: "#2563EB" }}>{formatTime(selectedUserForDetail.weekMinutes)}</strong>
+              </div>
+              <div style={{ background: "#FFFFFF", padding: "6px 12px", borderRadius: 8, border: "1px solid #E2E8F0", fontSize: 12 }}>
+                <span style={{ color: "#64748B" }}>This Month: </span>
+                <strong style={{ color: "#7C3AED" }}>{formatTime(selectedUserForDetail.monthMinutes)}</strong>
+              </div>
+              <div style={{ background: "#FFFFFF", padding: "6px 12px", borderRadius: 8, border: "1px solid #E2E8F0", fontSize: 12 }}>
+                <span style={{ color: "#64748B" }}>Overall: </span>
+                <strong style={{ color: "#1E293B" }}>{formatTime(selectedUserForDetail.overallMinutes)}</strong>
+              </div>
+              <div style={{ background: "#FFFFFF", padding: "6px 12px", borderRadius: 8, border: "1px solid #E2E8F0", fontSize: 12 }}>
+                <span style={{ color: "#64748B" }}>Total Sessions: </span>
+                <strong style={{ color: "#475569" }}>{selectedUserForDetail.sessions.length}</strong>
+              </div>
+            </div>
+
+            {/* Sessions Table */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "12px 20px" }}>
+              {selectedUserForDetail.sessions.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "30px 0", color: "#94A3B8", fontSize: 13 }}>
+                  No recorded login sessions for this user yet.
+                </div>
+              ) : (
+                <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ borderBottom: "2px solid #E2E8F0", color: "#475569" }}>
+                      <th style={{ padding: "8px 6px" }}>Login Time</th>
+                      <th style={{ padding: "8px 6px" }}>Logout Time</th>
+                      <th style={{ padding: "8px 6px" }}>Duration (Minutes)</th>
+                      <th style={{ padding: "8px 6px" }}>Device</th>
+                      <th style={{ padding: "8px 6px" }}>Location</th>
+                      <th style={{ padding: "8px 6px", textAlign: "center" }}>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedUserForDetail.sessions.map((sess, idx) => {
+                      const loginDate = sess.loginTime ? new Date(sess.loginTime) : null;
+                      const logoutDate = sess.logoutTime ? new Date(sess.logoutTime) : null;
+                      const loginMs = loginDate ? loginDate.getTime() : 0;
+                      const logoutMs = logoutDate ? logoutDate.getTime() : 0;
+                      let sMins = 0;
+                      if (sess.active) {
+                        sMins = loginMs ? Math.max(1, Math.round((Date.now() - loginMs) / 60000)) : 1;
+                      } else if (logoutMs && loginMs) {
+                        sMins = Math.max(1, Math.round((logoutMs - loginMs) / 60000));
+                      } else if (sess.hoursUsed) {
+                        sMins = Math.max(1, Math.round(Number(sess.hoursUsed) * 60));
+                      }
+
+                      return (
+                        <tr key={sess.id || idx} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                          <td style={{ padding: "9px 6px", color: "#1E293B", fontWeight: 600 }}>
+                            {loginDate ? loginDate.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
+                          </td>
+                          <td style={{ padding: "9px 6px", color: "#64748B" }}>
+                            {sess.active ? (
+                              <span style={{ color: "#059669", fontWeight: 700 }}>In Progress...</span>
+                            ) : logoutDate ? (
+                              logoutDate.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+                            ) : "—"}
+                          </td>
+                          <td style={{ padding: "9px 6px" }}>
+                            <span style={{
+                              fontWeight: 700,
+                              color: sess.active ? "#059669" : "#1E293B",
+                              background: sess.active ? "#ECFDF5" : "#F1F5F9",
+                              padding: "2px 7px",
+                              borderRadius: 6
+                            }}>
+                              {formatTime(sMins)}
+                            </span>
+                          </td>
+                          <td style={{ padding: "9px 6px", color: "#475569" }}>
+                            {sess.device || sess.deviceType || "Laptop"}
+                          </td>
+                          <td style={{ padding: "9px 6px", color: "#475569" }}>
+                            {sanitizeLocationString(sess.location) || "Office"}
+                          </td>
+                          <td style={{ padding: "9px 6px", textAlign: "center" }}>
+                            {sess.active ? (
+                              <span style={{ display: "inline-block", padding: "2px 7px", borderRadius: 999, background: "#ECFDF5", color: "#059669", fontSize: 11, fontWeight: 700 }}>
+                                Online Now
+                              </span>
+                            ) : (
+                              <span style={{ display: "inline-block", padding: "2px 7px", borderRadius: 999, background: "#F1F5F9", color: "#64748B", fontSize: 11 }}>
+                                Completed
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{ padding: "12px 20px", borderTop: "1px solid #E2E8F0", display: "flex", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                onClick={() => setSelectedUserForDetail(null)}
+                style={{
+                  padding: "6px 16px",
+                  borderRadius: 6,
+                  border: "1px solid #CBD5E1",
+                  background: "#FFFFFF",
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  color: "#475569",
+                  cursor: "pointer"
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

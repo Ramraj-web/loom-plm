@@ -1,3 +1,4 @@
+import { broadcast } from "../wsHandler.js";
 import { Router } from "express";
 import fs from "fs";
 import path from "path";
@@ -141,6 +142,9 @@ router.post("/:key(*)", async (req, res, next) => {
         { $set: { key, value, shared } },
         { upsert: true }
       );
+      try {
+        broadcast({ type: "STORAGE_CHANGE", key, value, shared, timestamp: new Date().toISOString() });
+      } catch (err) {}
       return res.status(200).json({ key, value, shared });
     } catch (error) {
       return next(error);
@@ -152,6 +156,9 @@ router.post("/:key(*)", async (req, res, next) => {
   if (!db[bucket]) db[bucket] = {};
   db[bucket][key] = value;
   writeDB(db);
+  try {
+    broadcast({ type: "STORAGE_CHANGE", key, value, shared: !!shared, timestamp: new Date().toISOString() });
+  } catch (err) {}
   return res.status(200).json({ key, value, shared: !!shared });
 });
 
