@@ -167,5 +167,7 @@ export const RESOURCE_SEEDS = {
       createdAt: "2026-05-02T11:45:00.000Z",
       isDeleted: false
     }
-  ]
+  ],
+  user_sessions: [],
+  audit_logs: []
 };

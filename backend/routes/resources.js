@@ -106,6 +106,8 @@ const SOFT_DELETE_RESOURCES = [
   "notifications",
   "suppliers",
   "supplierWork",
+  "user_sessions",
+  "audit_logs",
 ];
 
 function deduplicateOrders(ordersList, collection, db) {

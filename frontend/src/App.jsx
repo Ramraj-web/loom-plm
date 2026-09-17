@@ -836,36 +836,52 @@ export default function LoomPLM() {
 
     const interval = setInterval(() => {
       const nowIso = new Date().toISOString();
+      let updatedHeartbeatSession = null;
       setUserSessions(prev => {
         const updated = prev.map(s => {
           if (s.id === currentSessionId && s.active) {
             const loginMs = new Date(s.loginTime).getTime();
             const nowMs = new Date(nowIso).getTime();
             const hours = Math.max(0.01, Number(((nowMs - loginMs) / (1000 * 60 * 60)).toFixed(2)));
-            return { ...s, lastHeartbeat: nowIso, hoursUsed: hours };
+            updatedHeartbeatSession = { ...s, lastHeartbeat: nowIso, hoursUsed: hours };
+            return updatedHeartbeatSession;
           }
           return s;
         });
         if (window.storage) window.storage.set("user_sessions", JSON.stringify(updated), true);
         return updated;
       });
-    }, 60000);
+      if (updatedHeartbeatSession) {
+        broadcastLiveUpdate({
+          type: "USER_SESSION_UPDATE",
+          session: updatedHeartbeatSession
+        });
+      }
+    }, 25000);
 
     const handleBeforeUnload = () => {
       const nowIso = new Date().toISOString();
+      let logoutSession = null;
       setUserSessions(prev => {
         const updated = prev.map(s => {
           if (s.id === currentSessionId && s.active) {
             const loginMs = new Date(s.loginTime).getTime();
             const nowMs = new Date(nowIso).getTime();
             const hours = Math.max(0.01, Number(((nowMs - loginMs) / (1000 * 60 * 60)).toFixed(2)));
-            return { ...s, logoutTime: nowIso, hoursUsed: hours, active: false };
+            logoutSession = { ...s, logoutTime: nowIso, hoursUsed: hours, active: false };
+            return logoutSession;
           }
           return s;
         });
         if (window.storage) window.storage.set("user_sessions", JSON.stringify(updated), true);
         return updated;
       });
+      if (logoutSession) {
+        broadcastLiveUpdate({
+          type: "USER_SESSION_UPDATE",
+          session: logoutSession
+        });
+      }
     };
 
     window.addEventListener("beforeunload", handleBeforeUnload);
@@ -874,6 +890,97 @@ export default function LoomPLM() {
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
   }, [currentSessionId, activeUser]);
+
+  // Live WebSocket & BroadcastChannel subscription across tabs and users
+  useEffect(() => {
+    const unsubscribe = subscribeLiveSync((event) => {
+      if (!event) return;
+
+      // 1. Handle storage changes broadcast from server or peer tabs
+      if (event.type === "STORAGE_CHANGE") {
+        if (event.key === "user_sessions" && event.value) {
+          try {
+            const parsed = typeof event.value === "string" ? JSON.parse(event.value) : event.value;
+            if (Array.isArray(parsed)) {
+              setUserSessions(parsed.map(s => ({ ...s, location: sanitizeLocationString(s.location) })));
+            }
+          } catch (e) {}
+        } else if (event.key === "audit_logs" && event.value) {
+          try {
+            const parsed = typeof event.value === "string" ? JSON.parse(event.value) : event.value;
+            if (Array.isArray(parsed)) {
+              setAuditLogs(parsed.map(l => ({ ...l, location: sanitizeLocationString(l.location) })));
+            }
+          } catch (e) {}
+        } else if (event.key === "notifications" && event.value) {
+          try {
+            const parsed = typeof event.value === "string" ? JSON.parse(event.value) : event.value;
+            if (Array.isArray(parsed)) setNotifications(parsed);
+          } catch (e) {}
+        } else if (event.key === "attendance" && event.value) {
+          try {
+            const parsed = typeof event.value === "string" ? JSON.parse(event.value) : event.value;
+            if (parsed && typeof parsed === "object") setAttendance(parsed);
+          } catch (e) {}
+        }
+      }
+
+      // 2. Handle direct user session updates (login, heartbeat, logout)
+      if (event.type === "USER_SESSION_UPDATE" && event.session?.id) {
+        setUserSessions(prev => {
+          const map = new Map(prev.map(s => [s.id, s]));
+          const prevSess = map.get(event.session.id) || {};
+          map.set(event.session.id, { ...prevSess, ...event.session, location: sanitizeLocationString(event.session.location || prevSess.location) });
+          return Array.from(map.values()).sort((a, b) => new Date(b.loginTime || 0) - new Date(a.loginTime || 0));
+        });
+      }
+
+      // 3. Handle live order stage updates
+      if (event.type === "ORDER_STAGE_UPDATE" && event.orderId) {
+        setOrders(prev => prev.map(o => {
+          if (o.id === event.orderId || o.primaryId === event.orderId) {
+            return {
+              ...o,
+              stages: event.stages || o.stages,
+              status: event.status || o.status,
+              completed: event.completed !== undefined ? event.completed : o.completed
+            };
+          }
+          return o;
+        }));
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  const refreshUserSessions = useCallback(async () => {
+    if (!window.storage?.get) return;
+    try {
+      const [sessRes, logsRes] = await Promise.allSettled([
+        window.storage.get("user_sessions", true),
+        window.storage.get("audit_logs", true)
+      ]);
+      if (sessRes.status === "fulfilled" && sessRes.value?.value) {
+        try {
+          const parsed = typeof sessRes.value.value === "string" ? JSON.parse(sessRes.value.value) : sessRes.value.value;
+          if (Array.isArray(parsed)) {
+            setUserSessions(parsed.map(s => ({ ...s, location: sanitizeLocationString(s.location) })));
+          }
+        } catch (e) {}
+      }
+      if (logsRes.status === "fulfilled" && logsRes.value?.value) {
+        try {
+          const parsed = typeof logsRes.value.value === "string" ? JSON.parse(logsRes.value.value) : logsRes.value.value;
+          if (Array.isArray(parsed)) {
+            setAuditLogs(parsed.map(l => ({ ...l, location: sanitizeLocationString(l.location) })));
+          }
+        } catch (e) {}
+      }
+    } catch (e) {}
+  }, []);
 
   // Periodic full refresh only for authenticated users; module-specific live data is loaded on navigation.
   useEffect(() => {
@@ -1043,10 +1150,14 @@ export default function LoomPLM() {
           setSupplierWork(dbSupplierWork.filter(w => w.isDeleted !== true));
         }
       }
+
+      if (targetView === "auditLogs" || targetView === "attendance") {
+        await refreshUserSessions();
+      }
     } catch (e) {
       console.warn("Failed to load module data:", e.message);
     }
-  }, [activeUser]);
+  }, [activeUser, refreshUserSessions]);
 
   useEffect(() => {
     if (!activeUser) {
@@ -1439,19 +1550,51 @@ export default function LoomPLM() {
     setCurrentSessionId(sessId);
     try { sessionStorage.setItem("loom_active_session_id", sessId); } catch (e) {}
 
+    // Broadcast session immediately across all connected clients/tabs
+    broadcastLiveUpdate({
+      type: "USER_SESSION_UPDATE",
+      session: newSession
+    });
+
     setUserSessions(prev => {
       const updated = [newSession, ...prev];
       if (window.storage) window.storage.set("user_sessions", JSON.stringify(updated), true);
       return updated;
     });
 
+    // If logging in from a fresh/incognito tab where prior sessions weren't in memory,
+    // fetch existing sessions from backend storage and merge to avoid wiping other active users
+    if (window.storage?.get) {
+      window.storage.get("user_sessions", true).then(storageRes => {
+        if (storageRes?.value) {
+          try {
+            const existing = typeof storageRes.value === "string" ? JSON.parse(storageRes.value) : storageRes.value;
+            if (Array.isArray(existing) && existing.length > 0) {
+              setUserSessions(cur => {
+                const map = new Map();
+                existing.forEach(s => { if (s && s.id) map.set(s.id, s); });
+                cur.forEach(s => { if (s && s.id) map.set(s.id, s); });
+                map.set(sessId, newSession);
+                return Array.from(map.values()).sort((a, b) => new Date(b.loginTime || 0) - new Date(a.loginTime || 0));
+              });
+            }
+          } catch (e) {}
+        }
+      });
+    }
+
     // Asynchronously resolve location and record login audit log
     getLocationInfo().then(loc => {
       const resolvedLocation = sanitizeLocationString(loc.location);
+      const enrichedSession = { ...newSession, location: resolvedLocation };
       setUserSessions(prev => {
-        const enriched = prev.map(s => s.id === sessId ? { ...s, location: resolvedLocation } : s);
+        const enriched = prev.map(s => s.id === sessId ? enrichedSession : s);
         if (window.storage) window.storage.set("user_sessions", JSON.stringify(enriched), true);
         return enriched;
+      });
+      broadcastLiveUpdate({
+        type: "USER_SESSION_UPDATE",
+        session: enrichedSession
       });
 
       const logEntry = {
@@ -1499,6 +1642,7 @@ export default function LoomPLM() {
     const nowIso = new Date().toISOString();
     const dev = getDeviceInfo();
     if (sessId) {
+      let loggedOutSessionObj = null;
       setUserSessions(prev => {
         let loggedOutSess = null;
         const updated = prev.map(s => {
@@ -1511,6 +1655,7 @@ export default function LoomPLM() {
           }
           return s;
         });
+        loggedOutSessionObj = loggedOutSess;
         if (window.storage) window.storage.set("user_sessions", JSON.stringify(updated), true);
 
         const durationText = loggedOutSess ? ` (Session duration: ${loggedOutSess.hoursUsed} hrs)` : "";
@@ -1539,6 +1684,12 @@ export default function LoomPLM() {
 
         return updated;
       });
+      if (loggedOutSessionObj) {
+        broadcastLiveUpdate({
+          type: "USER_SESSION_UPDATE",
+          session: loggedOutSessionObj
+        });
+      }
       try { sessionStorage.removeItem("loom_active_session_id"); } catch (e) {}
       setCurrentSessionId(null);
     }
@@ -3638,6 +3789,7 @@ export default function LoomPLM() {
       <AuditLoggerPage
         auditLogs={auditLogs}
         userSessions={userSessions}
+        onRefresh={refreshUserSessions}
         onClearAuditLogs={() => {
           setAuditLogs([]);
           try {

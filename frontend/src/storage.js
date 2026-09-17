@@ -48,6 +48,7 @@ async function set(key, value, shared = false) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ value: stringValue, shared }),
+      keepalive: true,
     });
     if (!res.ok) {
       throw new Error(`Storage set failed with status ${res.status}`);

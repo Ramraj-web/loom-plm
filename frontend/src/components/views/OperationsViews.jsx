@@ -4823,7 +4823,7 @@ export function DepartmentDetail({
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
             {mappedUsers.map(u => {
-              const isOnline = userSessions.some(s => s.active && (s.userId === u.id || s.username === u.username));
+              const isOnline = userSessions.some(s => s.active && (s.userId === u.id || s.username === u.username) && (Date.now() - new Date(s.lastHeartbeat || s.loginTime || 0).getTime() < 3 * 60 * 1000));
               const sessionToday = userSessions.find(s => (s.userId === u.id || s.username === u.username) && (s.date === todayStr || (s.loginTime && s.loginTime.startsWith(todayStr))));
               const isPresent = Boolean(sessionToday || attendance[u.name] === "present");
               const isOnLeave = attendance[u.name] === "leave";
@@ -5587,7 +5587,8 @@ export function AuditLoggerPage({
   userSessions = [],
   onClearAuditLogs,
   users = [],
-  teams = []
+  teams = [],
+  onRefresh
 }) {
   const [activeTab, setActiveTab] = useState("userDurations"); // "userDurations" | "events"
   const [durationFormat, setDurationFormat] = useState("both"); // "both" | "mins" | "hours"
@@ -5602,6 +5603,15 @@ export function AuditLoggerPage({
   const [dateFilter, setDateFilter] = useState("");
 
   const todayStr = new Date().toISOString().slice(0, 10);
+
+  // Live auto-refresh of user sessions while on the Audit Logs page
+  React.useEffect(() => {
+    if (typeof onRefresh !== "function") return undefined;
+    const interval = setInterval(() => {
+      onRefresh();
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [onRefresh]);
 
   // Compute dates: today start, week start (Monday), month start (1st)
   const dateRanges = useMemo(() => {
@@ -5655,8 +5665,19 @@ export function AuditLoggerPage({
       const userKey = (sess.username || sess.name || sess.userId || "").toLowerCase();
       if (!userKey) return;
 
-      if (!userMap.has(userKey)) {
-        userMap.set(userKey, {
+      // Find user record by username, name, or userId
+      let rec = userMap.get(userKey);
+      if (!rec) {
+        for (const v of userMap.values()) {
+          if ((sess.userId && v.id === sess.userId) || (sess.username && v.username && v.username.toLowerCase() === sess.username.toLowerCase())) {
+            rec = v;
+            break;
+          }
+        }
+      }
+
+      if (!rec) {
+        rec = {
           id: sess.userId || userKey,
           username: sess.username || userKey,
           name: sess.name || sess.username || "User",
@@ -5672,10 +5693,10 @@ export function AuditLoggerPage({
           lastLoginTime: null,
           lastDevice: null,
           lastLocation: null
-        });
+        };
+        userMap.set(userKey, rec);
       }
 
-      const rec = userMap.get(userKey);
       rec.sessions.push(sess);
       rec.totalLogins += 1;
 
@@ -5683,10 +5704,18 @@ export function AuditLoggerPage({
       let sMins = 0;
       const loginMs = sess.loginTime ? new Date(sess.loginTime).getTime() : 0;
       const logoutMs = sess.logoutTime ? new Date(sess.logoutTime).getTime() : 0;
+      const lastHeartbeatMs = sess.lastHeartbeat ? new Date(sess.lastHeartbeat).getTime() : loginMs;
+      const timeSinceHeartbeatMs = dateRanges.nowMs - lastHeartbeatMs;
 
-      if (sess.active) {
+      // Online if sess.active is true AND heartbeat/login was within the last 3 minutes
+      const isOnlineSession = sess.active && (timeSinceHeartbeatMs < 3 * 60 * 1000);
+
+      if (isOnlineSession) {
         rec.isOnline = true;
         sMins = loginMs ? Math.max(1, Math.round((dateRanges.nowMs - loginMs) / 60000)) : 1;
+      } else if (sess.active) {
+        // Tab closed or inactive without clean logout
+        sMins = sess.hoursUsed ? Math.max(1, Math.round(Number(sess.hoursUsed) * 60)) : (lastHeartbeatMs > loginMs ? Math.max(1, Math.round((lastHeartbeatMs - loginMs) / 60000)) : 1);
       } else if (logoutMs && loginMs && logoutMs >= loginMs) {
         sMins = Math.max(1, Math.round((logoutMs - loginMs) / 60000));
       } else if (sess.hoursUsed) {
@@ -5933,72 +5962,100 @@ export function AuditLoggerPage({
       />
 
       {/* Top Navigation Tabs */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18, borderBottom: "1px solid #E2E8F0", paddingBottom: 12 }}>
-        <button
-          type="button"
-          onClick={() => setActiveTab("userDurations")}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
-            padding: "9px 18px",
-            borderRadius: 8,
-            border: activeTab === "userDurations" ? "1.5px solid #534AB7" : "1px solid #CBD5E1",
-            background: activeTab === "userDurations" ? "#534AB7" : "#FFFFFF",
-            color: activeTab === "userDurations" ? "#FFFFFF" : "#475569",
-            fontSize: 13,
-            fontWeight: 700,
-            cursor: "pointer",
-            boxShadow: activeTab === "userDurations" ? "0 2px 4px rgba(83, 74, 183, 0.25)" : "none",
-            transition: "all 0.15s ease"
-          }}
-        >
-          <Clock size={16} />
-          User Login & Screen Time Breakdown
-          <span style={{
-            fontSize: 11,
-            fontWeight: 700,
-            background: activeTab === "userDurations" ? "rgba(255,255,255,0.25)" : "#E2E8F0",
-            color: activeTab === "userDurations" ? "#FFFFFF" : "#334155",
-            padding: "1px 7px",
-            borderRadius: 999
-          }}>
-            {filteredUserStats.length} Users
-          </span>
-        </button>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18, borderBottom: "1px solid #E2E8F0", paddingBottom: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <button
+            type="button"
+            onClick={() => setActiveTab("userDurations")}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "9px 18px",
+              borderRadius: 8,
+              border: activeTab === "userDurations" ? "1.5px solid #534AB7" : "1px solid #CBD5E1",
+              background: activeTab === "userDurations" ? "#534AB7" : "#FFFFFF",
+              color: activeTab === "userDurations" ? "#FFFFFF" : "#475569",
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: "pointer",
+              boxShadow: activeTab === "userDurations" ? "0 2px 4px rgba(83, 74, 183, 0.25)" : "none",
+              transition: "all 0.15s ease"
+            }}
+          >
+            <Clock size={16} />
+            User Login & Screen Time Breakdown
+            <span style={{
+              fontSize: 11,
+              fontWeight: 700,
+              background: activeTab === "userDurations" ? "rgba(255,255,255,0.25)" : "#E2E8F0",
+              color: activeTab === "userDurations" ? "#FFFFFF" : "#334155",
+              padding: "1px 7px",
+              borderRadius: 999
+            }}>
+              {filteredUserStats.length} Users
+            </span>
+          </button>
 
-        <button
-          type="button"
-          onClick={() => setActiveTab("events")}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
-            padding: "9px 18px",
-            borderRadius: 8,
-            border: activeTab === "events" ? "1.5px solid #534AB7" : "1px solid #CBD5E1",
-            background: activeTab === "events" ? "#534AB7" : "#FFFFFF",
-            color: activeTab === "events" ? "#FFFFFF" : "#475569",
-            fontSize: 13,
-            fontWeight: 700,
-            cursor: "pointer",
-            boxShadow: activeTab === "events" ? "0 2px 4px rgba(83, 74, 183, 0.25)" : "none",
-            transition: "all 0.15s ease"
-          }}
-        >
-          <Activity size={16} />
-          All Audit Events & Activity Trail
-          <span style={{
-            fontSize: 11,
-            fontWeight: 700,
-            background: activeTab === "events" ? "rgba(255,255,255,0.25)" : "#E2E8F0",
-            color: activeTab === "events" ? "#FFFFFF" : "#334155",
-            padding: "1px 7px",
-            borderRadius: 999
-          }}>
-            {auditLogs.length}
-          </span>
-        </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("events")}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "9px 18px",
+              borderRadius: 8,
+              border: activeTab === "events" ? "1.5px solid #534AB7" : "1px solid #CBD5E1",
+              background: activeTab === "events" ? "#534AB7" : "#FFFFFF",
+              color: activeTab === "events" ? "#FFFFFF" : "#475569",
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: "pointer",
+              boxShadow: activeTab === "events" ? "0 2px 4px rgba(83, 74, 183, 0.25)" : "none",
+              transition: "all 0.15s ease"
+            }}
+          >
+            <Activity size={16} />
+            All Audit Events & Activity Trail
+            <span style={{
+              fontSize: 11,
+              fontWeight: 700,
+              background: activeTab === "events" ? "rgba(255,255,255,0.25)" : "#E2E8F0",
+              color: activeTab === "events" ? "#FFFFFF" : "#334155",
+              padding: "1px 7px",
+              borderRadius: 999
+            }}>
+              {auditLogs.length}
+            </span>
+          </button>
+        </div>
+
+        {onRefresh && (
+          <button
+            type="button"
+            onClick={onRefresh}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "8px 14px",
+              borderRadius: 8,
+              border: "1px solid #CBD5E1",
+              background: "#FFFFFF",
+              color: "#475569",
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: "pointer",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+              transition: "all 0.15s ease"
+            }}
+            title="Refresh active sessions and telemetry"
+          >
+            <RefreshCw size={14} />
+            Refresh Live
+          </button>
+        )}
       </div>
 
       {/* KPI Cards based on Active Tab */}
