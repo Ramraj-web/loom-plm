@@ -60,9 +60,25 @@ export function OrdersPage({
     ]
   });
 
-  const activeOrders = useMemo(() => orders.filter(o => o.isDeleted !== true && o.isDeleted !== "true" && !o.deletedAt && o.completed !== true), [orders]);
-  const completedOrders = useMemo(() => orders.filter(o => o.completed === true && o.isDeleted !== true && o.isDeleted !== "true" && !o.deletedAt), [orders]);
-  const deletedOrders = useMemo(() => orders.filter(o => o.isDeleted === true || o.isDeleted === "true" || !!o.deletedAt), [orders]);
+  const cleanBaseId = (idStr) => {
+    let str = String(idStr || "").trim();
+    while (str.startsWith("ord_")) str = str.replace(/^ord_/, "");
+    str = str.replace(/_[a-z0-9]{4,12}$/i, "");
+    return str.trim();
+  };
+
+  const deduplicateList = (list) => {
+    const map = new Map();
+    list.forEach(item => {
+      const key = cleanBaseId(item.id || item.primaryId).toUpperCase();
+      if (!map.has(key)) map.set(key, item);
+    });
+    return Array.from(map.values());
+  };
+
+  const activeOrders = useMemo(() => deduplicateList(orders.filter(o => o.isDeleted !== true && o.isDeleted !== "true" && !o.deletedAt && o.completed !== true)), [orders]);
+  const completedOrders = useMemo(() => deduplicateList(orders.filter(o => o.completed === true && o.isDeleted !== true && o.isDeleted !== "true" && !o.deletedAt)), [orders]);
+  const deletedOrders = useMemo(() => deduplicateList(orders.filter(o => o.isDeleted === true || o.isDeleted === "true" || !!o.deletedAt)), [orders]);
 
   const addColorBreakdownRow = () => {
     setForm(prev => ({

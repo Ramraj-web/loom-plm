@@ -112,19 +112,9 @@ const SOFT_DELETE_RESOURCES = [
 
 function deduplicateOrders(ordersList, collection, db) {
   if (!Array.isArray(ordersList)) return ordersList;
-  const isPhantomOrder = (idStr) => {
-    if (!idStr) return false;
-    const str = String(idStr).trim();
-    return (
-      str.startsWith("ord_ord_") ||
-      /^ord_.+_[a-z0-9]{4,12}$/i.test(str) ||
-      /_C0\d_[a-z0-9]+/i.test(str) ||
-      (str.startsWith("ord_") && (str.includes("_") || str.includes(" ")))
-    );
-  };
 
-  const extractBaseId = (idStr) => {
-    let str = String(idStr).trim();
+  const cleanBaseId = (idStr) => {
+    let str = String(idStr || "").trim();
     while (str.startsWith("ord_")) {
       str = str.replace(/^ord_/, "");
     }
@@ -132,56 +122,61 @@ function deduplicateOrders(ordersList, collection, db) {
     return str.trim();
   };
 
-  const realOrderMap = new Map();
-  const phantomDuplicates = [];
+  const groups = new Map();
+  const phantomIdsToDelete = [];
 
   ordersList.forEach(order => {
-    const idStr = String(order.id || "");
-    if (isPhantomOrder(idStr)) {
-      phantomDuplicates.push({ duplicate: order, baseId: extractBaseId(idStr) });
-    } else {
-      realOrderMap.set(idStr, order);
-      if (order.primaryId) realOrderMap.set(String(order.primaryId), order);
+    const rawId = String(order.id || order.orderId || order.primaryId || "");
+    const baseKey = cleanBaseId(rawId).toUpperCase();
+    if (!baseKey) return;
+
+    if (!groups.has(baseKey)) {
+      groups.set(baseKey, []);
+    }
+    groups.get(baseKey).push(order);
+
+    if (rawId.startsWith("ord_") || /_[a-z0-9]{4,12}$/i.test(rawId)) {
+      phantomIdsToDelete.push(rawId);
     }
   });
 
-  if (phantomDuplicates.length === 0) return ordersList;
+  const mergedList = [];
+  groups.forEach((list, baseKey) => {
+    const sorted = [...list].sort((a, b) => {
+      const aIsClean = !String(a.id || "").startsWith("ord_") && !/_[a-z0-9]{4,12}$/i.test(String(a.id || ""));
+      const bIsClean = !String(b.id || "").startsWith("ord_") && !/_[a-z0-9]{4,12}$/i.test(String(b.id || ""));
+      if (aIsClean && !bIsClean) return -1;
+      if (!aIsClean && bIsClean) return 1;
+      return 0;
+    });
 
-  const phantomIdsToDelete = [];
-  const cleanList = [];
+    const canonical = { ...sorted[0] };
+    canonical.id = cleanBaseId(canonical.id) || baseKey;
+    canonical.primaryId = canonical.id;
+    canonical.orderId = canonical.id;
 
-  ordersList.forEach(order => {
-    const idStr = String(order.id || "");
-    if (isPhantomOrder(idStr)) {
-      const baseId = extractBaseId(idStr);
-      const parent = realOrderMap.get(baseId);
-      if (parent) {
-        // Merge completed stages from duplicate into parent
-        if (Array.isArray(order.stages) && Array.isArray(parent.stages)) {
-          order.stages.forEach((dStage, sIdx) => {
-            const pStage = parent.stages[sIdx];
-            if (dStage.status === "done" && pStage && pStage.status !== "done") {
-              parent.stages[sIdx] = { ...dStage };
-            }
-          });
-        }
-        if (order.status && order.status !== "On Track") parent.status = order.status;
-        if (order.completed && !parent.completed) {
-          parent.completed = true;
-          parent.completedAt = order.completedAt || new Date().toISOString();
-        }
-        phantomIdsToDelete.push(order.id);
-        return; // Exclude phantom duplicate from output
-      } else {
-        // Standalone order with phantom ID: restore base ID
-        order.id = baseId;
-        order.orderId = baseId;
-        order.primaryId = baseId;
-        cleanList.push(order);
+    for (let i = 1; i < sorted.length; i++) {
+      const other = sorted[i];
+      if (Array.isArray(other.stages) && Array.isArray(canonical.stages)) {
+        other.stages.forEach((dStage, idx) => {
+          const cStage = canonical.stages[idx];
+          if (dStage.status === "done" && cStage && cStage.status !== "done") {
+            canonical.stages[idx] = { ...dStage };
+          }
+        });
       }
-    } else {
-      cleanList.push(order);
+      if (other.status && other.status !== "On Track") canonical.status = other.status;
+      if (other.completed && !canonical.completed) {
+        canonical.completed = true;
+        canonical.completedAt = other.completedAt || new Date().toISOString();
+      }
+      if (other.isDeleted && !canonical.isDeleted) {
+        canonical.isDeleted = true;
+        canonical.deletedAt = other.deletedAt || new Date().toISOString();
+      }
     }
+
+    mergedList.push(canonical);
   });
 
   if (phantomIdsToDelete.length > 0) {
@@ -193,7 +188,7 @@ function deduplicateOrders(ordersList, collection, db) {
     }
   }
 
-  return cleanList;
+  return mergedList;
 }
 
 router.get("/:resource", async (req, res, next) => {

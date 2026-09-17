@@ -544,25 +544,14 @@ export default function LoomPLM() {
   }, [rotation, activeUser, users, teams]);
 
   // Deduplicate and normalize orders, merging any phantom duplicates (ord_<baseId>_<hash>) into their real parent orders
+  // Deduplicate and normalize orders, merging any phantom duplicates (ord_<baseId>_<hash>) into their real parent orders
   const normalizeAndDeduplicateOrders = (rawOrders, prev = []) => {
     if (!Array.isArray(rawOrders)) return [];
     const realOrders = rawOrders.filter(bo => !["GKT-1054", "ST-7788", "JKT-2231", "TR-8899", "DR-5566", "PL-3321"].includes(bo.id));
 
-    // Check if an ID looks like an auto-generated phantom order duplicate
-    const isPhantomOrder = (idStr) => {
-      if (!idStr) return false;
-      const str = String(idStr).trim();
-      return (
-        str.startsWith("ord_ord_") ||
-        /^ord_.+_[a-z0-9]{4,12}$/i.test(str) ||
-        /_C0\d_[a-z0-9]+/i.test(str) ||
-        (str.startsWith("ord_") && (str.includes("_") || str.includes(" ")))
-      );
-    };
-
-    // Extract underlying base ID from a phantom string
-    const extractBaseId = (idStr) => {
-      let str = String(idStr).trim();
+    // Extract underlying base ID from any order ID string
+    const cleanBaseId = (idStr) => {
+      let str = String(idStr || "").trim();
       while (str.startsWith("ord_")) {
         str = str.replace(/^ord_/, "");
       }
@@ -570,53 +559,23 @@ export default function LoomPLM() {
       return str.trim();
     };
 
-    // 1. Index non-phantom orders by their real ID and primaryId
-    const realOrderMap = new Map();
-    realOrders.forEach(bo => {
-      const idStr = String(bo.id || "");
-      if (!isPhantomOrder(idStr)) {
-        realOrderMap.set(idStr, bo);
-        if (bo.primaryId) realOrderMap.set(String(bo.primaryId), bo);
-      }
-    });
-
+    // Group raw orders by their canonical uppercase base ID
+    const groups = new Map();
     const phantomIdsToDelete = [];
-    const cleanedOrders = [];
 
     realOrders.forEach(bo => {
-      const idStr = String(bo.id || "");
-      if (isPhantomOrder(idStr)) {
-        const baseId = extractBaseId(idStr);
-        const parent = realOrderMap.get(baseId);
-        if (parent) {
-          // Merge completed stages from phantom duplicate into parent order
-          if (Array.isArray(bo.stages) && Array.isArray(parent.stages)) {
-            bo.stages.forEach((dStage, idx) => {
-              const pStage = parent.stages[idx];
-              if (dStage.status === "done" && pStage && pStage.status !== "done") {
-                parent.stages[idx] = { ...dStage };
-              }
-            });
-          }
-          if (bo.status && bo.status !== "On Track") parent.status = bo.status;
-          if (bo.completed && !parent.completed) {
-            parent.completed = true;
-            parent.completedAt = bo.completedAt || new Date().toISOString();
-          }
-          phantomIdsToDelete.push(bo.id);
-          return; // Exclude phantom duplicate from state!
-        } else {
-          // Standalone order with phantom ID: restore clean base ID
-          cleanedOrders.push({
-            ...bo,
-            id: baseId,
-            orderId: baseId,
-            primaryId: baseId
-          });
-          return;
-        }
+      const rawId = String(bo.id || bo.orderId || bo.primaryId || "");
+      const baseKey = cleanBaseId(rawId).toUpperCase();
+      if (!baseKey) return;
+
+      if (!groups.has(baseKey)) {
+        groups.set(baseKey, []);
       }
-      cleanedOrders.push(bo);
+      groups.get(baseKey).push(bo);
+
+      if (rawId.startsWith("ord_") || /_[a-z0-9]{4,12}$/i.test(rawId)) {
+        phantomIdsToDelete.push(rawId);
+      }
     });
 
     // Permanently clean phantom duplicate documents from backend asynchronously
@@ -626,46 +585,91 @@ export default function LoomPLM() {
       });
     }
 
-    const mapped = cleanedOrders.map((bo) => {
-      const existing = prev.find(p => (bo.primaryId && p.primaryId === bo.primaryId) || p.id === bo.id);
-      // Stable primaryId: use existing bo.primaryId, bo._id, or bo.id (NEVER random Math.random string)
-      const primaryId = bo.primaryId || bo._id || existing?.primaryId || bo.id;
-      return {
+    const mergedList = [];
+    groups.forEach((orderList, baseKey) => {
+      // Pick best canonical base
+      const sorted = [...orderList].sort((a, b) => {
+        const aIsClean = !String(a.id || "").startsWith("ord_") && !/_[a-z0-9]{4,12}$/i.test(String(a.id || ""));
+        const bIsClean = !String(b.id || "").startsWith("ord_") && !/_[a-z0-9]{4,12}$/i.test(String(b.id || ""));
+        if (aIsClean && !bIsClean) return -1;
+        if (!aIsClean && bIsClean) return 1;
+        return 0;
+      });
+
+      const canonicalBase = sorted[0];
+      const existing = prev.find(p => cleanBaseId(p.id).toUpperCase() === baseKey || cleanBaseId(p.primaryId).toUpperCase() === baseKey);
+
+      // Merge attributes across any duplicates
+      const mergedOrder = { ...canonicalBase };
+      mergedOrder.id = cleanBaseId(canonicalBase.id) || baseKey;
+      mergedOrder.primaryId = mergedOrder.id;
+      mergedOrder.orderId = mergedOrder.id;
+
+      for (let i = 1; i < sorted.length; i++) {
+        const other = sorted[i];
+        if (Array.isArray(other.stages) && Array.isArray(mergedOrder.stages)) {
+          other.stages.forEach((dStage, idx) => {
+            const mStage = mergedOrder.stages[idx];
+            if (dStage.status === "done" && mStage && mStage.status !== "done") {
+              mergedOrder.stages[idx] = { ...dStage };
+            }
+          });
+        }
+        if (other.status && other.status !== "On Track") mergedOrder.status = other.status;
+        if (other.completed && !mergedOrder.completed) {
+          mergedOrder.completed = true;
+          mergedOrder.completedAt = other.completedAt || new Date().toISOString();
+        }
+        if (other.isDeleted && !mergedOrder.isDeleted) {
+          mergedOrder.isDeleted = true;
+          mergedOrder.deletedAt = other.deletedAt || new Date().toISOString();
+        }
+      }
+
+      mergedList.push({
         ...existing,
-        ...bo,
-        primaryId,
-        orderId: bo.orderId || bo.id,
-        completed: bo.completed ?? existing?.completed ?? false,
-        isDeleted: bo.isDeleted ?? existing?.isDeleted ?? false,
-        completedAt: bo.completedAt || existing?.completedAt || null,
-        deletedAt: bo.deletedAt || existing?.deletedAt || null,
-        template: bo.template || existing?.template || "90",
-        costingTemplate: bo.costingTemplate || existing?.costingTemplate || "fabric",
-        costingRows: bo.costingRows || existing?.costingRows || buildCostingRows(bo.costingTemplate || existing?.costingTemplate || "fabric"),
-        vapCount: bo.vapCount ?? existing?.vapCount ?? 1,
-        shippedQty: bo.shippedQty ?? existing?.shippedQty ?? 0,
-        plannedCost: bo.plannedCost ?? existing?.plannedCost ?? 0,
-        actualCost: bo.actualCost ?? existing?.actualCost ?? 0,
-        stages: ((bo.stages && bo.stages.length === 34)
-          ? bo.stages
+        ...mergedOrder,
+        id: mergedOrder.id,
+        primaryId: mergedOrder.id,
+        orderId: mergedOrder.id,
+        completed: mergedOrder.completed ?? existing?.completed ?? false,
+        isDeleted: mergedOrder.isDeleted ?? existing?.isDeleted ?? false,
+        completedAt: mergedOrder.completedAt || existing?.completedAt || null,
+        deletedAt: mergedOrder.deletedAt || existing?.deletedAt || null,
+        template: mergedOrder.template || existing?.template || "90",
+        costingTemplate: mergedOrder.costingTemplate || existing?.costingTemplate || "fabric",
+        costingRows: mergedOrder.costingRows || existing?.costingRows || buildCostingRows(mergedOrder.costingTemplate || existing?.costingTemplate || "fabric"),
+        vapCount: mergedOrder.vapCount ?? existing?.vapCount ?? 1,
+        shippedQty: mergedOrder.shippedQty ?? existing?.shippedQty ?? 0,
+        plannedCost: mergedOrder.plannedCost ?? existing?.plannedCost ?? 0,
+        actualCost: mergedOrder.actualCost ?? existing?.actualCost ?? 0,
+        stages: ((mergedOrder.stages && mergedOrder.stages.length === 34)
+          ? mergedOrder.stages
           : (existing?.stages && existing.stages.length === 34)
             ? existing.stages
-            : makeStages(bo.template || existing?.template || "90", 0, null)).map((s, sIdx) => {
+            : makeStages(mergedOrder.template || existing?.template || "90", 0, null)).map((s, sIdx) => {
               const existingStage = existing?.stages?.[sIdx];
               if (s.status === "done" && !s.completedAt) {
                 return {
                   ...s,
-                  completedAt: existingStage?.completedAt || bo.completedAt || bo.createdAt || new Date().toISOString(),
+                  completedAt: existingStage?.completedAt || mergedOrder.completedAt || mergedOrder.createdAt || new Date().toISOString(),
                   completedBy: s.completedBy || existingStage?.completedBy || undefined
                 };
               }
               return s;
             }),
-        preProd: bo.preProd || existing?.preProd || initPreProd(),
-      };
+        preProd: mergedOrder.preProd || existing?.preProd || initPreProd(),
+      });
     });
 
-    return Array.from(new Map(mapped.map(item => [item.primaryId || item.id, item])).values());
+    // Strictly one single item per uppercase base order ID
+    const resultMap = new Map();
+    mergedList.forEach(item => {
+      const key = cleanBaseId(item.id).toUpperCase();
+      if (key) resultMap.set(key, item);
+    });
+
+    return Array.from(resultMap.values());
   };
 
   // Master refresh function to pull fresh data from backend and storage

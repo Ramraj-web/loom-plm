@@ -573,11 +573,36 @@ export default async function handler(req, res) {
               : { resource };
             const items = await mongoCols.resources.find(filter).project({ _id: 0 }).toArray();
             if (resource === "orders") {
-              const cleanItems = items.filter(o => {
-                const s = String(o.id || "");
-                return !s.startsWith("ord_ord_") && !/_C0\d_[a-z0-9]+/i.test(s);
+              const cleanBaseId = (idStr) => {
+                let str = String(idStr || "").trim();
+                while (str.startsWith("ord_")) str = str.replace(/^ord_/, "");
+                str = str.replace(/_[a-z0-9]{4,12}$/i, "");
+                return str.trim();
+              };
+
+              const map = new Map();
+              items.forEach(o => {
+                const rawId = String(o.id || o.orderId || o.primaryId || "");
+                if (rawId.startsWith("ord_ord_") || /_C0\d_[a-z0-9]+/i.test(rawId)) return;
+                const baseKey = cleanBaseId(rawId).toUpperCase();
+                if (!baseKey) return;
+                if (!map.has(baseKey)) {
+                  map.set(baseKey, o);
+                } else {
+                  // Merge stages if necessary
+                  const existing = map.get(baseKey);
+                  if (Array.isArray(o.stages) && Array.isArray(existing.stages)) {
+                    o.stages.forEach((s, idx) => {
+                      if (s.status === "done" && existing.stages[idx] && existing.stages[idx].status !== "done") {
+                        existing.stages[idx] = { ...s };
+                      }
+                    });
+                  }
+                  if (o.status && o.status !== "On Track") existing.status = o.status;
+                  if (o.completed) existing.completed = true;
+                }
               });
-              return res.status(200).json(cleanItems);
+              return res.status(200).json(Array.from(map.values()));
             }
             return res.status(200).json(items);
           } catch (e) {

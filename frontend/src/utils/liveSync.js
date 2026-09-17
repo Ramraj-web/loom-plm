@@ -31,12 +31,17 @@ function notifyListeners(data) {
 }
 
 function getWebSocketUrl() {
-  if (typeof window === "undefined") return "ws://localhost:5000/ws";
+  if (typeof window === "undefined") return null;
+  // Vercel serverless does not run a persistent Node.js WebSocket server on port 5000:
+  const isVercel = window.location.hostname.includes("vercel.app");
+  if (isVercel) return null;
+
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const hostname = window.location.hostname || "localhost";
-  // If running via Vite dev server on 5173 or preview, backend is on 5000:
-  const port = (window.location.port === "5173" || window.location.port === "4173") ? "5000" : (window.location.port || "5000");
-  return `${protocol}//${hostname}:${port}/ws`;
+  if (hostname === "localhost" || hostname === "127.0.0.1") {
+    return `${protocol}//${hostname}:5000/ws`;
+  }
+  return null;
 }
 
 export function connectWebSocket() {
@@ -46,6 +51,11 @@ export function connectWebSocket() {
   }
 
   const url = getWebSocketUrl();
+  if (!url) {
+    // In production Vercel, multi-tab sync uses BroadcastChannel and real-time polling without spamming console errors
+    return;
+  }
+
   try {
     socket = new WebSocket(url);
 
@@ -68,22 +78,22 @@ export function connectWebSocket() {
 
     socket.onclose = () => {
       socket = null;
-      // Reconnect after 3 seconds
-      if (!reconnectTimer) {
+      // Reconnect after 5 seconds only if local development
+      if (!reconnectTimer && getWebSocketUrl()) {
         reconnectTimer = setTimeout(() => {
           reconnectTimer = null;
           connectWebSocket();
-        }, 3000);
+        }, 5000);
       }
     };
 
-    socket.onerror = (err) => {
+    socket.onerror = () => {
       try {
-        socket.close();
+        if (socket) socket.close();
       } catch (e) {}
     };
   } catch (err) {
-    console.warn("Could not initiate WebSocket:", err.message);
+    // Graceful fallback
   }
 }
 
