@@ -124,9 +124,10 @@ export function OrdersPage({
     const finalShipDate = form.ship || defaultShipIso;
     const finalOrderDate = form.orderDate || todayIso;
 
+    const orderIdClean = form.id.trim().toUpperCase();
     const newOrder = {
-      primaryId: "ord_" + Date.now() + "_" + Math.random().toString(36).slice(2, 9),
-      id: form.id.trim().toUpperCase(),
+      primaryId: orderIdClean,
+      id: orderIdClean,
       style: form.style.trim(),
       buyer: form.buyer.trim(),
       country: form.country.trim(),

@@ -572,6 +572,13 @@ export default async function handler(req, res) {
               ? { resource, isDeleted: isTrash ? true : { $ne: true } }
               : { resource };
             const items = await mongoCols.resources.find(filter).project({ _id: 0 }).toArray();
+            if (resource === "orders") {
+              const cleanItems = items.filter(o => {
+                const s = String(o.id || "");
+                return !s.startsWith("ord_ord_") && !/_C0\d_[a-z0-9]+/i.test(s);
+              });
+              return res.status(200).json(cleanItems);
+            }
             return res.status(200).json(items);
           } catch (e) {
             console.error("Mongo resource GET error:", e.message);
@@ -634,20 +641,50 @@ export default async function handler(req, res) {
         if (!id) return res.status(400).json({ error: "Record ID required" });
         const body = parsedBody;
 
+        const cleanCandidate = (cid) => {
+          let str = String(cid || "").trim();
+          while (str.startsWith("ord_")) str = str.replace(/^ord_/, "");
+          str = str.replace(/_[a-z0-9]{4,12}$/i, "");
+          return str.trim();
+        };
+
+        const candidateIds = new Set([id, body?.id, body?.primaryId, body?.orderId].filter(Boolean).map(String));
+        if (resource === "orders") {
+          Array.from(candidateIds).forEach(cid => {
+            const base = cleanCandidate(cid);
+            if (base) candidateIds.add(base);
+          });
+        }
+
         if (mongoCols?.resources) {
           try {
             const query = {
               resource,
-              $or: [{ id }, { primaryId: id }, { _id: id }, { orderId: id }]
+              $or: Array.from(candidateIds).flatMap(cid => [
+                { id: cid },
+                { primaryId: cid },
+                { orderId: cid },
+                ...(cid.length === 24 && /^[0-9a-fA-F]{24}$/.test(cid) ? [{ _id: cid }] : [])
+              ])
             };
             const existing = await mongoCols.resources.findOne(query);
-            const updated = { ...(existing || {}), ...body, resource };
-            if (!updated.id) updated.id = id;
+            const realId = (existing?.id && !/^ord_/.test(existing.id))
+              ? existing.id
+              : (body?.id && !/^ord_/.test(body.id) ? body.id : (body?.orderId || cleanCandidate(id) || id));
+            const realPrimaryId = existing?.primaryId || realId;
+
+            const updated = {
+              ...(existing || {}),
+              ...body,
+              id: realId,
+              primaryId: realPrimaryId,
+              resource
+            };
             delete updated._id;
             if (existing) {
-              await mongoCols.resources.updateOne(query, { $set: updated });
+              await mongoCols.resources.updateOne({ resource, _id: existing._id }, { $set: updated });
             } else {
-              await mongoCols.resources.insertOne({ resource, id, ...updated });
+              await mongoCols.resources.insertOne({ resource, id: realId, ...updated });
             }
             return res.status(200).json(updated);
           } catch (e) {
@@ -657,18 +694,21 @@ export default async function handler(req, res) {
 
         if (!Array.isArray(memoryDB[resource])) memoryDB[resource] = [];
         const index = memoryDB[resource].findIndex(r =>
-          String(r.id) === id || String(r.primaryId) === id || String(r._id) === id || String(r.orderId) === id
+          candidateIds.has(String(r.id)) || candidateIds.has(String(r.primaryId)) || candidateIds.has(String(r._id)) || candidateIds.has(String(r.orderId))
         );
         if (index < 0) {
-          const newRecord = { ...body, id, resource };
+          const realId = (resource === "orders" && cleanCandidate(body?.id || id)) || body?.id || id;
+          const newRecord = { ...body, id: realId, primaryId: realId, resource };
           memoryDB[resource].push(newRecord);
           return res.status(200).json(newRecord);
         }
 
+        const realId = memoryDB[resource][index].id || id;
         const updated = {
           ...memoryDB[resource][index],
           ...body,
-          id: memoryDB[resource][index].id || id,
+          id: realId,
+          primaryId: memoryDB[resource][index].primaryId || realId,
         };
         memoryDB[resource][index] = updated;
         return res.status(200).json(updated);

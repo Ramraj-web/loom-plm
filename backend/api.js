@@ -272,16 +272,34 @@ app.put("/api/resources/:resource/:id", (req, res, next) => {
   try {
     const db = readResourcesDB();
     if (!db[resource]) db[resource] = [];
+
+    const cleanCandidate = (cid) => {
+      let str = String(cid || "").trim();
+      while (str.startsWith("ord_")) str = str.replace(/^ord_/, "");
+      str = str.replace(/_[a-z0-9]{4,12}$/i, "");
+      return str.trim();
+    };
+
+    const candidateIds = new Set([id, req.body?.id, req.body?.primaryId, req.body?.orderId].filter(Boolean).map(String));
+    if (resource === "orders") {
+      Array.from(candidateIds).forEach(cid => {
+        const base = cleanCandidate(cid);
+        if (base) candidateIds.add(base);
+      });
+    }
+
     const index = db[resource].findIndex(item =>
-      String(item.id) === id || String(item.primaryId) === id || String(item._id) === id || String(item.orderId) === id
+      candidateIds.has(String(item.id)) || candidateIds.has(String(item.primaryId)) || candidateIds.has(String(item._id)) || candidateIds.has(String(item.orderId))
     );
     if (index < 0) {
-      const record = { ...req.body, id, resource };
+      const realId = (resource === "orders" && cleanCandidate(req.body?.id || id)) || req.body.id || id;
+      const record = { ...req.body, id: realId, primaryId: realId, resource };
       db[resource].push(record);
       writeResourcesDB(db);
       return res.json(record);
     }
-    const record = { ...db[resource][index], ...req.body, id: db[resource][index].id || id };
+    const realId = db[resource][index].id || id;
+    const record = { ...db[resource][index], ...req.body, id: realId, primaryId: db[resource][index].primaryId || realId };
     db[resource][index] = record;
     writeResourcesDB(db);
     res.json(record);
@@ -296,16 +314,34 @@ app.patch("/api/resources/:resource/:id", (req, res, next) => {
   try {
     const db = readResourcesDB();
     if (!db[resource]) db[resource] = [];
+
+    const cleanCandidate = (cid) => {
+      let str = String(cid || "").trim();
+      while (str.startsWith("ord_")) str = str.replace(/^ord_/, "");
+      str = str.replace(/_[a-z0-9]{4,12}$/i, "");
+      return str.trim();
+    };
+
+    const candidateIds = new Set([id, req.body?.id, req.body?.primaryId, req.body?.orderId].filter(Boolean).map(String));
+    if (resource === "orders") {
+      Array.from(candidateIds).forEach(cid => {
+        const base = cleanCandidate(cid);
+        if (base) candidateIds.add(base);
+      });
+    }
+
     const index = db[resource].findIndex(item =>
-      String(item.id) === id || String(item.primaryId) === id || String(item._id) === id || String(item.orderId) === id
+      candidateIds.has(String(item.id)) || candidateIds.has(String(item.primaryId)) || candidateIds.has(String(item._id)) || candidateIds.has(String(item.orderId))
     );
     if (index < 0) {
-      const record = { ...req.body, id, resource };
+      const realId = (resource === "orders" && cleanCandidate(req.body?.id || id)) || req.body.id || id;
+      const record = { ...req.body, id: realId, primaryId: realId, resource };
       db[resource].push(record);
       writeResourcesDB(db);
       return res.json(record);
     }
-    const record = { ...db[resource][index], ...req.body, id: db[resource][index].id || id };
+    const realId = db[resource][index].id || id;
+    const record = { ...db[resource][index], ...req.body, id: realId, primaryId: db[resource][index].primaryId || realId };
     db[resource][index] = record;
     writeResourcesDB(db);
     res.json(record);

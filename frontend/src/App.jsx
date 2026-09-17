@@ -548,12 +548,33 @@ export default function LoomPLM() {
     if (!Array.isArray(rawOrders)) return [];
     const realOrders = rawOrders.filter(bo => !["GKT-1054", "ST-7788", "JKT-2231", "TR-8899", "DR-5566", "PL-3321"].includes(bo.id));
 
+    // Check if an ID looks like an auto-generated phantom order duplicate
+    const isPhantomOrder = (idStr) => {
+      if (!idStr) return false;
+      const str = String(idStr).trim();
+      return (
+        str.startsWith("ord_ord_") ||
+        /^ord_.+_[a-z0-9]{4,12}$/i.test(str) ||
+        /_C0\d_[a-z0-9]+/i.test(str) ||
+        (str.startsWith("ord_") && (str.includes("_") || str.includes(" ")))
+      );
+    };
+
+    // Extract underlying base ID from a phantom string
+    const extractBaseId = (idStr) => {
+      let str = String(idStr).trim();
+      while (str.startsWith("ord_")) {
+        str = str.replace(/^ord_/, "");
+      }
+      str = str.replace(/_[a-z0-9]{4,12}$/i, "");
+      return str.trim();
+    };
+
     // 1. Index non-phantom orders by their real ID and primaryId
     const realOrderMap = new Map();
     realOrders.forEach(bo => {
       const idStr = String(bo.id || "");
-      const isPhantom = /^ord_.+_[a-z0-9]{4,8}$/.test(idStr);
-      if (!isPhantom) {
+      if (!isPhantomOrder(idStr)) {
         realOrderMap.set(idStr, bo);
         if (bo.primaryId) realOrderMap.set(String(bo.primaryId), bo);
       }
@@ -564,9 +585,8 @@ export default function LoomPLM() {
 
     realOrders.forEach(bo => {
       const idStr = String(bo.id || "");
-      const match = idStr.match(/^ord_(.+)_[a-z0-9]{4,8}$/);
-      if (match) {
-        const baseId = match[1];
+      if (isPhantomOrder(idStr)) {
+        const baseId = extractBaseId(idStr);
         const parent = realOrderMap.get(baseId);
         if (parent) {
           // Merge completed stages from phantom duplicate into parent order
@@ -586,12 +606,12 @@ export default function LoomPLM() {
           phantomIdsToDelete.push(bo.id);
           return; // Exclude phantom duplicate from state!
         } else {
-          // Standalone order with phantom ID: restore base ID
+          // Standalone order with phantom ID: restore clean base ID
           cleanedOrders.push({
             ...bo,
             id: baseId,
             orderId: baseId,
-            primaryId: bo.primaryId || baseId
+            primaryId: baseId
           });
           return;
         }
@@ -2067,7 +2087,7 @@ export default function LoomPLM() {
   };
 
   const addOrder = (newOrder) => {
-    const primaryId = newOrder.primaryId || `ord_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    const primaryId = newOrder.id || newOrder.primaryId;
     const fullOrder = {
       template: "90",
       costingTemplate: "fabric",
@@ -2649,13 +2669,15 @@ export default function LoomPLM() {
 
       const updated = {
         ...o,
+        id: o.id,
+        primaryId: o.id,
         stages: updatedStages,
         status,
         completed: isCompleted,
         completedAt
       };
 
-      const primId = o.primaryId || o._id || o.id;
+      const primId = o.id || o.primaryId || o._id;
       try {
         resourcesApi.update("orders", primId, updated).catch(err => {
           console.warn("Error updating order stages:", err.message);

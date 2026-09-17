@@ -112,14 +112,33 @@ const SOFT_DELETE_RESOURCES = [
 
 function deduplicateOrders(ordersList, collection, db) {
   if (!Array.isArray(ordersList)) return ordersList;
+  const isPhantomOrder = (idStr) => {
+    if (!idStr) return false;
+    const str = String(idStr).trim();
+    return (
+      str.startsWith("ord_ord_") ||
+      /^ord_.+_[a-z0-9]{4,12}$/i.test(str) ||
+      /_C0\d_[a-z0-9]+/i.test(str) ||
+      (str.startsWith("ord_") && (str.includes("_") || str.includes(" ")))
+    );
+  };
+
+  const extractBaseId = (idStr) => {
+    let str = String(idStr).trim();
+    while (str.startsWith("ord_")) {
+      str = str.replace(/^ord_/, "");
+    }
+    str = str.replace(/_[a-z0-9]{4,12}$/i, "");
+    return str.trim();
+  };
+
   const realOrderMap = new Map();
   const phantomDuplicates = [];
 
   ordersList.forEach(order => {
     const idStr = String(order.id || "");
-    const match = idStr.match(/^ord_(.+)_[a-z0-9]{4,8}$/);
-    if (match) {
-      phantomDuplicates.push({ duplicate: order, baseId: match[1] });
+    if (isPhantomOrder(idStr)) {
+      phantomDuplicates.push({ duplicate: order, baseId: extractBaseId(idStr) });
     } else {
       realOrderMap.set(idStr, order);
       if (order.primaryId) realOrderMap.set(String(order.primaryId), order);
@@ -133,9 +152,8 @@ function deduplicateOrders(ordersList, collection, db) {
 
   ordersList.forEach(order => {
     const idStr = String(order.id || "");
-    const match = idStr.match(/^ord_(.+)_[a-z0-9]{4,8}$/);
-    if (match) {
-      const baseId = match[1];
+    if (isPhantomOrder(idStr)) {
+      const baseId = extractBaseId(idStr);
       const parent = realOrderMap.get(baseId);
       if (parent) {
         // Merge completed stages from duplicate into parent
@@ -158,7 +176,7 @@ function deduplicateOrders(ordersList, collection, db) {
         // Standalone order with phantom ID: restore base ID
         order.id = baseId;
         order.orderId = baseId;
-        order.primaryId = order.primaryId || baseId;
+        order.primaryId = baseId;
         cleanList.push(order);
       }
     } else {
@@ -265,11 +283,23 @@ router.put("/:resource/:id(*)", async (req, res, next) => {
     if (req.body?.id) candidateIds.add(String(req.body.id));
     if (req.body?.orderId) candidateIds.add(String(req.body.orderId));
     if (resource === "orders") {
-      const match = String(id).match(/^ord_(.+)_[a-z0-9]{4,8}$/);
-      if (match) candidateIds.add(match[1]);
+      const cleanCandidate = (cid) => {
+        let str = String(cid || "").trim();
+        while (str.startsWith("ord_")) str = str.replace(/^ord_/, "");
+        str = str.replace(/_[a-z0-9]{4,12}$/i, "");
+        return str.trim();
+      };
+      if (id) {
+        const base = cleanCandidate(id);
+        if (base) candidateIds.add(base);
+      }
       if (req.body?.id) {
-        const bodyMatch = String(req.body.id).match(/^ord_(.+)_[a-z0-9]{4,8}$/);
-        if (bodyMatch) candidateIds.add(bodyMatch[1]);
+        const base = cleanCandidate(req.body.id);
+        if (base) candidateIds.add(base);
+      }
+      if (req.body?.primaryId) {
+        const base = cleanCandidate(req.body.primaryId);
+        if (base) candidateIds.add(base);
       }
     }
     const idList = Array.from(candidateIds);
@@ -283,10 +313,10 @@ router.put("/:resource/:id(*)", async (req, res, next) => {
       ]);
       const existing = await collection.findOne({ resource, $or: queryOr });
 
-      const realId = (existing?.id && !/^ord_.+_[a-z0-9]{4,8}$/.test(existing.id))
+      const realId = (existing?.id && !/^ord_/.test(existing.id))
         ? existing.id
-        : (req.body.orderId || (req.body.id && !/^ord_.+_[a-z0-9]{4,8}$/.test(req.body.id) ? req.body.id : (id.match(/^ord_(.+)_[a-z0-9]{4,8}$/)?.[1] || existing?.id || req.body.id || id)));
-      const realPrimaryId = existing?.primaryId || req.body.primaryId || realId;
+        : (req.body.id && !/^ord_/.test(req.body.id) ? req.body.id : (req.body.orderId || id.replace(/^ord_/, "").replace(/_[a-z0-9]+$/i, "") || id));
+      const realPrimaryId = existing?.primaryId || realId;
 
       const record = {
         ...(existing || {}),
@@ -312,18 +342,18 @@ router.put("/:resource/:id(*)", async (req, res, next) => {
         (item._id && candidateIds.has(String(item._id)))
       );
       if (index < 0) {
-        const realId = req.body.orderId || (req.body.id && !/^ord_.+_[a-z0-9]{4,8}$/.test(req.body.id) ? req.body.id : (id.match(/^ord_(.+)_[a-z0-9]{4,8}$/)?.[1] || req.body.id || id));
-        const realPrimaryId = req.body.primaryId || id;
+        const realId = (req.body.id && !/^ord_/.test(req.body.id)) ? req.body.id : (req.body.orderId || id.replace(/^ord_/, "").replace(/_[a-z0-9]+$/i, "") || id);
+        const realPrimaryId = realId;
         const record = { ...req.body, id: realId, primaryId: realPrimaryId, resource };
         db[resource].push(record);
         writeDB(db);
         return res.json(record);
       }
       const existing = db[resource][index];
-      const realId = (existing?.id && !/^ord_.+_[a-z0-9]{4,8}$/.test(existing.id))
+      const realId = (existing?.id && !/^ord_/.test(existing.id))
         ? existing.id
-        : (req.body.orderId || (req.body.id && !/^ord_.+_[a-z0-9]{4,8}$/.test(req.body.id) ? req.body.id : (id.match(/^ord_(.+)_[a-z0-9]{4,8}$/)?.[1] || existing?.id || req.body.id || id)));
-      const realPrimaryId = existing?.primaryId || req.body.primaryId || realId;
+        : (req.body.id && !/^ord_/.test(req.body.id) ? req.body.id : (req.body.orderId || id.replace(/^ord_/, "").replace(/_[a-z0-9]+$/i, "") || existing?.id || id));
+      const realPrimaryId = existing?.primaryId || realId;
       const record = { ...existing, ...req.body, id: realId, primaryId: realPrimaryId, resource };
       db[resource][index] = record;
       writeDB(db);
@@ -344,11 +374,23 @@ router.patch("/:resource/:id(*)", async (req, res, next) => {
     if (req.body?.id) candidateIds.add(String(req.body.id));
     if (req.body?.orderId) candidateIds.add(String(req.body.orderId));
     if (resource === "orders") {
-      const match = String(id).match(/^ord_(.+)_[a-z0-9]{4,8}$/);
-      if (match) candidateIds.add(match[1]);
+      const cleanCandidate = (cid) => {
+        let str = String(cid || "").trim();
+        while (str.startsWith("ord_")) str = str.replace(/^ord_/, "");
+        str = str.replace(/_[a-z0-9]{4,12}$/i, "");
+        return str.trim();
+      };
+      if (id) {
+        const base = cleanCandidate(id);
+        if (base) candidateIds.add(base);
+      }
       if (req.body?.id) {
-        const bodyMatch = String(req.body.id).match(/^ord_(.+)_[a-z0-9]{4,8}$/);
-        if (bodyMatch) candidateIds.add(bodyMatch[1]);
+        const base = cleanCandidate(req.body.id);
+        if (base) candidateIds.add(base);
+      }
+      if (req.body?.primaryId) {
+        const base = cleanCandidate(req.body.primaryId);
+        if (base) candidateIds.add(base);
       }
     }
     const idList = Array.from(candidateIds);

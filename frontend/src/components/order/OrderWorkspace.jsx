@@ -2748,7 +2748,7 @@ export function OrderWorkspace({
       };
     });
 
-    onUpdateStages(order.primaryId || order.id, stages);
+    onUpdateStages(order.id, stages);
   };
 
   const cycle = (idx) => {
@@ -2777,20 +2777,20 @@ export function OrderWorkspace({
         completedBy: next === "done" ? (s.completedBy || currentUserName) : s.completedBy
       };
     });
-    onUpdateStages(order.primaryId || order.id, stages);
+    onUpdateStages(order.id, stages);
   };
 
   const setReason = (idx, reason) => {
     const stages = order.stages.map((s, i) => i === idx ? { ...s, reason } : s);
-    onUpdateStages(order.primaryId || order.id, stages);
+    onUpdateStages(order.id, stages);
   };
 
   const setSupplier = (idx, supplier) => {
     const stages = order.stages.map((s, i) => i === idx ? { ...s, supplier } : s);
     if (onAssignSupplier) {
-      onAssignSupplier(order.primaryId || order.id, idx, supplier);
+      onAssignSupplier(order.id, idx, supplier);
     }
-    onUpdateStages(order.primaryId || order.id, stages);
+    onUpdateStages(order.id, stages);
   };
 
   const doneCount = (order.stages || []).filter(s => s.status === "done").length;
@@ -2809,7 +2809,7 @@ export function OrderWorkspace({
           <span style={{ fontSize: 11, color: "#8A8D98" }}>Template:</span>
           <select
             value={order.template || "90"}
-            onChange={e => onSetTemplate(order.primaryId || order.id, e.target.value)}
+            onChange={e => onSetTemplate(order.id, e.target.value)}
             style={{ fontSize: 12, padding: "5px 8px", borderRadius: 7, border: "1px solid #E7E8ED" }}
           >
             <option value="90">90-day (standard)</option>
@@ -2904,9 +2904,9 @@ export function OrderWorkspace({
     <PreProductionTab
       order={order}
       role={role}
-      onFieldChange={(docKey, fieldKey, value) => onPreProdField(order.primaryId || order.id, docKey, fieldKey, value)}
-      onSubmit={(docKey) => onPreProdSubmit(order.primaryId || order.id, docKey)}
-      onApprove={(docKey) => onPreProdApprove(order.primaryId || order.id, docKey, role.label.split(" (")[0])}
+      onFieldChange={(docKey, fieldKey, value) => onPreProdField(order.id, docKey, fieldKey, value)}
+      onSubmit={(docKey) => onPreProdSubmit(order.id, docKey)}
+      onApprove={(docKey) => onPreProdApprove(order.id, docKey, role.label.split(" (")[0])}
     />
   );
 
