@@ -543,6 +543,111 @@ export default function LoomPLM() {
     return () => window.clearInterval(timer);
   }, [rotation, activeUser, users, teams]);
 
+  // Deduplicate and normalize orders, merging any phantom duplicates (ord_<baseId>_<hash>) into their real parent orders
+  const normalizeAndDeduplicateOrders = (rawOrders, prev = []) => {
+    if (!Array.isArray(rawOrders)) return [];
+    const realOrders = rawOrders.filter(bo => !["GKT-1054", "ST-7788", "JKT-2231", "TR-8899", "DR-5566", "PL-3321"].includes(bo.id));
+
+    // 1. Index non-phantom orders by their real ID and primaryId
+    const realOrderMap = new Map();
+    realOrders.forEach(bo => {
+      const idStr = String(bo.id || "");
+      const isPhantom = /^ord_.+_[a-z0-9]{4,8}$/.test(idStr);
+      if (!isPhantom) {
+        realOrderMap.set(idStr, bo);
+        if (bo.primaryId) realOrderMap.set(String(bo.primaryId), bo);
+      }
+    });
+
+    const phantomIdsToDelete = [];
+    const cleanedOrders = [];
+
+    realOrders.forEach(bo => {
+      const idStr = String(bo.id || "");
+      const match = idStr.match(/^ord_(.+)_[a-z0-9]{4,8}$/);
+      if (match) {
+        const baseId = match[1];
+        const parent = realOrderMap.get(baseId);
+        if (parent) {
+          // Merge completed stages from phantom duplicate into parent order
+          if (Array.isArray(bo.stages) && Array.isArray(parent.stages)) {
+            bo.stages.forEach((dStage, idx) => {
+              const pStage = parent.stages[idx];
+              if (dStage.status === "done" && pStage && pStage.status !== "done") {
+                parent.stages[idx] = { ...dStage };
+              }
+            });
+          }
+          if (bo.status && bo.status !== "On Track") parent.status = bo.status;
+          if (bo.completed && !parent.completed) {
+            parent.completed = true;
+            parent.completedAt = bo.completedAt || new Date().toISOString();
+          }
+          phantomIdsToDelete.push(bo.id);
+          return; // Exclude phantom duplicate from state!
+        } else {
+          // Standalone order with phantom ID: restore base ID
+          cleanedOrders.push({
+            ...bo,
+            id: baseId,
+            orderId: baseId,
+            primaryId: bo.primaryId || baseId
+          });
+          return;
+        }
+      }
+      cleanedOrders.push(bo);
+    });
+
+    // Permanently clean phantom duplicate documents from backend asynchronously
+    if (phantomIdsToDelete.length > 0) {
+      phantomIdsToDelete.forEach(dId => {
+        resourcesApi.delete("orders", dId, "?permanent=true").catch(() => {});
+      });
+    }
+
+    const mapped = cleanedOrders.map((bo) => {
+      const existing = prev.find(p => (bo.primaryId && p.primaryId === bo.primaryId) || p.id === bo.id);
+      // Stable primaryId: use existing bo.primaryId, bo._id, or bo.id (NEVER random Math.random string)
+      const primaryId = bo.primaryId || bo._id || existing?.primaryId || bo.id;
+      return {
+        ...existing,
+        ...bo,
+        primaryId,
+        orderId: bo.orderId || bo.id,
+        completed: bo.completed ?? existing?.completed ?? false,
+        isDeleted: bo.isDeleted ?? existing?.isDeleted ?? false,
+        completedAt: bo.completedAt || existing?.completedAt || null,
+        deletedAt: bo.deletedAt || existing?.deletedAt || null,
+        template: bo.template || existing?.template || "90",
+        costingTemplate: bo.costingTemplate || existing?.costingTemplate || "fabric",
+        costingRows: bo.costingRows || existing?.costingRows || buildCostingRows(bo.costingTemplate || existing?.costingTemplate || "fabric"),
+        vapCount: bo.vapCount ?? existing?.vapCount ?? 1,
+        shippedQty: bo.shippedQty ?? existing?.shippedQty ?? 0,
+        plannedCost: bo.plannedCost ?? existing?.plannedCost ?? 0,
+        actualCost: bo.actualCost ?? existing?.actualCost ?? 0,
+        stages: ((bo.stages && bo.stages.length === 34)
+          ? bo.stages
+          : (existing?.stages && existing.stages.length === 34)
+            ? existing.stages
+            : makeStages(bo.template || existing?.template || "90", 0, null)).map((s, sIdx) => {
+              const existingStage = existing?.stages?.[sIdx];
+              if (s.status === "done" && !s.completedAt) {
+                return {
+                  ...s,
+                  completedAt: existingStage?.completedAt || bo.completedAt || bo.createdAt || new Date().toISOString(),
+                  completedBy: s.completedBy || existingStage?.completedBy || undefined
+                };
+              }
+              return s;
+            }),
+        preProd: bo.preProd || existing?.preProd || initPreProd(),
+      };
+    });
+
+    return Array.from(new Map(mapped.map(item => [item.primaryId || item.id, item])).values());
+  };
+
   // Master refresh function to pull fresh data from backend and storage
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefreshedAt, setLastRefreshedAt] = useState(() => new Date());
@@ -576,47 +681,7 @@ export default function LoomPLM() {
       ]);
 
       if (ordersRes.status === "fulfilled" && Array.isArray(ordersRes.value)) {
-        const realOrders = ordersRes.value.filter(bo => !["GKT-1054", "ST-7788", "JKT-2231", "TR-8899", "DR-5566", "PL-3321"].includes(bo.id));
-        setOrders(prev => {
-          const mapped = realOrders.map((bo) => {
-            const existing = prev.find(p => (bo.primaryId && p.primaryId === bo.primaryId) || p.id === bo.id);
-            const primaryId = bo.primaryId || bo._id || existing?.primaryId || `ord_${bo.id}_${Math.random().toString(36).slice(2, 7)}`;
-            return {
-              ...existing,
-              ...bo,
-              primaryId,
-              orderId: bo.orderId || bo.id,
-              completed: bo.completed ?? existing?.completed ?? false,
-              isDeleted: bo.isDeleted ?? existing?.isDeleted ?? false,
-              completedAt: bo.completedAt || existing?.completedAt || null,
-              deletedAt: bo.deletedAt || existing?.deletedAt || null,
-              template: bo.template || existing?.template || "90",
-              costingTemplate: bo.costingTemplate || existing?.costingTemplate || "fabric",
-              costingRows: bo.costingRows || existing?.costingRows || buildCostingRows(bo.costingTemplate || existing?.costingTemplate || "fabric"),
-              vapCount: bo.vapCount ?? existing?.vapCount ?? 1,
-              shippedQty: bo.shippedQty ?? existing?.shippedQty ?? 0,
-              plannedCost: bo.plannedCost ?? existing?.plannedCost ?? 0,
-              actualCost: bo.actualCost ?? existing?.actualCost ?? 0,
-              stages: ((bo.stages && bo.stages.length === 34)
-                ? bo.stages
-                : (existing?.stages && existing.stages.length === 34)
-                  ? existing.stages
-                  : makeStages(bo.template || existing?.template || "90", 0, null)).map((s, sIdx) => {
-                    const existingStage = existing?.stages?.[sIdx];
-                    if (s.status === "done" && !s.completedAt) {
-                      return {
-                        ...s,
-                        completedAt: existingStage?.completedAt || bo.completedAt || bo.createdAt || new Date().toISOString(),
-                        completedBy: s.completedBy || existingStage?.completedBy || undefined
-                      };
-                    }
-                    return s;
-                  }),
-              preProd: bo.preProd || existing?.preProd || initPreProd(),
-            };
-          });
-          return Array.from(new Map(mapped.map(item => [item.primaryId || item.id, item])).values());
-        });
+        setOrders(prev => normalizeAndDeduplicateOrders(ordersRes.value, prev));
       }
 
       if (debitRes.status === "fulfilled" && Array.isArray(debitRes.value) && debitRes.value.length > 0) {
@@ -884,48 +949,7 @@ export default function LoomPLM() {
       if (["dashboard", "orders", "tasks", "approvals", "departments", "calendar", "reports", "compliance", "supplierPerformance", "finance", "myDepartment", "executiveOverview"].includes(targetView)) {
         const backendOrders = await resourcesApi.list("orders", "?all=true");
         if (Array.isArray(backendOrders)) {
-          const realOrders = backendOrders.filter(bo => !["GKT-1054", "ST-7788", "JKT-2231", "TR-8899", "DR-5566", "PL-3321"].includes(bo.id));
-          setOrders(prev => {
-            const mapped = realOrders.map((bo) => {
-              const existing = prev.find(p => (bo.primaryId && p.primaryId === bo.primaryId) || p.id === bo.id);
-              const primaryId = bo.primaryId || bo._id || existing?.primaryId || `ord_${bo.id}_${Math.random().toString(36).slice(2, 7)}`;
-              return {
-                ...existing,
-                ...bo,
-                primaryId,
-                orderId: bo.orderId || bo.id,
-                completed: bo.completed ?? existing?.completed ?? false,
-                isDeleted: bo.isDeleted ?? existing?.isDeleted ?? false,
-                completedAt: bo.completedAt || existing?.completedAt || null,
-                deletedAt: bo.deletedAt || existing?.deletedAt || null,
-                template: bo.template || existing?.template || "90",
-                costingTemplate: bo.costingTemplate || existing?.costingTemplate || "fabric",
-                costingRows: bo.costingRows || existing?.costingRows || buildCostingRows(bo.costingTemplate || existing?.costingTemplate || "fabric"),
-                vapCount: bo.vapCount ?? existing?.vapCount ?? 1,
-                shippedQty: bo.shippedQty ?? existing?.shippedQty ?? 0,
-                plannedCost: bo.plannedCost ?? existing?.plannedCost ?? 0,
-                actualCost: bo.actualCost ?? existing?.actualCost ?? 0,
-                stages: ((bo.stages && bo.stages.length === 34)
-                  ? bo.stages
-                  : (existing?.stages && existing.stages.length === 34)
-                    ? existing.stages
-                    : makeStages(bo.template || existing?.template || "90", 0, null)).map((s, sIdx) => {
-                      const existingStage = existing?.stages?.[sIdx];
-                      if (s.status === "done" && !s.completedAt) {
-                        return {
-                          ...s,
-                          completedAt: existingStage?.completedAt || bo.completedAt || bo.createdAt || new Date().toISOString(),
-                          completedBy: s.completedBy || existingStage?.completedBy || undefined
-                        };
-                      }
-                      return s;
-                    }),
-                preProd: bo.preProd || existing?.preProd || initPreProd(),
-              };
-            });
-            // Keep unique by primaryId || id
-            return Array.from(new Map(mapped.map(item => [item.primaryId || item.id, item])).values());
-          });
+          setOrders(prev => normalizeAndDeduplicateOrders(backendOrders, prev));
         }
       }
 
@@ -2282,16 +2306,40 @@ export default function LoomPLM() {
   };
 
   const handleResolveComplaint = (complaintId, resolutionStatus = "Resolved") => {
+    let targetComp = null;
     setStageComplaints(prev => {
-      const updated = prev.map(c => c.id === complaintId ? { ...c, status: resolutionStatus, resolvedAt: new Date().toISOString() } : c);
+      const updated = prev.map(c => {
+        if (c.id === complaintId) {
+          targetComp = c;
+          return { ...c, status: resolutionStatus, resolvedAt: new Date().toISOString() };
+        }
+        return c;
+      });
       if (window.storage) window.storage.set("stage_complaints", JSON.stringify(updated), true);
       return updated;
     });
+
+    // When MD resolves or reverts the complaint, unlock the order's disputed stage flag
+    setOrders(prev => prev.map(o => {
+      const hasMatchingStage = (o.stages || []).some(s => s.disputeId === complaintId || (targetComp && (o.id === targetComp.orderId || o.primaryId === targetComp.orderId) && s.name === targetComp.stageName));
+      if (!hasMatchingStage) return o;
+      const updatedStages = (o.stages || []).map(s => {
+        if (s.disputeId === complaintId || (targetComp && (o.id === targetComp.orderId || o.primaryId === targetComp.orderId) && s.name === targetComp.stageName)) {
+          const cleanReason = String(s.reason || "").startsWith("Disputed:") ? "" : s.reason;
+          return { ...s, disputed: false, disputeId: null, reason: cleanReason };
+        }
+        return s;
+      });
+      const hasAnyDelayed = updatedStages.some(s => s.reason || s.status === "Delayed");
+      return { ...o, stages: updatedStages, status: hasAnyDelayed ? "Delayed" : "On Track" };
+    }));
   };
 
   const updateStages = (id, stages) => {
     setOrders(prev => prev.map(o => {
-      const isTarget = (o.primaryId && o.primaryId === id) || (o._id && o._id === id) || o.id === id;
+      const match = String(id).match(/^ord_(.+)_[a-z0-9]{4,8}$/);
+      const baseId = match ? match[1] : null;
+      const isTarget = (o.primaryId && o.primaryId === id) || (o._id && o._id === id) || o.id === id || (baseId && (o.id === baseId || o.primaryId === baseId));
       if (!isTarget) return o;
       const doneCount = stages.filter(s => s.status === "done").length;
       const allDone = stages.length > 0 && doneCount === stages.length;
@@ -2461,12 +2509,6 @@ export default function LoomPLM() {
         resourcesApi.update("orders", primId, updated).catch(err => {
           console.warn("Error updating order stages:", err.message);
         });
-        resourcesApi.patch("orders", primId, {
-          stages,
-          status,
-          completed: isCompleted,
-          completedAt
-        }).catch(() => { });
       } catch (e) { }
 
       // Broadcast stage update to all other connected users in real time

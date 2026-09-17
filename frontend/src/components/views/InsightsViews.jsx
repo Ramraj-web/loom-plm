@@ -3035,7 +3035,7 @@ export function EmployeePerformancePanel({ orders = [], roster = [], attendance 
   const employeeRows = useMemo(() => {
     const activeOrders = orders.filter(order => order.isDeleted !== true);
     const allStages = activeOrders.flatMap(order => (order.stages || []).map(stage => ({ ...stage, orderId: order.id })));
-    const cleanName = value => String(value || "").split("(")[0].trim().toLowerCase();
+    const cleanName = value => String(value || "").replace(/^@/, "").split("(")[0].trim().toLowerCase();
     const isDone = value => ["done", "completed", "complete", "closed"].includes(String(value || "").toLowerCase());
 
     const teamMap = new Map((teams || []).map(t => [t.id, t.name]));
@@ -3089,10 +3089,23 @@ export function EmployeePerformancePanel({ orders = [], roster = [], attendance 
         // Stage completion complaints / false reporting against this user (-10 pts each)
         const userComplaints = (complaints || []).filter(c => {
           const tagged = cleanName(c.taggedUser);
-          return (name && (tagged === name || tagged.includes(name))) ||
-            (username && (tagged === username || tagged.includes(username)));
+          const compBy = cleanName(c.completedBy);
+          return (name && (tagged === name || (tagged && name.includes(tagged)) || (name && tagged.includes(name)))) ||
+            (username && (tagged === username || (tagged && username.includes(tagged)) || (username && tagged.includes(username)))) ||
+            (compBy && name && (compBy === name || compBy.includes(name))) ||
+            (compBy && username && (compBy === username || compBy.includes(username)));
         });
         const complaintsCount = userComplaints.length;
+
+        // Unique mistake incidents: delayed stages + dispute complaints against this user (a mistake is always recorded)
+        const mistakeKeys = new Set();
+        assignedStages.filter(s => s.reason || s.status === "Delayed").forEach((s, i) => mistakeKeys.add(`delay_${s.orderId || "ord"}_${s.name || i}`));
+        userComplaints.forEach((c, i) => mistakeKeys.add(`complaint_${c.id || (c.orderId + "_" + (c.stageName || i))}`));
+        const mistakesCount = mistakeKeys.size;
+        const mistakeFreeRate = workItems > 0
+          ? Math.max(0, Math.round(((workItems - mistakesCount) / workItems) * 100))
+          : (mistakesCount > 0 ? 0 : 100);
+
         const score = workItems > 0 ? Math.max(0, Math.round((completedItems / workItems) * 100 - delayedItems * 5 - complaintsCount * 10)) : 0;
 
         return {
@@ -3104,6 +3117,8 @@ export function EmployeePerformancePanel({ orders = [], roster = [], attendance 
           openTasks,
           leaveCount: approvedLeave,
           complaintsCount,
+          mistakesCount,
+          mistakeFreeRate,
           attendance: attendance[person.name] || "present",
           score,
         };
@@ -3165,14 +3180,14 @@ export function EmployeePerformancePanel({ orders = [], roster = [], attendance 
           ))}
         </div>
         <div style={{ overflowX: "auto" }}>
-          <div style={{ minWidth: 860, display: "grid", gridTemplateColumns: "1.6fr 0.9fr 0.7fr 0.7fr 0.9fr 0.7fr 0.7fr 0.9fr 0.7fr", fontSize: 10.5, color: "#64748B", fontWeight: 700, padding: "0 0 7px", borderBottom: "1px solid #F1F5F9" }}>
-            <div>EMPLOYEE</div><div>DEPARTMENT</div><div>ORDERS</div><div>DONE</div><div>DAILY TASKS</div><div>DELAYED</div><div>LEAVE</div><div>COMPLAINTS</div><div>PERFORMANCE</div>
+          <div style={{ minWidth: 920, display: "grid", gridTemplateColumns: "1.5fr 0.9fr 0.6fr 0.6fr 0.8fr 0.6fr 0.6fr 0.8fr 0.8fr 0.7fr", fontSize: 10.5, color: "#64748B", fontWeight: 700, padding: "0 0 7px", borderBottom: "1px solid #F1F5F9" }}>
+            <div>EMPLOYEE</div><div>DEPARTMENT</div><div>ORDERS</div><div>DONE</div><div>DAILY TASKS</div><div>DELAYED</div><div>LEAVE</div><div>COMPLAINTS</div><div>MISTAKE-FREE</div><div>PERFORMANCE</div>
           </div>
-          <div style={{ minWidth: 860, maxHeight: 300, overflowY: "auto" }}>
+          <div style={{ minWidth: 920, maxHeight: 300, overflowY: "auto" }}>
             {employeeRows.length === 0 ? (
               <div style={{ padding: "24px 0", color: "#94A3B8", fontSize: 12 }}>No employee records available.</div>
             ) : employeeRows.map(employee => (
-              <div key={employee.name} style={{ display: "grid", gridTemplateColumns: "1.6fr 0.9fr 0.7fr 0.7fr 0.9fr 0.7fr 0.7fr 0.9fr 0.7fr", alignItems: "center", fontSize: 11.5, padding: "9px 0", borderBottom: "1px solid #F8FAFC" }}>
+              <div key={employee.name} style={{ display: "grid", gridTemplateColumns: "1.5fr 0.9fr 0.6fr 0.6fr 0.8fr 0.6fr 0.6fr 0.8fr 0.8fr 0.7fr", alignItems: "center", fontSize: 11.5, padding: "9px 0", borderBottom: "1px solid #F8FAFC" }}>
                 <div>
                   <div style={{ fontWeight: 700, color: "#1E293B" }}>{employee.name}</div>
                   <div style={{ fontSize: 10, color: employee.attendance === "present" ? "#059669" : "#DC2626", marginTop: 2 }}>{employee.attendance === "present" ? "Present" : employee.attendance}</div>
@@ -3191,6 +3206,19 @@ export function EmployeePerformancePanel({ orders = [], roster = [], attendance 
                   ) : (
                     <span style={{ color: "#94A3B8" }}>0</span>
                   )}
+                </div>
+                <div>
+                  <span style={{
+                    display: "inline-block",
+                    padding: "2px 7px",
+                    borderRadius: 999,
+                    background: (employee.mistakeFreeRate !== undefined && employee.mistakeFreeRate < 100) ? "#FEE2E2" : "#F3E8FF",
+                    color: (employee.mistakeFreeRate !== undefined && employee.mistakeFreeRate < 100) ? "#B91C1C" : "#7E22CE",
+                    fontWeight: 700,
+                    fontSize: 11
+                  }}>
+                    {employee.mistakeFreeRate !== undefined ? employee.mistakeFreeRate : 100}%
+                  </span>
                 </div>
                 <div style={{ color: employee.score >= 75 ? "#059669" : employee.score >= 50 ? "#D97706" : "#DC2626", fontWeight: 800 }}>{employee.score}%</div>
               </div>
@@ -3227,6 +3255,7 @@ export function EmployeePerformancePanel({ orders = [], roster = [], attendance 
               <tbody>
                 {complaints.map(c => {
                   const isResolved = c.status === "Resolved";
+                  const isReverted = c.status === "Reverted";
                   return (
                     <tr key={c.id} style={{ borderBottom: "1px solid #F1F5F9" }}>
                       <td style={{ padding: "9px 10px", fontWeight: 600, color: "#0F172A" }}>
@@ -3259,32 +3288,50 @@ export function EmployeePerformancePanel({ orders = [], roster = [], attendance 
                           borderRadius: 999,
                           fontSize: 10.5,
                           fontWeight: 700,
-                          background: isResolved ? "#DCFCE7" : "#FEF3C7",
-                          color: isResolved ? "#166534" : "#92400E"
+                          background: isResolved ? "#DCFCE7" : isReverted ? "#F1F5F9" : "#FEF3C7",
+                          color: isResolved ? "#166534" : isReverted ? "#475569" : "#92400E"
                         }}>
                           {c.status || "Under Review"}
                         </span>
                       </td>
                       {onResolveComplaint && (
                         <td style={{ padding: "9px 10px", textAlign: "right" }}>
-                          {!isResolved ? (
-                            <button
-                              onClick={() => onResolveComplaint(c.id, "Resolved")}
-                              style={{
-                                background: "#10B981",
-                                color: "#FFFFFF",
-                                border: "none",
-                                borderRadius: 5,
-                                padding: "4px 8px",
-                                fontSize: 11,
-                                fontWeight: 700,
-                                cursor: "pointer"
-                              }}
-                            >
-                              Resolve
-                            </button>
+                          {!isResolved && !isReverted ? (
+                            <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                              <button
+                                onClick={() => onResolveComplaint(c.id, "Resolved")}
+                                style={{
+                                  background: "#10B981",
+                                  color: "#FFFFFF",
+                                  border: "none",
+                                  borderRadius: 5,
+                                  padding: "4px 8px",
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  cursor: "pointer"
+                                }}
+                              >
+                                Resolve
+                              </button>
+                              <button
+                                onClick={() => onResolveComplaint(c.id, "Reverted")}
+                                title="Revert stage dispute: unblocks order stage while keeping mistake record on tagged employee"
+                                style={{
+                                  background: "#64748B",
+                                  color: "#FFFFFF",
+                                  border: "none",
+                                  borderRadius: 5,
+                                  padding: "4px 8px",
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  cursor: "pointer"
+                                }}
+                              >
+                                Revert
+                              </button>
+                            </div>
                           ) : (
-                            <span style={{ fontSize: 11, color: "#059669", fontWeight: 600 }}>Resolved</span>
+                            <span style={{ fontSize: 11, color: isResolved ? "#059669" : "#64748B", fontWeight: 600 }}>{c.status}</span>
                           )}
                         </td>
                       )}
@@ -3472,7 +3519,7 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
   const topPerformers = useMemo(() => {
     const activeOrders = orders.filter(order => order.isDeleted !== true);
     const activeStages = activeOrders.flatMap(order => (order.stages || []).map(stage => ({ ...stage, orderId: order.id, style: order.style, buyer: order.buyer })));
-    const cleanName = value => String(value || "").split("(")[0].trim().toLowerCase();
+    const cleanName = value => String(value || "").replace(/^@/, "").split("(")[0].trim().toLowerCase();
     const isDone = value => ["done", "completed", "complete", "closed"].includes(String(value || "").toLowerCase());
 
     const teamMap = new Map((teams || []).map(t => [t.id, t.name]));
@@ -3524,13 +3571,25 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
         // Stage disputes / complaints against this user (-10 pts each)
         const userComplaints = (complaints || []).filter(c => {
           const tagged = cleanName(c.taggedUser);
-          return (name && (tagged === name || tagged.includes(name))) ||
-            (username && (tagged === username || tagged.includes(username)));
+          const compBy = cleanName(c.completedBy);
+          return (name && (tagged === name || (tagged && name.includes(tagged)) || (name && tagged.includes(name)))) ||
+            (username && (tagged === username || (tagged && username.includes(tagged)) || (username && tagged.includes(username)))) ||
+            (compBy && name && (compBy === name || compBy.includes(name))) ||
+            (compBy && username && (compBy === username || compBy.includes(username)));
         });
         const complaintsCount = userComplaints.length;
+
+        // Unique mistake incidents: delayed stages + dispute complaints against this user (mistake is recorded on employee profile)
+        const mistakeKeys = new Set();
+        delayedStages.forEach((s, i) => mistakeKeys.add(`delay_${s.orderId || "ord"}_${s.name || i}`));
+        userComplaints.forEach((c, i) => mistakeKeys.add(`complaint_${c.id || (c.orderId + "_" + (c.stageName || i))}`));
+        const mistakesCount = mistakeKeys.size;
+
         const score = workItems > 0 ? Math.max(0, Math.round((completedItems / workItems) * 100 - delayedStages.length * 5 - complaintsCount * 10)) : 0;
         const onTimeRate = completedStages.length > 0 ? Math.round((onTimeStages.length / completedStages.length) * 100) : 100;
-        const mistakeFreeRate = workItems > 0 ? Math.round(((workItems - delayedStages.length) / workItems) * 100) : 100;
+        const mistakeFreeRate = workItems > 0
+          ? Math.max(0, Math.round(((workItems - mistakesCount) / workItems) * 100))
+          : (mistakesCount > 0 ? 0 : 100);
 
         return {
           ...person,
@@ -3543,6 +3602,7 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
           completedStages,
           completedTasks,
           onTimeRate,
+          mistakesCount,
           mistakeFreeRate,
           complaintsCount,
           attendance: attendance[person.name] || "present",
@@ -4223,17 +4283,27 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
                   </div>
                 </div>
 
-                <div style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 8, padding: "10px 12px" }}>
-                  <div style={{ fontSize: 10, color: "#1E40AF", fontWeight: 700, textTransform: "uppercase" }}>On-Time Rate</div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: "#1D4ED8", marginTop: 2 }}>
-                    {selectedPerformer.onTimeRate || 100}%
+                <div style={{
+                  background: (selectedPerformer.onTimeRate !== undefined && selectedPerformer.onTimeRate < 100) ? "#FFFBEB" : "#EFF6FF",
+                  border: `1px solid ${(selectedPerformer.onTimeRate !== undefined && selectedPerformer.onTimeRate < 100) ? "#FDE68A" : "#BFDBFE"}`,
+                  borderRadius: 8,
+                  padding: "10px 12px"
+                }}>
+                  <div style={{ fontSize: 10, color: (selectedPerformer.onTimeRate !== undefined && selectedPerformer.onTimeRate < 100) ? "#92400E" : "#1E40AF", fontWeight: 700, textTransform: "uppercase" }}>On-Time Rate</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: (selectedPerformer.onTimeRate !== undefined && selectedPerformer.onTimeRate < 100) ? "#B45309" : "#1D4ED8", marginTop: 2 }}>
+                    {selectedPerformer.onTimeRate !== undefined ? selectedPerformer.onTimeRate : 100}%
                   </div>
                 </div>
 
-                <div style={{ background: "#FAF5FF", border: "1px solid #E9D5FF", borderRadius: 8, padding: "10px 12px" }}>
-                  <div style={{ fontSize: 10, color: "#6B21A8", fontWeight: 700, textTransform: "uppercase" }}>Mistake-Free</div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: "#7E22CE", marginTop: 2 }}>
-                    {selectedPerformer.mistakeFreeRate || 100}%
+                <div style={{
+                  background: (selectedPerformer.mistakeFreeRate !== undefined && selectedPerformer.mistakeFreeRate < 100) ? "#FEF2F2" : "#FAF5FF",
+                  border: `1px solid ${(selectedPerformer.mistakeFreeRate !== undefined && selectedPerformer.mistakeFreeRate < 100) ? "#FECACA" : "#E9D5FF"}`,
+                  borderRadius: 8,
+                  padding: "10px 12px"
+                }}>
+                  <div style={{ fontSize: 10, color: (selectedPerformer.mistakeFreeRate !== undefined && selectedPerformer.mistakeFreeRate < 100) ? "#991B1B" : "#6B21A8", fontWeight: 700, textTransform: "uppercase" }}>Mistake-Free</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: (selectedPerformer.mistakeFreeRate !== undefined && selectedPerformer.mistakeFreeRate < 100) ? "#DC2626" : "#7E22CE", marginTop: 2 }}>
+                    {selectedPerformer.mistakeFreeRate !== undefined ? selectedPerformer.mistakeFreeRate : 100}%
                   </div>
                 </div>
 
@@ -4251,9 +4321,11 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
                   ⭐ Why {selectedPerformer.name} is a Top Performer:
                 </div>
                 <div style={{ fontSize: 11.5, color: "#475569", lineHeight: 1.5 }}>
-                  {selectedPerformer.delayed === 0
-                    ? `100% on-time execution without any delivery flags or errors across ${selectedPerformer.completed || 0} completed tasks and order stages.`
-                    : `Completed ${selectedPerformer.completed || 0} critical tasks on-time with an impressive ${selectedPerformer.onTimeRate}% on-time completion rate across ${selectedPerformer.orderCount || 0} active client orders.`}
+                  {selectedPerformer.mistakesCount > 0
+                    ? `Recorded ${selectedPerformer.completed || 0} completed items with ${selectedPerformer.mistakesCount} mistake incident(s) / dispute(s) on file (${selectedPerformer.mistakeFreeRate}% mistake-free rating).`
+                    : (selectedPerformer.delayed === 0
+                      ? `100% on-time execution without any delivery flags or errors across ${selectedPerformer.completed || 0} completed tasks and order stages.`
+                      : `Completed ${selectedPerformer.completed || 0} critical tasks on-time with an impressive ${selectedPerformer.onTimeRate}% on-time completion rate across ${selectedPerformer.orderCount || 0} active client orders.`)}
                 </div>
               </div>
 
@@ -4261,7 +4333,7 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
                 <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10 }}>
                   <AlertCircle size={18} color="#DC2626" style={{ flexShrink: 0 }} />
                   <div style={{ fontSize: 11.5, color: "#991B1B" }}>
-                    <b>{selectedPerformer.complaintsCount} Stage Completion Dispute(s) Filed</b> — penalty of -{selectedPerformer.complaintsCount * 10} points applied to efficiency score.
+                    <b>{selectedPerformer.complaintsCount} Stage Completion Dispute(s) Filed</b> — mistake recorded on employee profile ({selectedPerformer.mistakeFreeRate}% mistake-free rate) and penalty of -{selectedPerformer.complaintsCount * 10} points applied to efficiency score.
                   </div>
                 </div>
               )}
@@ -4400,6 +4472,7 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
               <tbody>
                 {complaints.map(c => {
                   const isResolved = c.status === "Resolved";
+                  const isReverted = c.status === "Reverted";
                   return (
                     <tr key={c.id} style={{ borderBottom: "1px solid #F1F5F9" }}>
                       <td style={{ padding: "10px 12px", fontWeight: 600, color: "#0F172A" }}>
@@ -4432,32 +4505,50 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
                           borderRadius: 999,
                           fontSize: 11,
                           fontWeight: 700,
-                          background: isResolved ? "#DCFCE7" : "#FEF3C7",
-                          color: isResolved ? "#166534" : "#92400E"
+                          background: isResolved ? "#DCFCE7" : isReverted ? "#F1F5F9" : "#FEF3C7",
+                          color: isResolved ? "#166534" : isReverted ? "#475569" : "#92400E"
                         }}>
                           {c.status || "Under Review"}
                         </span>
                       </td>
                       {onResolveComplaint && (
                         <td style={{ padding: "10px 12px", textAlign: "right" }}>
-                          {!isResolved ? (
-                            <button
-                              onClick={() => onResolveComplaint(c.id, "Resolved")}
-                              style={{
-                                background: "#10B981",
-                                color: "#FFFFFF",
-                                border: "none",
-                                borderRadius: 5,
-                                padding: "4px 10px",
-                                fontSize: 11,
-                                fontWeight: 700,
-                                cursor: "pointer"
-                              }}
-                            >
-                              Resolve
-                            </button>
+                          {!isResolved && !isReverted ? (
+                            <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                              <button
+                                onClick={() => onResolveComplaint(c.id, "Resolved")}
+                                style={{
+                                  background: "#10B981",
+                                  color: "#FFFFFF",
+                                  border: "none",
+                                  borderRadius: 5,
+                                  padding: "4px 10px",
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  cursor: "pointer"
+                                }}
+                              >
+                                Resolve
+                              </button>
+                              <button
+                                onClick={() => onResolveComplaint(c.id, "Reverted")}
+                                title="Revert stage dispute: unblocks order stage while keeping mistake record on tagged employee"
+                                style={{
+                                  background: "#64748B",
+                                  color: "#FFFFFF",
+                                  border: "none",
+                                  borderRadius: 5,
+                                  padding: "4px 10px",
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  cursor: "pointer"
+                                }}
+                              >
+                                Revert
+                              </button>
+                            </div>
                           ) : (
-                            <span style={{ fontSize: 11, color: "#059669", fontWeight: 600 }}>Resolved</span>
+                            <span style={{ fontSize: 11, color: isResolved ? "#059669" : "#64748B", fontWeight: 600 }}>{c.status}</span>
                           )}
                         </td>
                       )}

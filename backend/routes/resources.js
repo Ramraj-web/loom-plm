@@ -108,6 +108,74 @@ const SOFT_DELETE_RESOURCES = [
   "supplierWork",
 ];
 
+function deduplicateOrders(ordersList, collection, db) {
+  if (!Array.isArray(ordersList)) return ordersList;
+  const realOrderMap = new Map();
+  const phantomDuplicates = [];
+
+  ordersList.forEach(order => {
+    const idStr = String(order.id || "");
+    const match = idStr.match(/^ord_(.+)_[a-z0-9]{4,8}$/);
+    if (match) {
+      phantomDuplicates.push({ duplicate: order, baseId: match[1] });
+    } else {
+      realOrderMap.set(idStr, order);
+      if (order.primaryId) realOrderMap.set(String(order.primaryId), order);
+    }
+  });
+
+  if (phantomDuplicates.length === 0) return ordersList;
+
+  const phantomIdsToDelete = [];
+  const cleanList = [];
+
+  ordersList.forEach(order => {
+    const idStr = String(order.id || "");
+    const match = idStr.match(/^ord_(.+)_[a-z0-9]{4,8}$/);
+    if (match) {
+      const baseId = match[1];
+      const parent = realOrderMap.get(baseId);
+      if (parent) {
+        // Merge completed stages from duplicate into parent
+        if (Array.isArray(order.stages) && Array.isArray(parent.stages)) {
+          order.stages.forEach((dStage, sIdx) => {
+            const pStage = parent.stages[sIdx];
+            if (dStage.status === "done" && pStage && pStage.status !== "done") {
+              parent.stages[sIdx] = { ...dStage };
+            }
+          });
+        }
+        if (order.status && order.status !== "On Track") parent.status = order.status;
+        if (order.completed && !parent.completed) {
+          parent.completed = true;
+          parent.completedAt = order.completedAt || new Date().toISOString();
+        }
+        phantomIdsToDelete.push(order.id);
+        return; // Exclude phantom duplicate from output
+      } else {
+        // Standalone order with phantom ID: restore base ID
+        order.id = baseId;
+        order.orderId = baseId;
+        order.primaryId = order.primaryId || baseId;
+        cleanList.push(order);
+      }
+    } else {
+      cleanList.push(order);
+    }
+  });
+
+  if (phantomIdsToDelete.length > 0) {
+    if (collection) {
+      collection.deleteMany({ resource: "orders", id: { $in: phantomIdsToDelete } }).catch(() => {});
+    } else if (db && Array.isArray(db.orders)) {
+      db.orders = db.orders.filter(o => !phantomIdsToDelete.includes(o.id));
+      writeDB(db);
+    }
+  }
+
+  return cleanList;
+}
+
 router.get("/:resource", async (req, res, next) => {
   const { resource } = req.params;
   if (!validResource(resource)) return res.status(404).json({ error: "Unknown resource" });
@@ -121,10 +189,16 @@ router.get("/:resource", async (req, res, next) => {
       : { resource };
     if (collection) {
       const records = await collection.find(filter).project({ _id: 0 }).toArray();
+      if (resource === "orders") {
+        return res.json(deduplicateOrders(records, collection));
+      }
       return res.json(resource === "users" ? uniqueById(records) : records);
     }
     const db = readDB();
     const records = (db[resource] || []).filter(record => !isSoftDelete || showAll || (isTrash ? record.isDeleted === true : record.isDeleted !== true));
+    if (resource === "orders") {
+      return res.json(deduplicateOrders(records, null, db));
+    }
     res.json(resource === "users" ? uniqueById(records) : records);
   } catch (error) { next(error); }
 });
@@ -183,13 +257,40 @@ router.put("/:resource/:id(*)", async (req, res, next) => {
   if (!validResource(resource)) return res.status(404).json({ error: "Unknown resource" });
   try {
     const collection = getResourceCollection();
+    const candidateIds = new Set();
+    if (id) candidateIds.add(String(id));
+    if (req.body?.primaryId) candidateIds.add(String(req.body.primaryId));
+    if (req.body?.id) candidateIds.add(String(req.body.id));
+    if (req.body?.orderId) candidateIds.add(String(req.body.orderId));
+    if (resource === "orders") {
+      const match = String(id).match(/^ord_(.+)_[a-z0-9]{4,8}$/);
+      if (match) candidateIds.add(match[1]);
+      if (req.body?.id) {
+        const bodyMatch = String(req.body.id).match(/^ord_(.+)_[a-z0-9]{4,8}$/);
+        if (bodyMatch) candidateIds.add(bodyMatch[1]);
+      }
+    }
+    const idList = Array.from(candidateIds);
+
     if (collection) {
-      const existing = await collection.findOne({ resource, $or: [{ primaryId: id }, { _id: id }, { id }] });
+      const queryOr = idList.flatMap(cid => [
+        { primaryId: cid },
+        { id: cid },
+        { orderId: cid },
+        ...(cid.length === 24 && /^[0-9a-fA-F]{24}$/.test(cid) ? [{ _id: cid }] : [])
+      ]);
+      const existing = await collection.findOne({ resource, $or: queryOr });
+
+      const realId = (existing?.id && !/^ord_.+_[a-z0-9]{4,8}$/.test(existing.id))
+        ? existing.id
+        : (req.body.orderId || (req.body.id && !/^ord_.+_[a-z0-9]{4,8}$/.test(req.body.id) ? req.body.id : (id.match(/^ord_(.+)_[a-z0-9]{4,8}$/)?.[1] || existing?.id || req.body.id || id)));
+      const realPrimaryId = existing?.primaryId || req.body.primaryId || realId;
+
       const record = {
         ...(existing || {}),
         ...req.body,
-        id: existing?.id || req.body.id || id,
-        primaryId: existing?.primaryId || req.body.primaryId || id,
+        id: realId,
+        primaryId: realPrimaryId,
         resource
       };
       delete record._id;
@@ -202,14 +303,26 @@ router.put("/:resource/:id(*)", async (req, res, next) => {
     } else {
       const db = readDB();
       if (!db[resource]) db[resource] = [];
-      const index = db[resource].findIndex(item => (id && String(item.primaryId) === id) || (id && String(item._id) === id) || String(item.id) === id);
+      const index = db[resource].findIndex(item =>
+        candidateIds.has(String(item.primaryId)) ||
+        candidateIds.has(String(item.id)) ||
+        candidateIds.has(String(item.orderId)) ||
+        (item._id && candidateIds.has(String(item._id)))
+      );
       if (index < 0) {
-        const record = { ...req.body, id, primaryId: req.body.primaryId || id, resource };
+        const realId = req.body.orderId || (req.body.id && !/^ord_.+_[a-z0-9]{4,8}$/.test(req.body.id) ? req.body.id : (id.match(/^ord_(.+)_[a-z0-9]{4,8}$/)?.[1] || req.body.id || id));
+        const realPrimaryId = req.body.primaryId || id;
+        const record = { ...req.body, id: realId, primaryId: realPrimaryId, resource };
         db[resource].push(record);
         writeDB(db);
         return res.json(record);
       }
-      const record = { ...db[resource][index], ...req.body, id: db[resource][index].id || id, primaryId: db[resource][index].primaryId || id };
+      const existing = db[resource][index];
+      const realId = (existing?.id && !/^ord_.+_[a-z0-9]{4,8}$/.test(existing.id))
+        ? existing.id
+        : (req.body.orderId || (req.body.id && !/^ord_.+_[a-z0-9]{4,8}$/.test(req.body.id) ? req.body.id : (id.match(/^ord_(.+)_[a-z0-9]{4,8}$/)?.[1] || existing?.id || req.body.id || id)));
+      const realPrimaryId = existing?.primaryId || req.body.primaryId || realId;
+      const record = { ...existing, ...req.body, id: realId, primaryId: realPrimaryId, resource };
       db[resource][index] = record;
       writeDB(db);
       return res.json(record);
@@ -223,8 +336,29 @@ router.patch("/:resource/:id(*)", async (req, res, next) => {
   if (!validResource(resource)) return res.status(404).json({ error: "Unknown resource" });
   try {
     const collection = getResourceCollection();
+    const candidateIds = new Set();
+    if (id) candidateIds.add(String(id));
+    if (req.body?.primaryId) candidateIds.add(String(req.body.primaryId));
+    if (req.body?.id) candidateIds.add(String(req.body.id));
+    if (req.body?.orderId) candidateIds.add(String(req.body.orderId));
+    if (resource === "orders") {
+      const match = String(id).match(/^ord_(.+)_[a-z0-9]{4,8}$/);
+      if (match) candidateIds.add(match[1]);
+      if (req.body?.id) {
+        const bodyMatch = String(req.body.id).match(/^ord_(.+)_[a-z0-9]{4,8}$/);
+        if (bodyMatch) candidateIds.add(bodyMatch[1]);
+      }
+    }
+    const idList = Array.from(candidateIds);
+
     if (collection) {
-      const existing = await collection.findOne({ resource, $or: [{ primaryId: id }, { _id: id }, { id }] });
+      const queryOr = idList.flatMap(cid => [
+        { primaryId: cid },
+        { id: cid },
+        { orderId: cid },
+        ...(cid.length === 24 && /^[0-9a-fA-F]{24}$/.test(cid) ? [{ _id: cid }] : [])
+      ]);
+      const existing = await collection.findOne({ resource, $or: queryOr });
       if (!existing) return res.status(404).json({ error: "Record not found" });
       const record = {
         ...existing,
@@ -240,7 +374,12 @@ router.patch("/:resource/:id(*)", async (req, res, next) => {
     } else {
       const db = readDB();
       if (!db[resource]) db[resource] = [];
-      const index = db[resource].findIndex(item => (id && String(item.primaryId) === id) || (id && String(item._id) === id) || String(item.id) === id);
+      const index = db[resource].findIndex(item =>
+        candidateIds.has(String(item.primaryId)) ||
+        candidateIds.has(String(item.id)) ||
+        candidateIds.has(String(item.orderId)) ||
+        (item._id && candidateIds.has(String(item._id)))
+      );
       if (index < 0) return res.status(404).json({ error: "Record not found" });
       const record = { ...db[resource][index], ...req.body, id: db[resource][index].id || id, primaryId: db[resource][index].primaryId || id };
       db[resource][index] = record;
