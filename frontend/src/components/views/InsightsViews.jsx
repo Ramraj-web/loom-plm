@@ -232,10 +232,11 @@ function computeOrderVarianceBreakdown(order) {
   };
 }
 
-export function FinanceEntryPage({ orders, financials, onUpdate, onUpdateOrderCost }) {
+export function FinanceEntryPage({ orders = [], financials, onUpdate, onUpdateOrderCost }) {
   const [selectedOrderForVariance, setSelectedOrderForVariance] = useState(null);
+  const activeOrders = useMemo(() => orders.filter(o => o && o.isDeleted !== true && o.isDeleted !== "true" && !o.deletedAt), [orders]);
 
-  const totals = orders.reduce((a, o) => {
+  const totals = activeOrders.reduce((a, o) => {
     const cmtTotal = o.cmtTotal !== undefined ? (Number(o.cmtTotal) || 0) : ((Number(o.qty) || 0) * (Number(o.cmtRate) || 0));
     return {
       planned: a.planned + (o.plannedCost || 0),
@@ -821,10 +822,11 @@ export function FinanceEntryPage({ orders, financials, onUpdate, onUpdateOrderCo
   );
 }
 
-export function ReportsPage({ orders }) {
-  const total = orders.length;
-  const onTrack = orders.filter(o => o.status === "On Track").length;
-  const totalQty = orders.reduce((a, o) => a + (Number(o.qty) || 0), 0);
+export function ReportsPage({ orders = [] }) {
+  const activeOrders = useMemo(() => orders.filter(o => o && o.isDeleted !== true && o.isDeleted !== "true" && !o.deletedAt), [orders]);
+  const total = activeOrders.length;
+  const onTrack = activeOrders.filter(o => o.status === "On Track").length;
+  const totalQty = activeOrders.reduce((a, o) => a + (Number(o.qty) || 0), 0);
   const rows = [
     ["Total orders", total],
     ["On-time rate", total > 0 ? `${Math.round((onTrack / total) * 100)}%` : "0%"],
@@ -836,7 +838,7 @@ export function ReportsPage({ orders }) {
 
   const seasonRows = useMemo(() => {
     const groups = {};
-    orders.forEach(o => {
+    activeOrders.forEach(o => {
       const key = `${o.buyer}||${o.season || "—"}`;
       if (!groups[key]) groups[key] = { buyer: o.buyer, season: o.season || "—", ordered: 0, shipped: 0 };
       groups[key].ordered += (Number(o.qty) || 0);
@@ -847,7 +849,7 @@ export function ReportsPage({ orders }) {
       diff: g.shipped - g.ordered,
       pctDiff: g.ordered > 0 ? ((g.shipped - g.ordered) / g.ordered) * 100 : 0,
     }));
-  }, [orders]);
+  }, [activeOrders]);
 
   return (
     <div>

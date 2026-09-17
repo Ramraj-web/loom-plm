@@ -97,7 +97,8 @@ export function renderWithMentions(text) {
 
 export function collectTasks(orders, deptFilter) {
   const rows = [];
-  orders.forEach(o => {
+  (orders || []).forEach(o => {
+    if (!o || o.isDeleted === true || o.isDeleted === "true" || !!o.deletedAt) return;
     if (!o.stages) return;
     o.stages.forEach((s, idx) => {
       if (!deptFilter || s.dept === deptFilter) {
@@ -117,24 +118,34 @@ export function TaskTable({ rows, onOpenOrder, emptyText }) {
       <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1.3fr 0.9fr 0.9fr 1fr", fontSize: 11, color: "#8A8D98", padding: "0 4px 8px", borderBottom: "1px solid #F0F0F2" }}>
         <div>Order / Style</div><div>Task / stage</div><div>Due</div><div>Status</div><div>Flag</div>
       </div>
-      {rows.map(({ order, stage, stageIdx }, itemIdx) => (
-        <div
-          key={`${order?.id || "ord"}-${stage?.name || ""}-${stageIdx ?? itemIdx}-${itemIdx}`}
-          onClick={() => onOpenOrder(order.id)}
-          style={{ display: "grid", gridTemplateColumns: "1.1fr 1.3fr 0.9fr 0.9fr 1fr", alignItems: "center", fontSize: 12.5, padding: "10px 4px", borderBottom: "1px solid #F5F5F7", cursor: "pointer" }}
-          onMouseEnter={e => e.currentTarget.style.background = "#FAFAFB"}
-          onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-        >
-          <div>
-            <div style={{ fontFamily: "monospace", fontSize: 11, color: "#8A8D98" }}>{order.id}</div>
-            <div style={{ fontWeight: 600, color: "#1B2130" }}>{order.style}</div>
+      {rows.map(({ order, stage, stageIdx }, itemIdx) => {
+        const orderKey = order?.primaryId || order?.id;
+        return (
+          <div
+            key={`${orderKey || "ord"}-${stage?.name || ""}-${stageIdx ?? itemIdx}-${itemIdx}`}
+            onClick={() => onOpenOrder && onOpenOrder(order.primaryId || order.id, order.primaryId)}
+            style={{ display: "grid", gridTemplateColumns: "1.1fr 1.3fr 0.9fr 0.9fr 1fr", alignItems: "center", fontSize: 12.5, padding: "10px 4px", borderBottom: "1px solid #F5F5F7", cursor: "pointer" }}
+            onMouseEnter={e => e.currentTarget.style.background = "#FAFAFB"}
+            onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+          >
+            <div>
+              <div style={{ fontFamily: "monospace", fontSize: 11, color: "#8A8D98", display: "flex", alignItems: "center", gap: 6 }}>
+                <span>{order.id}</span>
+                {order.color && (
+                  <span style={{ fontSize: 9.5, background: "#EFF6FF", color: "#1D4ED8", padding: "1px 5px", borderRadius: 4, fontWeight: 600 }}>
+                    {order.color}
+                  </span>
+                )}
+              </div>
+              <div style={{ fontWeight: 600, color: "#1B2130" }}>{order.style}</div>
+            </div>
+            <div>{stage.name}</div>
+            <div>{stage.planned}</div>
+            <div>{statusPill(stage.status)}</div>
+            <div style={{ color: stage.reason ? "#A32D2D" : "#B0B2BA" }}>{stage.reason || "—"}</div>
           </div>
-          <div>{stage.name}</div>
-          <div>{stage.planned}</div>
-          <div>{statusPill(stage.status)}</div>
-          <div style={{ color: stage.reason ? "#A32D2D" : "#B0B2BA" }}>{stage.reason || "—"}</div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -219,23 +230,33 @@ export function GroupedTaskList({ rows, onOpenOrder, emptyText }) {
               <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1.3fr 0.9fr 0.9fr", fontSize: 10.5, color: "#B0B2BA", padding: "8px 10px 4px" }}>
                 <div>Order / Style</div><div>Task / stage</div><div>Due</div><div>Status</div>
               </div>
-              {groupItems.map(({ order, stage, stageIdx }, itemIdx) => (
-                <div
-                  key={`${order?.id || "ord"}-${stage?.name || ""}-${stageIdx ?? itemIdx}-${itemIdx}`}
-                  onClick={() => onOpenOrder(order.id)}
-                  style={{ display: "grid", gridTemplateColumns: "1.1fr 1.3fr 0.9fr 0.9fr", alignItems: "center", fontSize: 12.5, padding: "9px 10px", borderBottom: "1px solid #F5F5F7", cursor: "pointer" }}
-                  onMouseEnter={e => e.currentTarget.style.background = "#FAFAFB"}
-                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-                >
-                  <div>
-                    <div style={{ fontFamily: "monospace", fontSize: 11, color: "#8A8D98" }}>{order.id}</div>
-                    <div style={{ fontWeight: 600, color: "#1B2130" }}>{order.style}</div>
+              {groupItems.map(({ order, stage, stageIdx }, itemIdx) => {
+                const orderKey = order?.primaryId || order?.id;
+                return (
+                  <div
+                    key={`${orderKey || "ord"}-${stage?.name || ""}-${stageIdx ?? itemIdx}-${itemIdx}`}
+                    onClick={() => onOpenOrder && onOpenOrder(order.primaryId || order.id, order.primaryId)}
+                    style={{ display: "grid", gridTemplateColumns: "1.1fr 1.3fr 0.9fr 0.9fr", alignItems: "center", fontSize: 12.5, padding: "9px 10px", borderBottom: "1px solid #F5F5F7", cursor: "pointer" }}
+                    onMouseEnter={e => e.currentTarget.style.background = "#FAFAFB"}
+                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                  >
+                    <div>
+                      <div style={{ fontFamily: "monospace", fontSize: 11, color: "#8A8D98", display: "flex", alignItems: "center", gap: 6 }}>
+                        <span>{order.id}</span>
+                        {order.color && (
+                          <span style={{ fontSize: 9.5, background: "#EFF6FF", color: "#1D4ED8", padding: "1px 5px", borderRadius: 4, fontWeight: 600 }}>
+                            {order.color}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontWeight: 600, color: "#1B2130" }}>{order.style}</div>
+                    </div>
+                    <div>{stage.name} <span style={{ color: "#B0B2BA", fontSize: 10.5 }}>· {stage.dept}</span></div>
+                    <div>{stage.planned}</div>
+                    <div>{statusPill(stage.status)}</div>
                   </div>
-                  <div>{stage.name} <span style={{ color: "#B0B2BA", fontSize: 10.5 }}>· {stage.dept}</span></div>
-                  <div>{stage.planned}</div>
-                  <div>{statusPill(stage.status)}</div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -281,9 +302,20 @@ export function DarkCardHeader({ title, sub, action }) {
 export function gatingApproval(stages, idx) {
   if (!stages) return null;
   for (let j = idx - 1; j >= 0; j--) {
-    if (stages[j].name.toLowerCase().includes("approval")) {
-      return stages[j].status !== "done" ? stages[j] : null;
+    const s = stages[j];
+    if (s && s.name && s.name.toLowerCase().includes("approval")) {
+      // If stage has colourways, check if at least one color is completed/received.
+      // Partial color completion does NOT stop production and allows subsequent stages to proceed!
+      if (Array.isArray(s.colourways) && s.colourways.length > 0) {
+        const anyDone = s.colourways.some(c => c.status === "done" || (Number(c.completedQty) || 0) > 0);
+        if (!anyDone && s.status !== "done") {
+          return s;
+        }
+      } else if (s.status !== "done") {
+        return s;
+      }
     }
   }
   return null;
 }
+

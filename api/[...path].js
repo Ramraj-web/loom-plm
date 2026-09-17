@@ -336,7 +336,9 @@ export default async function handler(req, res) {
       // GET
       if (req.method === "GET") {
         if (id) {
-          const item = memoryDB[resource].find(r => String(r.id) === id);
+          const item = memoryDB[resource].find(r =>
+            String(r.id) === id || String(r.primaryId) === id || String(r._id) === id || String(r.orderId) === id
+          );
           if (!item) return res.status(404).json({ error: "Record not found" });
           return res.status(200).json(item);
         }
@@ -351,12 +353,20 @@ export default async function handler(req, res) {
       // POST
       if (req.method === "POST") {
         const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
+        const recordId = makeId(resource, body);
         const record = {
           ...body,
-          id: makeId(resource, body),
+          id: recordId,
           ...(isSoftDelete ? { isDeleted: false } : {}),
         };
-        memoryDB[resource] = [record, ...memoryDB[resource]];
+        const existingIdx = memoryDB[resource].findIndex(r =>
+          String(r.id) === String(recordId) || (record.primaryId && String(r.primaryId) === String(record.primaryId))
+        );
+        if (existingIdx >= 0) {
+          memoryDB[resource][existingIdx] = record;
+        } else {
+          memoryDB[resource] = [record, ...memoryDB[resource]];
+        }
         return res.status(201).json(record);
       }
 
@@ -364,13 +374,19 @@ export default async function handler(req, res) {
       if (req.method === "PUT" || req.method === "PATCH") {
         if (!id) return res.status(400).json({ error: "Record ID required" });
         const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
-        const index = memoryDB[resource].findIndex(r => String(r.id) === id);
-        if (index < 0) return res.status(404).json({ error: "Record not found" });
+        const index = memoryDB[resource].findIndex(r =>
+          String(r.id) === id || String(r.primaryId) === id || String(r._id) === id || String(r.orderId) === id
+        );
+        if (index < 0) {
+          const newRecord = { ...body, id, resource };
+          memoryDB[resource].push(newRecord);
+          return res.status(200).json(newRecord);
+        }
 
         const updated = {
           ...memoryDB[resource][index],
           ...body,
-          id,
+          id: memoryDB[resource][index].id || id,
         };
         memoryDB[resource][index] = updated;
         return res.status(200).json(updated);
@@ -380,35 +396,70 @@ export default async function handler(req, res) {
       if (req.method === "DELETE") {
         if (!id) return res.status(400).json({ error: "Record ID required" });
         const isPermanent = url.searchParams.get("permanent") === "true" || url.searchParams.get("force") === "true";
-        const index = memoryDB[resource].findIndex(r => String(r.id) === id);
+        const index = memoryDB[resource].findIndex(r =>
+          String(r.id) === id || String(r.primaryId) === id || String(r._id) === id || String(r.orderId) === id || String(r.name) === id
+        );
         if (index < 0) return res.status(404).json({ error: "Record not found" });
 
+        const target = memoryDB[resource][index];
+        const targetIdentifiers = Array.from(new Set([target.id, target.primaryId, target._id, target.orderId, id].filter(Boolean).map(String)));
+
         if (isSoftDelete && !isPermanent) {
-          memoryDB[resource][index] = {
-            ...memoryDB[resource][index],
-            isDeleted: true,
-            deletedAt: new Date().toISOString(),
-          };
+          if (resource === "orders") {
+            memoryDB[resource] = memoryDB[resource].map(r => {
+              if (targetIdentifiers.includes(String(r.id)) || targetIdentifiers.includes(String(r.primaryId)) || targetIdentifiers.includes(String(r.orderId))) {
+                return { ...r, isDeleted: true, deletedAt: new Date().toISOString() };
+              }
+              return r;
+            });
+          } else {
+            memoryDB[resource][index] = {
+              ...memoryDB[resource][index],
+              isDeleted: true,
+              deletedAt: new Date().toISOString(),
+            };
+          }
+          if (resource === "orders" && Array.isArray(memoryDB["tasks"])) {
+            memoryDB["tasks"] = memoryDB["tasks"].map(t => {
+              if (targetIdentifiers.includes(String(t.orderId)) || targetIdentifiers.includes(String(t.order))) {
+                return { ...t, isDeleted: true, deletedAt: new Date().toISOString() };
+              }
+              return t;
+            });
+          }
           return res.status(200).json({ id, deleted: true, isDeleted: true });
         }
 
-        memoryDB[resource].splice(index, 1);
+        if (resource === "orders") {
+          memoryDB[resource] = memoryDB[resource].filter(r =>
+            !targetIdentifiers.includes(String(r.id)) &&
+            !targetIdentifiers.includes(String(r.primaryId)) &&
+            !targetIdentifiers.includes(String(r.orderId))
+          );
+        } else {
+          memoryDB[resource].splice(index, 1);
+        }
 
         // Cascade delete in memory for orders
         if (resource === "orders") {
           ["tasks", "notifications", "supplierWork", "certifications", "compliances", "debitNotes", "capas"].forEach(relRes => {
             if (Array.isArray(memoryDB[relRes])) {
               memoryDB[relRes] = memoryDB[relRes].filter(r =>
-                r.orderId !== id && r.order !== id && r.po !== id && r.relatedId !== id
+                !targetIdentifiers.includes(String(r.orderId)) &&
+                !targetIdentifiers.includes(String(r.order)) &&
+                !targetIdentifiers.includes(String(r.po)) &&
+                !targetIdentifiers.includes(String(r.relatedId))
               );
             }
           });
           ["personal", "shared"].forEach(b => {
             if (memoryStorage[b]) {
-              delete memoryStorage[b][`docs:${id}`];
-              delete memoryStorage[b][`highlights:${id}`];
-              delete memoryStorage[b][`chat:${id}`];
-              delete memoryStorage[b][`customTypes:${id}`];
+              targetIdentifiers.forEach(ti => {
+                delete memoryStorage[b][`docs:${ti}`];
+                delete memoryStorage[b][`highlights:${ti}`];
+                delete memoryStorage[b][`chat:${ti}`];
+                delete memoryStorage[b][`customTypes:${ti}`];
+              });
             }
           });
         }

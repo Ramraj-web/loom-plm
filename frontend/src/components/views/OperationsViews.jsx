@@ -60,9 +60,9 @@ export function OrdersPage({
     ]
   });
 
-  const activeOrders = useMemo(() => orders.filter(o => o.isDeleted !== true && o.completed !== true), [orders]);
-  const completedOrders = useMemo(() => orders.filter(o => o.completed === true && o.isDeleted !== true), [orders]);
-  const deletedOrders = useMemo(() => orders.filter(o => o.isDeleted === true), [orders]);
+  const activeOrders = useMemo(() => orders.filter(o => o.isDeleted !== true && o.isDeleted !== "true" && !o.deletedAt && o.completed !== true), [orders]);
+  const completedOrders = useMemo(() => orders.filter(o => o.completed === true && o.isDeleted !== true && o.isDeleted !== "true" && !o.deletedAt), [orders]);
+  const deletedOrders = useMemo(() => orders.filter(o => o.isDeleted === true || o.isDeleted === "true" || !!o.deletedAt), [orders]);
 
   const addColorBreakdownRow = () => {
     setForm(prev => ({
@@ -876,10 +876,44 @@ export function MyTasksPage({
       : [role?.dept || ""];
 
     return tasks.filter(t => {
+      if (t.isDeleted) return false;
+      if (t.orderId) {
+        const linkedOrder = orders.find(o =>
+          (o.primaryId && o.primaryId === t.orderId) ||
+          (o._id && o._id === t.orderId) ||
+          o.id === t.orderId
+        );
+        if (linkedOrder && linkedOrder.isDeleted) return false;
+      }
       if (role?.fullAccess || role?.dept === "Administrators" || role?.dept === "Executive") return true;
       return userDeptList.includes(t.dept) || t.dept === "All";
     });
-  }, [tasks, role]);
+  }, [tasks, role, orders]);
+
+  const [deptFilter, setDeptFilter] = useState("all");
+
+  const availableDepts = useMemo(() => {
+    const deptMap = {};
+    tnaRows.forEach(r => {
+      const d = r.dept || "General";
+      deptMap[d] = (deptMap[d] || 0) + 1;
+    });
+    roleCustomTasks.forEach(t => {
+      const d = t.dept || "General";
+      deptMap[d] = (deptMap[d] || 0) + 1;
+    });
+    return deptMap;
+  }, [tnaRows, roleCustomTasks]);
+
+  const filteredTnaRows = useMemo(() => {
+    if (deptFilter === "all") return tnaRows;
+    return tnaRows.filter(r => (r.dept || "").toLowerCase() === deptFilter.toLowerCase());
+  }, [tnaRows, deptFilter]);
+
+  const filteredCustomTasks = useMemo(() => {
+    if (deptFilter === "all") return roleCustomTasks;
+    return roleCustomTasks.filter(t => (t.dept || "").toLowerCase() === deptFilter.toLowerCase() || t.dept === "All");
+  }, [roleCustomTasks, deptFilter]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -914,13 +948,15 @@ export function MyTasksPage({
     low: { bg: "#E1F5EE", fg: "#085041" }
   };
 
+  const totalVisibleTasks = filteredTnaRows.length + filteredCustomTasks.length;
+
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 700, color: "#151B2E", margin: 0 }}>My tasks</h1>
           <div style={{ fontSize: 13, color: "#8A8D98", marginTop: 4 }}>
-            Showing tasks for {role?.label} — {role?.dept} · {tnaRows.length} T&A stage task{tnaRows.length === 1 ? "" : "s"} · {roleCustomTasks.length} custom task{roleCustomTasks.length === 1 ? "" : "s"}
+            Showing tasks for {role?.label} — {role?.dept} · {filteredTnaRows.length} T&A stage task{filteredTnaRows.length === 1 ? "" : "s"} · {filteredCustomTasks.length} custom task{filteredCustomTasks.length === 1 ? "" : "s"}
           </div>
         </div>
         <button
@@ -953,11 +989,11 @@ export function MyTasksPage({
       </div>
 
       {/* Task Filters Tabs */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
         {[
-          { key: "all", label: `All Tasks (${tnaRows.length + roleCustomTasks.length})` },
-          { key: "custom", label: `Custom & Assigned Tasks (${roleCustomTasks.length})` },
-          { key: "tna", label: `T&A Stage Tasks (${tnaRows.length})` }
+          { key: "all", label: `All Tasks (${totalVisibleTasks})` },
+          { key: "custom", label: `Custom & Assigned Tasks (${filteredCustomTasks.length})` },
+          { key: "tna", label: `T&A Stage Tasks (${filteredTnaRows.length})` }
         ].map(tab => (
           <button
             key={tab.key}
@@ -979,6 +1015,61 @@ export function MyTasksPage({
         ))}
       </div>
 
+      {/* Department Filter Bar */}
+      <div style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        marginBottom: 16,
+        padding: "8px 12px",
+        background: "#F8FAFC",
+        borderRadius: 10,
+        border: "1px solid #E2E8F0",
+        flexWrap: "wrap"
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 700, color: "#475569", marginRight: 4 }}>
+          <Filter size={14} />
+          <span>Department:</span>
+        </div>
+        <button
+          onClick={() => setDeptFilter("all")}
+          style={{
+            padding: "4px 10px",
+            borderRadius: 6,
+            fontSize: 12,
+            fontWeight: deptFilter === "all" ? 700 : 500,
+            cursor: "pointer",
+            border: "1px solid",
+            borderColor: deptFilter === "all" ? "#0F766E" : "#CBD5E1",
+            background: deptFilter === "all" ? "#0F766E" : "#FFFFFF",
+            color: deptFilter === "all" ? "#FFFFFF" : "#334155",
+            transition: "all 0.15s"
+          }}
+        >
+          All Departments ({tnaRows.length + roleCustomTasks.length})
+        </button>
+        {Object.entries(availableDepts).map(([deptName, count]) => (
+          <button
+            key={deptName}
+            onClick={() => setDeptFilter(deptName)}
+            style={{
+              padding: "4px 10px",
+              borderRadius: 6,
+              fontSize: 12,
+              fontWeight: deptFilter.toLowerCase() === deptName.toLowerCase() ? 700 : 500,
+              cursor: "pointer",
+              border: "1px solid",
+              borderColor: deptFilter.toLowerCase() === deptName.toLowerCase() ? "#0F766E" : "#CBD5E1",
+              background: deptFilter.toLowerCase() === deptName.toLowerCase() ? "#0F766E" : "#FFFFFF",
+              color: deptFilter.toLowerCase() === deptName.toLowerCase() ? "#FFFFFF" : "#334155",
+              transition: "all 0.15s"
+            }}
+          >
+            {deptName} ({count})
+          </button>
+        ))}
+      </div>
+
       {/* 1. Custom / Assigned Action Items Section */}
       {(taskTab === "all" || taskTab === "custom") && (
         <Card style={{ marginBottom: 20 }}>
@@ -986,7 +1077,7 @@ export function MyTasksPage({
             <div>
               <span style={{ fontSize: 14, fontWeight: 700, color: "#1B2130" }}>Assigned & Action Items</span>
               <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, background: "#E0DBF5", color: "#3D3878", padding: "2px 8px", borderRadius: 999 }}>
-                {roleCustomTasks.length} task{roleCustomTasks.length === 1 ? "" : "s"}
+                {filteredCustomTasks.length} task{filteredCustomTasks.length === 1 ? "" : "s"}
               </span>
             </div>
           </div>
@@ -995,12 +1086,12 @@ export function MyTasksPage({
             <div>Task Description</div><div>Related Order</div><div>Department</div><div>Assignee</div><div>Due</div><div>Status</div><div style={{ textAlign: "right" }}>Actions</div>
           </div>
 
-          {roleCustomTasks.length === 0 ? (
+          {filteredCustomTasks.length === 0 ? (
             <div style={{ padding: "28px 0", textAlign: "center", color: "#8A8D98", fontSize: 13 }}>
-              No custom tasks yet. Click <strong>Add Task</strong> above to assign an action item.
+              No custom tasks found. Click <strong>Add Task</strong> above to assign an action item.
             </div>
           ) : (
-            roleCustomTasks.map(t => {
+            filteredCustomTasks.map(t => {
               const isDone = t.status === "done";
               const pStyle = priorityColors[t.priority] || priorityColors.medium;
               return (
@@ -1034,14 +1125,43 @@ export function MyTasksPage({
                   </div>
 
                   <div>
-                    {t.orderId ? (
-                      <span
-                        onClick={() => onOpenOrder && onOpenOrder(t.orderId)}
-                        style={{ fontFamily: "monospace", fontSize: 11.5, color: "#378ADD", cursor: "pointer", fontWeight: 600 }}
-                      >
-                        {t.orderId}
-                      </span>
-                    ) : (
+                    {t.orderId ? (() => {
+                      const linkedOrder = orders.find(o =>
+                        (o.primaryId && o.primaryId === t.orderId) ||
+                        (o._id && o._id === t.orderId) ||
+                        o.id === t.orderId
+                      );
+                      const targetId = linkedOrder?.primaryId || linkedOrder?._id || t.orderId;
+                      return (
+                        <span
+                          onClick={() => onOpenOrder && onOpenOrder(targetId, linkedOrder?.primaryId)}
+                          style={{
+                            fontFamily: "monospace",
+                            fontSize: 11.5,
+                            color: "#0F766E",
+                            cursor: "pointer",
+                            fontWeight: 600,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 4
+                          }}
+                        >
+                          {linkedOrder?.id || t.orderId}
+                          {linkedOrder?.color && (
+                            <span style={{
+                              fontSize: 10,
+                              fontWeight: 600,
+                              padding: "1px 5px",
+                              borderRadius: 4,
+                              background: "#E2E8F0",
+                              color: "#334155"
+                            }}>
+                              {linkedOrder.color}
+                            </span>
+                          )}
+                        </span>
+                      );
+                    })() : (
                       <span style={{ color: "#B0B2BA", fontSize: 11.5 }}>General</span>
                     )}
                   </div>
@@ -1116,7 +1236,7 @@ export function MyTasksPage({
       {(taskTab === "all" || taskTab === "tna") && (
         <Card>
           <CardHeader title={`${role?.dept || "Department"} — T&A stage schedule tasks`} sub="Auto-synced from active order stage trackers" />
-          <GroupedTaskList rows={tnaRows} onOpenOrder={onOpenOrder} emptyText="No open stage tasks for this role right now." />
+          <GroupedTaskList rows={filteredTnaRows} onOpenOrder={onOpenOrder} emptyText="No open stage tasks for this role right now." />
         </Card>
       )}
 
@@ -1318,31 +1438,43 @@ export function MyTasksPage({
   );
 }
 
-export function CalendarPage({ orders, onOpenOrder }) {
+export function CalendarPage({ orders = [], onOpenOrder }) {
+  const activeOrders = useMemo(() => orders.filter(o => o && o.isDeleted !== true && o.isDeleted !== "true" && !o.deletedAt), [orders]);
   return (
     <div>
       <PageHeader title="Timeline / calendar" sub="Full 21-step T&A schedule across all active orders" />
       <Card>
-        {orders.map(o => (
-          <div key={o.id} style={{ marginBottom: 20 }}>
-            <div onClick={() => onOpenOrder(o.id)} style={{ fontSize: 12.5, fontWeight: 600, color: "#1B2130", marginBottom: 8, cursor: "pointer" }}>
-              {o.id} · {o.style} <span style={{ color: "#8A8D98", fontWeight: 400 }}>({o.buyer}, ship {o.ship})</span>
+        {activeOrders.length === 0 ? (
+          <div style={{ padding: "20px 0", textAlign: "center", color: "#8A8D98", fontSize: 13 }}>No active orders in calendar.</div>
+        ) : (
+          activeOrders.map(o => (
+            <div key={o.primaryId || o.id} style={{ marginBottom: 20 }}>
+              <div onClick={() => onOpenOrder(o.primaryId || o.id, o.primaryId)} style={{ fontSize: 12.5, fontWeight: 600, color: "#1B2130", marginBottom: 8, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+                <span>{o.id}</span>
+                {o.color && (
+                  <span style={{ fontSize: 10, background: "#EFF6FF", color: "#1D4ED8", padding: "1px 5px", borderRadius: 4, fontWeight: 600 }}>
+                    {o.color}
+                  </span>
+                )}
+                <span>· {o.style}</span>
+                <span style={{ color: "#8A8D98", fontWeight: 400 }}>({o.buyer}, ship {o.ship})</span>
+              </div>
+              <div style={{ display: "flex", gap: 2, overflowX: "auto" }}>
+                {(o.stages || []).map((s, i) => (
+                  <div
+                    key={i}
+                    onClick={() => onOpenOrder(o.primaryId || o.id, o.primaryId)}
+                    title={`${s.name} — ${s.status} (${s.dept})`}
+                    style={{
+                      flex: "0 0 32px", height: 22, borderRadius: 5, cursor: "pointer",
+                      background: s.status === "done" ? "#1F9E8D" : s.status === "in_progress" ? (s.reason ? "#D64545" : "#E2A83B") : "#EDEEF1"
+                    }}
+                  />
+                ))}
+              </div>
             </div>
-            <div style={{ display: "flex", gap: 2, overflowX: "auto" }}>
-              {(o.stages || []).map((s, i) => (
-                <div
-                  key={i}
-                  onClick={() => onOpenOrder(o.id)}
-                  title={`${s.name} — ${s.status} (${s.dept})`}
-                  style={{
-                    flex: "0 0 32px", height: 22, borderRadius: 5, cursor: "pointer",
-                    background: s.status === "done" ? "#1F9E8D" : s.status === "in_progress" ? (s.reason ? "#D64545" : "#E2A83B") : "#EDEEF1"
-                  }}
-                />
-              ))}
-            </div>
-          </div>
-        ))}
+          ))
+        )}
       </Card>
     </div>
   );
@@ -1353,11 +1485,11 @@ export function ApprovalsPage({ orders = [], onOpenOrder, onApproveCosting, onRe
   const pendingCount = rows.filter(r => r.stage.status !== "done").length;
 
   const costingPendingOrders = useMemo(() => {
-    return orders.filter(o => o.costingApproval && o.costingApproval.status === "submitted");
+    return orders.filter(o => o && o.isDeleted !== true && o.isDeleted !== "true" && !o.deletedAt && o.costingApproval && o.costingApproval.status === "submitted");
   }, [orders]);
 
   const costingApprovedOrders = useMemo(() => {
-    return orders.filter(o => o.costingApproval && o.costingApproval.status === "approved");
+    return orders.filter(o => o && o.isDeleted !== true && o.isDeleted !== "true" && !o.deletedAt && o.costingApproval && o.costingApproval.status === "approved");
   }, [orders]);
 
   return (
@@ -4763,6 +4895,7 @@ export function DepartmentDetail({
       <DepartmentPerformanceAndKPI
         deptName={deptName}
         roles={roles}
+        mappedUsers={mappedUsers}
         allDeptTasks={allDeptTasks}
         doneTasks={doneTasks}
         processTasks={processTasks}

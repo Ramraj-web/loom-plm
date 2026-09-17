@@ -103,29 +103,47 @@ function getAppraisalRecommendation(score) {
 export function DepartmentPerformanceAndKPI({
   deptName,
   roles = [],
+  mappedUsers = [],
   allDeptTasks = [],
   doneTasks = [],
   processTasks = [],
 }) {
-  // Extract staff list from roles
+  // Extract staff list from mappedUsers (real assigned personnel) AND roles
   const staffList = useMemo(() => {
     const list = [];
-    roles.forEach(r => {
-      if (r.name && r.name !== "—") {
-        r.name.split(/&|,/).forEach(n => {
-          const clean = n.trim();
-          if (clean && !list.some(s => s.name === clean)) {
-            list.push({
-              name: clean,
-              title: r.title || "Staff",
-              initials: clean.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2)
-            });
-          }
-        });
-      }
-    });
+    // 1. Add mappedUsers (from Settings -> User Access / teams assigned to this department)
+    if (Array.isArray(mappedUsers)) {
+      mappedUsers.forEach(u => {
+        const name = u.name || u.username;
+        if (name && !list.some(s => s.name.toLowerCase() === name.toLowerCase())) {
+          list.push({
+            name,
+            title: u.role || u.title || "Staff",
+            initials: (u.name || u.username || "U").split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2),
+            user: u
+          });
+        }
+      });
+    }
+    // 2. Add roles (from legacy orgStructure if any)
+    if (Array.isArray(roles)) {
+      roles.forEach(r => {
+        if (r.name && r.name !== "—") {
+          r.name.split(/&|,/).forEach(n => {
+            const clean = n.trim();
+            if (clean && !list.some(s => s.name.toLowerCase() === clean.toLowerCase())) {
+              list.push({
+                name: clean,
+                title: r.title || "Staff",
+                initials: clean.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2)
+              });
+            }
+          });
+        }
+      });
+    }
     return list;
-  }, [roles]);
+  }, [roles, mappedUsers]);
 
   // Live Department Performance Metrics
   const totalTasksCount = allDeptTasks.length;

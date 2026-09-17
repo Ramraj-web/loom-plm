@@ -1087,15 +1087,37 @@ export default function LoomPLM() {
 
   // Central Notification Dispatcher with Deduplication
   const pushNotification = (notif) => {
+    // RESTRICTION: Only assigned tasks or mentioned names should trigger notifications/alerts!
+    // All other operational events (order creation, deletion, completion, etc.) are captured in eventlogger only.
+    const isTaskAssignment = notif.type === "task" ||
+      notif.type === "assigned" ||
+      notif.type === "assignment" ||
+      notif.isTask === true ||
+      (notif.title && (
+        notif.title.toLowerCase().includes("task assigned") ||
+        notif.title.toLowerCase().includes("assigned") ||
+        notif.title.toLowerCase().includes("work assigned")
+      )) ||
+      Boolean(notif.assignee || notif.targetUser);
+
+    const isMention = notif.type === "mention" ||
+      notif.isMention === true ||
+      (notif.title && notif.title.toLowerCase().includes("mention")) ||
+      (notif.message && notif.message.includes("@"));
+
+    if (!isTaskAssignment && !isMention) {
+      return;
+    }
+
     const id = notif.id || `notif-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const eventKey = notif.eventKey || `${notif.type}-${notif.relatedId || id}`;
     const newNotif = {
       id,
       eventKey,
-      type: notif.type || "order",
+      type: notif.type || "task",
       title: notif.title || "Notification",
       message: notif.message || "",
-      relatedModule: notif.relatedModule || "orders",
+      relatedModule: notif.relatedModule || "tasks",
       relatedId: notif.relatedId || null,
       priority: notif.priority || "medium",
       isRead: false,
@@ -1782,6 +1804,8 @@ export default function LoomPLM() {
       message: `'${newTask.title}' has been assigned to ${newTask.assignee || "you"}.`,
       relatedModule: "tasks",
       relatedId: newTask.id,
+      targetUser: newTask.assignee && newTask.assignee !== "Unassigned" ? newTask.assignee : undefined,
+      targetDept: newTask.dept,
       priority: newTask.priority || "medium"
     });
 
@@ -1905,6 +1929,51 @@ export default function LoomPLM() {
       priority: fullOrder.risk === "high" ? "high" : "medium"
     });
 
+    // Notify all assigned users with tasks in this new order!
+    const stageAssignees = {};
+    (fullOrder.stages || []).forEach(stage => {
+      const assignee = stage.assignee;
+      if (assignee && assignee !== "Unassigned" && assignee !== "Assigned") {
+        if (!stageAssignees[assignee]) {
+          stageAssignees[assignee] = { stages: [], depts: new Set() };
+        }
+        stageAssignees[assignee].stages.push(stage.name);
+        if (stage.dept) stageAssignees[assignee].depts.add(stage.dept);
+      }
+    });
+
+    Object.entries(stageAssignees).forEach(([assignee, data]) => {
+      const stageList = data.stages.slice(0, 3).join(", ") + (data.stages.length > 3 ? ` +${data.stages.length - 3} more` : "");
+      const dept = Array.from(data.depts)[0] || "";
+      pushNotification({
+        eventKey: `order-task-assigned-${fullOrder.id}-${assignee}`,
+        type: "task",
+        title: `Task Assigned: Order #${fullOrder.id}`,
+        message: `You have been assigned ${data.stages.length} task${data.stages.length > 1 ? "s" : ""} (${stageList}) on new Order #${fullOrder.id} (${fullOrder.style || "Order"}).`,
+        relatedModule: "orders",
+        relatedId: fullOrder.id,
+        targetUser: assignee,
+        targetDept: dept,
+        priority: "high"
+      });
+    });
+
+    // Notify the department of the initial stage (Stage 0)
+    const firstStage = (fullOrder.stages || [])[0];
+    if (firstStage && firstStage.dept) {
+      pushNotification({
+        eventKey: `order-first-stage-${fullOrder.id}-${firstStage.name}-${firstStage.dept}`,
+        type: "task",
+        title: `Initial Task Ready: ${firstStage.name}`,
+        message: `New Order #${fullOrder.id} (${fullOrder.style || "Order"}) initiated. Stage "${firstStage.name}" is pending action for ${firstStage.dept}.`,
+        relatedModule: "orders",
+        relatedId: fullOrder.id,
+        targetDept: firstStage.dept,
+        targetUser: firstStage.assignee && firstStage.assignee !== "Unassigned" ? firstStage.assignee : undefined,
+        priority: "high"
+      });
+    }
+
     logEvent({
       eventType: "ORDER",
       action: `Created new order #${fullOrder.id} (${fullOrder.style || "Style"}) for ${fullOrder.buyer || "Buyer"} (Qty: ${fullOrder.qty || 0})`,
@@ -1925,17 +1994,6 @@ export default function LoomPLM() {
         console.warn("Error completing order:", err.message);
       });
     } catch (e) { }
-
-    pushNotification({
-      eventKey: `order-completed-${primId}`,
-      type: "order",
-      title: "Order Completed",
-      message: `Order #${orderNum} has been completed.`,
-      relatedModule: "orders",
-      relatedId: orderNum,
-      priority: "low"
-    });
-
     logEvent({
       eventType: "ORDER",
       action: `Marked order #${orderNum} as Completed`,
@@ -1969,41 +2027,68 @@ export default function LoomPLM() {
       return;
     }
     const deletedAt = new Date().toISOString();
-    // Prioritize matching by unique primaryId or _id first
-    const targetOrder = orders.find(o => (o.primaryId && o.primaryId === primaryKey) || (o._id && o._id === primaryKey) || o.id === primaryKey);
+    // Match target order by primaryId, _id, or id
+    const targetOrder = orders.find(o => (o.primaryId && o.primaryId === primaryKey) || (o._id && o._id === primaryKey) || o.id === primaryKey || o.orderId === primaryKey);
     const primId = targetOrder?.primaryId || targetOrder?._id || primaryKey;
-    const orderNum = targetOrder?.id || primaryKey;
+    const orderNum = targetOrder?.id || targetOrder?.orderId || primaryKey;
 
-    // 1. Soft-delete ONLY the single order matching this exact primaryKey!
-    setOrders(prev => prev.map(o => {
-      const isTarget = targetOrder?.primaryId
-        ? (o.primaryId === targetOrder.primaryId)
-        : (o._id ? o._id === targetOrder._id : o === targetOrder);
-      return isTarget ? { ...o, isDeleted: true, deletedAt } : o;
-    }));
+    // 1. Soft-delete ALL orders matching this order name or primaryId so NO order in that name is displayed in the app!
+    setOrders(prev => {
+      const updated = prev.map(o => {
+        const isTarget = Boolean(
+          (primId && (o.primaryId === primId || o._id === primId)) ||
+          (orderNum && (o.id === orderNum || o.orderId === orderNum))
+        );
+        return isTarget ? { ...o, isDeleted: true, deletedAt } : o;
+      });
+      if (window.storage) window.storage.set("orders", JSON.stringify(updated), true);
+      return updated;
+    });
 
     // 2. Automatically delete/cleanup all tasks related to this order!
     setCustomTasks(prev => {
-      const remainingTasks = prev.filter(t => t.orderId !== primId && t.orderId !== orderNum);
+      const remainingTasks = prev.filter(t =>
+        t.orderId !== primId &&
+        t.orderId !== orderNum &&
+        t.order !== primId &&
+        t.order !== orderNum &&
+        t.relatedOrderId !== primId &&
+        t.relatedOrderId !== orderNum
+      );
       if (window.storage) window.storage.set("custom_tasks", JSON.stringify(remainingTasks), true);
       return remainingTasks;
     });
 
-    try {
-      resourcesApi.remove("orders", primId).catch(err => {
-        console.warn("Error deleting order:", err.message);
-      });
-    } catch (e) { }
-
-    pushNotification({
-      eventKey: `order-deleted-${primId}-${Date.now()}`,
-      type: "order",
-      title: "Order Deleted",
-      message: `Order #${orderNum} has been moved to deleted history.`,
-      relatedModule: "orders",
-      relatedId: orderNum,
-      priority: "medium"
+    // 3. Cascade remove any notifications related to this order
+    setNotifications(prev => {
+      const remainingNotifs = prev.filter(n =>
+        n.relatedId !== primId &&
+        n.relatedId !== orderNum &&
+        n.orderId !== primId &&
+        n.orderId !== orderNum &&
+        (!n.eventKey || (!n.eventKey.includes(primId) && !n.eventKey.includes(orderNum)))
+      );
+      if (window.storage) window.storage.set("notifications", JSON.stringify(remainingNotifs), true);
+      return remainingNotifs;
     });
+
+    // 4. If user is currently inside this deleted order view, navigate back to orders list
+    if (selectedId === primId || selectedId === orderNum) {
+      setSelectedId(null);
+      setView("orders");
+      window.location.hash = getRouteHash("orders");
+    }
+
+    try {
+      if (primId) {
+        resourcesApi.remove("orders", primId).catch(err => {
+          console.warn("Error deleting order:", err.message);
+        });
+      }
+      if (orderNum && orderNum !== primId) {
+        resourcesApi.remove("orders", orderNum).catch(() => {});
+      }
+    } catch (e) { }
 
     logEvent({
       eventType: "ORDER",
@@ -2018,17 +2103,18 @@ export default function LoomPLM() {
       alert("Permission denied: Only Administrators can permanently delete orders.");
       return;
     }
-    const targetOrder = orders.find(o => (o.primaryId && o.primaryId === primaryKey) || (o._id && o._id === primaryKey) || o.id === primaryKey);
+    const targetOrder = orders.find(o => (o.primaryId && o.primaryId === primaryKey) || (o._id && o._id === primaryKey) || o.id === primaryKey || o.orderId === primaryKey);
     const primId = targetOrder?.primaryId || targetOrder?._id || primaryKey;
-    const orderNum = targetOrder?.id || primaryKey;
+    const orderNum = targetOrder?.id || targetOrder?.orderId || primaryKey;
 
-    // 1. Completely purge ONLY the single order matching this primaryKey
+    // 1. Completely purge ALL orders matching this name/ID or primaryKey
     setOrders(prev => {
       const remaining = prev.filter(o => {
-        const isTarget = targetOrder?.primaryId
-          ? (o.primaryId === targetOrder.primaryId)
-          : (o._id ? o._id === targetOrder._id : o === targetOrder);
-        return !isTarget;
+        const isMatch = Boolean(
+          (primId && (o.primaryId === primId || o._id === primId)) ||
+          (orderNum && (o.id === orderNum || o.orderId === orderNum))
+        );
+        return !isMatch;
       });
       if (window.storage) window.storage.set("orders", JSON.stringify(remaining), true);
       return remaining;
@@ -2036,7 +2122,14 @@ export default function LoomPLM() {
 
     // 2. Cascade clean all tasks related to this order from state & storage
     setCustomTasks(prev => {
-      const remainingTasks = prev.filter(t => t.orderId !== primId && t.orderId !== orderNum && t.order !== primId && t.order !== orderNum && t.relatedOrderId !== primId && t.relatedOrderId !== orderNum);
+      const remainingTasks = prev.filter(t =>
+        t.orderId !== primId &&
+        t.orderId !== orderNum &&
+        t.order !== primId &&
+        t.order !== orderNum &&
+        t.relatedOrderId !== primId &&
+        t.relatedOrderId !== orderNum
+      );
       if (window.storage) window.storage.set("custom_tasks", JSON.stringify(remainingTasks), true);
       return remainingTasks;
     });
@@ -2089,21 +2182,27 @@ export default function LoomPLM() {
       localStorage.removeItem(`chat:${orderNum}`);
     } catch (e) { }
 
-    // 8. Send PERMANENT delete request to backend & MongoDB with primaryId
+    if (selectedId === primId || selectedId === orderNum) {
+      setSelectedId(null);
+      setView("orders");
+      window.location.hash = getRouteHash("orders");
+    }
+
+    // 8. Send PERMANENT delete request to backend & MongoDB with primaryId and orderNum
     try {
       await resourcesApi.remove("orders", primId, "?permanent=true");
+      if (orderNum && orderNum !== primId) {
+        await resourcesApi.remove("orders", orderNum, "?permanent=true").catch(() => {});
+      }
     } catch (err) {
       console.error("Failed to permanently delete order from backend:", err);
     }
 
-    pushNotification({
-      eventKey: `order-perm-deleted-${primId}-${Date.now()}`,
-      type: "order",
-      title: "Order Permanently Deleted",
-      message: `Order #${orderNum} has been permanently removed from the system.`,
-      relatedModule: "orders",
-      relatedId: orderNum,
-      priority: "high"
+    logEvent({
+      eventType: "ORDER",
+      action: `Permanently deleted order #${orderNum}`,
+      targetId: orderNum,
+      metadata: { orderId: orderNum, primaryId: primId }
     });
   };
 
@@ -2298,7 +2397,7 @@ export default function LoomPLM() {
           updatedAt: nowIso
         };
 
-        // TARGETED NOTIFICATION: Only goes to this specific department!
+        // TARGETED NOTIFICATION: Goes to this specific department and assigned user!
         pushNotification({
           eventKey: `dept-task-assigned-${id}-${nextStageToActivate.name}-${nextStageToActivate.dept}`,
           type: "task",
@@ -2307,6 +2406,7 @@ export default function LoomPLM() {
           relatedModule: "tasks",
           relatedId: id,
           targetDept: nextStageToActivate.dept, // Strict department targeting
+          targetUser: nextDeptAssignee && nextDeptAssignee !== "Unassigned" && nextDeptAssignee !== "Assigned" ? nextDeptAssignee : undefined,
           priority: "high"
         });
       }
@@ -2764,11 +2864,17 @@ export default function LoomPLM() {
     }
   };
 
-  const openOrder = (id) => {
-    setSelectedId(id);
+  const openOrder = (id, primaryId) => {
+    let target = id;
+    if (typeof id === "object" && id !== null) {
+      target = id.primaryId || id._id || id.id;
+    } else if (primaryId) {
+      target = primaryId;
+    }
+    setSelectedId(target);
     setPreviousView(view === "order" ? previousView : view);
     setView("order");
-    const targetHash = getRouteHash("order", id);
+    const targetHash = getRouteHash("order", target);
     if (window.location.hash !== targetHash) {
       window.location.hash = targetHash;
     }
@@ -2784,12 +2890,15 @@ export default function LoomPLM() {
     }
   };
 
-  const selectedOrder = orders.find(o => o.id === selectedId);
+  const selectedOrder = orders.find(o =>
+    selectedId && ((o.primaryId && o.primaryId === selectedId) || (o._id && o._id === selectedId))
+  ) || orders.find(o => o.id === selectedId);
   const canSeeAll = !!role.fullAccess;
   const canAccess = permission => canSeeAll || role.permissions?.includes(permission);
   const personName = (role.label.match(/\(([^)]+)\)/) || [])[1] || role.label;
 
   const searchResults = searchQuery.trim().length === 0 ? [] : orders
+    .filter(o => o && !o.isDeleted && o.isDeleted !== "true" && !o.deletedAt)
     .filter(o => canSeeAll || (o.stages && o.stages.some(s => s.dept === role.dept)))
     .filter(o => {
       const q = searchQuery.toLowerCase();
@@ -2800,10 +2909,11 @@ export default function LoomPLM() {
   const bellAlerts = (() => {
     const items = [];
     orders.forEach(o => {
+      if (!o || o.isDeleted === true || o.isDeleted === "true" || o.deletedAt) return;
       if (!o.stages) return;
       o.stages.forEach(s => {
         if (s.reason && (canSeeAll || s.dept === role.dept)) {
-          items.push({ text: `${s.reason} — ${o.style} PO #${o.id}`, sev: o.risk, orderId: o.id });
+          items.push({ text: `${s.reason} — ${o.style} PO #${o.id}`, sev: o.risk, orderId: o.primaryId || o.id });
         }
       });
     });
@@ -3648,9 +3758,29 @@ export default function LoomPLM() {
     );
   }
 
-  // Filter notifications: Admin and MD see all; department users see their department, general, or notifications specifically targeted to them (@user)
+  // Filter notifications: ONLY assigned tasks and mentioned names hit the notification tray! Other events are in event logger.
   const userNotifications = notifications.filter(n => {
-    if (n.isDeleted === true) return false;
+    if (!n || n.isDeleted === true) return false;
+
+    // Strict filter: only assigned tasks or mentioned names
+    const isTaskAssignment = n.type === "task" ||
+      n.type === "assigned" ||
+      n.type === "assignment" ||
+      n.isTask === true ||
+      (n.title && (
+        n.title.toLowerCase().includes("task assigned") ||
+        n.title.toLowerCase().includes("assigned") ||
+        n.title.toLowerCase().includes("work assigned")
+      )) ||
+      Boolean(n.assignee || n.targetUser);
+
+    const isMention = n.type === "mention" ||
+      n.isMention === true ||
+      (n.title && n.title.toLowerCase().includes("mention")) ||
+      (n.message && n.message.includes("@"));
+
+    if (!isTaskAssignment && !isMention) return false;
+
     const isSuper = Boolean(
       role.fullAccess ||
       role.dept === "Executive" ||
@@ -3660,9 +3790,13 @@ export default function LoomPLM() {
       activeUser?.isMD
     );
 
+    const userDeptList = Array.isArray(role?.departments) && role.departments.length > 0
+      ? role.departments.map(d => d.toLowerCase())
+      : [(role?.dept || "").toLowerCase()];
+
     // If notification is explicitly targeted to a person/username
-    if (n.targetUser) {
-      const target = String(n.targetUser).replace(/^@/, "").trim().toLowerCase();
+    if (n.targetUser || n.assignee) {
+      const target = String(n.targetUser || n.assignee).replace(/^@/, "").trim().toLowerCase();
       const uName = String(activeUser?.username || "").trim().toLowerCase();
       const pName = String(personName || activeUser?.name || "").trim().toLowerCase();
       const isTarget = Boolean(
@@ -3670,13 +3804,14 @@ export default function LoomPLM() {
         (pName && (pName === target || pName.includes(target) || target.includes(pName)))
       );
       if (isTarget) return true;
-      if (isSuper) return true; // Superusers also see complaints & mentions
+      if (n.targetDept && userDeptList.includes(n.targetDept.toLowerCase())) return true;
+      if (isSuper) return true;
       return false;
     }
 
     if (isSuper) return true;
     if (n.targetDept) {
-      return n.targetDept.toLowerCase() === (role.dept || "").toLowerCase();
+      return userDeptList.includes(n.targetDept.toLowerCase());
     }
     return true;
   });

@@ -226,7 +226,9 @@ app.get("/api/resources/:resource/:id", (req, res, next) => {
   if (!validResource(resource)) return res.status(404).json({ error: "Unknown resource" });
   try {
     const db = readResourcesDB();
-    const record = (db[resource] || []).find(item => String(item.id) === id);
+    const record = (db[resource] || []).find(item =>
+      String(item.id) === id || String(item.primaryId) === id || String(item._id) === id || String(item.orderId) === id
+    );
     if (!record) return res.status(404).json({ error: "Record not found" });
     if (SOFT_DELETE_RESOURCES.includes(resource) && req.query.all !== "true" && req.query.trash !== "true" && record.isDeleted === true) {
       return res.status(404).json({ error: "Record not found" });
@@ -249,7 +251,9 @@ app.post("/api/resources/:resource", (req, res, next) => {
   try {
     const db = readResourcesDB();
     if (!db[resource]) db[resource] = [];
-    const existingIdx = db[resource].findIndex(item => String(item.id) === String(recordId));
+    const existingIdx = db[resource].findIndex(item =>
+      String(item.id) === String(recordId) || (record.primaryId && String(item.primaryId) === String(record.primaryId))
+    );
     if (existingIdx >= 0) {
       db[resource][existingIdx] = record;
     } else {
@@ -268,14 +272,16 @@ app.put("/api/resources/:resource/:id", (req, res, next) => {
   try {
     const db = readResourcesDB();
     if (!db[resource]) db[resource] = [];
-    const index = db[resource].findIndex(item => String(item.id) === id);
+    const index = db[resource].findIndex(item =>
+      String(item.id) === id || String(item.primaryId) === id || String(item._id) === id || String(item.orderId) === id
+    );
     if (index < 0) {
       const record = { ...req.body, id, resource };
       db[resource].push(record);
       writeResourcesDB(db);
       return res.json(record);
     }
-    const record = { ...db[resource][index], ...req.body, id };
+    const record = { ...db[resource][index], ...req.body, id: db[resource][index].id || id };
     db[resource][index] = record;
     writeResourcesDB(db);
     res.json(record);
@@ -290,14 +296,16 @@ app.patch("/api/resources/:resource/:id", (req, res, next) => {
   try {
     const db = readResourcesDB();
     if (!db[resource]) db[resource] = [];
-    const index = db[resource].findIndex(item => String(item.id) === id);
+    const index = db[resource].findIndex(item =>
+      String(item.id) === id || String(item.primaryId) === id || String(item._id) === id || String(item.orderId) === id
+    );
     if (index < 0) {
       const record = { ...req.body, id, resource };
       db[resource].push(record);
       writeResourcesDB(db);
       return res.json(record);
     }
-    const record = { ...db[resource][index], ...req.body, id };
+    const record = { ...db[resource][index], ...req.body, id: db[resource][index].id || id };
     db[resource][index] = record;
     writeResourcesDB(db);
     res.json(record);
@@ -312,30 +320,66 @@ app.delete("/api/resources/:resource/:id", (req, res, next) => {
   const isPermanent = req.query.permanent === "true" || req.query.force === "true";
   try {
     const db = readResourcesDB();
+    const index = (db[resource] || []).findIndex(item =>
+      String(item.id) === id || String(item.primaryId) === id || String(item._id) === id || String(item.orderId) === id
+    );
+    if (index < 0) return res.status(404).json({ error: "Record not found" });
+
+    const target = db[resource][index];
+    const targetIdentifiers = Array.from(new Set([target.id, target.primaryId, target._id, target.orderId, id].filter(Boolean).map(String)));
+
     if (SOFT_DELETE_RESOURCES.includes(resource) && !isPermanent) {
-      const record = db[resource]?.find(item => String(item.id) === id);
-      if (!record) return res.status(404).json({ error: "Record not found" });
-      record.isDeleted = true;
-      record.deletedAt = new Date().toISOString();
+      if (resource === "orders") {
+        db[resource] = db[resource].map(r => {
+          if (targetIdentifiers.includes(String(r.id)) || targetIdentifiers.includes(String(r.primaryId)) || targetIdentifiers.includes(String(r.orderId))) {
+            return { ...r, isDeleted: true, deletedAt: new Date().toISOString() };
+          }
+          return r;
+        });
+      } else {
+        target.isDeleted = true;
+        target.deletedAt = new Date().toISOString();
+      }
+
+      if (resource === "orders" && Array.isArray(db["tasks"])) {
+        db["tasks"] = db["tasks"].map(t => {
+          if (targetIdentifiers.includes(String(t.orderId)) || targetIdentifiers.includes(String(t.order))) {
+            return { ...t, isDeleted: true, deletedAt: new Date().toISOString() };
+          }
+          return t;
+        });
+      }
+
       writeResourcesDB(db);
       return res.json({ id, deleted: true, isDeleted: true });
     }
-    const before = db[resource]?.length || 0;
-    db[resource] = (db[resource] || []).filter(item => String(item.id) !== id);
+
+    if (resource === "orders") {
+      db[resource] = db[resource].filter(r =>
+        !targetIdentifiers.includes(String(r.id)) &&
+        !targetIdentifiers.includes(String(r.primaryId)) &&
+        !targetIdentifiers.includes(String(r.orderId))
+      );
+    } else {
+      db[resource].splice(index, 1);
+    }
     
     // Cascade delete for orders
     if (resource === "orders") {
       ["tasks", "notifications", "supplierWork", "certifications", "compliances", "debitNotes", "capas"].forEach(relRes => {
         if (Array.isArray(db[relRes])) {
           db[relRes] = db[relRes].filter(r =>
-            r.orderId !== id && r.order !== id && r.po !== id && r.relatedId !== id
+            !targetIdentifiers.includes(String(r.orderId)) &&
+            !targetIdentifiers.includes(String(r.order)) &&
+            !targetIdentifiers.includes(String(r.po)) &&
+            !targetIdentifiers.includes(String(r.relatedId))
           );
         }
       });
     }
 
     writeResourcesDB(db);
-    res.json({ id, deleted: db[resource].length < before, permanent: true });
+    res.json({ id, deleted: true, permanent: true });
   } catch (error) {
     next(error);
   }

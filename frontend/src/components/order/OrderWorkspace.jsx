@@ -545,9 +545,9 @@ export function StageColourwayModal({
         {/* Quantity Summary: Completed vs Pending Pieces */}
         <div style={{ padding: "10px 24px", background: "#F9FAFB", borderBottom: "1px solid #F3F4F6", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12 }}>
           <div style={{ display: "flex", gap: 14 }}>
-            <span>Total: <strong style={{ color: "#111827" }}>{totalPieces.toLocaleString()} pcs</strong></span>
-            <span style={{ color: "#16A34A" }}>Completed: <strong>{completedPieces.toLocaleString()} pcs</strong></span>
-            <span style={{ color: "#DC2626" }}>Pending: <strong>{pendingPieces.toLocaleString()} pcs</strong></span>
+            <span>Total: <strong style={{ color: "#111827" }}>{(Number(totalPieces) || 0).toLocaleString()} pcs</strong></span>
+            <span style={{ color: "#16A34A" }}>Completed: <strong>{(Number(completedPieces) || 0).toLocaleString()} pcs</strong></span>
+            <span style={{ color: "#DC2626" }}>Pending: <strong>{(Number(pendingPieces) || 0).toLocaleString()} pcs</strong></span>
           </div>
           <div style={{ fontSize: 11, fontWeight: 600, color: doneCount === colourways.length ? "#16A34A" : "#6366F1" }}>
             {totalPieces > 0 ? Math.round((completedPieces / totalPieces) * 100) : 0}% Done
@@ -560,8 +560,8 @@ export function StageColourwayModal({
             const isDone = c.status === "done";
             const isInProgress = c.status === "in_progress";
             const isPending = !isDone && !isInProgress;
-            const cCompleted = c.completedQty != null ? Number(c.completedQty) : (isDone ? c.qty : 0);
-            const cPending = Math.max(0, c.qty - cCompleted);
+            const cCompleted = c.completedQty != null ? Number(c.completedQty) : (isDone ? (Number(c.qty) || 0) : 0);
+            const cPending = Math.max(0, (Number(c.qty) || 0) - cCompleted);
             const hasDelay = Boolean(c.reason && c.reason !== "No delay flagged");
 
             return (
@@ -582,7 +582,7 @@ export function StageColourwayModal({
                       {c.color}
                     </div>
                     <div style={{ fontSize: 12, color: "#6B7280", marginTop: 2 }}>
-                      {c.qty.toLocaleString()} pcs
+                      {(Number(c.qty) || 0).toLocaleString()} pcs
                     </div>
                   </div>
 
@@ -613,10 +613,10 @@ export function StageColourwayModal({
                 {/* Pieces breakdown: Completed vs Pending */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#F9FAFB", padding: "6px 10px", borderRadius: 8, fontSize: 11.5, marginBottom: 10 }}>
                   <div style={{ color: "#4B5563" }}>
-                    Completed: <strong style={{ color: "#16A34A" }}>{cCompleted.toLocaleString()}</strong> pcs
+                    Completed: <strong style={{ color: "#16A34A" }}>{(Number(cCompleted) || 0).toLocaleString()}</strong> pcs
                   </div>
                   <div style={{ color: "#4B5563" }}>
-                    Pending: <strong style={{ color: "#DC2626" }}>{cPending.toLocaleString()}</strong> pcs
+                    Pending: <strong style={{ color: "#DC2626" }}>{(Number(cPending) || 0).toLocaleString()}</strong> pcs
                   </div>
                   {canEdit && (
                     <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -954,6 +954,11 @@ function StageNode({ stage, idx, onCycle, onReason, onSupplierChange, onOpenDisp
           <div style={{ fontSize: 10.5, color: "#E2A83B", marginTop: 2, fontWeight: 500 }}>
             {stage.assignee && stage.assignee !== "Unassigned" ? stage.assignee : "In Progress"}
           </div>
+          {hasColourways && doneColourwaysCount > 0 && (
+            <div style={{ fontSize: 9.5, color: "#059669", fontWeight: 600, marginTop: 1 }}>
+              ✓ {doneColourwaysCount}/{totalColourwaysCount} colours received
+            </div>
+          )}
           <div style={{ marginTop: 6 }}>
             <button
               onClick={() => setOpen(!open)}
@@ -1027,9 +1032,9 @@ function PreProductionTab({ order, role, onFieldChange, onSubmit, onApprove }) {
 
           const summaryParts = [];
           if (extracted.poNumber) summaryParts.push(`PO #${extracted.poNumber}`);
-          if (extracted.poQty) summaryParts.push(`Qty: ${extracted.poQty.toLocaleString()}`);
+          if (extracted.poQty) summaryParts.push(`Qty: ${(Number(extracted.poQty) || 0).toLocaleString()}`);
           if (extracted.fobPrice) summaryParts.push(`FOB: ₹${extracted.fobPrice}`);
-          if (extracted.orderValue) summaryParts.push(`Order Value: ₹${extracted.orderValue.toLocaleString()}`);
+          if (extracted.orderValue) summaryParts.push(`Order Value: ₹${(Number(extracted.orderValue) || 0).toLocaleString()}`);
 
           setScanMessage(`✓ Extracted from ${file.name}: ${summaryParts.join(" · ")}`);
         } else {
@@ -2100,9 +2105,9 @@ function DocumentsPanel({
 
           const details = [];
           if (extracted.poNumber) details.push(`PO #${extracted.poNumber}`);
-          if (extracted.poQty) details.push(`Qty: ${extracted.poQty.toLocaleString()}`);
+          if (extracted.poQty) details.push(`Qty: ${(Number(extracted.poQty) || 0).toLocaleString()}`);
           if (extracted.fobPrice) details.push(`FOB: ₹${extracted.fobPrice}`);
-          if (extracted.orderValue) details.push(`Order Value: ₹${extracted.orderValue.toLocaleString()}`);
+          if (extracted.orderValue) details.push(`Order Value: ₹${(Number(extracted.orderValue) || 0).toLocaleString()}`);
 
           setScanStatus({ text: `✓ Auto-scanned & synced to Order Value: ${details.join(" · ")}`, loading: false });
         } else {
@@ -2346,7 +2351,7 @@ function DocumentsPanel({
                 onChange={e => onUpdateShippedQty(order.primaryId || order.id, Number(e.target.value))}
                 style={{ width: 110, fontSize: 13, fontWeight: 600, padding: "7px 10px", borderRadius: 8, border: "1px solid #E7E8ED", textAlign: "right" }}
               />
-              <span style={{ fontSize: 11.5, color: "#8A8D98" }}>/ {order.qty.toLocaleString()} pcs ordered</span>
+              <span style={{ fontSize: 11.5, color: "#8A8D98" }}>/ {(Number(order.qty) || 0).toLocaleString()} pcs ordered</span>
             </div>
           )}
           {docTypes.map((docType, i) => {
@@ -2748,7 +2753,6 @@ export function OrderWorkspace({
 
   const cycle = (idx) => {
     if (gatingApproval(order.stages, idx)) return;
-    if (cuttingIdx !== -1 && idx >= cuttingIdx && !bulkGateOpen) return;
     const current = order.stages[idx];
     if (current && current.status === "done") {
       // Completed stages stay completed — do not cycle back to pending!
@@ -2839,7 +2843,6 @@ export function OrderWorkspace({
       <div style={{ display: "flex", gap: 2, overflowX: "auto", paddingBottom: 8 }}>
         {(order.stages || []).map((s, i) => {
           const gate = gatingApproval(order.stages, i);
-          const bulkLocked = !gate && cuttingIdx !== -1 && i >= cuttingIdx && !bulkGateOpen;
           
           // Strict Multi-Department Ownership:
           // Admin, Executive, fullAccess can edit any stage.
@@ -2864,7 +2867,7 @@ export function OrderWorkspace({
               onReason={setReason}
               onSupplierChange={setSupplier}
               onOpenDispute={(st, index) => setDisputeModalData({ isOpen: true, stage: st, stageIdx: index })}
-              lockedBy={gate ? gate.name : bulkLocked ? "Pre-Production sign-off" : null}
+              lockedBy={gate ? gate.name : null}
               suppliers={suppliers}
               canEdit={canEditThisStage}
               roleDept={role?.dept || "User"}
@@ -2932,7 +2935,7 @@ export function OrderWorkspace({
           <div style={{ fontFamily: "monospace", fontSize: 13, color: "#8A8D98", marginBottom: 4 }}>PO #{order.id}</div>
           <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0, color: "#1B2130" }}>{order.style}</h1>
           <div style={{ fontSize: 13.5, color: "#565A66", marginTop: 4, display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-            <span>{order.buyer} · {order.country} · {order.qty.toLocaleString()} pcs · Ship {order.ship}</span>
+            <span>{order.buyer} · {order.country} · {(Number(order.qty) || 0).toLocaleString()} pcs · Ship {order.ship}</span>
             {Array.isArray(order.colorBreakdown) && order.colorBreakdown.length > 0 ? (
               <div style={{ display: "inline-flex", flexWrap: "wrap", gap: 4, marginLeft: 6 }}>
                 {order.colorBreakdown.map((b, bi) => (
@@ -3085,10 +3088,7 @@ export function OrderWorkspace({
                   : [(role?.dept || "").toLowerCase()]
                 ).includes(order.stages[colourwayModalStageIdx].dept.toLowerCase())
               )
-            ) && !(
-              gatingApproval(order.stages, colourwayModalStageIdx) ||
-              (cuttingIdx !== -1 && colourwayModalStageIdx >= cuttingIdx && !bulkGateOpen)
-            )
+            ) && !gatingApproval(order.stages, colourwayModalStageIdx)
           }
         />
       )}

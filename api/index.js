@@ -558,7 +558,10 @@ export default async function handler(req, res) {
         if (mongoCols?.resources) {
           try {
             if (id) {
-              const record = await mongoCols.resources.findOne({ resource, id }, { projection: { _id: 0 } });
+              const record = await mongoCols.resources.findOne({
+                resource,
+                $or: [{ id }, { primaryId: id }, { _id: id }, { orderId: id }]
+              }, { projection: { _id: 0 } });
               if (!record) return res.status(404).json({ error: "Record not found" });
               if (isSoftDelete && !showAll && !isTrash && record.isDeleted === true) {
                 return res.status(404).json({ error: "Record not found" });
@@ -580,7 +583,9 @@ export default async function handler(req, res) {
         }
 
         if (id) {
-          const item = memoryDB[resource].find(r => String(r.id) === id);
+          const item = memoryDB[resource].find(r =>
+            String(r.id) === id || String(r.primaryId) === id || String(r._id) === id || String(r.orderId) === id
+          );
           if (!item) return res.status(404).json({ error: "Record not found" });
           if (isSoftDelete && !showAll && !isTrash && item.isDeleted === true) {
             return res.status(404).json({ error: "Record not found" });
@@ -616,7 +621,9 @@ export default async function handler(req, res) {
         }
 
         if (!Array.isArray(memoryDB[resource])) memoryDB[resource] = [];
-        const existingIdx = memoryDB[resource].findIndex(r => String(r.id) === String(recordId));
+        const existingIdx = memoryDB[resource].findIndex(r =>
+          String(r.id) === String(recordId) || (record.primaryId && String(r.primaryId) === String(record.primaryId))
+        );
         if (existingIdx >= 0) memoryDB[resource][existingIdx] = record;
         else memoryDB[resource] = [record, ...memoryDB[resource]];
         return res.status(201).json(record);
@@ -629,10 +636,19 @@ export default async function handler(req, res) {
 
         if (mongoCols?.resources) {
           try {
-            const existing = await mongoCols.resources.findOne({ resource, id });
-            const updated = { ...(existing || {}), ...body, id, resource };
+            const query = {
+              resource,
+              $or: [{ id }, { primaryId: id }, { _id: id }, { orderId: id }]
+            };
+            const existing = await mongoCols.resources.findOne(query);
+            const updated = { ...(existing || {}), ...body, resource };
+            if (!updated.id) updated.id = id;
             delete updated._id;
-            await mongoCols.resources.replaceOne({ resource, id }, { resource, ...updated }, { upsert: true });
+            if (existing) {
+              await mongoCols.resources.updateOne(query, { $set: updated });
+            } else {
+              await mongoCols.resources.insertOne({ resource, id, ...updated });
+            }
             return res.status(200).json(updated);
           } catch (e) {
             console.error("Mongo resource PUT/PATCH error:", e.message);
@@ -640,7 +656,9 @@ export default async function handler(req, res) {
         }
 
         if (!Array.isArray(memoryDB[resource])) memoryDB[resource] = [];
-        const index = memoryDB[resource].findIndex(r => String(r.id) === id);
+        const index = memoryDB[resource].findIndex(r =>
+          String(r.id) === id || String(r.primaryId) === id || String(r._id) === id || String(r.orderId) === id
+        );
         if (index < 0) {
           const newRecord = { ...body, id, resource };
           memoryDB[resource].push(newRecord);
@@ -650,7 +668,7 @@ export default async function handler(req, res) {
         const updated = {
           ...memoryDB[resource][index],
           ...body,
-          id,
+          id: memoryDB[resource][index].id || id,
         };
         memoryDB[resource][index] = updated;
         return res.status(200).json(updated);
@@ -663,15 +681,63 @@ export default async function handler(req, res) {
 
         if (mongoCols?.resources) {
           try {
+            const query = {
+              resource,
+              $or: [{ id }, { primaryId: id }, { _id: id }, { orderId: id }, { name: id }]
+            };
+            const target = await mongoCols.resources.findOne(query);
+            if (!target) return res.status(404).json({ error: "Record not found" });
+
+            const targetIdentifiers = Array.from(new Set([target.id, target.primaryId, target._id, target.orderId, id].filter(Boolean).map(String)));
+
             if (isSoftDelete && !isPermanent) {
               const update = { $set: { isDeleted: true, deletedAt: new Date().toISOString() } };
-              const result = await mongoCols.resources.updateOne({ resource, id }, update);
-              if (!result.matchedCount) return res.status(404).json({ error: "Record not found" });
+              if (resource === "orders") {
+                await mongoCols.resources.updateMany({
+                  resource: "orders",
+                  $or: [
+                    { id: { $in: targetIdentifiers } },
+                    { primaryId: { $in: targetIdentifiers } },
+                    { orderId: { $in: targetIdentifiers } }
+                  ]
+                }, update);
+              } else {
+                await mongoCols.resources.updateOne(query, update);
+              }
+
+              // Cascade soft-delete related tasks
+              if (resource === "orders") {
+                try {
+                  await mongoCols.resources.updateMany({
+                    resource: "tasks",
+                    $or: [
+                      { orderId: { $in: targetIdentifiers } },
+                      { order: { $in: targetIdentifiers } },
+                      { relatedOrderId: { $in: targetIdentifiers } }
+                    ]
+                  }, update);
+                } catch (taskErr) {
+                  console.warn("Cascade soft-delete tasks error:", taskErr.message);
+                }
+              }
+
               return res.status(200).json({ id, deleted: true, isDeleted: true });
             }
 
             // Permanent deletion from MongoDB
-            const result = await mongoCols.resources.deleteOne({ resource, $or: [{ id }, { name: id }] });
+            let result;
+            if (resource === "orders") {
+              result = await mongoCols.resources.deleteMany({
+                resource: "orders",
+                $or: [
+                  { id: { $in: targetIdentifiers } },
+                  { primaryId: { $in: targetIdentifiers } },
+                  { orderId: { $in: targetIdentifiers } }
+                ]
+              });
+            } else {
+              result = await mongoCols.resources.deleteOne(query);
+            }
 
             // If an order is permanently deleted, cascade delete related records from MongoDB
             if (resource === "orders") {
@@ -679,42 +745,63 @@ export default async function handler(req, res) {
                 // Delete tasks associated with this order
                 await mongoCols.resources.deleteMany({
                   resource: "tasks",
-                  $or: [{ orderId: id }, { order: id }, { relatedOrderId: id }]
+                  $or: [
+                    { orderId: { $in: targetIdentifiers } },
+                    { order: { $in: targetIdentifiers } },
+                    { relatedOrderId: { $in: targetIdentifiers } }
+                  ]
                 });
                 // Delete notifications associated with this order
                 await mongoCols.resources.deleteMany({
                   resource: "notifications",
-                  $or: [{ relatedId: id }, { orderId: id }, { eventKey: { $regex: id } }]
+                  $or: [
+                    { relatedId: { $in: targetIdentifiers } },
+                    { orderId: { $in: targetIdentifiers } },
+                    ...targetIdentifiers.map(ti => ({ eventKey: { $regex: ti } }))
+                  ]
                 });
                 // Delete supplier work associated with this order
                 await mongoCols.resources.deleteMany({
                   resource: "supplierWork",
-                  $or: [{ orderId: id }, { order: id }]
+                  $or: [
+                    { orderId: { $in: targetIdentifiers } },
+                    { order: { $in: targetIdentifiers } }
+                  ]
                 });
                 // Delete certifications associated with this order
                 await mongoCols.resources.deleteMany({
                   resource: "certifications",
-                  orderId: id
+                  orderId: { $in: targetIdentifiers }
                 });
                 // Delete compliances associated with this order
                 await mongoCols.resources.deleteMany({
                   resource: "compliances",
-                  orderId: id
+                  orderId: { $in: targetIdentifiers }
                 });
                 // Delete debit notes associated with this order
                 await mongoCols.resources.deleteMany({
                   resource: "debitNotes",
-                  $or: [{ po: id }, { orderId: id }]
+                  $or: [
+                    { po: { $in: targetIdentifiers } },
+                    { orderId: { $in: targetIdentifiers } }
+                  ]
                 });
                 // Delete capas associated with this order
                 await mongoCols.resources.deleteMany({
                   resource: "capas",
-                  $or: [{ po: id }, { orderId: id }]
+                  $or: [
+                    { po: { $in: targetIdentifiers } },
+                    { orderId: { $in: targetIdentifiers } }
+                  ]
                 });
                 // Delete order-specific storage keys
                 if (mongoCols?.storage) {
+                  const storageKeys = [];
+                  targetIdentifiers.forEach(ti => {
+                    storageKeys.push(`docs:${ti}`, `highlights:${ti}`, `chat:${ti}`, `customTypes:${ti}`);
+                  });
                   await mongoCols.storage.deleteMany({
-                    key: { $in: [`docs:${id}`, `highlights:${id}`, `chat:${id}`, `customTypes:${id}`] }
+                    key: { $in: storageKeys }
                   });
                 }
               } catch (cascadeErr) {
@@ -729,35 +816,70 @@ export default async function handler(req, res) {
         }
 
         if (!Array.isArray(memoryDB[resource])) memoryDB[resource] = [];
-        const index = memoryDB[resource].findIndex(r => String(r.id) === id);
+        const index = memoryDB[resource].findIndex(r =>
+          String(r.id) === id || String(r.primaryId) === id || String(r._id) === id || String(r.orderId) === id || String(r.name) === id
+        );
         if (index < 0) return res.status(404).json({ error: "Record not found" });
 
+        const target = memoryDB[resource][index];
+        const targetIdentifiers = Array.from(new Set([target.id, target.primaryId, target._id, target.orderId, id].filter(Boolean).map(String)));
+
         if (isSoftDelete && !isPermanent) {
-          memoryDB[resource][index] = {
-            ...memoryDB[resource][index],
-            isDeleted: true,
-            deletedAt: new Date().toISOString(),
-          };
+          if (resource === "orders") {
+            memoryDB[resource] = memoryDB[resource].map(r => {
+              if (targetIdentifiers.includes(String(r.id)) || targetIdentifiers.includes(String(r.primaryId)) || targetIdentifiers.includes(String(r.orderId))) {
+                return { ...r, isDeleted: true, deletedAt: new Date().toISOString() };
+              }
+              return r;
+            });
+          } else {
+            memoryDB[resource][index] = {
+              ...memoryDB[resource][index],
+              isDeleted: true,
+              deletedAt: new Date().toISOString(),
+            };
+          }
+          if (resource === "orders" && Array.isArray(memoryDB["tasks"])) {
+            memoryDB["tasks"] = memoryDB["tasks"].map(t => {
+              if (targetIdentifiers.includes(String(t.orderId)) || targetIdentifiers.includes(String(t.order))) {
+                return { ...t, isDeleted: true, deletedAt: new Date().toISOString() };
+              }
+              return t;
+            });
+          }
           return res.status(200).json({ id, deleted: true, isDeleted: true });
         }
 
-        memoryDB[resource].splice(index, 1);
+        if (resource === "orders") {
+          memoryDB[resource] = memoryDB[resource].filter(r =>
+            !targetIdentifiers.includes(String(r.id)) &&
+            !targetIdentifiers.includes(String(r.primaryId)) &&
+            !targetIdentifiers.includes(String(r.orderId))
+          );
+        } else {
+          memoryDB[resource].splice(index, 1);
+        }
 
         // Cascade delete from memoryDB for orders
         if (resource === "orders") {
           ["tasks", "notifications", "supplierWork", "certifications", "compliances", "debitNotes", "capas"].forEach(relRes => {
             if (Array.isArray(memoryDB[relRes])) {
               memoryDB[relRes] = memoryDB[relRes].filter(r =>
-                r.orderId !== id && r.order !== id && r.po !== id && r.relatedId !== id
+                !targetIdentifiers.includes(String(r.orderId)) &&
+                !targetIdentifiers.includes(String(r.order)) &&
+                !targetIdentifiers.includes(String(r.po)) &&
+                !targetIdentifiers.includes(String(r.relatedId))
               );
             }
           });
           ["personal", "shared"].forEach(b => {
             if (memoryStorage[b]) {
-              delete memoryStorage[b][`docs:${id}`];
-              delete memoryStorage[b][`highlights:${id}`];
-              delete memoryStorage[b][`chat:${id}`];
-              delete memoryStorage[b][`customTypes:${id}`];
+              targetIdentifiers.forEach(ti => {
+                delete memoryStorage[b][`docs:${ti}`];
+                delete memoryStorage[b][`highlights:${ti}`];
+                delete memoryStorage[b][`chat:${ti}`];
+                delete memoryStorage[b][`customTypes:${ti}`];
+              });
             }
           });
         }
