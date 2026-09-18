@@ -3625,6 +3625,7 @@ export default function LoomPLM() {
             isRefreshing={isRefreshing}
             lastRefreshedAt={lastRefreshedAt}
             onOpenDept={openDept}
+            isSidebarCollapsed={isSidebarCollapsed}
           />
         </div>
       );
@@ -3669,6 +3670,7 @@ export default function LoomPLM() {
           isRefreshing={isRefreshing}
           lastRefreshedAt={lastRefreshedAt}
           onOpenDept={openDept}
+          isSidebarCollapsed={isSidebarCollapsed}
         />
       );
     } else {
@@ -3903,6 +3905,7 @@ export default function LoomPLM() {
         isRefreshing={isRefreshing}
         lastRefreshedAt={lastRefreshedAt}
         onOpenDept={openDept}
+        isSidebarCollapsed={isSidebarCollapsed}
       />
     );
   } else if (view === "settings") {
@@ -3931,6 +3934,7 @@ export default function LoomPLM() {
         isRefreshing={isRefreshing}
         lastRefreshedAt={lastRefreshedAt}
         onOpenDept={openDept}
+        isSidebarCollapsed={isSidebarCollapsed}
       />
     );
   } else if (canSeeAll) {

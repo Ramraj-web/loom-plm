@@ -2,7 +2,8 @@ import React, { useState, useMemo, useEffect } from "react";
 import {
   TriangleAlert, Globe, Gauge, CheckCircle2, ClipboardList, Landmark, Clock, Truck, TrendingUp,
   Bell, Package, Calendar, CheckSquare, ClipboardCheck, Award, ShieldCheck, CheckCircle, Search, Trash2, Check,
-  Plus, Edit, X, ChevronLeft, ChevronRight, Building2, Phone, Mail, MapPin, ExternalLink, AlertCircle, Layers, RefreshCw
+  Plus, Edit, X, ChevronLeft, ChevronRight, Building2, Phone, Mail, MapPin, ExternalLink, AlertCircle, Layers, RefreshCw,
+  Crown, Trophy, Sparkles, Flame, Star, Zap, Target
 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer
@@ -3347,7 +3348,238 @@ export function EmployeePerformancePanel({ orders = [], roster = [], attendance 
   );
 }
 
-export function ExecutiveOverviewPage({ orders, attendance, financials, roster, customTasks = [], leaveRequests = [], users = [], teams = [], complaints = [], onResolveComplaint, isAdmin = false, onOpenOrder, onNavigate, onApproveCosting, onRejectCosting, onRefresh, isRefreshing = false, lastRefreshedAt = null, onOpenDept }) {
+/**
+ * 3D Graphic Spotlight for the #1 Top Performing Employee in the MD Dashboard.
+ * Positioned absolute / fixed on the left side, displaying 3D visuals and employee name only.
+ */
+export function TopPerformer3DSpotlight({ performer, isSidebarCollapsed = false, onViewDetails }) {
+  const [isHovered, setIsHovered] = useState(false);
+
+  if (!performer) return null;
+
+  const isPresent = performer.attendance === "present";
+  const initials = String(performer.name || "★")
+    .trim()
+    .split(/\s+/)
+    .map(p => p[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase() || "★";
+
+  return (
+    <div
+      onClick={onViewDetails}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      title={`#1 Top Performer: ${performer.name} · Click to view detailed work breakdown`}
+      style={{
+        position: "fixed",
+        bottom: 24,
+        left: isSidebarCollapsed ? 84 : 228,
+        zIndex: 90,
+        width: 146,
+        background: "linear-gradient(165deg, rgba(9, 13, 22, 0.96) 0%, rgba(21, 25, 52, 0.96) 50%, rgba(10, 14, 26, 0.96) 100%)",
+        border: isHovered ? "1px solid rgba(245, 158, 11, 0.85)" : "1px solid rgba(245, 158, 11, 0.45)",
+        borderRadius: 16,
+        padding: "11px 10px 10px",
+        boxShadow: isHovered
+          ? "0 20px 35px -6px rgba(0, 0, 0, 0.65), 0 0 24px rgba(245, 158, 11, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.25)"
+          : "0 12px 26px -8px rgba(0, 0, 0, 0.5), 0 0 16px rgba(245, 158, 11, 0.18), inset 0 1px 1px rgba(255, 255, 255, 0.12)",
+        cursor: "pointer",
+        backdropFilter: "blur(8px)",
+        transform: isHovered ? "translateY(-4px) scale(1.03)" : "translateY(0) scale(1)",
+        transition: "left 0.22s ease, transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.22s ease, border-color 0.22s ease",
+        userSelect: "none"
+      }}
+    >
+      {/* Holographic Top Sheen */}
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 2,
+          background: "linear-gradient(90deg, transparent 0%, #F59E0B 30%, #FDE047 50%, #F59E0B 70%, transparent 100%)"
+        }}
+      />
+
+      {/* Top Header: Badge & Live Status */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 3 }}>
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+            padding: "2px 6px",
+            borderRadius: 12,
+            background: "linear-gradient(135deg, rgba(245, 158, 11, 0.3), rgba(217, 119, 6, 0.15))",
+            border: "1px solid rgba(245, 158, 11, 0.5)",
+            color: "#FDE68A",
+            fontSize: 9,
+            fontWeight: 800,
+            letterSpacing: 0.4
+          }}
+        >
+          <Crown size={10} color="#FBBF24" fill="#FBBF24" />
+          <span>#1 TOP</span>
+        </div>
+
+        <span
+          title={isPresent ? "Present Today" : "Absent / Away"}
+          style={{
+            width: 7,
+            height: 7,
+            borderRadius: "50%",
+            background: isPresent ? "#22C55E" : "#EF4444",
+            boxShadow: isPresent ? "0 0 6px #22C55E" : "none"
+          }}
+        />
+      </div>
+
+      {/* 3D Isometric Pedestal & Elevated Avatar Graphic */}
+      <div
+        style={{
+          position: "relative",
+          width: "100%",
+          height: 84,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center"
+        }}
+      >
+        {/* Isometric Pedestal Platform SVG */}
+        <svg
+          width="130"
+          height="52"
+          viewBox="0 0 220 85"
+          fill="none"
+          style={{
+            position: "absolute",
+            bottom: 2,
+            filter: "drop-shadow(0 8px 14px rgba(0, 0, 0, 0.5))"
+          }}
+        >
+          <defs>
+            <linearGradient id="podiumTop" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#FEF3C7" />
+              <stop offset="40%" stopColor="#FDE68A" />
+              <stop offset="100%" stopColor="#D97706" />
+            </linearGradient>
+            <linearGradient id="podiumFront" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="#B45309" />
+              <stop offset="100%" stopColor="#451A03" />
+            </linearGradient>
+            <linearGradient id="podiumRight" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#92400E" />
+              <stop offset="100%" stopColor="#270E02" />
+            </linearGradient>
+            <linearGradient id="goldGlowRing" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#F59E0B" stopOpacity="0.9" />
+              <stop offset="50%" stopColor="#FDE047" stopOpacity="1" />
+              <stop offset="100%" stopColor="#D97706" stopOpacity="0.9" />
+            </linearGradient>
+          </defs>
+
+          {/* Pedestal Facets */}
+          <path d="M 28 42 L 110 74 L 192 42 L 192 56 L 110 82 L 28 56 Z" fill="url(#podiumFront)" />
+          <path d="M 110 74 L 192 42 L 192 56 L 110 82 Z" fill="url(#podiumRight)" opacity="0.85" />
+          <polygon points="110,10 192,42 110,72 28,42" fill="url(#podiumTop)" stroke="#FDE68A" strokeWidth="1" />
+          <ellipse cx="110" cy="42" rx="54" ry="18" fill="none" stroke="url(#goldGlowRing)" strokeWidth="2.5" strokeDasharray="5 3" opacity="0.85" />
+          <ellipse cx="110" cy="42" rx="34" ry="11" fill="white" opacity="0.3" filter="blur(1.5px)" />
+        </svg>
+
+        {/* Floating Avatar */}
+        <div
+          style={{
+            position: "relative",
+            zIndex: 3,
+            transform: isHovered ? "translateY(-4px) scale(1.06)" : "translateY(0)",
+            transition: "transform 0.22s ease"
+          }}
+        >
+          <div
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: "50%",
+              background: "linear-gradient(135deg, #FFE066 0%, #F59E0B 40%, #B45309 100%)",
+              padding: 2.5,
+              boxShadow: "0 8px 18px rgba(0, 0, 0, 0.45), 0 0 16px rgba(245, 158, 11, 0.4)"
+            }}
+          >
+            <div
+              style={{
+                width: "100%",
+                height: "100%",
+                borderRadius: "50%",
+                background: "linear-gradient(145deg, #1E1B4B 0%, #0F172A 100%)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#FDE68A",
+                fontSize: 16,
+                fontWeight: 900,
+                textShadow: "0 2px 4px rgba(0,0,0,0.5)"
+              }}
+            >
+              {initials}
+            </div>
+          </div>
+
+          {/* Trophy Badge */}
+          <div
+            style={{
+              position: "absolute",
+              bottom: -2,
+              right: -2,
+              width: 18,
+              height: 18,
+              borderRadius: "50%",
+              background: "linear-gradient(135deg, #F59E0B, #B45309)",
+              border: "1.5px solid #0B0F19",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 2px 6px rgba(0, 0, 0, 0.5)"
+            }}
+          >
+            <Trophy size={9} color="#FFFFFF" fill="#FFFFFF" />
+          </div>
+
+          <Sparkles
+            size={11}
+            color="#FDE047"
+            style={{ position: "absolute", top: -4, left: -8, opacity: 0.9, filter: "drop-shadow(0 0 3px #FDE047)" }}
+          />
+        </div>
+      </div>
+
+      {/* ONLY DISPLAYED NAME */}
+      <div style={{ textAlign: "center", marginTop: 2 }}>
+        <div
+          style={{
+            fontSize: 13.5,
+            fontWeight: 800,
+            color: "#F8FAFC",
+            letterSpacing: -0.2,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis"
+          }}
+        >
+          {performer.name}
+        </div>
+        <div style={{ fontSize: 9.5, color: "#FDE68A", fontWeight: 700, marginTop: 1 }}>
+          ★ Top Performer
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ExecutiveOverviewPage({ orders, attendance, financials, roster, customTasks = [], leaveRequests = [], users = [], teams = [], complaints = [], onResolveComplaint, isAdmin = false, onOpenOrder, onNavigate, onApproveCosting, onRejectCosting, onRefresh, isRefreshing = false, lastRefreshedAt = null, onOpenDept, isSidebarCollapsed = false }) {
   // Only consider active, non-deleted orders for MD Executive Dashboard metrics
   const activeOrders = useMemo(() => (orders || []).filter(o => o.isDeleted !== true && o.completed !== true), [orders]);
   const allStages = useMemo(() => activeOrders.flatMap(o => (o.stages || []).map(s => ({ ...s, orderId: o.id, style: o.style, buyer: o.buyer }))), [activeOrders]);
@@ -3714,6 +3946,13 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
           </button>
         </div>
       </div>
+
+      {/* 3D Top Performer Graphic View (Absolute / Fixed on left side, only showing 3D graphic + name) */}
+      <TopPerformer3DSpotlight
+        performer={topPerformers[0]}
+        isSidebarCollapsed={isSidebarCollapsed}
+        onViewDetails={() => topPerformers[0] && setSelectedPerformer(topPerformers[0])}
+      />
 
       {/* Row 1: Top 6 KPI Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, marginBottom: 16 }}>

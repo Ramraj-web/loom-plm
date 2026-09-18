@@ -344,6 +344,114 @@ export function formatStageDoneDate(completedAt) {
   }
 }
 
+// Compute cascade delay shifts for continuous stages
+export function computeOrderStageSchedules(stages = [], orderStartDate) {
+  if (!Array.isArray(stages) || stages.length === 0) return [];
+
+  let baseDate = new Date();
+  if (orderStartDate) {
+    const parsed = new Date(orderStartDate);
+    if (!isNaN(parsed.getTime())) baseDate = parsed;
+  }
+
+  const anchorYear = baseDate.getFullYear();
+  const anchorMonth = baseDate.getMonth();
+  const anchorDay = baseDate.getDate();
+
+  const addDays = (y, m, d, daysToAdd) => new Date(y, m, d + daysToAdd);
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+  let cumulativeDelayDays = 0;
+  const schedules = [];
+
+  for (let i = 0; i < stages.length; i++) {
+    const stage = stages[i];
+    const plannedStr = stage.planned || "";
+    let startOffset = 0;
+    let endOffset = null;
+
+    if (typeof plannedStr === "string") {
+      const trimmed = plannedStr.trim();
+      const match = trimmed.match(/day\s*(\d+)(?:\s*-\s*(\d+))?/i);
+      if (match) {
+        startOffset = Math.max(0, parseInt(match[1], 10) - 1);
+        if (match[2]) {
+          endOffset = Math.max(0, parseInt(match[2], 10) - 1);
+        }
+      } else {
+        const tryParsed = new Date(trimmed);
+        if (!isNaN(tryParsed.getTime())) {
+          const diffFromAnchor = Math.round((tryParsed.getTime() - new Date(anchorYear, anchorMonth, anchorDay).getTime()) / (24 * 60 * 60 * 1000));
+          startOffset = Math.max(0, diffFromAnchor);
+        }
+      }
+    }
+
+    const origStartDate = addDays(anchorYear, anchorMonth, anchorDay, startOffset);
+    const origEndDate = endOffset !== null
+      ? addDays(anchorYear, anchorMonth, anchorDay, endOffset)
+      : origStartDate;
+
+    const isDone = stage.status === "done";
+    let doneDelayDays = 0;
+
+    if (isDone) {
+      const rawDone = stage.completedAt || stage.completedOn || stage.doneDate || stage.updatedAt ||
+        (Array.isArray(stage.colourways) ? stage.colourways.find(c => c.completedAt)?.completedAt : null);
+
+      if (rawDone) {
+        const doneD = new Date(rawDone);
+        if (!isNaN(doneD.getTime())) {
+          const doneMidnight = new Date(doneD.getFullYear(), doneD.getMonth(), doneD.getDate());
+          const targetMidnight = new Date(origEndDate.getFullYear(), origEndDate.getMonth(), origEndDate.getDate());
+          const diffMs = doneMidnight.getTime() - targetMidnight.getTime();
+          doneDelayDays = Math.round(diffMs / (24 * 60 * 60 * 1000));
+          if (doneDelayDays > 0) {
+            cumulativeDelayDays = Math.max(cumulativeDelayDays, doneDelayDays);
+          }
+        }
+      }
+
+      schedules.push({
+        origStartDate,
+        origEndDate,
+        isDone: true,
+        doneDelayDays: doneDelayDays > 0 ? doneDelayDays : 0,
+        shiftDays: 0,
+        revisedDateStr: null,
+      });
+    } else {
+      let revisedDateStr = null;
+      if (cumulativeDelayDays > 0) {
+        const revStart = addDays(anchorYear, anchorMonth, anchorDay, startOffset + cumulativeDelayDays);
+        const revStartStr = `${revStart.getDate()} ${monthNames[revStart.getMonth()]}`;
+
+        if (endOffset !== null) {
+          const revEnd = addDays(anchorYear, anchorMonth, anchorDay, endOffset + cumulativeDelayDays);
+          if (revStart.getMonth() === revEnd.getMonth()) {
+            revisedDateStr = `${revStart.getDate()}-${revEnd.getDate()} ${monthNames[revStart.getMonth()]}`;
+          } else {
+            revisedDateStr = `${revStartStr} - ${revEnd.getDate()} ${monthNames[revEnd.getMonth()]}`;
+          }
+        } else {
+          revisedDateStr = revStartStr;
+        }
+      }
+
+      schedules.push({
+        origStartDate,
+        origEndDate,
+        isDone: false,
+        doneDelayDays: 0,
+        shiftDays: cumulativeDelayDays,
+        revisedDateStr,
+      });
+    }
+  }
+
+  return schedules;
+}
+
 export function StageColourwayModal({
   isOpen,
   onClose,
@@ -766,7 +874,7 @@ export function StageColourwayModal({
   );
 }
 
-function StageNode({ stage, idx, onCycle, onReason, onSupplierChange, onOpenDispute, lockedBy, suppliers = [], canEdit = true, roleDept = "", orderColourways = [], onOpenColourways, orderStartDate }) {
+function StageNode({ stage, idx, onCycle, onReason, onSupplierChange, onOpenDispute, lockedBy, suppliers = [], canEdit = true, roleDept = "", orderColourways = [], onOpenColourways, orderStartDate, schedule = {} }) {
   const [open, setOpen] = useState(false);
   const locked = !!lockedBy;
   const isAllowedToEdit = !locked && canEdit;
@@ -819,7 +927,7 @@ function StageNode({ stage, idx, onCycle, onReason, onSupplierChange, onOpenDisp
   };
 
   return (
-    <div style={{ flex: "0 0 134px", minWidth: 134, position: "relative", opacity: locked ? 0.6 : !canEdit ? 0.75 : 1 }}>
+    <div style={{ flex: "0 0 134px", minWidth: 150, position: "relative", opacity: locked ? 0.6 : !canEdit ? 0.75 : 1 }}>
       <div style={{ display: "flex", alignItems: "center" }}>
         <div
           onClick={handleStageClick}
@@ -852,7 +960,28 @@ function StageNode({ stage, idx, onCycle, onReason, onSupplierChange, onOpenDisp
         {stage.name}
       </div>
 
-      <div style={{ fontSize: 10.5, color: "#8A8D98", marginTop: 2, fontWeight: 500 }} title={`Planned date: ${displayPlannedDate}`}>{displayPlannedDate}</div>
+      {/* Planned Date - ALWAYS displayed; if shifted due to previous delay, shows '→ revisedDate' */}
+      <div
+        style={{
+          fontSize: 10.5,
+          color: "#8A8D98",
+          marginTop: 2,
+          fontWeight: 500,
+          display: "flex",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: 3
+        }}
+        title={`Planned date: ${displayPlannedDate}${schedule?.revisedDateStr && stage.status !== "done" ? ` (Shifted: ${schedule.revisedDateStr} due to +${schedule.shiftDays}d delay)` : ""}`}
+      >
+        <span>{displayPlannedDate}</span>
+        {schedule?.revisedDateStr && stage.status !== "done" && (
+          <span style={{ color: "#D97706", fontWeight: 700, fontSize: 10 }}>
+            → {schedule.revisedDateStr}
+          </span>
+        )}
+      </div>
+
       <div style={{ fontSize: 10, color: canEdit ? "#1F9E8D" : "#B0B2BA", marginTop: 2, fontWeight: canEdit ? 600 : 400 }}>
         {stage.dept} {!canEdit && "(Read-only)"}
       </div>
@@ -908,6 +1037,11 @@ function StageNode({ stage, idx, onCycle, onReason, onSupplierChange, onOpenDisp
           <Lock size={9} /> Needs {lockedBy}
         </div>
       )}
+      {locked && schedule?.revisedDateStr && (
+        <div style={{ fontSize: 9.5, color: "#D97706", fontWeight: 600, marginTop: 2 }} title={`Target shifted due to previous stage delay: +${schedule.shiftDays}d`}>
+          New: {schedule.revisedDateStr} (+{schedule.shiftDays}d)
+        </div>
+      )}
       {!locked && stage.status === "done" && (
         <div style={{ marginTop: 4 }}>
           <div style={{ fontSize: 10, color: "#1F9E8D", fontWeight: 600, display: "flex", alignItems: "center", gap: 3, flexWrap: "wrap" }}>
@@ -920,11 +1054,31 @@ function StageNode({ stage, idx, onCycle, onReason, onSupplierChange, onOpenDisp
               </span>
             )}
           </div>
-          {stage.completedBy && (
-            <div style={{ fontSize: 9.5, color: "#64748B", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={`Completed by ${stage.completedBy}${displayDoneDate ? ` on ${displayDoneDate}` : ""}`}>
-              by {stage.completedBy}
+          {stage.completedBy ? (
+            <div
+              style={{
+                fontSize: 9.5,
+                color: "#64748B",
+                marginTop: 1,
+                display: "flex",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: 3
+              }}
+              title={`Completed by ${stage.completedBy}${displayDoneDate ? ` on ${displayDoneDate}` : ""}${schedule?.doneDelayDays > 0 ? ` (+${schedule.doneDelayDays}d late)` : ""}`}
+            >
+              <span>by {stage.completedBy}</span>
+              {schedule?.doneDelayDays > 0 && (
+                <span style={{ color: "#DC2626", fontWeight: 600 }}>
+                  (+{schedule.doneDelayDays}d late)
+                </span>
+              )}
             </div>
-          )}
+          ) : schedule?.doneDelayDays > 0 ? (
+            <div style={{ fontSize: 9.5, color: "#DC2626", fontWeight: 600, marginTop: 1 }}>
+              (+{schedule.doneDelayDays}d late)
+            </div>
+          ) : null}
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onOpenDispute && onOpenDispute(stage, idx); }}
@@ -951,8 +1105,27 @@ function StageNode({ stage, idx, onCycle, onReason, onSupplierChange, onOpenDisp
       )}
       {!locked && stage.status === "in_progress" && (
         <>
-          <div style={{ fontSize: 10.5, color: "#E2A83B", marginTop: 2, fontWeight: 500 }}>
-            {stage.assignee && stage.assignee !== "Unassigned" ? stage.assignee : "In Progress"}
+          <div
+            style={{
+              fontSize: 10,
+              marginTop: 2,
+              display: "flex",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: 3
+            }}
+            title={`Assigned: ${stage.assignee || "Assigned"}${schedule?.revisedDateStr ? ` · New Target: ${schedule.revisedDateStr} (+${schedule.shiftDays}d)` : ""}`}
+          >
+            <span style={{ color: stage.assignee && stage.assignee !== "Unassigned" ? "#475569" : "#E2A83B", fontWeight: 500 }}>
+              {stage.assignee && stage.assignee !== "Unassigned"
+                ? (stage.assignee.toLowerCase().startsWith("by ") ? stage.assignee : `by ${stage.assignee}`)
+                : "by Assigned"}
+            </span>
+            {schedule?.revisedDateStr && (
+              <span style={{ color: "#D97706", fontWeight: 600, fontSize: 9.5 }}>
+                · New: {schedule.revisedDateStr} (+{schedule.shiftDays}d)
+              </span>
+            )}
           </div>
           {hasColourways && doneColourwaysCount > 0 && (
             <div style={{ fontSize: 9.5, color: "#059669", fontWeight: 600, marginTop: 1 }}>
@@ -993,6 +1166,30 @@ function StageNode({ stage, idx, onCycle, onReason, onSupplierChange, onOpenDisp
             )}
           </div>
         </>
+      )}
+      {!locked && stage.status !== "done" && stage.status !== "in_progress" && (
+        <div
+          style={{
+            fontSize: 9.5,
+            marginTop: 3,
+            display: "flex",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: 3
+          }}
+          title={`Assigned: ${stage.assignee || "Assigned"}${schedule?.revisedDateStr ? ` · New Target: ${schedule.revisedDateStr} (+${schedule.shiftDays}d)` : ""}`}
+        >
+          <span style={{ color: "#64748B" }}>
+            {stage.assignee && stage.assignee !== "Unassigned"
+              ? (stage.assignee.toLowerCase().startsWith("by ") ? stage.assignee : `by ${stage.assignee}`)
+              : "by Assigned"}
+          </span>
+          {schedule?.revisedDateStr && (
+            <span style={{ color: "#D97706", fontWeight: 600 }}>
+              · New: {schedule.revisedDateStr} (+{schedule.shiftDays}d)
+            </span>
+          )}
+        </div>
       )}
     </div>
   );
@@ -2796,6 +2993,13 @@ export function OrderWorkspace({
   const doneCount = (order.stages || []).filter(s => s.status === "done").length;
   const flaggedReasons = (order.stages || []).filter(s => s.reason).map(s => `${s.name}: ${s.reason}`);
 
+  const orderStartDate = order.orderDate || order.createdAt || order.ship;
+  const stageSchedules = useMemo(
+    () => computeOrderStageSchedules(order.stages || [], orderStartDate),
+    [order.stages, orderStartDate]
+  );
+  const maxShiftDays = stageSchedules.reduce((max, sch) => Math.max(max, sch.shiftDays || 0), 0);
+
   const trackerCard = (
     <div style={{ background: "#fff", border: "1px solid #ECEDF1", borderRadius: 14, padding: "20px 22px", marginBottom: 20 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
@@ -2840,6 +3044,25 @@ export function OrderWorkspace({
       <div style={{ fontSize: 11, color: "#B0B2BA", margin: "6px 0 16px" }}>
         {(order.stages || []).length} steps from the {order.template || "90"}-day T&A template — pick 120-day for styles with a longer delivery window.{orderColourways.length > 0 ? " Click any stage circle or colour badge (e.g. \"0/2 colours\") to manage color-wise pieces & delays." : " Click any stage circle to advance progress."} Stages after an approval step stay locked until approved.
       </div>
+      {maxShiftDays > 0 && (
+        <div style={{
+          background: "#FFFBEB",
+          border: "1px solid #FDE68A",
+          borderRadius: 8,
+          padding: "8px 12px",
+          marginBottom: 12,
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          fontSize: 12,
+          color: "#92400E"
+        }}>
+          <Clock size={15} color="#D97706" style={{ flexShrink: 0 }} />
+          <span>
+            <b>Schedule Shifted (+{maxShiftDays} days):</b> Previous stage completion was delayed. Subsequent continuous stage targets have automatically adjusted to reflect real execution dates, while keeping original planned dates visible.
+          </span>
+        </div>
+      )}
       <div style={{ display: "flex", gap: 2, overflowX: "auto", paddingBottom: 8 }}>
         {(order.stages || []).map((s, i) => {
           const gate = gatingApproval(order.stages, i);
@@ -2873,7 +3096,8 @@ export function OrderWorkspace({
               roleDept={role?.dept || "User"}
               orderColourways={orderColourways}
               onOpenColourways={(index) => setColourwayModalStageIdx(index)}
-              orderStartDate={order.orderDate || order.createdAt || order.ship}
+              orderStartDate={orderStartDate}
+              schedule={stageSchedules[i] || {}}
             />
           );
         })}
