@@ -55,7 +55,7 @@ export function DateWiseActivityFeed({
     }
     if (activitySearch.trim()) {
       const q = activitySearch.toLowerCase();
-      list = list.filter(a => 
+      list = list.filter(a =>
         (a.title && a.title.toLowerCase().includes(q)) ||
         (a.description && a.description.toLowerCase().includes(q)) ||
         (a.dept && a.dept.toLowerCase().includes(q)) ||
@@ -461,7 +461,7 @@ export function OrderDeliveryCalendarWidget({ orders = [], onOpenOrder, onNaviga
   };
 
   return (
-    <Card style={{ display: "flex", flexDirection: "column", height: "93%", padding: "16px 18px" }}>
+    <Card style={{ display: "flex", flexDirection: "column", height: "100%", padding: "16px 18px", boxSizing: "border-box" }}>
       {/* Header with Title, Mode Switcher & Calendar Action */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
         <div>
@@ -1174,64 +1174,97 @@ export function Dashboard({
         </div>
       </Card>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 0.9fr", gap: 16, marginBottom: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr 1fr", gap: 16, marginBottom: 16, alignItems: "stretch" }}>
         <OrderDeliveryCalendarWidget orders={orders} onOpenOrder={onOpenOrder} onNavigate={onNavigate} />
 
-        <Card style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-          <CardHeader title="Production vs plan (today)" action="Reports" onAction={() => onNavigate("reports")} />
-          <div style={{ position: "relative", width: 120, height: 120, margin: "8px 0 16px" }}>
-            <svg viewBox="0 0 36 36" width="120" height="120">
-              <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#F0F0F2" strokeWidth="3.5" />
-              <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#534AB7" strokeWidth="3.5" strokeDasharray={`${productionPlan.pct}, 100`} strokeLinecap="round" />
-            </svg>
-            <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-              <div style={{ fontSize: 22, fontWeight: 700, color: "#1B2130" }}>{productionPlan.pct}%</div>
-              <div style={{ fontSize: 10.5, color: "#8A8D98" }}>Achieved</div>
+        {/* Production vs plan (today) - Hidden per user request (preserved for future reference) */}
+        {false && (
+          <Card style={{ display: "none", flexDirection: "column", alignItems: "center" }}>
+            <CardHeader title="Production vs plan (today)" action="Reports" onAction={() => onNavigate("reports")} />
+            <div style={{ position: "relative", width: 120, height: 120, margin: "8px 0 16px" }}>
+              <svg viewBox="0 0 36 36" width="120" height="120">
+                <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#F0F0F2" strokeWidth="3.5" />
+                <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#534AB7" strokeWidth="3.5" strokeDasharray={`${productionPlan.pct}, 100`} strokeLinecap="round" />
+              </svg>
+              <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ fontSize: 22, fontWeight: 700, color: "#1B2130" }}>{productionPlan.pct}%</div>
+                <div style={{ fontSize: 10.5, color: "#8A8D98" }}>Achieved</div>
+              </div>
             </div>
-          </div>
-          <div style={{ width: "100%", fontSize: 12 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}><span style={{ color: "#8A8D98" }}>Planned</span><span style={{ fontWeight: 600 }}>{productionPlan.totalQty.toLocaleString()} pcs</span></div>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}><span style={{ color: "#8A8D98" }}>Actual</span><span style={{ fontWeight: 600, color: "#1F9E8D" }}>{productionPlan.actual.toLocaleString()} pcs</span></div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#8A8D98" }}>Balance</span><span style={{ fontWeight: 600, color: "#D64545" }}>{productionPlan.balance.toLocaleString()} pcs</span></div>
-          </div>
-        </Card>
+            <div style={{ width: "100%", fontSize: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}><span style={{ color: "#8A8D98" }}>Planned</span><span style={{ fontWeight: 600 }}>{productionPlan.totalQty.toLocaleString()} pcs</span></div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}><span style={{ color: "#8A8D98" }}>Actual</span><span style={{ fontWeight: 600, color: "#1F9E8D" }}>{productionPlan.actual.toLocaleString()} pcs</span></div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#8A8D98" }}>Balance</span><span style={{ fontWeight: 600, color: "#D64545" }}>{productionPlan.balance.toLocaleString()} pcs</span></div>
+            </div>
+          </Card>
+        )}
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <Card>
-            <CardHeader title="My tasks" action="Open" onAction={() => onNavigate("tasks")} />
+        {/* My tasks Widget - Expanded to fill the covered area */}
+        <Card style={{ display: "flex", flexDirection: "column", height: "100%", boxSizing: "border-box" }}>
+          <CardHeader title="My tasks" action="Open" onAction={() => onNavigate("tasks")} />
+          <div style={{ flex: 1, overflowY: "auto", maxHeight: 320 }}>
             {myTasksPreview.length === 0 ? (
-              <div style={{ fontSize: 12, color: "#B0B2BA" }}>Nothing in progress right now.</div>
+              <div style={{ fontSize: 12, color: "#B0B2BA", padding: "16px 0" }}>Nothing in progress right now.</div>
             ) : myTasksPreview.map((item, i) => {
               const due = item.stage.reason
                 ? { label: "Overdue", bg: "#FCEBEB", fg: "#791F1F" }
                 : [{ label: "Due Today", bg: "#FCEBEB", fg: "#791F1F" }, { label: "Tomorrow", bg: "#FAEEDA", fg: "#633806" }, { label: "In 2 Days", bg: "#E6F1FB", fg: "#1D5A8A" }][i % 3];
               return (
-                <div key={item.order.id + item.stage.name} onClick={() => onOpenOrder(item.order.id)} style={{ padding: "8px 0", borderBottom: "1px solid #F5F5F7", cursor: "pointer" }}>
+                <div key={item.order.id + item.stage.name} onClick={() => onOpenOrder(item.order.id)} style={{ padding: "9px 0", borderBottom: "1px solid #F5F5F7", cursor: "pointer" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                     <div style={{ fontSize: 12.5, fontWeight: 600, color: "#1B2130" }}>{item.stage.name}</div>
                     <span style={{ fontSize: 10, fontWeight: 700, background: due.bg, color: due.fg, borderRadius: 999, padding: "2px 8px", whiteSpace: "nowrap" }}>{due.label}</span>
                   </div>
-                  <div style={{ fontSize: 11, color: "#8A8D98", marginTop: 2 }}>{item.order.style} · {item.order.buyer}</div>
+                  <div style={{ fontSize: 11, color: "#8A8D98", marginTop: 3 }}>
+                    <span style={{ fontWeight: 600, color: "#475569" }}>{item.order.id}</span> · {item.order.style} · {item.order.buyer}
+                  </div>
                 </div>
               );
             })}
-          </Card>
-          {attendance && roster && (
-            <Card>
-              <CardHeader title="Attendance today" action="Open" onAction={() => onNavigate("attendance")} />
-              {(() => {
-                const counts = { present: 0, absent: 0, leave: 0 };
-                roster.forEach(s => { counts[attendance[s.name] || "present"]++; });
-                return [["Present", counts.present, "#1F9E8D"], ["Absent", counts.absent, "#D64545"], ["On leave", counts.leave, "#E2A83B"]].map(([label, val, color]) => (
-                  <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: "1px solid #F5F5F7", fontSize: 12 }}>
-                    <span style={{ color: "#565A66" }}>{label}</span>
-                    <span style={{ fontWeight: 700, color }}>{val}</span>
+          </div>
+        </Card>
+
+        {/* Attendance today Widget - Expanded to fill the covered area */}
+        {attendance && roster ? (
+          <Card style={{ display: "flex", flexDirection: "column", height: "100%", boxSizing: "border-box" }}>
+            <CardHeader title="Attendance today" action="Open" onAction={() => onNavigate("attendance")} />
+            {(() => {
+              const counts = { present: 0, absent: 0, leave: 0 };
+              roster.forEach(s => { counts[attendance[s.name] || "present"]++; });
+              const totalStaff = roster.length || 1;
+              const presentPct = Math.round((counts.present / totalStaff) * 100);
+
+              return (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12, flex: 1, justifyContent: "center" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "#F8FAFC", borderRadius: 8, border: "1px solid #E2E8F0" }}>
+                    <div>
+                      <div style={{ fontSize: 11, color: "#64748B", fontWeight: 600 }}>Overall Turnout</div>
+                      <div style={{ fontSize: 20, fontWeight: 800, color: "#0F172A", marginTop: 2 }}>{presentPct}%</div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 11, color: "#64748B", fontWeight: 600 }}>Total Team</div>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: "#334155", marginTop: 2 }}>{totalStaff} staff</div>
+                    </div>
                   </div>
-                ));
-              })()}
-            </Card>
-          )}
-        </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    {[["Present", counts.present, "rgba(78, 224, 59, 1)", "#ECFDF5"], ["Absent", counts.absent, "#D64545", "#FEF2F2"], ["On leave", counts.leave, "#E2A83B", "#FFFBEB"]].map(([label, val, color, bg]) => (
+                      <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 10px", borderRadius: 6, background: bg, fontSize: 12.5 }}>
+                        <span style={{ fontWeight: 600, color: "#334155" }}>{label}</span>
+                        <span style={{ fontWeight: 800, fontSize: 14, color }}>{val}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+          </Card>
+        ) : (
+          <Card style={{ display: "flex", flexDirection: "column", height: "100%", boxSizing: "border-box" }}>
+            <CardHeader title="Attendance today" action="Open" onAction={() => onNavigate("attendance")} />
+            <div style={{ fontSize: 12, color: "#B0B2BA", padding: "16px 0" }}>No attendance records available.</div>
+          </Card>
+        )}
       </div>
 
       <DateWiseActivityFeed

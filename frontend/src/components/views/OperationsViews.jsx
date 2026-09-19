@@ -235,8 +235,26 @@ export function OrdersPage({
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.9fr 0.9fr 0.7fr 0.8fr 0.8fr 0.7fr 0.9fr 0.8fr 0.7fr", fontSize: 11.5, color: "#8A8D98", padding: "0 4px 8px", borderBottom: "1px solid #F0F0F2" }}>
-          <div>PO / Style</div><div>Buyer</div><div>Country</div><div>Season</div><div>Qty</div><div>Ship date</div><div>Risk</div><div>Status</div><div>Color</div><div style={{ textAlign: "right" }}>Actions</div>
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "minmax(0, 1.3fr) minmax(0, 0.9fr) minmax(0, 0.8fr) minmax(0, 0.65fr) minmax(0, 0.75fr) minmax(0, 0.9fr) minmax(0, 0.65fr) minmax(0, 0.85fr) minmax(0, 1.2fr) 68px",
+          gap: 8,
+          fontSize: 11.5,
+          color: "#8A8D98",
+          padding: "0 4px 8px",
+          borderBottom: "1px solid #F0F0F2",
+          alignItems: "center"
+        }}>
+          <div>PO / Style</div>
+          <div>Buyer</div>
+          <div>Country</div>
+          <div>Season</div>
+          <div>Qty</div>
+          <div>Ship date</div>
+          <div>Risk</div>
+          <div>Status</div>
+          <div>Color</div>
+          <div style={{ textAlign: "right" }}>Actions</div>
         </div>
 
         {activeOrders.length === 0 ? (
@@ -247,60 +265,72 @@ export function OrdersPage({
           activeOrders.map(o => (
             <div
               key={o.primaryId || o.id}
-              style={{ display: "grid", gridTemplateColumns: "1.2fr 0.9fr 0.9fr 0.7fr 0.8fr 0.8fr 0.7fr 0.9fr 0.8fr 0.7fr", alignItems: "center", fontSize: 13, padding: "12px 4px", borderBottom: "1px solid #F5F5F7" }}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "minmax(0, 1.3fr) minmax(0, 0.9fr) minmax(0, 0.8fr) minmax(0, 0.65fr) minmax(0, 0.75fr) minmax(0, 0.9fr) minmax(0, 0.65fr) minmax(0, 0.85fr) minmax(0, 1.2fr) 68px",
+                gap: 8,
+                alignItems: "center",
+                fontSize: 12.5,
+                padding: "12px 4px",
+                borderBottom: "1px solid #F5F5F7"
+              }}
               onMouseEnter={e => e.currentTarget.style.background = "#FAFAFB"}
               onMouseLeave={e => e.currentTarget.style.background = "transparent"}
             >
-              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer" }}>
-                <div style={{ fontFamily: "monospace", fontSize: 12, color: "#8A8D98" }}>{o.id}</div>
-                <div style={{ fontWeight: 600, color: "#1B2130" }}>{o.style}</div>
+              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer", overflow: "hidden" }}>
+                <div style={{ fontFamily: "monospace", fontSize: 11.5, color: "#8A8D98" }}>{o.id}</div>
+                <div style={{ fontWeight: 600, color: "#1B2130", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={o.style}>{o.style}</div>
               </div>
-              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer" }}>{o.buyer}</div>
-              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer" }}>{o.country}</div>
-              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer" }}>{o.season || "SS26"}</div>
-              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer" }}>{Number(o.qty || 0).toLocaleString()}</div>
-              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer" }}>{o.ship}</div>
-              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer", display: "flex", alignItems: "center", textTransform: "capitalize" }}>
+              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={o.buyer}>{o.buyer}</div>
+              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={o.country}>{o.country}</div>
+              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer", whiteSpace: "nowrap" }}>{o.season || "SS26"}</div>
+              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer", whiteSpace: "nowrap" }}>{Number(o.qty || 0).toLocaleString()}</div>
+              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer", whiteSpace: "nowrap" }}>{o.ship}</div>
+              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer", display: "flex", alignItems: "center", textTransform: "capitalize", whiteSpace: "nowrap" }}>
                 {riskDot(o.risk)}{o.risk}
               </div>
-              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer" }}>
+              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer", display: "flex", alignItems: "center" }}>
                 {statusPill(o.status)}
               </div>
-              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer" }}>
+              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer", overflow: "hidden" }}>
                 {Array.isArray(o.colorBreakdown) && o.colorBreakdown.length > 0 ? (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 3, overflow: "hidden" }}>
                     {o.colorBreakdown.slice(0, 2).map((b, bi) => (
                       <span
                         key={bi}
                         style={{
-                          fontSize: 10.5,
+                          fontSize: 10,
                           background: "#F0EFFB",
                           color: "#534AB7",
-                          padding: "1px 5px",
+                          padding: "1px 4px",
                           borderRadius: 4,
                           fontWeight: 600,
-                          whiteSpace: "nowrap"
+                          whiteSpace: "nowrap",
+                          maxWidth: "100%",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis"
                         }}
+                        title={`${b.color} ${b.size ? `(${b.size})` : ""} ${b.qty ? `· ${b.qty}` : ""}`}
                       >
                         {b.color} {b.size && `(${b.size})`} {b.qty && `· ${b.qty}`}
                       </span>
                     ))}
                     {o.colorBreakdown.length > 2 && (
-                      <span style={{ fontSize: 10, color: "#6B7280", alignSelf: "center", fontWeight: 700 }}>
+                      <span style={{ fontSize: 9.5, color: "#6B7280", alignSelf: "center", fontWeight: 700 }}>
                         +{o.colorBreakdown.length - 2}
                       </span>
                     )}
                   </div>
                 ) : Array.isArray(o.colors) && o.colors.length > 0 ? (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 3, overflow: "hidden" }}>
                     {o.colors.map((c, ci) => (
-                      <span key={ci} style={{ fontSize: 10.5, background: "#F3F4F6", color: "#374151", padding: "1px 5px", borderRadius: 4, fontWeight: 500 }}>
+                      <span key={ci} style={{ fontSize: 10, background: "#F3F4F6", color: "#374151", padding: "1px 4px", borderRadius: 4, fontWeight: 500, whiteSpace: "nowrap" }}>
                         {c}
                       </span>
                     ))}
                   </div>
                 ) : (
-                  <span style={{ color: o.color ? "#1B2130" : "#9CA3AF" }}>{o.color || "—"}</span>
+                  <span style={{ color: o.color ? "#1B2130" : "#9CA3AF", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>{o.color || "—"}</span>
                 )}
               </div>
               <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
@@ -314,7 +344,7 @@ export function OrdersPage({
                       border: "none",
                       borderRadius: 6,
                       padding: "4px 8px",
-                      fontSize: 11.5,
+                      fontSize: 11,
                       fontWeight: 600,
                       cursor: "pointer",
                       display: "inline-flex",
@@ -322,7 +352,7 @@ export function OrdersPage({
                       gap: 3
                     }}
                   >
-                    <Trash2 size={12} />
+                    <Trash2 size={11} />
                     Delete
                   </button>
                 )}
@@ -344,8 +374,25 @@ export function OrdersPage({
           <span style={{ fontSize: 12, color: "#8A8D98" }}>Finished orders — kept in history</span>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.9fr 0.9fr 0.7fr 0.8fr 0.8fr 0.8fr 0.8fr 1.1fr", fontSize: 11.5, color: "#8A8D98", padding: "0 4px 8px", borderBottom: "1px solid #F0F0F2" }}>
-          <div>PO / Style</div><div>Buyer</div><div>Country</div><div>Season</div><div>Qty</div><div>Ship date</div><div>Color</div><div>Status</div><div style={{ textAlign: "right" }}>Actions</div>
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "minmax(0, 1.3fr) minmax(0, 0.9fr) minmax(0, 0.8fr) minmax(0, 0.65fr) minmax(0, 0.75fr) minmax(0, 0.9fr) minmax(0, 1.2fr) minmax(0, 0.85fr) 130px",
+          gap: 8,
+          fontSize: 11.5,
+          color: "#8A8D98",
+          padding: "0 4px 8px",
+          borderBottom: "1px solid #F0F0F2",
+          alignItems: "center"
+        }}>
+          <div>PO / Style</div>
+          <div>Buyer</div>
+          <div>Country</div>
+          <div>Season</div>
+          <div>Qty</div>
+          <div>Ship date</div>
+          <div>Color</div>
+          <div>Status</div>
+          <div style={{ textAlign: "right" }}>Actions</div>
         </div>
 
         {completedOrders.length === 0 ? (
@@ -356,48 +403,61 @@ export function OrdersPage({
           completedOrders.map(o => (
             <div
               key={o.primaryId || o.id}
-              style={{ display: "grid", gridTemplateColumns: "1.2fr 0.9fr 0.9fr 0.7fr 0.8fr 0.8fr 0.8fr 0.8fr 1.1fr", alignItems: "center", fontSize: 13, padding: "12px 4px", borderBottom: "1px solid #F5F5F7", background: "#FAFDFB" }}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "minmax(0, 1.3fr) minmax(0, 0.9fr) minmax(0, 0.8fr) minmax(0, 0.65fr) minmax(0, 0.75fr) minmax(0, 0.9fr) minmax(0, 1.2fr) minmax(0, 0.85fr) 130px",
+                gap: 8,
+                alignItems: "center",
+                fontSize: 12.5,
+                padding: "12px 4px",
+                borderBottom: "1px solid #F5F5F7",
+                background: "#FAFDFB"
+              }}
             >
-              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer" }}>
-                <div style={{ fontFamily: "monospace", fontSize: 12, color: "#8A8D98" }}>{o.id}</div>
-                <div style={{ fontWeight: 600, color: "#1B2130" }}>{o.style}</div>
+              <div onClick={() => onOpenOrder && onOpenOrder(o.id, o.primaryId)} style={{ cursor: "pointer", overflow: "hidden" }}>
+                <div style={{ fontFamily: "monospace", fontSize: 11.5, color: "#8A8D98" }}>{o.id}</div>
+                <div style={{ fontWeight: 600, color: "#1B2130", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={o.style}>{o.style}</div>
               </div>
-              <div>{o.buyer}</div>
-              <div>{o.country}</div>
-              <div>{o.season || "SS26"}</div>
-              <div>{Number(o.qty || 0).toLocaleString()}</div>
-              <div>{o.ship}</div>
-              <div>
+              <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={o.buyer}>{o.buyer}</div>
+              <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={o.country}>{o.country}</div>
+              <div style={{ whiteSpace: "nowrap" }}>{o.season || "SS26"}</div>
+              <div style={{ whiteSpace: "nowrap" }}>{Number(o.qty || 0).toLocaleString()}</div>
+              <div style={{ whiteSpace: "nowrap" }}>{o.ship}</div>
+              <div style={{ overflow: "hidden" }}>
                 {Array.isArray(o.colorBreakdown) && o.colorBreakdown.length > 0 ? (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 3, overflow: "hidden" }}>
                     {o.colorBreakdown.slice(0, 2).map((b, bi) => (
                       <span
                         key={bi}
                         style={{
-                          fontSize: 10.5,
+                          fontSize: 10,
                           background: "#F0EFFB",
                           color: "#534AB7",
-                          padding: "1px 5px",
+                          padding: "1px 4px",
                           borderRadius: 4,
                           fontWeight: 600,
-                          whiteSpace: "nowrap"
+                          whiteSpace: "nowrap",
+                          maxWidth: "100%",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis"
                         }}
+                        title={`${b.color} ${b.size ? `(${b.size})` : ""}`}
                       >
                         {b.color} {b.size && `(${b.size})`}
                       </span>
                     ))}
                     {o.colorBreakdown.length > 2 && (
-                      <span style={{ fontSize: 10, color: "#6B7280", alignSelf: "center", fontWeight: 700 }}>
+                      <span style={{ fontSize: 9.5, color: "#6B7280", alignSelf: "center", fontWeight: 700 }}>
                         +{o.colorBreakdown.length - 2}
                       </span>
                     )}
                   </div>
                 ) : (
-                  <span style={{ color: o.color ? "#1B2130" : "#9CA3AF" }}>{o.color || "—"}</span>
+                  <span style={{ color: o.color ? "#1B2130" : "#9CA3AF", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>{o.color || "—"}</span>
                 )}
               </div>
-              <div>
-                <span style={{ background: "#E1F5EE", color: "#085041", fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 999 }}>
+              <div style={{ display: "flex", alignItems: "center" }}>
+                <span style={{ background: "#E1F5EE", color: "#085041", fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 999, whiteSpace: "nowrap" }}>
                   Completed
                 </span>
               </div>
@@ -411,7 +471,7 @@ export function OrdersPage({
                     border: "none",
                     borderRadius: 6,
                     padding: "4px 8px",
-                    fontSize: 11.5,
+                    fontSize: 11,
                     fontWeight: 600,
                     cursor: "pointer",
                     display: "inline-flex",
@@ -419,7 +479,7 @@ export function OrdersPage({
                     gap: 3
                   }}
                 >
-                  <RotateCcw size={12} />
+                  <RotateCcw size={11} />
                   Reopen
                 </button>
                 {isAdmin && (
@@ -432,7 +492,7 @@ export function OrdersPage({
                       border: "none",
                       borderRadius: 6,
                       padding: "4px 8px",
-                      fontSize: 11.5,
+                      fontSize: 11,
                       fontWeight: 600,
                       cursor: "pointer",
                       display: "inline-flex",
@@ -440,7 +500,7 @@ export function OrdersPage({
                       gap: 3
                     }}
                   >
-                    <Trash2 size={12} />
+                    <Trash2 size={11} />
                     Delete
                   </button>
                 )}
@@ -450,14 +510,14 @@ export function OrdersPage({
         )}
       </Card>
 
-      {/* 3. Deleted Orders / History Section (Admin Only) */}
+      {/* 3. Deleted / History Orders Section */}
       {isAdmin && (
-      <Card>
+      <Card style={{ marginBottom: 24 }}>
         <div style={{ padding: "0 0 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
-            <span style={{ fontSize: 14, fontWeight: 700, color: "#1B2130" }}>Deleted Orders (History)</span>
-            <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, background: "#F3F4F6", color: "#4B5563", padding: "2px 8px", borderRadius: 999 }}>
-              {deletedOrders.length} archived
+            <span style={{ fontSize: 14, fontWeight: 700, color: "#1B2130" }}>Deleted Orders History</span>
+            <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, background: "#FEE2E2", color: "#991B1B", padding: "2px 8px", borderRadius: 999 }}>
+              {deletedOrders.length} deleted
             </span>
           </div>
           <button
@@ -470,8 +530,25 @@ export function OrdersPage({
 
         {showDeletedSection && (
           <>
-            <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.9fr 0.9fr 0.7fr 0.8fr 0.8fr 0.8fr 1fr 0.8fr", fontSize: 11.5, color: "#8A8D98", padding: "0 4px 8px", borderBottom: "1px solid #F0F0F2" }}>
-              <div>PO / Style</div><div>Buyer</div><div>Country</div><div>Season</div><div>Qty</div><div>Ship date</div><div>Color</div><div>Deleted date</div><div style={{ textAlign: "right" }}>Actions</div>
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "minmax(0, 1.3fr) minmax(0, 0.9fr) minmax(0, 0.8fr) minmax(0, 0.65fr) minmax(0, 0.75fr) minmax(0, 0.9fr) minmax(0, 1.1fr) minmax(0, 0.95fr) 150px",
+              gap: 8,
+              fontSize: 11.5,
+              color: "#8A8D98",
+              padding: "0 4px 8px",
+              borderBottom: "1px solid #F0F0F2",
+              alignItems: "center"
+            }}>
+              <div>PO / Style</div>
+              <div>Buyer</div>
+              <div>Country</div>
+              <div>Season</div>
+              <div>Qty</div>
+              <div>Ship date</div>
+              <div>Color</div>
+              <div>Deleted date</div>
+              <div style={{ textAlign: "right" }}>Actions</div>
             </div>
 
             {deletedOrders.length === 0 ? (
@@ -482,19 +559,28 @@ export function OrdersPage({
               deletedOrders.map(o => (
                 <div
                   key={o.primaryId || o.id}
-                  style={{ display: "grid", gridTemplateColumns: "1.2fr 0.9fr 0.9fr 0.7fr 0.8fr 0.8fr 0.8fr 1fr 0.8fr", alignItems: "center", fontSize: 13, padding: "12px 4px", borderBottom: "1px solid #F5F5F7", opacity: 0.85 }}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "minmax(0, 1.3fr) minmax(0, 0.9fr) minmax(0, 0.8fr) minmax(0, 0.65fr) minmax(0, 0.75fr) minmax(0, 0.9fr) minmax(0, 1.1fr) minmax(0, 0.95fr) 150px",
+                    gap: 8,
+                    alignItems: "center",
+                    fontSize: 12.5,
+                    padding: "12px 4px",
+                    borderBottom: "1px solid #F5F5F7",
+                    opacity: 0.85
+                  }}
                 >
-                  <div>
-                    <div style={{ fontFamily: "monospace", fontSize: 12, color: "#8A8D98", textDecoration: "line-through" }}>{o.id}</div>
-                    <div style={{ fontWeight: 600, color: "#6B7280" }}>{o.style}</div>
+                  <div style={{ overflow: "hidden" }}>
+                    <div style={{ fontFamily: "monospace", fontSize: 11.5, color: "#8A8D98", textDecoration: "line-through" }}>{o.id}</div>
+                    <div style={{ fontWeight: 600, color: "#6B7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={o.style}>{o.style}</div>
                   </div>
-                  <div style={{ color: "#6B7280" }}>{o.buyer}</div>
-                  <div style={{ color: "#6B7280" }}>{o.country}</div>
-                  <div style={{ color: "#6B7280" }}>{o.season || "SS26"}</div>
-                  <div style={{ color: "#6B7280" }}>{Number(o.qty || 0).toLocaleString()}</div>
-                  <div style={{ color: "#6B7280" }}>{o.ship}</div>
-                  <div style={{ color: o.color ? "#6B7280" : "#9CA3AF" }}>{o.color || "—"}</div>
-                  <div style={{ fontSize: 11.5, color: "#9CA3AF" }}>
+                  <div style={{ color: "#6B7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={o.buyer}>{o.buyer}</div>
+                  <div style={{ color: "#6B7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={o.country}>{o.country}</div>
+                  <div style={{ color: "#6B7280", whiteSpace: "nowrap" }}>{o.season || "SS26"}</div>
+                  <div style={{ color: "#6B7280", whiteSpace: "nowrap" }}>{Number(o.qty || 0).toLocaleString()}</div>
+                  <div style={{ color: "#6B7280", whiteSpace: "nowrap" }}>{o.ship}</div>
+                  <div style={{ color: o.color ? "#6B7280" : "#9CA3AF", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.color || "—"}</div>
+                  <div style={{ fontSize: 11.5, color: "#9CA3AF", whiteSpace: "nowrap" }}>
                     {o.deletedAt ? new Date(o.deletedAt).toLocaleDateString() : "Archived"}
                   </div>
                   <div style={{ textAlign: "right", display: "flex", justifyContent: "flex-end", gap: 6, alignItems: "center" }}>
@@ -506,8 +592,8 @@ export function OrdersPage({
                         color: "#085041",
                         border: "none",
                         borderRadius: 6,
-                        padding: "4px 10px",
-                        fontSize: 11.5,
+                        padding: "4px 8px",
+                        fontSize: 11,
                         fontWeight: 600,
                         cursor: "pointer",
                         display: "inline-flex",
@@ -515,7 +601,7 @@ export function OrdersPage({
                         gap: 3
                       }}
                     >
-                      <RotateCcw size={12} />
+                      <RotateCcw size={11} />
                       Restore
                     </button>
                     <button
@@ -531,7 +617,7 @@ export function OrdersPage({
                         border: "1px solid #FECACA",
                         borderRadius: 6,
                         padding: "4px 8px",
-                        fontSize: 11.5,
+                        fontSize: 11,
                         fontWeight: 600,
                         cursor: "pointer",
                         display: "inline-flex",
@@ -539,7 +625,7 @@ export function OrdersPage({
                         gap: 3
                       }}
                     >
-                      <Trash2 size={12} />
+                      <Trash2 size={11} />
                       Delete Forever
                     </button>
                   </div>

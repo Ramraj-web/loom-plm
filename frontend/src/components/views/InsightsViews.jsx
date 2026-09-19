@@ -22,9 +22,10 @@ import {
  * using stored costing rows, template sections, CMT values, and actual order costs.
  */
 function computeOrderVarianceBreakdown(order) {
+  const isCostingApproved = order && order.costingApproval?.status === "approved";
   const qty = Number(order.qty) || 1;
-  const plannedCost = Number(order.plannedCost) || 0;
-  const actualCost = Number(order.actualCost) || 0;
+  const plannedCost = isCostingApproved ? (Number(order.plannedCost) || 0) : 0;
+  const actualCost = isCostingApproved ? (Number(order.actualCost) || 0) : 0;
   const totalVariance = actualCost - plannedCost;
   const totalVariancePct = plannedCost > 0 ? (totalVariance / plannedCost) * 100 : 0;
 
@@ -68,8 +69,8 @@ function computeOrderVarianceBreakdown(order) {
     }
   ];
 
-  // Map costingRows if present
-  const rows = Array.isArray(order.costingRows) ? order.costingRows : [];
+  // Map costingRows if present and approved
+  const rows = isCostingApproved && Array.isArray(order.costingRows) ? order.costingRows : [];
 
   // Calculate planned amounts per category from costing rows
   const plannedByCategory = {};
@@ -94,29 +95,30 @@ function computeOrderVarianceBreakdown(order) {
     }
   });
 
+  const hasCostingData = Boolean(isCostingApproved && (plannedCost > 0 || actualCost > 0 || totalCostingRowsValue > 0));
+
   // If order has CMT rate/total explicitly recorded, reflect or adjust CMT category
-  const explicitCmtTotal = order.cmtTotal !== undefined && order.cmtTotal !== ""
+  const explicitCmtTotal = isCostingApproved && order.cmtTotal !== undefined && order.cmtTotal !== ""
     ? Number(order.cmtTotal)
-    : (order.cmtRate !== undefined && order.cmtRate !== "" ? qty * Number(order.cmtRate) : null);
+    : (isCostingApproved && order.cmtRate !== undefined && order.cmtRate !== "" ? qty * Number(order.cmtRate) : null);
 
   // If order has a custom actualCostBreakdown stored, use it; otherwise compute from real data
-  const storedActualBreakdown = order.actualCostBreakdown || null;
+  const storedActualBreakdown = isCostingApproved ? (order.actualCostBreakdown || null) : null;
 
   // Build each category's planned and actual values
   let categories = CATEGORY_MAP.map(cat => {
     let planned = 0;
-    if (totalCostingRowsValue > 0) {
-      // Costing sheet per piece multiplied by qty, or scaled to order.plannedCost
-      const perPieceFromRows = plannedByCategory[cat.key] || 0;
-      if (plannedCost > 0) {
-        // Proportional to entered plannedCost
-        planned = Math.round((perPieceFromRows / totalCostingRowsValue) * plannedCost);
-      } else {
-        planned = Math.round(perPieceFromRows * qty);
+    if (hasCostingData) {
+      if (totalCostingRowsValue > 0) {
+        const perPieceFromRows = plannedByCategory[cat.key] || 0;
+        if (plannedCost > 0) {
+          planned = Math.round((perPieceFromRows / totalCostingRowsValue) * plannedCost);
+        } else {
+          planned = Math.round(perPieceFromRows * qty);
+        }
+      } else if (plannedCost > 0) {
+        planned = Math.round(plannedCost * cat.defaultRatio);
       }
-    } else if (plannedCost > 0) {
-      // Fall back to standard garment industry cost ratio on plannedCost only if plannedCost > 0
-      planned = Math.round(plannedCost * cat.defaultRatio);
     }
 
     return {
@@ -129,74 +131,72 @@ function computeOrderVarianceBreakdown(order) {
     };
   });
 
-  // Calculate actuals
-  if (storedActualBreakdown) {
-    categories.forEach(c => {
-      c.actual = storedActualBreakdown[c.key] !== undefined ? Number(storedActualBreakdown[c.key]) || 0 : c.planned;
-    });
-  } else if (explicitCmtTotal !== null && explicitCmtTotal > 0) {
-    const cmtCategory = categories.find(c => c.key === "cmt");
-    if (cmtCategory) {
-      cmtCategory.actual = explicitCmtTotal;
+  // Calculate actuals only if valid costing data exists
+  if (hasCostingData) {
+    if (storedActualBreakdown) {
+      categories.forEach(c => {
+        c.actual = storedActualBreakdown[c.key] !== undefined ? Number(storedActualBreakdown[c.key]) || 0 : c.planned;
+      });
+    } else if (explicitCmtTotal !== null && explicitCmtTotal > 0) {
+      const cmtCategory = categories.find(c => c.key === "cmt");
+      if (cmtCategory) {
+        cmtCategory.actual = explicitCmtTotal;
+      }
+      const nonCmtCategories = categories.filter(c => c.key !== "cmt");
+      const nonCmtPlannedSum = nonCmtCategories.reduce((sum, c) => sum + c.planned, 0);
+      const remainingActual = Math.max(0, actualCost - explicitCmtTotal);
+
+      nonCmtCategories.forEach(c => {
+        if (nonCmtPlannedSum > 0) {
+          c.actual = Math.round(remainingActual * (c.planned / nonCmtPlannedSum));
+        } else {
+          c.actual = Math.round(remainingActual * (1 / nonCmtCategories.length));
+        }
+      });
+    } else if (actualCost > 0) {
+      categories.forEach(c => {
+        if (plannedCost > 0) {
+          c.actual = Math.round(actualCost * (c.planned / plannedCost));
+        } else {
+          const catDef = CATEGORY_MAP.find(m => m.key === c.key);
+          c.actual = Math.round(actualCost * (catDef ? catDef.defaultRatio : 1 / categories.length));
+        }
+      });
     }
-    const nonCmtCategories = categories.filter(c => c.key !== "cmt");
-    const nonCmtPlannedSum = nonCmtCategories.reduce((sum, c) => sum + c.planned, 0);
-    const remainingActual = Math.max(0, actualCost - explicitCmtTotal);
 
-    nonCmtCategories.forEach(c => {
-      if (nonCmtPlannedSum > 0) {
-        c.actual = Math.round(remainingActual * (c.planned / nonCmtPlannedSum));
-      } else {
-        c.actual = Math.round(remainingActual * (1 / nonCmtCategories.length));
-      }
-    });
-  } else {
+    // Adjust rounding differences so sum of category actuals strictly equals actualCost
+    const currentActualSum = categories.reduce((sum, c) => sum + c.actual, 0);
+    const actualDiff = actualCost - currentActualSum;
+    if (actualDiff !== 0 && categories.length > 0) {
+      const targetCat = categories.find(c => c.key === "fabric") || categories[0];
+      targetCat.actual += actualDiff;
+    }
+
+    // Calculate final variances and percentage for each category
     categories.forEach(c => {
-      if (plannedCost > 0) {
-        c.actual = Math.round(actualCost * (c.planned / plannedCost));
-      } else {
-        const catDef = CATEGORY_MAP.find(m => m.key === c.key);
-        c.actual = Math.round(actualCost * (catDef ? catDef.defaultRatio : 1 / categories.length));
-      }
+      c.variance = c.actual - c.planned;
+      c.variancePct = c.planned > 0 ? (c.variance / c.planned) * 100 : (c.actual > 0 ? 100 : 0);
     });
-  }
 
-  // Adjust rounding differences so sum of category actuals strictly equals actualCost
-  const currentActualSum = categories.reduce((sum, c) => sum + c.actual, 0);
-  const actualDiff = actualCost - currentActualSum;
-  if (actualDiff !== 0 && categories.length > 0) {
-    // Apply diff to largest category or fabric
-    const targetCat = categories.find(c => c.key === "fabric") || categories[0];
-    targetCat.actual += actualDiff;
-  }
+    const sumPlanned = categories.reduce((sum, c) => sum + c.planned, 0);
+    const diffPlanned = plannedCost - sumPlanned;
+    if (diffPlanned !== 0 && categories.length > 0) {
+      categories[0].planned += diffPlanned;
+      categories[0].variance = categories[0].actual - categories[0].planned;
+      categories[0].variancePct = categories[0].planned > 0 ? (categories[0].variance / categories[0].planned) * 100 : 0;
+    }
 
-  // Calculate final variances and percentage for each category
-  categories.forEach(c => {
-    c.variance = c.actual - c.planned;
-    c.variancePct = c.planned > 0 ? (c.variance / c.planned) * 100 : (c.actual > 0 ? 100 : 0);
-  });
-
-  // Adjust any rounding so that category actuals sum exactly to actualCost
-  // and category planned sums exactly to plannedCost
-  const sumPlanned = categories.reduce((sum, c) => sum + c.planned, 0);
-  const diffPlanned = plannedCost - sumPlanned;
-  if (diffPlanned !== 0 && categories.length > 0) {
-    categories[0].planned += diffPlanned;
-    categories[0].variance = categories[0].actual - categories[0].planned;
-    categories[0].variancePct = categories[0].planned > 0 ? (categories[0].variance / categories[0].planned) * 100 : 0;
-  }
-
-  const sumActual = categories.reduce((sum, c) => sum + c.actual, 0);
-  const diffActual = actualCost - sumActual;
-  if (diffActual !== 0 && categories.length > 0) {
-    // Distribute diff to the category with highest actual or first category
-    categories[0].actual += diffActual;
-    categories[0].variance = categories[0].actual - categories[0].planned;
-    categories[0].variancePct = categories[0].planned > 0 ? (categories[0].variance / categories[0].planned) * 100 : 0;
+    const sumActual = categories.reduce((sum, c) => sum + c.actual, 0);
+    const diffActual = actualCost - sumActual;
+    if (diffActual !== 0 && categories.length > 0) {
+      categories[0].actual += diffActual;
+      categories[0].variance = categories[0].actual - categories[0].planned;
+      categories[0].variancePct = categories[0].planned > 0 ? (categories[0].variance / categories[0].planned) * 100 : 0;
+    }
   }
 
   // Find biggest overrun category (positive variance)
-  const overrunCategories = categories.filter(c => c.variance > 0).sort((a, b) => b.variance - a.variance);
+  const overrunCategories = hasCostingData ? categories.filter(c => c.variance > 0).sort((a, b) => b.variance - a.variance) : [];
   const biggestOverrun = overrunCategories.length > 0 ? overrunCategories[0] : null;
 
   // Retrieve actual documented reasons/notes stored in project data
@@ -223,6 +223,8 @@ function computeOrderVarianceBreakdown(order) {
   return {
     order,
     qty,
+    isCostingApproved,
+    hasCostingData,
     plannedCost,
     actualCost,
     totalVariance,
@@ -540,227 +542,261 @@ export function FinanceEntryPage({ orders = [], financials, onUpdate, onUpdateOr
 
             {/* Modal Scrollable Body */}
             <div style={{ padding: "20px 24px", overflowY: "auto", flex: 1 }}>
-              {/* Summary Highlights */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
-                <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, padding: "12px 16px" }}>
-                  <div style={{ fontSize: 11.5, color: "#64748B", fontWeight: 600 }}>Planned Budget</div>
-                  <div style={{ fontSize: 20, fontWeight: 800, color: "#0F172A", marginTop: 4 }}>
-                    ₹{activeBreakdown.plannedCost.toLocaleString("en-IN")}
-                  </div>
-                </div>
-                <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, padding: "12px 16px" }}>
-                  <div style={{ fontSize: 11.5, color: "#64748B", fontWeight: 600 }}>Actual Incurred</div>
-                  <div style={{ fontSize: 20, fontWeight: 800, color: "#0F172A", marginTop: 4 }}>
-                    ₹{activeBreakdown.actualCost.toLocaleString("en-IN")}
-                  </div>
-                </div>
+              {!activeBreakdown.hasCostingData ? (
                 <div style={{
-                  background: activeBreakdown.totalVariance > 0 ? "#FEF2F2" : activeBreakdown.totalVariance < 0 ? "#ECFDF5" : "#F8FAFC",
-                  border: `1px solid ${activeBreakdown.totalVariance > 0 ? "#FECACA" : activeBreakdown.totalVariance < 0 ? "#A7F3D0" : "#E2E8F0"}`,
-                  borderRadius: 10,
-                  padding: "12px 16px"
-                }}>
-                  <div style={{ fontSize: 11.5, fontWeight: 600, color: activeBreakdown.totalVariance > 0 ? "#991B1B" : activeBreakdown.totalVariance < 0 ? "#065F46" : "#475569" }}>
-                    Total Variance
-                  </div>
-                  <div style={{
-                    fontSize: 20,
-                    fontWeight: 800,
-                    color: activeBreakdown.totalVariance > 0 ? "#DC2626" : activeBreakdown.totalVariance < 0 ? "#059669" : "#334155",
-                    marginTop: 4
-                  }}>
-                    {activeBreakdown.totalVariance > 0 ? "+" : activeBreakdown.totalVariance < 0 ? "-" : ""}₹{Math.abs(activeBreakdown.totalVariance).toLocaleString("en-IN")}
-                    <span style={{ fontSize: 12.5, fontWeight: 600, marginLeft: 6 }}>
-                      ({activeBreakdown.totalVariancePct > 0 ? "+" : ""}{activeBreakdown.totalVariancePct.toFixed(1)}%)
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Biggest Overrun Callout Banner (Requirement 8 & 3) */}
-              {activeBreakdown.biggestOverrun ? (
-                <div style={{
-                  background: "#FEF2F2",
-                  border: "1px solid #F87171",
-                  borderRadius: 10,
-                  padding: "12px 16px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                  marginBottom: 20
-                }}>
-                  <div style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 8,
-                    background: "#FEE2E2",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0
-                  }}>
-                    <TriangleAlert size={18} color="#DC2626" />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "#991B1B", textTransform: "uppercase", letterSpacing: 0.5 }}>
-                      Biggest Cost Overrun Driver
-                    </div>
-                    <div style={{ fontSize: 13.5, fontWeight: 600, color: "#7F1D1D", marginTop: 2 }}>
-                      <span style={{ fontWeight: 800 }}>{activeBreakdown.biggestOverrun.label}</span> is exceeding budget by{" "}
-                      <span style={{ fontWeight: 800 }}>+{activeBreakdown.biggestOverrun.variance > 0 ? "" : "-"}₹{Math.abs(activeBreakdown.biggestOverrun.variance).toLocaleString("en-IN")}</span>{" "}
-                      (+{activeBreakdown.biggestOverrun.variancePct.toFixed(1)}%)
-                    </div>
-                  </div>
-                </div>
-              ) : (activeBreakdown.plannedCost > 0 || activeBreakdown.actualCost > 0) && activeBreakdown.totalVariance <= 0 ? (
-                <div style={{
-                  background: "#ECFDF5",
-                  border: "1px solid #6EE7B7",
-                  borderRadius: 10,
-                  padding: "12px 16px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                  marginBottom: 20
-                }}>
-                  <div style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 8,
-                    background: "#D1FAE5",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0
-                  }}>
-                    <CheckCircle size={18} color="#059669" />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "#065F46", textTransform: "uppercase", letterSpacing: 0.5 }}>
-                      No Overruns Detected
-                    </div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "#047857", marginTop: 1 }}>
-                      All individual cost categories are operating within or below the planned budget limits.
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-
-              {/* Category Contribution Table (Requirements 5, 6, 7) */}
-              <div style={{ border: "1px solid #E2E8F0", borderRadius: 10, overflow: "hidden", marginBottom: 20 }}>
-                <div style={{
-                  display: "grid",
-                  gridTemplateColumns: "2.2fr 1fr 1fr 1.2fr 1fr",
                   background: "#F8FAFC",
-                  borderBottom: "1px solid #E2E8F0",
-                  padding: "10px 14px",
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: "#64748B",
-                  textTransform: "uppercase",
-                  letterSpacing: 0.4
+                  border: "1px dashed #CBD5E1",
+                  borderRadius: 12,
+                  padding: "32px 24px",
+                  textAlign: "center",
+                  marginBottom: 20
                 }}>
-                  <div>Cost Category</div>
-                  <div style={{ textAlign: "right" }}>Planned (₹)</div>
-                  <div style={{ textAlign: "right" }}>Actual (₹)</div>
-                  <div style={{ textAlign: "right" }}>Variance (₹)</div>
-                  <div style={{ textAlign: "right" }}>Variance (%)</div>
+                  <div style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: "50%",
+                    background: "#F1F5F9",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    margin: "0 auto 12px",
+                    color: "#64748B"
+                  }}>
+                    <TriangleAlert size={22} />
+                  </div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: "#1E293B", marginBottom: 6 }}>
+                    {!activeBreakdown.isCostingApproved ? "Costing Not Approved" : "No Costing Data Entered"}
+                  </div>
+                  <div style={{ fontSize: 13, color: "#64748B", maxWidth: 460, margin: "0 auto", lineHeight: 1.5 }}>
+                    {!activeBreakdown.isCostingApproved
+                      ? "Costing values for this order have not been approved yet. Cost category variance breakdown and budget totals will only appear after costing is created and approved."
+                      : "No planned or actual cost figures have been entered for this order yet."}
+                  </div>
                 </div>
-
-                {activeBreakdown.categories.map((cat, idx) => {
-                  const isCatOverrun = cat.variance > 0;
-                  const isCatFavourable = cat.variance < 0;
-                  const isCatZero = cat.variance === 0;
-
-                  return (
-                    <div
-                      key={cat.key}
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "2.2fr 1fr 1fr 1.2fr 1fr",
-                        alignItems: "center",
-                        padding: "11px 14px",
-                        fontSize: 12.5,
-                        borderBottom: idx === activeBreakdown.categories.length - 1 ? "none" : "1px solid #F1F5F9",
-                        background: isCatOverrun ? "#FFFBFB" : "transparent"
-                      }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{
-                          display: "inline-block",
-                          width: 8,
-                          height: 8,
-                          borderRadius: "50%",
-                          background: isCatOverrun ? "#DC2626" : isCatFavourable ? "#059669" : "#9CA3AF"
-                        }} />
-                        <span style={{ fontWeight: 600, color: "#1E293B" }}>{cat.label}</span>
-                        {activeBreakdown.biggestOverrun && activeBreakdown.biggestOverrun.key === cat.key && (
-                          <span style={{
-                            fontSize: 9.5,
-                            fontWeight: 700,
-                            padding: "1px 6px",
-                            borderRadius: 4,
-                            background: "#FEE2E2",
-                            color: "#DC2626",
-                            border: "1px solid #FECACA"
-                          }}>
-                            HIGHEST OVERRUN
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ textAlign: "right", color: "#475569", fontWeight: 500 }}>
-                        ₹{cat.planned.toLocaleString("en-IN")}
-                      </div>
-                      <div style={{ textAlign: "right", color: "#0F172A", fontWeight: 600 }}>
-                        ₹{cat.actual.toLocaleString("en-IN")}
-                      </div>
-                      <div style={{
-                        textAlign: "right",
-                        fontWeight: 700,
-                        color: isCatOverrun ? "#DC2626" : isCatFavourable ? "#059669" : "#64748B"
-                      }}>
-                        {cat.variance > 0 ? "+" : cat.variance < 0 ? "-" : ""}₹{Math.abs(cat.variance).toLocaleString("en-IN")}
-                      </div>
-                      <div style={{
-                        textAlign: "right",
-                        fontWeight: 700,
-                        color: isCatOverrun ? "#DC2626" : isCatFavourable ? "#059669" : "#64748B"
-                      }}>
-                        {cat.variancePct > 0 ? "+" : ""}{cat.variancePct.toFixed(1)}%
+              ) : (
+                <>
+                  {/* Summary Highlights */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
+                    <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, padding: "12px 16px" }}>
+                      <div style={{ fontSize: 11.5, color: "#64748B", fontWeight: 600 }}>Planned Budget</div>
+                      <div style={{ fontSize: 20, fontWeight: 800, color: "#0F172A", marginTop: 4 }}>
+                        ₹{activeBreakdown.plannedCost.toLocaleString("en-IN")}
                       </div>
                     </div>
-                  );
-                })}
+                    <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, padding: "12px 16px" }}>
+                      <div style={{ fontSize: 11.5, color: "#64748B", fontWeight: 600 }}>Actual Incurred</div>
+                      <div style={{ fontSize: 20, fontWeight: 800, color: "#0F172A", marginTop: 4 }}>
+                        ₹{activeBreakdown.actualCost.toLocaleString("en-IN")}
+                      </div>
+                    </div>
+                    <div style={{
+                      background: activeBreakdown.totalVariance > 0 ? "#FEF2F2" : activeBreakdown.totalVariance < 0 ? "#ECFDF5" : "#F8FAFC",
+                      border: `1px solid ${activeBreakdown.totalVariance > 0 ? "#FECACA" : activeBreakdown.totalVariance < 0 ? "#A7F3D0" : "#E2E8F0"}`,
+                      borderRadius: 10,
+                      padding: "12px 16px"
+                    }}>
+                      <div style={{ fontSize: 11.5, fontWeight: 600, color: activeBreakdown.totalVariance > 0 ? "#991B1B" : activeBreakdown.totalVariance < 0 ? "#065F46" : "#475569" }}>
+                        Total Variance
+                      </div>
+                      <div style={{
+                        fontSize: 20,
+                        fontWeight: 800,
+                        color: activeBreakdown.totalVariance > 0 ? "#DC2626" : activeBreakdown.totalVariance < 0 ? "#059669" : "#334155",
+                        marginTop: 4
+                      }}>
+                        {activeBreakdown.totalVariance > 0 ? "+" : activeBreakdown.totalVariance < 0 ? "-" : ""}₹{Math.abs(activeBreakdown.totalVariance).toLocaleString("en-IN")}
+                        <span style={{ fontSize: 12.5, fontWeight: 600, marginLeft: 6 }}>
+                          ({activeBreakdown.totalVariancePct > 0 ? "+" : ""}{activeBreakdown.totalVariancePct.toFixed(1)}%)
+                        </span>
+                      </div>
+                    </div>
+                  </div>
 
-                {/* Total Row (Requirement 7) */}
-                <div style={{
-                  display: "grid",
-                  gridTemplateColumns: "2.2fr 1fr 1fr 1.2fr 1fr",
-                  alignItems: "center",
-                  padding: "12px 14px",
-                  fontSize: 13,
-                  fontWeight: 800,
-                  background: "#F1F5F9",
-                  borderTop: "2px solid #CBD5E1",
-                  color: "#0F172A"
-                }}>
-                  <div>Total Order Spend</div>
-                  <div style={{ textAlign: "right" }}>₹{activeBreakdown.plannedCost.toLocaleString("en-IN")}</div>
-                  <div style={{ textAlign: "right" }}>₹{activeBreakdown.actualCost.toLocaleString("en-IN")}</div>
-                  <div style={{
-                    textAlign: "right",
-                    color: activeBreakdown.totalVariance > 0 ? "#DC2626" : activeBreakdown.totalVariance < 0 ? "#059669" : "#475569"
-                  }}>
-                    {activeBreakdown.totalVariance > 0 ? "+" : activeBreakdown.totalVariance < 0 ? "-" : ""}₹{Math.abs(activeBreakdown.totalVariance).toLocaleString("en-IN")}
+                  {/* Biggest Overrun Callout Banner (Requirement 8 & 3) */}
+                  {activeBreakdown.biggestOverrun ? (
+                    <div style={{
+                      background: "#FEF2F2",
+                      border: "1px solid #F87171",
+                      borderRadius: 10,
+                      padding: "12px 16px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      marginBottom: 20
+                    }}>
+                      <div style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 8,
+                        background: "#FEE2E2",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0
+                      }}>
+                        <TriangleAlert size={18} color="#DC2626" />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#991B1B", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                          Biggest Cost Overrun Driver
+                        </div>
+                        <div style={{ fontSize: 13.5, fontWeight: 600, color: "#7F1D1D", marginTop: 2 }}>
+                          <span style={{ fontWeight: 800 }}>{activeBreakdown.biggestOverrun.label}</span> is exceeding budget by{" "}
+                          <span style={{ fontWeight: 800 }}>+{activeBreakdown.biggestOverrun.variance > 0 ? "" : "-"}₹{Math.abs(activeBreakdown.biggestOverrun.variance).toLocaleString("en-IN")}</span>{" "}
+                          (+{activeBreakdown.biggestOverrun.variancePct.toFixed(1)}%)
+                        </div>
+                      </div>
+                    </div>
+                  ) : activeBreakdown.totalVariance <= 0 ? (
+                    <div style={{
+                      background: "#ECFDF5",
+                      border: "1px solid #6EE7B7",
+                      borderRadius: 10,
+                      padding: "12px 16px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      marginBottom: 20
+                    }}>
+                      <div style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 8,
+                        background: "#D1FAE5",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0
+                      }}>
+                        <CheckCircle size={18} color="#059669" />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#065F46", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                          No Overruns Detected
+                        </div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "#047857", marginTop: 1 }}>
+                          All individual cost categories are operating within or below the planned budget limits.
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {/* Category Contribution Table (Requirements 5, 6, 7) */}
+                  <div style={{ border: "1px solid #E2E8F0", borderRadius: 10, overflow: "hidden", marginBottom: 20 }}>
+                    <div style={{
+                      display: "grid",
+                      gridTemplateColumns: "2.2fr 1fr 1fr 1.2fr 1fr",
+                      background: "#F8FAFC",
+                      borderBottom: "1px solid #E2E8F0",
+                      padding: "10px 14px",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: "#64748B",
+                      textTransform: "uppercase",
+                      letterSpacing: 0.4
+                    }}>
+                      <div>Cost Category</div>
+                      <div style={{ textAlign: "right" }}>Planned (₹)</div>
+                      <div style={{ textAlign: "right" }}>Actual (₹)</div>
+                      <div style={{ textAlign: "right" }}>Variance (₹)</div>
+                      <div style={{ textAlign: "right" }}>Variance (%)</div>
+                    </div>
+
+                    {activeBreakdown.categories.map((cat, idx) => {
+                      const isCatOverrun = cat.variance > 0;
+                      const isCatFavourable = cat.variance < 0;
+
+                      return (
+                        <div
+                          key={cat.key}
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "2.2fr 1fr 1fr 1.2fr 1fr",
+                            alignItems: "center",
+                            padding: "11px 14px",
+                            fontSize: 12.5,
+                            borderBottom: idx === activeBreakdown.categories.length - 1 ? "none" : "1px solid #F1F5F9",
+                            background: isCatOverrun ? "#FFFBFB" : "transparent"
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{
+                              display: "inline-block",
+                              width: 8,
+                              height: 8,
+                              borderRadius: "50%",
+                              background: isCatOverrun ? "#DC2626" : isCatFavourable ? "#059669" : "#9CA3AF"
+                            }} />
+                            <span style={{ fontWeight: 600, color: "#1E293B" }}>{cat.label}</span>
+                            {activeBreakdown.biggestOverrun && activeBreakdown.biggestOverrun.key === cat.key && (
+                              <span style={{
+                                fontSize: 9.5,
+                                fontWeight: 700,
+                                padding: "1px 6px",
+                                borderRadius: 4,
+                                background: "#FEE2E2",
+                                color: "#DC2626",
+                                border: "1px solid #FECACA"
+                              }}>
+                                HIGHEST OVERRUN
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ textAlign: "right", color: "#475569", fontWeight: 500 }}>
+                            ₹{cat.planned.toLocaleString("en-IN")}
+                          </div>
+                          <div style={{ textAlign: "right", color: "#0F172A", fontWeight: 600 }}>
+                            ₹{cat.actual.toLocaleString("en-IN")}
+                          </div>
+                          <div style={{
+                            textAlign: "right",
+                            fontWeight: 700,
+                            color: isCatOverrun ? "#DC2626" : isCatFavourable ? "#059669" : "#64748B"
+                          }}>
+                            {cat.variance > 0 ? "+" : cat.variance < 0 ? "-" : ""}₹{Math.abs(cat.variance).toLocaleString("en-IN")}
+                          </div>
+                          <div style={{
+                            textAlign: "right",
+                            fontWeight: 700,
+                            color: isCatOverrun ? "#DC2626" : isCatFavourable ? "#059669" : "#64748B"
+                          }}>
+                            {cat.variancePct > 0 ? "+" : ""}{cat.variancePct.toFixed(1)}%
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* Total Row (Requirement 7) */}
+                    <div style={{
+                      display: "grid",
+                      gridTemplateColumns: "2.2fr 1fr 1fr 1.2fr 1fr",
+                      alignItems: "center",
+                      padding: "12px 14px",
+                      fontSize: 13,
+                      fontWeight: 800,
+                      background: "#F1F5F9",
+                      borderTop: "2px solid #CBD5E1",
+                      color: "#0F172A"
+                    }}>
+                      <div>Total Order Spend</div>
+                      <div style={{ textAlign: "right" }}>₹{activeBreakdown.plannedCost.toLocaleString("en-IN")}</div>
+                      <div style={{ textAlign: "right" }}>₹{activeBreakdown.actualCost.toLocaleString("en-IN")}</div>
+                      <div style={{
+                        textAlign: "right",
+                        color: activeBreakdown.totalVariance > 0 ? "#DC2626" : activeBreakdown.totalVariance < 0 ? "#059669" : "#475569"
+                      }}>
+                        {activeBreakdown.totalVariance > 0 ? "+" : activeBreakdown.totalVariance < 0 ? "-" : ""}₹{Math.abs(activeBreakdown.totalVariance).toLocaleString("en-IN")}
+                      </div>
+                      <div style={{
+                        textAlign: "right",
+                        color: activeBreakdown.totalVariance > 0 ? "#DC2626" : activeBreakdown.totalVariance < 0 ? "#059669" : "#475569"
+                      }}>
+                        {activeBreakdown.totalVariancePct > 0 ? "+" : ""}{activeBreakdown.totalVariancePct.toFixed(1)}%
+                      </div>
+                    </div>
                   </div>
-                  <div style={{
-                    textAlign: "right",
-                    color: activeBreakdown.totalVariance > 0 ? "#DC2626" : activeBreakdown.totalVariance < 0 ? "#059669" : "#475569"
-                  }}>
-                    {activeBreakdown.totalVariancePct > 0 ? "+" : ""}{activeBreakdown.totalVariancePct.toFixed(1)}%
-                  </div>
-                </div>
-              </div>
+                </>
+              )}
 
               {/* Documented Root Causes / Stage Notes (Requirement 9: Show only when actually exists in stored data) */}
               <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, padding: "14px 16px" }}>
@@ -2872,7 +2908,10 @@ export function DebitNotesPage({ orders, notes, onAdd }) {
   const set = (field, val) => setForm(f => ({ ...f, [field]: val }));
   const total = notes.reduce((a, n) => a + (Number(n.amount) || 0), 0);
   const bySeason = {};
-  notes.forEach(n => { bySeason[n.season] = (bySeason[n.season] || 0) + (Number(n.amount) || 0); });
+  notes.forEach(n => {
+    const sKey = n.season || "Other";
+    bySeason[sKey] = (bySeason[sKey] || 0) + (Number(n.amount) || 0);
+  });
 
   function submit() {
     if (!form.buyer.trim() || !form.amount) return;
@@ -2885,11 +2924,11 @@ export function DebitNotesPage({ orders, notes, onAdd }) {
       <PageHeader title="Debit Notes" sub="Entered by Merchandising each season — buyer deductions and claims against orders" />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 16 }}>
         <Card style={{ padding: "16px 18px" }}><div style={{ fontSize: 12, color: "#8A8D98" }}>Total debit notes</div><div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: "#D64545" }}>{notes.length}</div></Card>
-        <Card style={{ padding: "16px 18px" }}><div style={{ fontSize: 12, color: "#8A8D98" }}>Total value</div><div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: "#D64545" }}>${total.toLocaleString()}</div></Card>
+        <Card style={{ padding: "16px 18px" }}><div style={{ fontSize: 12, color: "#8A8D98" }}>Total value</div><div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: "#D64545" }}>₹{total.toLocaleString("en-IN")}</div></Card>
         <Card style={{ padding: "16px 18px" }}>
           <div style={{ fontSize: 12, color: "#8A8D98", marginBottom: 4 }}>By season</div>
           {Object.entries(bySeason).map(([s, v]) => (
-            <div key={s} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}><span>{s}</span><span style={{ fontWeight: 600 }}>${v.toLocaleString()}</span></div>
+            <div key={s} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}><span>{s}</span><span style={{ fontWeight: 600 }}>₹{v.toLocaleString("en-IN")}</span></div>
           ))}
         </Card>
       </div>
@@ -2917,7 +2956,7 @@ export function DebitNotesPage({ orders, notes, onAdd }) {
             </select>
           </div>
           <div>
-            <label style={{ fontSize: 11, color: "#8A8D98", display: "block", marginBottom: 4 }}>Amount ($)</label>
+            <label style={{ fontSize: 11, color: "#8A8D98", display: "block", marginBottom: 4 }}>Amount (₹)</label>
             <input type="number" value={form.amount} onChange={e => set("amount", e.target.value)} style={{ width: "100%", padding: "7px 8px", borderRadius: 7, border: "1px solid #E7E8ED", fontSize: 12.5 }} />
           </div>
           <div>
@@ -2934,16 +2973,16 @@ export function DebitNotesPage({ orders, notes, onAdd }) {
 
       <Card>
         <div style={{ display: "grid", gridTemplateColumns: "0.8fr 1fr 0.9fr 0.9fr 1.6fr 0.8fr", fontSize: 11, color: "#8A8D98", padding: "0 4px 8px", borderBottom: "1px solid #F0F0F2" }}>
-          <div>Season</div><div>Buyer</div><div>PO</div><div>Amount</div><div>Reason</div><div>Date</div>
+          <div>Season</div><div>Buyer</div><div>PO</div><div>Amount (₹)</div><div>Reason</div><div>Date</div>
         </div>
         {notes.length === 0 ? (
           <div style={{ fontSize: 12.5, color: "#B0B2BA", padding: "12px 4px" }}>No debit notes recorded yet.</div>
         ) : notes.map(n => (
           <div key={n.id} style={{ display: "grid", gridTemplateColumns: "0.8fr 1fr 0.9fr 0.9fr 1.6fr 0.8fr", alignItems: "center", fontSize: 12.5, padding: "10px 4px", borderBottom: "1px solid #F5F5F7" }}>
-            <div>{n.season}</div>
+            <div>{n.season || "—"}</div>
             <div style={{ fontWeight: 600, color: "#1B2130" }}>{n.buyer}</div>
             <div style={{ fontFamily: "monospace", fontSize: 11 }}>{n.po || "—"}</div>
-            <div style={{ color: "#D64545", fontWeight: 600 }}>${Number(n.amount).toLocaleString()}</div>
+            <div style={{ color: "#D64545", fontWeight: 600 }}>₹{Number(n.amount || 0).toLocaleString("en-IN")}</div>
             <div style={{ color: "#565A66" }}>{n.reason}</div>
             <div>{n.date}</div>
           </div>
