@@ -16,6 +16,7 @@ import {
 import {
   Card, CardHeader, PageHeader, DarkCard, DarkCardHeader, MiniDonut, BackLink, statusPill
 } from "../common/CommonUI.jsx";
+import { analyzeCuttingDelayForOrder, CuttingDelayDashboardBanner } from "../CuttingDelayAlertModal.jsx";
 
 /**
  * Helper function to compute category-level planned vs actual variance breakdown
@@ -3913,8 +3914,25 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
     // { label: "Gross Margin", value: `${grossMargin}%`, icon: TrendingUp, color: "#E2A83B" },
   ];
 
+  const cuttingDelayedOrders = useMemo(() => {
+    if (!Array.isArray(activeOrders)) return [];
+    const res = [];
+    for (const ord of activeOrders) {
+      const a = analyzeCuttingDelayForOrder(ord);
+      if (a) res.push(a);
+    }
+    return res;
+  }, [activeOrders]);
+
   return (
     <div style={{ padding: "0 0 40px 0" }}>
+      {/* Cutting Delay Warning Banner for MD */}
+      <CuttingDelayDashboardBanner
+        delayedOrders={cuttingDelayedOrders}
+        onOpenAlert={() => window.dispatchEvent(new CustomEvent("loom_open_cutting_alert"))}
+        snoozedUntil={Number(localStorage.getItem("loom_cutting_delay_snooze_until_5m")) || 0}
+      />
+
       {/* Title & Screen Refresh Controls */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12, marginBottom: 18 }}>
         <div>

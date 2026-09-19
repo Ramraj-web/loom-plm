@@ -13,6 +13,7 @@ import {
 import {
   Card, CardHeader, PageHeader, statusPill, riskDot, collectTasks
 } from "../common/CommonUI.jsx";
+import { analyzeCuttingDelayForOrder, CuttingDelayDashboardBanner } from "../CuttingDelayAlertModal.jsx";
 
 export function DateWiseActivityFeed({
   selectedDate,
@@ -992,6 +993,16 @@ export function Dashboard({
     return { onTimeApprovalPct, capacityUtilPct };
   }, [allStages]);
 
+  const cuttingDelayedOrders = useMemo(() => {
+    if (!Array.isArray(activeOrders)) return [];
+    const res = [];
+    for (const ord of activeOrders) {
+      const a = analyzeCuttingDelayForOrder(ord);
+      if (a) res.push(a);
+    }
+    return res;
+  }, [activeOrders]);
+
   const cards = [
     { label: "Active orders", value: stats.total, color: "#378ADD", Icon: Package, delta: `${completedOrders.length} completed · ${deletedOrders.length} deleted` },
     { label: "On track", value: stats.onTrack, color: "#1F9E8D", Icon: CheckCircle2, delta: `${Math.round((stats.onTrack / (stats.total || 1)) * 100)}% of active` },
@@ -1003,6 +1014,13 @@ export function Dashboard({
 
   return (
     <div>
+      {/* Cutting Delay Warning Banner for Admin and MD */}
+      <CuttingDelayDashboardBanner
+        delayedOrders={cuttingDelayedOrders}
+        onOpenAlert={() => window.dispatchEvent(new CustomEvent("loom_open_cutting_alert"))}
+        snoozedUntil={Number(localStorage.getItem("loom_cutting_delay_snooze_until_5m")) || 0}
+      />
+
       <PageHeader title="Dashboard" sub="Real-time overview of all orders and operations" />
 
       {/* Top 6 KPI Cards - Clean, modern, elevated styling with subtle accents */}

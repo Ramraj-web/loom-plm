@@ -30,6 +30,7 @@ import {
 } from "./components/views/InsightsViews.jsx";
 import { MyChecklistPage } from "./components/views/MyChecklistPage.jsx";
 import { ProjectChatbot } from "./components/ProjectChatbot.jsx";
+import CuttingDelayAlertModal from "./components/CuttingDelayAlertModal.jsx";
 import { DEFAULT_TEAMS, DEFAULT_USERS, LoginPage, UserAccessPage } from "./components/UserAccess.jsx";
 
 function roleForUser(user, teams, activeDeptOverride = null) {
@@ -792,14 +793,19 @@ export default function LoomPLM() {
             ? existing.stages
             : makeStages(mergedOrder.template || existing?.template || "90", 0, null)).map((s, sIdx) => {
               const existingStage = existing?.stages?.[sIdx];
-              if (s.status === "done" && !s.completedAt) {
-                return {
-                  ...s,
-                  completedAt: existingStage?.completedAt || mergedOrder.completedAt || mergedOrder.createdAt || new Date().toISOString(),
-                  completedBy: s.completedBy || existingStage?.completedBy || undefined
-                };
-              }
-              return s;
+              return {
+                ...s,
+                status: s.status || existingStage?.status || "pending",
+                reason: s.reason !== undefined ? s.reason : (existingStage?.reason || null),
+                completedAt: s.completedAt || existingStage?.completedAt || (s.status === "done" ? (existingStage?.completedAt || new Date().toISOString()) : undefined),
+                completedBy: s.completedBy || existingStage?.completedBy || undefined,
+                updatedAt: s.updatedAt || existingStage?.updatedAt || undefined,
+                updatedBy: s.updatedBy || existingStage?.updatedBy || undefined,
+                flaggedAt: s.flaggedAt || existingStage?.flaggedAt || undefined,
+                delayedDate: s.delayedDate || existingStage?.delayedDate || undefined,
+                revisedDateStr: s.revisedDateStr || existingStage?.revisedDateStr || undefined,
+                colourways: Array.isArray(s.colourways) && s.colourways.length > 0 ? s.colourways : (existingStage?.colourways || s.colourways)
+              };
             }),
         preProd: mergedOrder.preProd || existing?.preProd || initPreProd(),
       });
@@ -4694,6 +4700,12 @@ export default function LoomPLM() {
         </div>
       </div>
       <ProjectChatbot orders={orders} onOpenOrder={openOrder} userId={activeUser.id} />
+      <CuttingDelayAlertModal
+        orders={orders}
+        role={role}
+        activeUser={activeUser}
+        onOpenOrder={openOrder}
+      />
     </div>
   );
 }
