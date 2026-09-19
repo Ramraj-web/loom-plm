@@ -2098,8 +2098,8 @@ export default function LoomPLM() {
       costingRows: buildCostingRows("fabric"),
       vapCount: 1,
       shippedQty: 0,
-      plannedCost: Math.round((newOrder.qty || 5000) * 4),
-      actualCost: Math.round((newOrder.qty || 5000) * 4),
+      plannedCost: 0,
+      actualCost: 0,
       stages: makeStages("90", 0, null),
       preProd: initPreProd(),
       ...newOrder,
@@ -2731,7 +2731,14 @@ export default function LoomPLM() {
       if (!isTarget) return o;
       const rows = [...(o.costingRows || [])];
       rows[idx] = { ...rows[idx], [field]: value };
-      const updated = { ...o, costingRows: rows };
+      const orderQty = Number(o.qty) || 0;
+      const grandTotal = rows.reduce((a, r) => a + (r.isHeader ? 0 : (Number(r.price) || 0) * (Number(r.qty) || 0)), 0);
+      const computedPlanned = Math.round(grandTotal * orderQty);
+      const updated = {
+        ...o,
+        costingRows: rows,
+        plannedCost: computedPlanned > 0 ? computedPlanned : (o.plannedCost || 0)
+      };
       try { resourcesApi.update("orders", o.primaryId || o._id || o.id, updated); } catch (e) { }
       return updated;
     }));
@@ -2741,7 +2748,15 @@ export default function LoomPLM() {
     setOrders(prev => prev.map(o => {
       const isTarget = (o.primaryId && o.primaryId === id) || (o._id && o._id === id) || o.id === id;
       if (!isTarget) return o;
-      const updated = { ...o, costingRows: [...(o.costingRows || []), { label: "", section: "Other", isHeader: false, price: 0, qty: 1, custom: true }] };
+      const rows = [...(o.costingRows || []), { label: "", section: "Other", isHeader: false, price: 0, qty: 1, custom: true }];
+      const orderQty = Number(o.qty) || 0;
+      const grandTotal = rows.reduce((a, r) => a + (r.isHeader ? 0 : (Number(r.price) || 0) * (Number(r.qty) || 0)), 0);
+      const computedPlanned = Math.round(grandTotal * orderQty);
+      const updated = {
+        ...o,
+        costingRows: rows,
+        plannedCost: computedPlanned > 0 ? computedPlanned : (o.plannedCost || 0)
+      };
       try { resourcesApi.update("orders", o.primaryId || o._id || o.id, updated); } catch (e) { }
       return updated;
     }));

@@ -60,7 +60,7 @@
           "label": "Zip / Buttons / Elastic",
           "section": "Trims & Accessories",
           "isHeader": false,
-          "price": 0,
+          "price": "200",
           "qty": 1
         },
         {
@@ -147,7 +147,7 @@
           "label": "Cutting",
           "section": "CMT",
           "isHeader": false,
-          "price": 0,
+          "price": "104",
           "qty": 1
         },
         {
@@ -223,8 +223,8 @@
       ],
       "vapCount": 1,
       "shippedQty": 0,
-      "plannedCost": 4000,
-      "actualCost": 3953,
+      "plannedCost": 304000,
+      "actualCost": 2,
       "stages": [
         {
           "name": "Order Confirmation & Enquiry",
@@ -233,7 +233,7 @@
           "assignee": "Assigned",
           "reason": null,
           "planned": "Day 1",
-          "completedAt": null,
+          "completedAt": "2026-09-18T16:18:37.068Z",
           "completedOn": null,
           "updatedAt": "2026-05-12T09:00:00.000Z",
           "flaggedAt": null
@@ -245,7 +245,7 @@
           "assignee": "Assigned",
           "reason": null,
           "planned": "Day 1",
-          "completedAt": null,
+          "completedAt": "2026-09-18T16:18:37.068Z",
           "completedOn": null,
           "updatedAt": null,
           "flaggedAt": null
@@ -271,7 +271,7 @@
           "assignee": "Assigned",
           "reason": null,
           "planned": "Day 2-3",
-          "completedAt": null,
+          "completedAt": "2026-09-18T16:18:37.068Z",
           "completedOn": null,
           "updatedAt": "2026-09-14T05:25:10.508Z",
           "flaggedAt": null
@@ -720,8 +720,21 @@
       "completedAt": null,
       "deletedAt": null,
       "orderId": "12121212",
-      "cmtRate": 0.25,
-      "cmtTotal": 250.26
+      "cmtRate": "",
+      "cmtTotal": 0,
+      "resource": "orders",
+      "costingApproval": {
+        "status": "approved",
+        "submittedAt": "2026-09-18T17:37:07.493Z",
+        "submittedDate": "18/09/2026",
+        "grandTotal": 200,
+        "totalPlannedCost": 200000,
+        "currency": "INR",
+        "submittedBy": "Admin",
+        "approvedBy": "Admin",
+        "approvedAt": "2026-09-18T17:37:07.494Z",
+        "approvedDate": "18/09/2026"
+      }
     },
     {
       "template": "90",
@@ -956,7 +969,7 @@
           "assignee": "Assigned",
           "reason": null,
           "planned": "Day 1",
-          "completedAt": null,
+          "completedAt": "2026-09-18T16:18:37.068Z",
           "completedOn": null,
           "updatedAt": "2026-05-12T09:00:00.000Z",
           "flaggedAt": null
@@ -1420,7 +1433,8 @@
       "completedAt": null,
       "deletedAt": null,
       "orderId": "WSSSS",
-      "cmtTotal": 0.27
+      "cmtTotal": "",
+      "resource": "orders"
     },
     {
       "template": "90",
@@ -2429,7 +2443,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 3-5",
-          "completedAt": null,
+          "completedAt": "2026-09-18T16:18:37.068Z",
           "completedOn": null,
           "updatedAt": "2026-09-09T06:26:44.940Z",
           "flaggedAt": null
@@ -2441,7 +2455,7 @@
           "assignee": "Assigned",
           "reason": null,
           "planned": "Day 4-7",
-          "completedAt": null,
+          "completedAt": "2026-09-18T16:18:37.068Z",
           "completedOn": null,
           "updatedAt": "2026-09-09T06:26:47.614Z",
           "flaggedAt": null
@@ -2824,10 +2838,11 @@
       "isDeleted": false,
       "completedAt": null,
       "deletedAt": null,
-      "cmtRate": 0.22,
-      "cmtTotal": 2200,
+      "cmtRate": "",
+      "cmtTotal": 0,
       "primaryId": "EEE",
-      "orderId": "EEE"
+      "orderId": "EEE",
+      "resource": "orders"
     }
   ],
   "staff": [
@@ -2850,13 +2865,14 @@
   "financials": [
     {
       "revenue": 0,
-      "cogs": 197132,
+      "cogs": 2,
       "ebitda": 0,
       "stockValue": 0,
       "cashFlow": 0,
       "complianceScore": 100,
       "id": "current",
-      "resource": "financials"
+      "resource": "financials",
+      "primaryId": "current"
     }
   ],
   "certifications": [],
@@ -4077,5 +4093,7 @@
     }
   ],
   "teams": [],
-  "dashboard_rotation": []
+  "dashboard_rotation": [],
+  "user_sessions": [],
+  "audit_logs": []
 }

@@ -114,8 +114,8 @@ function computeOrderVarianceBreakdown(order) {
       } else {
         planned = Math.round(perPieceFromRows * qty);
       }
-    } else {
-      // Fall back to standard garment industry cost ratio on plannedCost
+    } else if (plannedCost > 0) {
+      // Fall back to standard garment industry cost ratio on plannedCost only if plannedCost > 0
       planned = Math.round(plannedCost * cat.defaultRatio);
     }
 
@@ -239,9 +239,10 @@ export function FinanceEntryPage({ orders = [], financials, onUpdate, onUpdateOr
 
   const totals = activeOrders.reduce((a, o) => {
     const cmtTotal = o.cmtTotal !== undefined ? (Number(o.cmtTotal) || 0) : ((Number(o.qty) || 0) * (Number(o.cmtRate) || 0));
+    const isCostingApproved = o.costingApproval?.status === "approved";
     return {
-      planned: a.planned + (o.plannedCost || 0),
-      actual: a.actual + (o.actualCost || 0),
+      planned: a.planned + (isCostingApproved ? (Number(o.plannedCost) || 0) : 0),
+      actual: a.actual + (isCostingApproved ? (Number(o.actualCost) || 0) : 0),
       cmt: a.cmt + cmtTotal,
     };
   }, { planned: 0, actual: 0, cmt: 0 });
@@ -305,21 +306,25 @@ export function FinanceEntryPage({ orders = [], financials, onUpdate, onUpdateOr
             const qty = Number(o.qty) || 0;
             const cmtRate = o.cmtRate !== undefined ? o.cmtRate : "";
             const calculatedCmtTotal = qty * (Number(cmtRate) || 0);
-            const cmtTotalVal = o.cmtTotal !== undefined ? o.cmtTotal : (cmtRate !== "" ? calculatedCmtTotal : 0);
-            const planned = Number(o.plannedCost) || 0;
+            const isCostingApproved = o.costingApproval?.status === "approved";
+            const planned = isCostingApproved ? (Number(o.plannedCost) || 0) : 0;
             const actual = Number(o.actualCost) || 0;
+            const hasCostingData = isCostingApproved && (planned > 0 || actual > 0);
             const variance = actual - planned;
             const variancePct = planned > 0 ? (variance / planned) * 100 : 0;
 
             // Status category & styling
-            const isOverrun = variance > 0;
-            const isFavourable = variance < 0;
-            const isNoVariance = variance === 0;
+            const isNotCosted = !hasCostingData;
+            const isOverrun = hasCostingData && variance > 0;
+            const isFavourable = hasCostingData && variance < 0;
+            const isNoVariance = hasCostingData && variance === 0;
 
-            const statusText = isOverrun ? "Cost Overrun" : isFavourable ? "Favourable" : "No variance";
-            const statusBg = isOverrun ? "#FEF2F2" : isFavourable ? "#ECFDF5" : "#F3F4F6";
-            const statusColor = isOverrun ? "#DC2626" : isFavourable ? "#059669" : "#4B5563";
-            const statusBorder = isOverrun ? "#FECACA" : isFavourable ? "#A7F3D0" : "#E5E7EB";
+            const statusText = !isCostingApproved 
+              ? (o.costingApproval?.status === "submitted" ? "Pending Approval" : "Not Costed")
+              : (isOverrun ? "Cost Overrun" : isFavourable ? "Favourable" : "No variance");
+            const statusBg = isNotCosted ? "#F8FAFC" : isOverrun ? "#FEF2F2" : isFavourable ? "#ECFDF5" : "#F3F4F6";
+            const statusColor = isNotCosted ? "#64748B" : isOverrun ? "#DC2626" : isFavourable ? "#059669" : "#4B5563";
+            const statusBorder = isNotCosted ? "#E2E8F0" : isOverrun ? "#FECACA" : isFavourable ? "#A7F3D0" : "#E5E7EB";
 
             return (
               <div key={o.id} style={{ display: "grid", gridTemplateColumns: "1.2fr 0.9fr 0.8fr 1fr 1fr 1fr 1fr 1.3fr", alignItems: "center", fontSize: 12.5, padding: "8px 4px", borderBottom: "1px solid #F5F5F7", gap: 6 }}>
@@ -359,16 +364,18 @@ export function FinanceEntryPage({ orders = [], financials, onUpdate, onUpdateOr
                 <div>
                   <input
                     type="number"
-                    value={o.plannedCost || 0}
-                    onChange={e => onUpdateOrderCost(o.id, "plannedCost", Number(e.target.value))}
+                    placeholder="—"
+                    value={isCostingApproved && o.plannedCost ? o.plannedCost : ""}
+                    onChange={e => onUpdateOrderCost(o.id, "plannedCost", e.target.value === "" ? 0 : Number(e.target.value))}
                     style={{ width: 84, fontSize: 12, padding: "5px 7px", borderRadius: 6, border: "1px solid #E7E8ED" }}
                   />
                 </div>
                 <div>
                   <input
                     type="number"
-                    value={o.actualCost || 0}
-                    onChange={e => onUpdateOrderCost(o.id, "actualCost", Number(e.target.value))}
+                    placeholder="—"
+                    value={isCostingApproved && o.actualCost ? o.actualCost : ""}
+                    onChange={e => onUpdateOrderCost(o.id, "actualCost", e.target.value === "" ? 0 : Number(e.target.value))}
                     style={{ width: 84, fontSize: 12, padding: "5px 7px", borderRadius: 6, border: "1px solid #E7E8ED" }}
                   />
                 </div>
@@ -400,13 +407,13 @@ export function FinanceEntryPage({ orders = [], financials, onUpdate, onUpdateOr
                       <span style={{
                         fontWeight: 700,
                         fontSize: 13,
-                        color: isOverrun ? "#DC2626" : isFavourable ? "#059669" : "#4B5563",
-                        textDecoration: "underline",
+                        color: isNotCosted ? "#64748B" : isOverrun ? "#DC2626" : isFavourable ? "#059669" : "#4B5563",
+                        textDecoration: hasCostingData ? "underline" : "none",
                         textUnderlineOffset: 3,
                       }}>
-                        {variance > 0 ? "+" : variance < 0 ? "-" : ""}₹{Math.abs(variance).toLocaleString("en-IN")}
+                        {isNotCosted ? "—" : `${variance > 0 ? "+" : variance < 0 ? "-" : ""}₹${Math.abs(variance).toLocaleString("en-IN")}`}
                       </span>
-                      {planned > 0 && (
+                      {hasCostingData && planned > 0 && (
                         <span style={{ fontSize: 11, color: isOverrun ? "#B91C1C" : isFavourable ? "#047857" : "#6B7280", fontWeight: 600 }}>
                           ({variancePct > 0 ? "+" : ""}{variancePct.toFixed(1)}%)
                         </span>
@@ -605,7 +612,7 @@ export function FinanceEntryPage({ orders = [], financials, onUpdate, onUpdateOr
                     </div>
                   </div>
                 </div>
-              ) : activeBreakdown.totalVariance <= 0 ? (
+              ) : (activeBreakdown.plannedCost > 0 || activeBreakdown.actualCost > 0) && activeBreakdown.totalVariance <= 0 ? (
                 <div style={{
                   background: "#ECFDF5",
                   border: "1px solid #6EE7B7",
