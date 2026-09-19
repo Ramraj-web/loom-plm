@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import {
   Package, CheckCircle2, TriangleAlert, ArrowDownRight, Zap, Factory, Clock, CircleAlert,
-  Calendar, CheckSquare, Layers, ShieldCheck, Bell, DollarSign, ChevronRight, ChevronLeft, Truck
+  Calendar, CheckSquare, Layers, ShieldCheck, Bell, DollarSign, ChevronRight, ChevronLeft, Truck, Users
 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Legend, PieChart, Pie, Cell
@@ -855,7 +855,10 @@ export function Dashboard({
   onApproveCosting,
   onRejectCosting,
   role = {},
-  onOpenDept
+  onOpenDept,
+  userSessions = [],
+  users = [],
+  teams = []
 }) {
   const activeOrders = useMemo(() => orders.filter(o => o.isDeleted !== true && o.completed !== true), [orders]);
   const completedOrders = useMemo(() => orders.filter(o => o.completed === true && o.isDeleted !== true), [orders]);
@@ -1002,76 +1005,139 @@ export function Dashboard({
     <div>
       <PageHeader title="Dashboard" sub="Real-time overview of all orders and operations" />
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 12, marginBottom: 20 }}>
+      {/* Top 6 KPI Cards - Clean, modern, elevated styling with subtle accents */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 14, marginBottom: 20 }}>
         {cards.map(c => (
-          <Card key={c.label} style={{ padding: "16px 18px" }}>
-            <div style={{ width: 30, height: 30, borderRadius: 8, background: c.color + "22", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
-              <c.Icon size={15} color={c.color} />
+          <Card
+            key={c.label}
+            className="kpi-overview-card"
+            data-kpi={c.label.toLowerCase().replace(/\s+/g, '-')}
+            style={{
+              padding: "16px 18px",
+              background: "#FFFFFF",
+              border: "1px solid #E8EBF0",
+              borderTop: `3.5px solid ${c.color}`,
+              borderRadius: 12,
+              boxShadow: "0 2px 5px rgba(15, 23, 42, 0.04)",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
+              position: "relative",
+              overflow: "hidden"
+            }}
+          >
+            <div>
+              <div className="kpi-icon-box" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                <div
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 9,
+                    background: `linear-gradient(135deg, ${c.color}15 0%, ${c.color}25 100%)`,
+                    border: `1px solid ${c.color}35`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center"
+                  }}
+                >
+                  <c.Icon size={17} color={c.color} />
+                </div>
+              </div>
+              <div className="kpi-title" style={{ fontSize: 13, fontWeight: 700, color: "#1B2130", letterSpacing: "-0.2px" }}>{c.label}</div>
+              <div className="kpi-val" style={{ fontSize: 24, fontWeight: 800, marginTop: 6, color: c.color, letterSpacing: "-0.5px" }}>{c.value}</div>
             </div>
-            <div style={{ fontSize: 12.5, color: "#8A8D98" }}>{c.label}</div>
-            <div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: c.color }}>{c.value}</div>
-            <div style={{ fontSize: 10.5, color: c.delta.startsWith("-") ? "#D64545" : "#1F9E8D", marginTop: 4, fontWeight: 600 }}>{c.delta}</div>
+            <div
+              className="kpi-delta"
+              style={{
+                fontSize: 10.5,
+                color: c.delta.startsWith("-") ? "#D64545" : "#475569",
+                marginTop: 10,
+                fontWeight: 600,
+                background: "#F8FAFC",
+                padding: "3px 9px",
+                borderRadius: 6,
+                border: "1px solid #E2E8F0",
+                display: "inline-block",
+                width: "fit-content"
+              }}
+            >
+              {c.delta}
+            </div>
           </Card>
         ))}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.1fr 0.9fr", gap: 16, marginBottom: 16 }}>
-        <Card>
+      {/* Middle Row: Orders by department, Shipment performance, Risk analysis */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.15fr 0.95fr", gap: 16, marginBottom: 18 }}>
+        {/* 1. Orders by Department Card */}
+        <Card style={{ background: "#FFFFFF", border: "1px solid #E8EBF0", borderRadius: 12, boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04)" }}>
           <CardHeader title="Orders by department" sub="Delay flags" action="View all" onAction={() => onNavigate("departments")} />
           {departmentCounts.length === 0 ? (
-            <div style={{ fontSize: 12, color: "#B0B2BA" }}>No delays flagged yet.</div>
-          ) : departmentCounts.map((d, i) => {
-            const max = Math.max(...departmentCounts.map(x => x.count), 1);
-            const dotColor = ["#D64545", "#E2A83B", "#378ADD", "#1F9E8D", "#7F77DD", "#B0812E"][i % 6];
-            return (
-              <div
-                key={d.dept}
-                onClick={() => onOpenDept && onOpenDept(d.dept)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  marginBottom: 10,
-                  cursor: "pointer",
-                  padding: "4px 6px",
-                  borderRadius: 6,
-                  transition: "background 0.15s ease"
-                }}
-                onMouseEnter={e => e.currentTarget.style.background = "#F4F4F6"}
-                onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-                title={`Click to open ${d.dept} department page`}
-              >
-                <span style={{ width: 7, height: 7, borderRadius: 999, background: dotColor, flexShrink: 0 }} />
-                <div style={{ width: 85, fontSize: 11.5, color: "#1E293B", fontWeight: 600, flexShrink: 0, display: "flex", alignItems: "center", gap: 4 }}>
-                  <span>{d.dept}</span>
-                  <span style={{ fontSize: 10, color: "#6366F1" }}>→</span>
-                </div>
-                <div style={{ flex: 1, height: 7, background: "#F0F0F2", borderRadius: 999 }}>
-                  <div style={{ height: 7, width: `${(d.count / max) * 100}%`, background: dotColor, borderRadius: 999 }} />
-                </div>
-                <div style={{ fontSize: 12, color: "#8A8D98", width: 16, textAlign: "right" }}>{d.count}</div>
-              </div>
-            );
-          })}
+            <div style={{ fontSize: 12, color: "#94A3B8", padding: "16px 0", textAlign: "center" }}>No delays flagged yet.</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {departmentCounts.map((d, i) => {
+                const max = Math.max(...departmentCounts.map(x => x.count), 1);
+                const dotColor = ["#EF4444", "#F59E0B", "#3B82F6", "#10B981", "#6366F1", "#D97706"][i % 6];
+                return (
+                  <div
+                    key={d.dept}
+                    onClick={() => onOpenDept && onOpenDept(d.dept)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      cursor: "pointer",
+                      padding: "6px 8px",
+                      borderRadius: 8,
+                      background: "#F8FAFC",
+                      border: "1px solid #F1F5F9",
+                      transition: "background 0.15s ease, border-color 0.15s ease"
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.background = "#EEF2F6";
+                      e.currentTarget.style.borderColor = "#CBD5E1";
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.background = "#F8FAFC";
+                      e.currentTarget.style.borderColor = "#F1F5F9";
+                    }}
+                    title={`Click to open ${d.dept} department page`}
+                  >
+                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: dotColor, flexShrink: 0 }} />
+                    <div style={{ width: 90, fontSize: 12, color: "#1E293B", fontWeight: 700, flexShrink: 0, display: "flex", alignItems: "center", gap: 4 }}>
+                      <span>{d.dept}</span>
+                      <span style={{ fontSize: 11, color: "#6366F1" }}>→</span>
+                    </div>
+                    <div style={{ flex: 1, height: 8, background: "#E2E8F0", borderRadius: 999, overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${(d.count / max) * 100}%`, background: dotColor, borderRadius: 999, transition: "width 0.3s ease" }} />
+                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#0F172A", width: 22, textAlign: "right" }}>{d.count}</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
           {lookFirstText && (
-            <div style={{ background: "#F0EFFB", border: "1px solid #DCD8F5", borderRadius: 10, padding: "10px 12px", marginTop: 14 }}>
-              <div style={{ fontSize: 10.5, fontWeight: 700, color: "#534AB7", textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 3 }}>Where to look first</div>
-              <div style={{ fontSize: 12, color: "#3D3878" }}>{lookFirstText}</div>
+            <div style={{ background: "linear-gradient(135deg, #F0EFFB 0%, #EEF2FF 100%)", border: "1px solid #DCD8F5", borderRadius: 10, padding: "11px 14px", marginTop: 14 }}>
+              <div style={{ fontSize: 10.5, fontWeight: 800, color: "#534AB7", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3 }}>Where to look first</div>
+              <div style={{ fontSize: 12, color: "#3730A3", lineHeight: 1.45, fontWeight: 500 }}>{lookFirstText}</div>
             </div>
           )}
         </Card>
 
-        <Card>
+        {/* 2. Shipment Performance Chart Card */}
+        <Card style={{ background: "#FFFFFF", border: "1px solid #E8EBF0", borderRadius: 12, boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04)" }}>
           <CardHeader
             title="Shipment performance"
             sub={shipmentTrendData.rangeLabel ? `${shipmentTrendData.rangeLabel} (Based on Orders)` : "Last 6 months"}
           />
-          <div style={{ width: "100%", height: 170 }}>
+          <div style={{ width: "100%", height: 180 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={shipmentTrendData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F2" vertical={false} />
-                <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#8A8D98" }} axisLine={{ stroke: "#F0F0F2" }} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: "#8A8D98" }} axisLine={false} tickLine={false} domain={[0, 100]} />
+              <LineChart data={shipmentTrendData} margin={{ top: 6, right: 10, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
+                <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#64748B", fontWeight: 600 }} axisLine={{ stroke: "#E2E8F0" }} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: "#64748B", fontWeight: 600 }} axisLine={false} tickLine={false} domain={[0, 100]} />
                 <Tooltip
                   content={({ active, payload, label }) => {
                     if (!active || !payload || !payload.length) return null;
@@ -1099,15 +1165,16 @@ export function Dashboard({
                     );
                   }}
                 />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Line type="monotone" dataKey="onTime" name="Actual On-time %" stroke="#534AB7" strokeWidth={2} dot={{ r: 3 }} connectNulls={true} />
-                <Line type="monotone" dataKey="target" name="Target Goal % (75% Benchmark)" stroke="#B0B2BA" strokeWidth={1.5} strokeDasharray="4 4" dot={false} />
+                <Legend wrapperStyle={{ fontSize: 11, paddingTop: 6 }} />
+                <Line type="monotone" dataKey="onTime" name="Actual On-time %" stroke="#534AB7" strokeWidth={2.5} dot={{ r: 3.5, fill: "#534AB7" }} activeDot={{ r: 5 }} connectNulls={true} />
+                <Line type="monotone" dataKey="target" name="Target Goal % (75% Benchmark)" stroke="#94A3B8" strokeWidth={1.5} strokeDasharray="4 4" dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
         </Card>
 
-        <Card style={{ background: "#fff" }}>
+        {/* 3. Risk Analysis Donut Card */}
+        <Card style={{ background: "#FFFFFF", border: "1px solid #E8EBF0", borderRadius: 12, boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04)" }}>
           <CardHeader title="Risk analysis" action="View insights" onAction={() => onNavigate("insights")} />
           <div style={{ width: "100%", height: 140, position: "relative" }}>
             <ResponsiveContainer width="100%" height="100%">
@@ -1118,58 +1185,81 @@ export function Dashboard({
               </PieChart>
             </ResponsiveContainer>
             <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
-              <div style={{ fontSize: 18, fontWeight: 700, color: "#1B2130" }}>{stats.total}</div>
-              <div style={{ fontSize: 10, color: "#8A8D98" }}>Orders</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: "#1E293B" }}>{stats.total}</div>
+              <div style={{ fontSize: 10.5, color: "#64748B", fontWeight: 600 }}>Orders</div>
             </div>
           </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 12px", justifyContent: "center", marginTop: 4, marginBottom: 12 }}>
-            {[["High", "#D64545"], ["Medium", "#E2A83B"], ["Low", "#1F9E8D"]].map(([l, c]) => (
-              <div key={l} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10.5, color: "#8A8D98" }}>
-                <span style={{ width: 7, height: 7, borderRadius: 999, background: c }} /> {l}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", justifyContent: "center", marginTop: 4, marginBottom: 12 }}>
+            {[["High", "#EF4444"], ["Medium", "#F59E0B"], ["Low", "#10B981"]].map(([l, c]) => (
+              <div key={l} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#475569", fontWeight: 600 }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: c }} /> {l}
               </div>
             ))}
           </div>
           {aiInsightText && (
-            <div style={{ background: "#F0EFFB", border: "1px solid #DCD8F5", borderRadius: 10, padding: "10px 12px" }}>
-              <div style={{ fontSize: 10.5, fontWeight: 700, color: "#534AB7", textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 3 }}>AI Insight</div>
-              <div style={{ fontSize: 12, color: "#3D3878" }}>{aiInsightText}</div>
+            <div style={{ background: "linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%)", border: "1px solid #E2E8F0", borderRadius: 10, padding: "10px 12px" }}>
+              <div style={{ fontSize: 10.5, fontWeight: 800, color: "#334155", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3 }}>AI Insight</div>
+              <div style={{ fontSize: 11.5, color: "#475569", lineHeight: 1.45 }}>{aiInsightText}</div>
             </div>
           )}
         </Card>
       </div>
 
-      <Card style={{ marginBottom: 16 }}>
+      {/* T&A Progress Overview Section */}
+      <Card style={{ marginBottom: 18, background: "#FFFFFF", border: "1px solid #E8EBF0", borderRadius: 12, boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04)" }}>
         <CardHeader title="T&A progress overview (all orders)" sub="21-step workflow from the T&A template" action="Timeline / calendar" onAction={() => onNavigate("calendar")} />
-        <div style={{ display: "flex", gap: 4, overflowX: "auto", paddingBottom: 8 }}>
+        
+        {/* Horizontal Workflow Stepper */}
+        <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 10 }}>
           {stageCounts.map((s, i) => {
             const Icon = STAGE_ICON_SET_BASE[i % STAGE_ICON_SET_BASE.length];
             return (
-              <div key={s.name} style={{ flex: "0 0 64px", textAlign: "center" }}>
-                <div style={{ width: 30, height: 30, borderRadius: 999, background: "#F0EFFB", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto" }}>
-                  <Icon size={14} color="#534AB7" />
+              <div
+                key={s.name}
+                style={{
+                  flex: "0 0 68px",
+                  textAlign: "center",
+                  background: "#F8FAFC",
+                  padding: "8px 4px",
+                  borderRadius: 8,
+                  border: "1px solid #F1F5F9"
+                }}
+              >
+                <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#EEF2FF", border: "1px solid #E0E7FF", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto" }}>
+                  <Icon size={14} color="#4F46E5" />
                 </div>
-                <div style={{ fontSize: 9.5, color: "#8A8D98", marginTop: 6, lineHeight: 1.25 }}>{s.name}</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "#1B2130", marginTop: 2 }}>{s.count}</div>
+                <div style={{ fontSize: 9.5, color: "#64748B", fontWeight: 600, marginTop: 6, lineHeight: 1.25, height: 24, overflow: "hidden" }}>{s.name}</div>
+                <div style={{ fontSize: 13.5, fontWeight: 800, color: "#0F172A", marginTop: 2 }}>{s.count}</div>
               </div>
             );
           })}
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginTop: 20, paddingTop: 16, borderTop: "1px solid #F0F0F2" }}>
-          <div>
-            <div style={{ fontSize: 11.5, color: "#1F9E8D", display: "flex", alignItems: "center", gap: 4 }}><CheckCircle2 size={12} />Completed</div>
-            <div style={{ fontSize: 15, fontWeight: 700, marginTop: 2 }}>{summary.completed} <span style={{ fontSize: 11, color: "#8A8D98", fontWeight: 400 }}>({Math.round((summary.completed / summary.total) * 100)}%)</span></div>
+
+        {/* 4 Summary Stat Chips */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginTop: 16, paddingTop: 14, borderTop: "1px solid #F1F5F9" }}>
+          <div style={{ background: "#F0FDF4", border: "1px solid #DCFCE7", padding: "10px 14px", borderRadius: 8 }}>
+            <div style={{ fontSize: 11.5, color: "#166534", fontWeight: 700, display: "flex", alignItems: "center", gap: 5 }}><CheckCircle2 size={13} />Completed</div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: "#15803D", marginTop: 3 }}>
+              {summary.completed} <span style={{ fontSize: 11.5, color: "#166534", fontWeight: 500 }}>({Math.round((summary.completed / summary.total) * 100)}%)</span>
+            </div>
           </div>
-          <div>
-            <div style={{ fontSize: 11.5, color: "#378ADD", display: "flex", alignItems: "center", gap: 4 }}><Clock size={12} />In progress</div>
-            <div style={{ fontSize: 15, fontWeight: 700, marginTop: 2 }}>{summary.inProgress} <span style={{ fontSize: 11, color: "#8A8D98", fontWeight: 400 }}>({Math.round((summary.inProgress / summary.total) * 100)}%)</span></div>
+          <div style={{ background: "#EFF6FF", border: "1px solid #DBEAFE", padding: "10px 14px", borderRadius: 8 }}>
+            <div style={{ fontSize: 11.5, color: "#1E40AF", fontWeight: 700, display: "flex", alignItems: "center", gap: 5 }}><Clock size={13} />In progress</div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: "#1D4ED8", marginTop: 3 }}>
+              {summary.inProgress} <span style={{ fontSize: 11.5, color: "#1E40AF", fontWeight: 500 }}>({Math.round((summary.inProgress / summary.total) * 100)}%)</span>
+            </div>
           </div>
-          <div>
-            <div style={{ fontSize: 11.5, color: "#E2A83B", display: "flex", alignItems: "center", gap: 4 }}><TriangleAlert size={12} />At risk</div>
-            <div style={{ fontSize: 15, fontWeight: 700, marginTop: 2 }}>{summary.atRisk} <span style={{ fontSize: 11, color: "#8A8D98", fontWeight: 400 }}>({Math.round((summary.atRisk / summary.total) * 100)}%)</span></div>
+          <div style={{ background: "#FFFBEB", border: "1px solid #FEF3C7", padding: "10px 14px", borderRadius: 8 }}>
+            <div style={{ fontSize: 11.5, color: "#92400E", fontWeight: 700, display: "flex", alignItems: "center", gap: 5 }}><TriangleAlert size={13} />At risk</div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: "#D97706", marginTop: 3 }}>
+              {summary.atRisk} <span style={{ fontSize: 11.5, color: "#92400E", fontWeight: 500 }}>({Math.round((summary.atRisk / summary.total) * 100)}%)</span>
+            </div>
           </div>
-          <div>
-            <div style={{ fontSize: 11.5, color: "#D64545", display: "flex", alignItems: "center", gap: 4 }}><CircleAlert size={12} />Pending</div>
-            <div style={{ fontSize: 15, fontWeight: 700, marginTop: 2 }}>{summary.pending} <span style={{ fontSize: 11, color: "#8A8D98", fontWeight: 400 }}>({Math.round((summary.pending / summary.total) * 100)}%)</span></div>
+          <div style={{ background: "#FEF2F2", border: "1px solid #FEE2E2", padding: "10px 14px", borderRadius: 8 }}>
+            <div style={{ fontSize: 11.5, color: "#991B1B", fontWeight: 700, display: "flex", alignItems: "center", gap: 5 }}><CircleAlert size={13} />Pending</div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: "#DC2626", marginTop: 3 }}>
+              {summary.pending} <span style={{ fontSize: 11.5, color: "#991B1B", fontWeight: 500 }}>({Math.round((summary.pending / summary.total) * 100)}%)</span>
+            </div>
           </div>
         </div>
       </Card>
@@ -1224,47 +1314,264 @@ export function Dashboard({
           </div>
         </Card>
 
-        {/* Attendance today Widget - Expanded to fill the covered area */}
-        {attendance && roster ? (
-          <Card style={{ display: "flex", flexDirection: "column", height: "100%", boxSizing: "border-box" }}>
-            <CardHeader title="Attendance today" action="Open" onAction={() => onNavigate("attendance")} />
-            {(() => {
-              const counts = { present: 0, absent: 0, leave: 0 };
-              roster.forEach(s => { counts[attendance[s.name] || "present"]++; });
-              const totalStaff = roster.length || 1;
-              const presentPct = Math.round((counts.present / totalStaff) * 100);
+        {/* Attendance today Widget - Live attendance & leave data only */}
+        {(() => {
+          const todayStr = new Date().toISOString().slice(0, 10);
 
-              return (
-                <div style={{ display: "flex", flexDirection: "column", gap: 12, flex: 1, justifyContent: "center" }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "#F8FAFC", borderRadius: 8, border: "1px solid #E2E8F0" }}>
-                    <div>
-                      <div style={{ fontSize: 11, color: "#64748B", fontWeight: 600 }}>Overall Turnout</div>
-                      <div style={{ fontSize: 20, fontWeight: 800, color: "#0F172A", marginTop: 2 }}>{presentPct}%</div>
+          // Build unified staff list exactly as AttendancePage does
+          const staffList = [...(roster || [])];
+          const existingNames = new Set((roster || []).map(r => (r.name || "").toLowerCase()));
+          if (Array.isArray(users)) {
+            users.forEach(u => {
+              if (u.name && !existingNames.has(u.name.toLowerCase())) {
+                const userTeamIds = Array.isArray(u.teamIds) && u.teamIds.length > 0 ? u.teamIds : (u.teamId ? [u.teamId] : []);
+                const deptNames = Array.isArray(teams)
+                  ? teams.filter(t => userTeamIds.includes(t.id)).map(t => t.name).join(", ")
+                  : "";
+                staffList.push({
+                  id: u.id,
+                  name: u.name,
+                  username: u.username,
+                  title: u.title || (userTeamIds.includes("team-admin") ? "Administrator" : "Team Member"),
+                  dept: deptNames || "Merchandising",
+                  isSystemUser: true
+                });
+                existingNames.add(u.name.toLowerCase());
+              }
+            });
+          }
+
+          // Real-time status lookup function
+          const getLiveStatus = (person) => {
+            const onLeave = (leaveRequests || []).find(l =>
+              l.status === "approved" &&
+              (l.name?.toLowerCase() === (person.name || "").toLowerCase())
+            ) || (attendance && attendance[person.name] === "leave");
+
+            if (onLeave) {
+              return { status: "leave", label: "On leave", bg: "#FFFBEB", color: "#B45309" };
+            }
+
+            const session = (userSessions || []).find(s =>
+              (s.date === todayStr || (s.loginTime && s.loginTime.startsWith(todayStr))) &&
+              ((s.userId && s.userId === person.id) ||
+               (s.username && person.username && s.username.toLowerCase() === person.username.toLowerCase()) ||
+               (s.name && person.name && s.name.toLowerCase() === person.name.toLowerCase()))
+            );
+
+            if (session || (attendance && attendance[person.name] === "present")) {
+              return { status: "present", label: "Present", bg: "#ECFDF5", color: "#047857" };
+            }
+
+            return { status: "absent", label: "Absent", bg: "#FEF2F2", color: "#B91C1C" };
+          };
+
+          const counts = { present: 0, absent: 0, leave: 0 };
+          staffList.forEach(s => {
+            const st = getLiveStatus(s);
+            counts[st.status]++;
+          });
+
+          const totalStaff = staffList.length;
+          const presentPct = totalStaff > 0 ? Math.round((counts.present / totalStaff) * 100) : 0;
+
+          return (
+            <Card style={{ display: "flex", flexDirection: "column", height: "100%", boxSizing: "border-box" }}>
+              <CardHeader title="Attendance today" action="Open" onAction={() => onNavigate("attendance")} />
+              {totalStaff === 0 ? (
+                <div style={{ fontSize: 12, color: "#B0B2BA", padding: "16px 0" }}>No staff or attendance records recorded yet.</div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", flex: 1, justifyContent: "space-between", gap: 14 }}>
+                  {/* Top Banner: Turnout % with live gauge & total staff */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "12px 14px",
+                      background: "linear-gradient(135deg, #F8FAFC 0%, #EEF2F6 100%)",
+                      borderRadius: 10,
+                      border: "1px solid #E2E8F0"
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <div style={{ position: "relative", width: 44, height: 44 }}>
+                        <svg viewBox="0 0 36 36" width="44" height="44">
+                          <path
+                            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                            fill="none"
+                            stroke="#E2E8F0"
+                            strokeWidth="3.8"
+                          />
+                          <path
+                            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                            fill="none"
+                            stroke="#10B981"
+                            strokeWidth="3.8"
+                            strokeDasharray={`${presentPct}, 100`}
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                        <div
+                          style={{
+                            position: "absolute",
+                            inset: 0,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: 10.5,
+                            fontWeight: 800,
+                            color: "#0F172A"
+                          }}
+                        >
+                          {presentPct}%
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 13.5, fontWeight: 700, color: "#0F172A" }}>Overall Turnout</div>
+                        <div style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>Live workforce attendance</div>
+                      </div>
                     </div>
-                    <div style={{ textAlign: "right" }}>
-                      <div style={{ fontSize: 11, color: "#64748B", fontWeight: 600 }}>Total Team</div>
-                      <div style={{ fontSize: 16, fontWeight: 700, color: "#334155", marginTop: 2 }}>{totalStaff} staff</div>
+
+                    <div
+                      style={{
+                        textAlign: "right",
+                        background: "#FFFFFF",
+                        padding: "6px 12px",
+                        borderRadius: 8,
+                        border: "1px solid #E2E8F0",
+                        boxShadow: "0 1px 2px rgba(0,0,0,0.03)"
+                      }}
+                    >
+                      <div style={{ fontSize: 10.5, color: "#64748B", fontWeight: 600 }}>Total Team</div>
+                      <div style={{ fontSize: 14.5, fontWeight: 800, color: "#1E293B", marginTop: 1 }}>{totalStaff} staff</div>
                     </div>
                   </div>
 
-                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    {[["Present", counts.present, "rgba(78, 224, 59, 1)", "#ECFDF5"], ["Absent", counts.absent, "#D64545", "#FEF2F2"], ["On leave", counts.leave, "#E2A83B", "#FFFBEB"]].map(([label, val, color, bg]) => (
-                      <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 10px", borderRadius: 6, background: bg, fontSize: 12.5 }}>
-                        <span style={{ fontWeight: 600, color: "#334155" }}>{label}</span>
-                        <span style={{ fontWeight: 800, fontSize: 14, color }}>{val}</span>
-                      </div>
-                    ))}
+                  {/* Turnout Progress Bar */}
+                  <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, fontWeight: 600, color: "#64748B", marginBottom: 5 }}>
+                      <span>Turnout Ratio</span>
+                      <span style={{ color: "#0F172A", fontWeight: 700 }}>{counts.present} of {totalStaff} present</span>
+                    </div>
+                    <div style={{ height: 7, borderRadius: 999, background: "#F1F5F9", display: "flex", overflow: "hidden" }}>
+                      <div style={{ width: `${(counts.present / (totalStaff || 1)) * 100}%`, background: "#10B981", transition: "width 0.3s" }} />
+                      <div style={{ width: `${(counts.leave / (totalStaff || 1)) * 100}%`, background: "#F59E0B", transition: "width 0.3s" }} />
+                      <div style={{ width: `${(counts.absent / (totalStaff || 1)) * 100}%`, background: "#EF4444", transition: "width 0.3s" }} />
+                    </div>
+                  </div>
+
+                  {/* Status 3 Cards Grid */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                    <div
+                      style={{
+                        background: "#F0FDF4",
+                        border: "1px solid #DCFCE7",
+                        borderRadius: 8,
+                        padding: "10px 8px",
+                        textAlign: "center"
+                      }}
+                    >
+                      <div style={{ fontSize: 11, fontWeight: 600, color: "#166534" }}>Present</div>
+                      <div style={{ fontSize: 19, fontWeight: 800, color: "#15803D", marginTop: 2 }}>{counts.present}</div>
+                    </div>
+                    <div
+                      style={{
+                        background: "#FEF2F2",
+                        border: "1px solid #FEE2E2",
+                        borderRadius: 8,
+                        padding: "10px 8px",
+                        textAlign: "center"
+                      }}
+                    >
+                      <div style={{ fontSize: 11, fontWeight: 600, color: "#991B1B" }}>Absent</div>
+                      <div style={{ fontSize: 19, fontWeight: 800, color: "#B91C1C", marginTop: 2 }}>{counts.absent}</div>
+                    </div>
+                    <div
+                      style={{
+                        background: "#FFFBEB",
+                        border: "1px solid #FEF3C7",
+                        borderRadius: 8,
+                        padding: "10px 8px",
+                        textAlign: "center"
+                      }}
+                    >
+                      <div style={{ fontSize: 11, fontWeight: 600, color: "#92400E" }}>On Leave</div>
+                      <div style={{ fontSize: 19, fontWeight: 800, color: "#D97706", marginTop: 2 }}>{counts.leave}</div>
+                    </div>
+                  </div>
+
+                  {/* Staff Live Attendance Roster */}
+                  <div
+                    style={{
+                      borderTop: "1px solid #F1F5F9",
+                      paddingTop: 10,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 6,
+                      maxHeight: 125,
+                      overflowY: "auto"
+                    }}
+                  >
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#8A8D98", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 2 }}>
+                      Live Roster Status
+                    </div>
+                    {staffList.slice(0, 6).map((s) => {
+                      const st = getLiveStatus(s);
+                      return (
+                        <div
+                          key={s.name}
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            padding: "4px 0",
+                            fontSize: 12
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                            <div
+                              style={{
+                                width: 22,
+                                height: 22,
+                                borderRadius: "50%",
+                                background: "#EEF2F6",
+                                color: "#475569",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontSize: 10,
+                                fontWeight: 700
+                              }}
+                            >
+                              {(s.name || "U")[0]}
+                            </div>
+                            <div>
+                              <span style={{ fontWeight: 600, color: "#1E293B" }}>{s.name}</span>
+                              <span style={{ fontSize: 10.5, color: "#94A3B8", marginLeft: 6 }}>{s.title || s.dept || ""}</span>
+                            </div>
+                          </div>
+                          <span
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 700,
+                              background: st.bg,
+                              color: st.color,
+                              padding: "2px 7px",
+                              borderRadius: 999
+                            }}
+                          >
+                            {st.label}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-              );
-            })()}
-          </Card>
-        ) : (
-          <Card style={{ display: "flex", flexDirection: "column", height: "100%", boxSizing: "border-box" }}>
-            <CardHeader title="Attendance today" action="Open" onAction={() => onNavigate("attendance")} />
-            <div style={{ fontSize: 12, color: "#B0B2BA", padding: "16px 0" }}>No attendance records available.</div>
-          </Card>
-        )}
+              )}
+            </Card>
+          );
+        })()}
       </div>
 
       <DateWiseActivityFeed

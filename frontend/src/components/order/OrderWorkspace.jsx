@@ -2883,6 +2883,17 @@ export function OrderWorkspace({
   const cuttingIdx = order.stages.findIndex(s => s.name === "Cutting");
   const bulkGateOpen = allPreProdApproved(order);
 
+  // Align & Reorder stages permission: Only Admin, MD / Executive, and Merchandiser
+  const canAlignStages = useMemo(() => {
+    if (!role) return false;
+    const deptStr = String(role.dept || "").toLowerCase();
+    const labelStr = String(role.label || "").toLowerCase();
+    const isMD = role.isMD === true || deptStr.includes("executive") || deptStr.includes("md") || labelStr.includes("managing director") || labelStr.includes("md");
+    const isAdmin = role.fullAccess === true || deptStr.includes("admin") || labelStr.includes("admin");
+    const isMerchandiser = deptStr.includes("merchandis") || labelStr.includes("merchandis") || (Array.isArray(role.departments) && role.departments.some(d => String(d).toLowerCase().includes("merchandis")));
+    return Boolean(isMD || isAdmin || isMerchandiser);
+  }, [role]);
+
   // Derive colourways ONLY if this order has color breakdown or multiple colors configured
   const orderColourways = useMemo(() => {
     // 1. Color breakdown array with valid entries (e.g. from Add Order multi-color table)
@@ -3019,26 +3030,28 @@ export function OrderWorkspace({
             <option value="90">90-day (standard)</option>
             <option value="120">120-day (dye / print, longer lead time)</option>
           </select>
-          <button
-            type="button"
-            onClick={() => setShowAlignModal(true)}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 4,
-              padding: "5px 12px",
-              borderRadius: 7,
-              border: "1px solid #D6D2F3",
-              background: "#F0EFFB",
-              color: "#534AB7",
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: "pointer"
-            }}
-            title="Reorder and align T&A stages 1 to end based on actual process"
-          >
-            Align & Reorder Stages
-          </button>
+          {canAlignStages && (
+            <button
+              type="button"
+              onClick={() => setShowAlignModal(true)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                padding: "5px 12px",
+                borderRadius: 7,
+                border: "1px solid #D6D2F3",
+                background: "#F0EFFB",
+                color: "#534AB7",
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: "pointer"
+              }}
+              title="Reorder and align T&A stages 1 to end based on actual process (Admin, MD, Merchandiser)"
+            >
+              Align & Reorder Stages
+            </button>
+          )}
         </div>
       </div>
       <div style={{ fontSize: 11, color: "#B0B2BA", margin: "6px 0 16px" }}>
@@ -3257,7 +3270,7 @@ export function OrderWorkspace({
         />
       )}
 
-      {showAlignModal && (
+      {canAlignStages && showAlignModal && (
         <OrderStageAlignmentModal
           order={order}
           isOpen={showAlignModal}

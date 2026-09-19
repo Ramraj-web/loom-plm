@@ -28,22 +28,13 @@ export function ProductionTab({
     return `${dd}/${mm}/${yyyy}`;
   };
 
-  const [date, setDate] = useState("04/09/2026");
+  const [date, setDate] = useState(getTodayFormatted());
   const [line, setLine] = useState("");
   const [outputPcs, setOutputPcs] = useState("");
   const [hoursWorked, setHoursWorked] = useState("8");
 
-  // Retrieve existing logs or default sample entry matching user's screen
-  const logs = order.productionLogs || [
-    {
-      id: "init-log-1",
-      date: "04/09/2026",
-      line: "33",
-      outputPcs: 33,
-      hours: "8h",
-      efficiency: "—"
-    }
-  ];
+  // Retrieve existing logs for this specific order only
+  const logs = order.productionLogs || [];
 
   // Check if SAM is defined in preProd or order
   const obSamDoc = order.preProd?.poSheet?.values?.sam || order.sam || null;
@@ -76,7 +67,8 @@ export function ProductionTab({
     };
 
     if (onAddProductionLog) {
-      onAddProductionLog(order.id, newEntry);
+      const targetId = order.primaryId || order._id || order.id;
+      onAddProductionLog(targetId, newEntry);
     }
 
     // Reset inputs
@@ -287,48 +279,63 @@ export function ProductionTab({
 
       {/* Table Body Rows */}
       <div style={{ marginBottom: 28 }}>
-        {logs.map((row) => (
+        {logs.length === 0 ? (
           <div
-            key={row.id || row.date + row.line}
             style={{
-              display: "grid",
-              gridTemplateColumns: "1.2fr 1fr 1fr 1fr 1fr auto",
-              alignItems: "center",
-              fontSize: 12.5,
-              color: "#1B2130",
-              padding: "10px 12px 10px 4px",
+              padding: "18px 12px",
+              textAlign: "center",
+              fontSize: 12,
+              color: "#9CA3AF",
+              fontStyle: "italic",
               borderBottom: "1px solid #F3F4F6"
             }}
           >
-            <div>{row.date}</div>
-            <div>{row.line || "—"}</div>
-            <div>{row.outputPcs}</div>
-            <div>{row.hours || "8h"}</div>
-            <div>{row.efficiency || "—"}</div>
-            <div>
-              {onDeleteProductionLog && (
-                <button
-                  type="button"
-                  onClick={() => onDeleteProductionLog(order.id, row.id)}
-                  title="Remove log entry"
-                  style={{
-                    background: "none",
-                    border: "none",
-                    color: "#9CA3AF",
-                    cursor: "pointer",
-                    padding: 4,
-                    display: "flex",
-                    alignItems: "center"
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = "#DC2626")}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = "#9CA3AF")}
-                >
-                  <Trash2 size={13} />
-                </button>
-              )}
-            </div>
+            No production logs recorded for this order yet. Enter the daily output above to log.
           </div>
-        ))}
+        ) : (
+          logs.map((row) => (
+            <div
+              key={row.id || row.date + row.line}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1.2fr 1fr 1fr 1fr 1fr auto",
+                alignItems: "center",
+                fontSize: 12.5,
+                color: "#1B2130",
+                padding: "10px 12px 10px 4px",
+                borderBottom: "1px solid #F3F4F6"
+              }}
+            >
+              <div>{row.date}</div>
+              <div>{row.line || "—"}</div>
+              <div>{row.outputPcs}</div>
+              <div>{row.hours || "8h"}</div>
+              <div>{row.efficiency || "—"}</div>
+              <div>
+                {onDeleteProductionLog && (
+                  <button
+                    type="button"
+                    onClick={() => onDeleteProductionLog(order.primaryId || order._id || order.id, row.id)}
+                    title="Remove log entry"
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: "#9CA3AF",
+                      cursor: "pointer",
+                      padding: 4,
+                      display: "flex",
+                      alignItems: "center"
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = "#DC2626")}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = "#9CA3AF")}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))
+        )}
       </div>
 
       {/* Document Upload Cards (Cutting Report & Sewing Output Report) */}

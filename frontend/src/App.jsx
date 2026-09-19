@@ -2964,17 +2964,9 @@ export default function LoomPLM() {
 
   const addOrderProductionLog = (id, logEntry) => {
     setOrders(prev => prev.map(o => {
-      if (o.id !== id) return o;
-      const currentLogs = o.productionLogs || [
-        {
-          id: "init-log-1",
-          date: "04/09/2026",
-          line: "33",
-          outputPcs: 33,
-          hours: "8h",
-          efficiency: "—"
-        }
-      ];
+      const isTarget = (o.primaryId && o.primaryId === id) || (o._id && o._id === id) || o.id === id;
+      if (!isTarget) return o;
+      const currentLogs = o.productionLogs || [];
       const updatedLogs = [logEntry, ...currentLogs];
       const updated = { ...o, productionLogs: updatedLogs };
       try { resourcesApi.update("orders", o.primaryId || o._id || o.id, updated); } catch (e) { }
@@ -2986,16 +2978,7 @@ export default function LoomPLM() {
     setOrders(prev => prev.map(o => {
       const isTarget = (o.primaryId && o.primaryId === id) || (o._id && o._id === id) || o.id === id;
       if (!isTarget) return o;
-      const currentLogs = o.productionLogs || [
-        {
-          id: "init-log-1",
-          date: "04/09/2026",
-          line: "33",
-          outputPcs: 33,
-          hours: "8h",
-          efficiency: "—"
-        }
-      ];
+      const currentLogs = o.productionLogs || [];
       const updatedLogs = currentLogs.filter(l => l.id !== logId);
       const updated = { ...o, productionLogs: updatedLogs };
       try { resourcesApi.update("orders", o.primaryId || o._id || o.id, updated); } catch (e) { }
@@ -4094,6 +4077,9 @@ export default function LoomPLM() {
         onRejectCosting={rejectOrderCosting}
         role={role}
         onOpenDept={openDept}
+        userSessions={userSessions}
+        users={users}
+        teams={teams}
       />
     );
   } else {
@@ -4279,6 +4265,7 @@ export default function LoomPLM() {
                         navigate(item.key);
                       }
                     }}
+                    className={`sidebar-nav-item ${active ? "active" : ""}`}
                     style={{
                       display: "flex", alignItems: "center", justifyContent: isSidebarCollapsed ? "center" : "flex-start", gap: isSidebarCollapsed ? 0 : 10, padding: "9px 10px", borderRadius: 8,
                       color: active ? "#fff" : isDarkMode ? "#94A3B8" : "#9498A8", background: active ? (isDarkMode ? "#1F9E8D33" : "#1F9E8D22") : "transparent",
