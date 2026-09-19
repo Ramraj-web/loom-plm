@@ -150,6 +150,49 @@ function getRouteHash(view, selectedId = null, selectedDept = null) {
   return `#/${view || "dashboard"}`;
 }
 
+// Persistent read notification tracker: ensures notifications marked read stay read across refreshes and syncs
+export function getReadNotificationIds() {
+  try {
+    const raw = localStorage.getItem("loom_read_notification_ids");
+    if (raw) return new Set(JSON.parse(raw));
+  } catch (e) {}
+  return new Set();
+}
+
+export function markIdsAsReadLocally(ids = []) {
+  try {
+    const set = getReadNotificationIds();
+    ids.forEach(id => { if (id) set.add(String(id)); });
+    localStorage.setItem("loom_read_notification_ids", JSON.stringify(Array.from(set)));
+  } catch (e) {}
+}
+
+export function applyReadStatusAndDedupe(notifs = []) {
+  if (!Array.isArray(notifs)) return [];
+  const readSet = getReadNotificationIds();
+  const map = new Map();
+
+  notifs.forEach(n => {
+    if (!n) return;
+    const key = n.eventKey || n.id;
+    if (!key) return;
+
+    const isExplicitlyRead = n.isRead === true || readSet.has(String(n.id)) || (n.eventKey && readSet.has(String(n.eventKey)));
+    const normalized = { ...n, isRead: isExplicitlyRead };
+
+    if (!map.has(key)) {
+      map.set(key, normalized);
+    } else {
+      const existing = map.get(key);
+      if (normalized.isRead && !existing.isRead) {
+        map.set(key, { ...existing, isRead: true });
+      }
+    }
+  });
+
+  return Array.from(map.values()).sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+}
+
 export default function LoomPLM() {
   const [orders, setOrders] = useState(() => {
     try {
@@ -247,10 +290,10 @@ export default function LoomPLM() {
       const cached = localStorage.getItem("loom_notifications_cache");
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) return applyReadStatusAndDedupe(parsed);
       }
     } catch (e) {}
-    return INITIAL_NOTIFICATIONS;
+    return applyReadStatusAndDedupe(INITIAL_NOTIFICATIONS);
   });
   const [soundEnabled, setSoundEnabledState] = useState(() => isSoundEnabled());
   const toggleSound = () => {
@@ -377,6 +420,7 @@ export default function LoomPLM() {
   const initialViewLoadRef = useRef(false);
   const lastViewFetchRef = useRef({});
   const isSyncingNotifsRef = useRef(false);
+  const hasEnsuredTodayLoginRef = useRef(false);
   const [activeUser, setActiveUser] = useState(() => {
     try {
       const saved = localStorage.getItem("loom_active_user");
@@ -528,6 +572,105 @@ export default function LoomPLM() {
       setRole(roleForUser(activeUser, teams));
     }
   }, [teams, activeUser]);
+
+  // Ensure returning logged-in users have an active tab session and today's login audit log registered
+  useEffect(() => {
+    if (!activeUser?.name || hasEnsuredTodayLoginRef.current) return;
+    const nowIso = new Date().toISOString();
+    const todayStr = nowIso.slice(0, 10);
+    const existingSessionId = sessionStorage.getItem("loom_active_session_id");
+
+    const dev = getDeviceInfo();
+    const currentRole = roleForUser(activeUser, teams);
+
+    // 1. Ensure user has an active session ID for this browser tab
+    let sessId = existingSessionId;
+    if (!sessId) {
+      sessId = `sess_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      setCurrentSessionId(sessId);
+      try { sessionStorage.setItem("loom_active_session_id", sessId); } catch (e) {}
+
+      const newSession = {
+        id: sessId,
+        userId: activeUser.id,
+        username: activeUser.username,
+        name: activeUser.name,
+        dept: currentRole.dept,
+        loginTime: nowIso,
+        logoutTime: null,
+        hoursUsed: 0.01,
+        active: true,
+        date: todayStr,
+        device: dev.deviceSummary,
+        deviceType: dev.deviceType,
+        location: "Detecting..."
+      };
+
+      setUserSessions(prev => {
+        const updated = [newSession, ...prev.filter(s => s.id !== sessId)];
+        if (window.storage) window.storage.set("user_sessions", JSON.stringify(updated), true);
+        return updated;
+      });
+
+      broadcastLiveUpdate({
+        type: "USER_SESSION_UPDATE",
+        session: newSession
+      });
+    }
+
+    // 2. Ensure a LOGIN audit event exists for this user today so "Logins Today" is never 0
+    const hasLoginToday = auditLogs.some(l =>
+      l.eventType === "LOGIN" &&
+      (l.username === activeUser.username || l.userName === activeUser.name) &&
+      (l.timestamp || "").startsWith(todayStr)
+    );
+
+    if (!hasLoginToday) {
+      hasEnsuredTodayLoginRef.current = true;
+      const logId = `log_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      const logEntry = {
+        id: logId,
+        timestamp: nowIso,
+        eventType: "LOGIN",
+        action: `${activeUser.name} logged into the application from ${dev.deviceType} (${dev.os} · ${dev.browser})`,
+        userName: activeUser.name,
+        username: activeUser.username,
+        userDept: currentRole.dept,
+        device: dev.deviceSummary,
+        deviceType: dev.deviceType,
+        location: "Detecting...",
+        targetId: activeUser.id
+      };
+
+      setAuditLogs(prevLogs => {
+        const updatedLogs = [logEntry, ...prevLogs.slice(0, 499)];
+        try {
+          localStorage.setItem("loom_audit_logs", JSON.stringify(updatedLogs));
+          if (window.storage?.set) window.storage.set("audit_logs", JSON.stringify(updatedLogs), true);
+        } catch (e) {}
+        return updatedLogs;
+      });
+
+      getLocationInfo().then(loc => {
+        const resolvedLocation = sanitizeLocationString(loc.location);
+        setUserSessions(prev => {
+          const updated = prev.map(s => s.id === sessId ? { ...s, location: resolvedLocation } : s);
+          if (window.storage) window.storage.set("user_sessions", JSON.stringify(updated), true);
+          return updated;
+        });
+        setAuditLogs(prevLogs => {
+          const updatedLogs = prevLogs.map(l => l.id === logId ? { ...l, location: resolvedLocation } : l);
+          try {
+            localStorage.setItem("loom_audit_logs", JSON.stringify(updatedLogs));
+            if (window.storage?.set) window.storage.set("audit_logs", JSON.stringify(updatedLogs), true);
+          } catch (e) {}
+          return updatedLogs;
+        });
+      });
+    } else {
+      hasEnsuredTodayLoginRef.current = true;
+    }
+  }, [activeUser, teams, auditLogs]);
 
   useEffect(() => {
     if (!rotation.enabled || !activeUser || users.length < 2) return undefined;
@@ -729,18 +872,7 @@ export default function LoomPLM() {
       }
 
       if (notifsRes.status === "fulfilled" && Array.isArray(notifsRes.value) && notifsRes.value.length > 0) {
-        setNotifications(prev => {
-          const map = new Map();
-          notifsRes.value.forEach(n => {
-            const key = n.id || n.eventKey;
-            if (key) map.set(key, n);
-          });
-          prev.forEach(n => {
-            const key = n.id || n.eventKey;
-            if (key && !map.has(key)) map.set(key, n);
-          });
-          return Array.from(map.values()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-        });
+        setNotifications(prev => applyReadStatusAndDedupe([...notifsRes.value, ...prev]));
       }
 
       if (financialsRes.status === "fulfilled" && Array.isArray(financialsRes.value) && financialsRes.value.length > 0) {
@@ -808,14 +940,7 @@ export default function LoomPLM() {
           });
         }
         if (Array.isArray(storageMap.notifications) && storageMap.notifications.length > 0) {
-          setNotifications(prev => {
-            const map = new Map(prev.map(item => [item.id || item.eventKey, item]));
-            storageMap.notifications.forEach(item => {
-              const key = item.id || item.eventKey;
-              if (key) map.set(key, { ...map.get(key), ...item });
-            });
-            return Array.from(map.values()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-          });
+          setNotifications(prev => applyReadStatusAndDedupe([...storageMap.notifications, ...prev]));
         }
         if (Array.isArray(storageMap.leaveRequests)) {
           setLeaveRequests(storageMap.leaveRequests.filter(l => !DEMO_NAMES.has(l.name)));
@@ -939,7 +1064,7 @@ export default function LoomPLM() {
         } else if (event.key === "notifications" && event.value) {
           try {
             const parsed = typeof event.value === "string" ? JSON.parse(event.value) : event.value;
-            if (Array.isArray(parsed)) setNotifications(parsed);
+            if (Array.isArray(parsed)) setNotifications(prev => applyReadStatusAndDedupe([...parsed, ...prev]));
           } catch (e) {}
         } else if (event.key === "attendance" && event.value) {
           try {
@@ -1033,20 +1158,7 @@ export default function LoomPLM() {
         const dbNotifs = await resourcesApi.list("notifications", "?all=true");
         if (!Array.isArray(dbNotifs) || cancelled) return;
 
-        setNotifications(prev => {
-          const map = new Map();
-          dbNotifs.forEach(n => {
-            const key = n.id || n.eventKey;
-            if (key) map.set(key, n);
-          });
-
-          prev.forEach(n => {
-            const key = n.id || n.eventKey;
-            if (key && !map.has(key)) map.set(key, n);
-          });
-
-          return Array.from(map.values()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-        });
+        setNotifications(prev => applyReadStatusAndDedupe([...dbNotifs, ...prev]));
       } catch (e) {
         if (!cancelled) {
           console.warn("Notification polling failed:", e.message);
@@ -1094,18 +1206,7 @@ export default function LoomPLM() {
       if (targetView === "notifications") {
         const dbNotifs = await resourcesApi.list("notifications", "?all=true");
         if (Array.isArray(dbNotifs)) {
-          setNotifications(prev => {
-            const map = new Map();
-            dbNotifs.forEach(n => {
-              const key = n.id || n.eventKey;
-              if (key) map.set(key, n);
-            });
-            prev.forEach(n => {
-              const key = n.id || n.eventKey;
-              if (key && !map.has(key)) map.set(key, n);
-            });
-            return Array.from(map.values()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-          });
+          setNotifications(prev => applyReadStatusAndDedupe([...dbNotifs, ...prev]));
         }
       }
 
@@ -1291,8 +1392,8 @@ export default function LoomPLM() {
         return prev;
       }
       playNotificationSound(newNotif.priority);
-      const updated = [newNotif, ...prev];
-      if (window.storage) window.storage.set("notifications", JSON.stringify(updated), true);
+      const updated = applyReadStatusAndDedupe([newNotif, ...prev]);
+      if (window.storage) window.storage.set("notifications", JSON.stringify(updated.slice(0, 300)), true);
       return updated;
     });
 
@@ -1302,9 +1403,10 @@ export default function LoomPLM() {
   };
 
   const markNotificationAsRead = (id) => {
+    markIdsAsReadLocally([id]);
     setNotifications(prev => {
-      const updated = prev.map(n => n.id === id ? { ...n, isRead: true } : n);
-      if (window.storage) window.storage.set("notifications", JSON.stringify(updated), true);
+      const updated = prev.map(n => (n.id === id || n.eventKey === id) ? { ...n, isRead: true } : n);
+      if (window.storage) window.storage.set("notifications", JSON.stringify(updated.slice(0, 300)), true);
       return updated;
     });
     try {
@@ -1314,15 +1416,23 @@ export default function LoomPLM() {
 
   const markAllNotificationsAsRead = () => {
     setNotifications(prev => {
-      const updated = prev.map(n => ({ ...n, isRead: true }));
-      if (window.storage) window.storage.set("notifications", JSON.stringify(updated), true);
+      const allIds = [];
+      const updated = prev.map(n => {
+        if (n.id) allIds.push(n.id);
+        if (n.eventKey) allIds.push(n.eventKey);
+        return { ...n, isRead: true };
+      });
+      markIdsAsReadLocally(allIds);
+      if (window.storage) window.storage.set("notifications", JSON.stringify(updated.slice(0, 300)), true);
       return updated;
     });
     try {
-      notifications.forEach(n => {
-        if (!n.isRead) {
-          resourcesApi.patch("notifications", n.id, { isRead: true }).catch(() => { });
-        }
+      resourcesApi.post("notifications/mark-all-read", {}).catch(() => {
+        notifications.slice(0, 20).forEach(n => {
+          if (!n.isRead) {
+            resourcesApi.patch("notifications", n.id, { isRead: true }).catch(() => { });
+          }
+        });
       });
     } catch (e) { }
   };
@@ -1607,7 +1717,32 @@ export default function LoomPLM() {
       });
     }
 
-    // Asynchronously resolve location and record login audit log
+    // Synchronously record login audit log so it appears immediately without waiting for geolocation
+    const logId = `log_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const initialLogEntry = {
+      id: logId,
+      timestamp: nowIso,
+      eventType: "LOGIN",
+      action: `${user.name} logged into the application from ${dev.deviceType} (${dev.os} · ${dev.browser})`,
+      userName: user.name,
+      username: user.username,
+      userDept: nextRole.dept,
+      device: dev.deviceSummary,
+      deviceType: dev.deviceType,
+      location: "Detecting...",
+      targetId: user.id
+    };
+
+    setAuditLogs(prevLogs => {
+      const updatedLogs = [initialLogEntry, ...prevLogs.slice(0, 499)];
+      try {
+        localStorage.setItem("loom_audit_logs", JSON.stringify(updatedLogs));
+        if (window.storage?.set) window.storage.set("audit_logs", JSON.stringify(updatedLogs), true);
+      } catch (e) {}
+      return updatedLogs;
+    });
+
+    // Asynchronously resolve location and enrich session & audit log
     getLocationInfo().then(loc => {
       const resolvedLocation = sanitizeLocationString(loc.location);
       const enrichedSession = { ...newSession, location: resolvedLocation };
@@ -1621,22 +1756,8 @@ export default function LoomPLM() {
         session: enrichedSession
       });
 
-      const logEntry = {
-        id: `log_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-        timestamp: nowIso,
-        eventType: "LOGIN",
-        action: `${user.name} logged into the application from ${dev.deviceType} (${dev.os} · ${dev.browser})`,
-        userName: user.name,
-        username: user.username,
-        userDept: nextRole.dept,
-        device: dev.deviceSummary,
-        deviceType: dev.deviceType,
-        location: resolvedLocation,
-        targetId: user.id
-      };
-
       setAuditLogs(prevLogs => {
-        const updatedLogs = [logEntry, ...prevLogs.slice(0, 499)];
+        const updatedLogs = prevLogs.map(l => l.id === logId ? { ...l, location: resolvedLocation } : l);
         try {
           localStorage.setItem("loom_audit_logs", JSON.stringify(updatedLogs));
           if (window.storage?.set) window.storage.set("audit_logs", JSON.stringify(updatedLogs), true);
@@ -2098,8 +2219,8 @@ export default function LoomPLM() {
       costingRows: buildCostingRows("fabric"),
       vapCount: 1,
       shippedQty: 0,
-      plannedCost: 0,
-      actualCost: 0,
+      plannedCost:0,
+      actualCost:0,
       stages: makeStages("90", 0, null),
       preProd: initPreProd(),
       ...newOrder,
@@ -2748,7 +2869,7 @@ export default function LoomPLM() {
     setOrders(prev => prev.map(o => {
       const isTarget = (o.primaryId && o.primaryId === id) || (o._id && o._id === id) || o.id === id;
       if (!isTarget) return o;
-      const rows = [...(o.costingRows || []), { label: "", section: "Other", isHeader: false, price: 0, qty: 1, custom: true }];
+    const rows = [...(o.costingRows || []), { label: "", section: "Other", isHeader: false, price: 0, qty: 1, custom: true }];
       const orderQty = Number(o.qty) || 0;
       const grandTotal = rows.reduce((a, r) => a + (r.isHeader ? 0 : (Number(r.price) || 0) * (Number(r.qty) || 0)), 0);
       const computedPlanned = Math.round(grandTotal * orderQty);

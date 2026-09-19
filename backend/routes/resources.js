@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { RESOURCE_SEEDS } from "../data/seed.js";
-import { getResourceCollection } from "../db/mongodb.js";
+import { getResourceCollection, getStorageCollection } from "../db/mongodb.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_FILE = path.join(__dirname, "..", "data", "resources.json");
@@ -242,6 +242,34 @@ router.get("/:resource/:id(*)", async (req, res, next) => {
       return res.status(404).json({ error: "Record not found" });
     }
     res.json(record);
+  } catch (error) { next(error); }
+});
+
+router.post("/notifications/mark-all-read", async (req, res, next) => {
+  try {
+    const rCol = getResourceCollection();
+    if (rCol) {
+      await rCol.updateMany({ resource: "notifications", isRead: { $ne: true } }, { $set: { isRead: true } });
+    }
+    const sCol = getStorageCollection();
+    if (sCol) {
+      const notifDoc = await sCol.findOne({ key: "notifications" });
+      if (notifDoc?.value) {
+        try {
+          const list = typeof notifDoc.value === "string" ? JSON.parse(notifDoc.value) : notifDoc.value;
+          if (Array.isArray(list)) {
+            const updated = list.map(n => ({ ...n, isRead: true }));
+            await sCol.updateOne({ key: "notifications" }, { $set: { value: JSON.stringify(updated) } });
+          }
+        } catch (e) {}
+      }
+    }
+    const db = readDB();
+    if (Array.isArray(db.notifications)) {
+      db.notifications.forEach(n => { n.isRead = true; });
+      writeDB(db);
+    }
+    res.json({ success: true, message: "All notifications marked as read" });
   } catch (error) { next(error); }
 });
 
