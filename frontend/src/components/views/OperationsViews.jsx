@@ -5933,8 +5933,9 @@ export function AuditLoggerPage({
         userMap.set(userKey, rec);
       }
 
+      if (!Array.isArray(rec.sessions)) rec.sessions = [];
       rec.sessions.push(sess);
-      rec.totalLogins += 1;
+      rec.totalLogins = (rec.totalLogins || 0) + 1;
 
       // Calculate session duration in minutes
       let sMins = 0;
