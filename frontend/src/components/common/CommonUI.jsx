@@ -99,8 +99,10 @@ export function collectTasks(orders, deptFilter) {
   const rows = [];
   (orders || []).forEach(o => {
     if (!o || o.isDeleted === true || o.isDeleted === "true" || !!o.deletedAt) return;
-    if (!o.stages) return;
+    if (!Array.isArray(o.stages)) return;
     o.stages.forEach((s, idx) => {
+      // Guard: skip null/undefined stage entries (can occur with corrupted backend data)
+      if (!s || typeof s !== "object") return;
       if (!deptFilter || s.dept === deptFilter) {
         rows.push({ order: o, stage: s, stageIdx: idx, dept: s.dept });
       }
