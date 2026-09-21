@@ -8,7 +8,7 @@ import {
 } from "recharts";
 import {
   SHIPMENT_PERFORMANCE, computeMonthlyShipmentPerformance, TA_STAGES, STAGE_ICON_SET_BASE, ORG_STRUCTURE, RISK_DELAY_DAYS,
-  collectActivitiesForDate, formatDisplayDate, isSameDay
+  collectActivitiesForDate, formatDisplayDate, isSameDay, computeDynamicOrderRisk, parseShipDateSafe
 } from "../../constants/loomData.js";
 import {
   Card, CardHeader, PageHeader, statusPill, riskDot, collectTasks
@@ -895,103 +895,307 @@ export function Dashboard({
     return { completed, inProgress, atRisk, pending, total: allStages.length || 1 };
   }, [allStages]);
 
+  // Compute live dynamic risk level for each order based on target ship date, delay flags, and status:
+  const orderRiskMap = useMemo(() => {
+    const map = {};
+    if (!Array.isArray(activeOrders)) return map;
+    activeOrders.forEach(o => {
+      if (!o) return;
+      const orderId = o.id || o.primaryId;
+      if (!orderId) return;
+      map[orderId] = computeDynamicOrderRisk(o);
+    });
+    return map;
+  }, [activeOrders]);
+
+  const alerts = useMemo(() => {
+    const items = [];
+    if (!Array.isArray(activeOrders)) return items;
+    activeOrders.forEach(o => {
+      if (!o || !Array.isArray(o.stages)) return;
+      const orderRisk = String(orderRiskMap[o.id || o.primaryId] || o.risk || "medium").toLowerCase();
+      o.stages.forEach(s => {
+        if (s && typeof s.reason === "string" && s.reason.trim() !== "" && s.reason !== "No delay flagged") {
+          items.push({
+            text: `${s.reason} — ${o.style || ""} PO #${o.id || o.primaryId || ""} (${s.dept || "General"})`,
+            sev: orderRisk
+          });
+        }
+      });
+    });
+    return items.slice(0, 5);
+  }, [activeOrders, orderRiskMap]);
+
+  const topAtRisk = useMemo(() => {
+    if (!Array.isArray(activeOrders)) return [];
+    return activeOrders
+      .filter(o => o && o.status !== "On Track")
+      .sort((a, b) => {
+        const rA = String(orderRiskMap[a?.id || a?.primaryId] || a?.risk || "medium").toLowerCase();
+        const rB = String(orderRiskMap[b?.id || b?.primaryId] || b?.risk || "medium").toLowerCase();
+        return (rA === "high" ? 0 : 1) - (rB === "high" ? 0 : 1);
+      })
+      .slice(0, 5)
+      .map(o => {
+        const stages = Array.isArray(o.stages) ? o.stages : [];
+        const flagged = stages.find(s => s && s.reason);
+        const rawRisk = String(orderRiskMap[o.id || o.primaryId] || o.risk || "medium").toLowerCase();
+        const delayDays = RISK_DELAY_DAYS && RISK_DELAY_DAYS[rawRisk] ? RISK_DELAY_DAYS[rawRisk] : 1;
+        return {
+          ...o,
+          risk: rawRisk,
+          predictedDelay: `${delayDays} Day${delayDays > 1 ? "s" : ""}`,
+          primaryReason: flagged && typeof flagged.reason === "string" ? flagged.reason : "—"
+        };
+      });
+  }, [activeOrders, orderRiskMap]);
+
+  // Break down reasons into clean root-causes (splitting compound "Color: Reason · Color2: Reason2" strings)
   const reasonCounts = useMemo(() => {
     const counts = {};
-    allStages.forEach(s => { if (s.reason) counts[s.reason] = (counts[s.reason] || 0) + 1; });
+    if (!Array.isArray(allStages)) return { arr: [], totalFlags: 1 };
+    allStages.forEach(s => {
+      if (!s || typeof s.reason !== "string" || !s.reason.trim() || s.reason === "No delay flagged") return;
+      // Check if it has multiple colorway delay reasons joined by ' · '
+      const parts = s.reason.split(/\s*·\s*/);
+      parts.forEach(part => {
+        let cleaned = typeof part === "string" ? part.trim() : "";
+        // Remove colorway prefix like "Black: " or "215 IVORY: "
+        if (cleaned.includes(": ")) {
+          const colonIdx = cleaned.indexOf(": ");
+          cleaned = cleaned.substring(colonIdx + 2).trim();
+        }
+        if (cleaned) {
+          counts[cleaned] = (counts[cleaned] || 0) + 1;
+        }
+      });
+    });
     const arr = Object.entries(counts).sort((a, b) => b[1] - a[1]);
     const totalFlags = arr.reduce((a, [, c]) => a + c, 0) || 1;
     return { arr, totalFlags };
   }, [allStages]);
 
   const departmentCounts = useMemo(() => {
+    if (!ORG_STRUCTURE || !Array.isArray(allStages)) return [];
     const depts = Object.keys(ORG_STRUCTURE);
     return depts.map(dept => {
-      const count = allStages.filter(s => s.dept === dept && s.reason).length;
+      const count = allStages.filter(s => s && s.dept === dept && typeof s.reason === "string" && s.reason.trim() !== "" && s.reason !== "No delay flagged").length;
       return { dept, count };
     }).filter(d => d.count > 0).sort((a, b) => b.count - a.count).slice(0, 6);
   }, [allStages]);
 
-  const productionPlan = useMemo(() => {
-    const totalQty = activeOrders.reduce((a, o) => a + (Number(o.qty) || 0), 0);
-    const avgProgress = activeOrders.length > 0
-      ? activeOrders.reduce((a, o) => a + (o.stages ? o.stages.filter(s => s.status === "done").length / o.stages.length : 0), 0) / activeOrders.length
-      : 0;
-    const actual = Math.round(totalQty * avgProgress);
-    return { totalQty, actual, balance: totalQty - actual, pct: Math.round(avgProgress * 100) };
-  }, [activeOrders]);
-
-  const alerts = useMemo(() => {
-    const items = [];
-    activeOrders.forEach(o => {
-      if (!o.stages) return;
-      o.stages.forEach(s => {
-        if (s.reason) items.push({ text: `${s.reason} — ${o.style} PO #${o.id} (${s.dept})`, sev: o.risk });
+  const riskCounts = useMemo(() => {
+    let high = 0;
+    let medium = 0;
+    let low = 0;
+    if (Array.isArray(activeOrders)) {
+      activeOrders.forEach(o => {
+        if (!o) return;
+        const r = String(orderRiskMap[o.id || o.primaryId] || o.risk || "low").toLowerCase();
+        if (r === "high") high++;
+        else if (r === "medium") medium++;
+        else low++;
       });
-    });
-    return items.slice(0, 5);
-  }, [activeOrders]);
+    }
+    return { high, medium, low };
+  }, [activeOrders, orderRiskMap]);
 
-  const topAtRisk = useMemo(() => {
-    return activeOrders
-      .filter(o => o.status !== "On Track")
-      .sort((a, b) => (a.risk === "high" ? 0 : 1) - (b.risk === "high" ? 0 : 1))
-      .slice(0, 5)
-      .map(o => {
-        const flagged = o.stages ? o.stages.find(s => s.reason) : null;
-        return { ...o, predictedDelay: `${RISK_DELAY_DAYS[o.risk] || 1} Day${(RISK_DELAY_DAYS[o.risk] || 1) > 1 ? "s" : ""}`, primaryReason: flagged ? flagged.reason : "—" };
-      });
-  }, [activeOrders]);
-
-  const riskCounts = useMemo(() => ({
-    high: activeOrders.filter(o => o.risk === "high").length,
-    medium: activeOrders.filter(o => o.risk === "medium").length,
-    low: activeOrders.filter(o => o.risk === "low").length,
-  }), [activeOrders]);
-  const riskPieData = [
-    { name: "High risk", value: riskCounts.high, color: "#D64545" },
-    { name: "Medium risk", value: riskCounts.medium, color: "#E2A83B" },
-    { name: "Low risk", value: riskCounts.low, color: "#1F9E8D" },
-  ].filter(d => d.value > 0);
+  const riskPieData = useMemo(() => {
+    const data = [];
+    if (riskCounts.high > 0) data.push({ name: "High risk", value: riskCounts.high, color: "#EF4444" });
+    if (riskCounts.medium > 0) data.push({ name: "Medium risk", value: riskCounts.medium, color: "#F59E0B" });
+    if (riskCounts.low > 0) data.push({ name: "Low risk", value: riskCounts.low, color: "#10B981" });
+    return data;
+  }, [riskCounts]);
 
   const lookFirstText = useMemo(() => {
-    if (departmentCounts.length === 0) return null;
+    if (!departmentCounts || departmentCounts.length === 0) return null;
     const top = departmentCounts.slice(0, 2).map(d => d.dept);
     const topSum = departmentCounts.slice(0, 2).reduce((a, d) => a + d.count, 0);
-    const pct = Math.round((topSum / reasonCounts.totalFlags) * 100);
+    const totalFlags = reasonCounts?.totalFlags || 1;
+    const pct = Math.round((topSum / totalFlags) * 100);
     return top.length === 2
       ? `${top[0]} and ${top[1]} delays account for ${pct}% of flagged issues this week.`
       : `${top[0]} delays account for ${pct}% of flagged issues this week.`;
   }, [departmentCounts, reasonCounts]);
 
   const aiInsightText = useMemo(() => {
-    if (reasonCounts.arr.length === 0) return null;
+    if (!reasonCounts || !reasonCounts.arr || reasonCounts.arr.length === 0) {
+      if (riskCounts.high === 0 && riskCounts.medium === 0) {
+        return "All active orders are on track — no production delays or shipment risks detected.";
+      }
+      return `${riskCounts.high > 0 ? `${riskCounts.high} order(s) carry high shipment risk` : `${riskCounts.medium} order(s) in medium risk`} — monitoring milestone progress closely.`;
+    }
     const [topReason, topCount] = reasonCounts.arr[0];
-    const pct = Math.round((topCount / reasonCounts.totalFlags) * 100);
-    return `${riskCounts.high} order${riskCounts.high === 1 ? "" : "s"} carry high shipment risk — the leading cause is ${topReason} (${pct}%).`;
-  }, [reasonCounts, riskCounts]);
+    const pct = Math.round((topCount / (reasonCounts.totalFlags || 1)) * 100);
+    const orderCountText = riskCounts.high > 0
+      ? `${riskCounts.high} order${riskCounts.high === 1 ? "" : "s"} carry high shipment risk`
+      : riskCounts.medium > 0
+      ? `${riskCounts.medium} order${riskCounts.medium === 1 ? "" : "s"} at medium risk`
+      : `${(stats?.atRisk || 0) + (stats?.delayed || 0)} orders with delay flags`;
+    return `${orderCountText} — the leading cause is ${topReason} (${pct}%).`;
+  }, [reasonCounts, riskCounts, stats]);
 
   const myTasksPreview = useMemo(() => {
     const items = [];
+    if (!Array.isArray(activeOrders)) return items;
     activeOrders.forEach(o => {
-      if (!o.stages) return;
+      if (!o || !Array.isArray(o.stages)) return;
       o.stages.forEach(s => {
-        if (s.status === "in_progress") items.push({ order: o, stage: s });
+        if (s && s.status === "in_progress") items.push({ order: o, stage: s });
       });
     });
     return items.slice(0, 4);
   }, [activeOrders]);
 
   const bottomStats = useMemo(() => {
+    // 1. Live Avg Order Lead Time (days between order creation/start and target ship date)
+    let leadTimeDaysTotal = 0;
+    let leadTimeCount = 0;
+    activeOrders.forEach(o => {
+      const shipStr = o.shipDate || o.ship;
+      const startStr = o.orderDate || o.createdAt || o.createdDate;
+      if (shipStr) {
+        let shipD = new Date(shipStr);
+        if (isNaN(shipD.getTime()) && typeof shipStr === "string") {
+          shipD = new Date(`${shipStr} ${new Date().getFullYear()}`);
+        }
+        let startD = startStr ? new Date(startStr) : null;
+        if (startD && isNaN(startD.getTime()) && typeof startStr === "string") {
+          startD = new Date(`${startStr} ${new Date().getFullYear()}`);
+        }
+        if (!startD || isNaN(startD.getTime())) {
+          // If no created date, calculate from stage Day 1 or standard lead
+          const stageCount = o.stages?.length || 35;
+          const estimatedLead = stageCount > 35 ? 120 : 90;
+          leadTimeDaysTotal += estimatedLead;
+          leadTimeCount++;
+        } else if (!isNaN(shipD.getTime()) && !isNaN(startD.getTime())) {
+          const diffDays = Math.round(Math.abs(shipD.getTime() - startD.getTime()) / (1000 * 60 * 60 * 24));
+          if (diffDays > 0) {
+            leadTimeDaysTotal += diffDays;
+            leadTimeCount++;
+          }
+        }
+      }
+    });
+    const avgOrderLeadTimeStr = leadTimeCount > 0 ? `${Math.round(leadTimeDaysTotal / leadTimeCount)} days` : "—";
+
+    // 2. Live Avg Sampling Time (measured across proto/sample stages)
+    let samplingDaysTotal = 0;
+    let samplingCount = 0;
+    activeOrders.forEach(o => {
+      const sampleStages = (o.stages || []).filter(s => {
+        const n = (s.name || "").toLowerCase();
+        return n.includes("sample") || n.includes("proto") || n.includes("size set") || n.includes("fit");
+      });
+      sampleStages.forEach(s => {
+        // Check stage day span string (e.g. "Day 25-35", "Day 35-38", or Day 50)
+        const match = (s.day || "").match(/(\d+)\s*-\s*(\d+)/);
+        if (match) {
+          const span = Math.abs(parseInt(match[2], 10) - parseInt(match[1], 10));
+          if (span > 0) {
+            samplingDaysTotal += span;
+            samplingCount++;
+          }
+        } else {
+          const singleMatch = (s.day || "").match(/(\d+)/);
+          if (singleMatch) {
+            // Stage cycle day
+            samplingDaysTotal += 7; // Average standard sample cycle window
+            samplingCount++;
+          }
+        }
+      });
+    });
+    const avgSamplingTimeStr = samplingCount > 0 ? `${Math.round(samplingDaysTotal / samplingCount)} days` : "—";
+
+    // 3. Live On-Time Approval %
     const approvalStages = allStages.filter(s => s.name.toLowerCase().includes("approval"));
     const doneApprovals = approvalStages.filter(s => s.status === "done" && !s.reason).length;
     const onTimeApprovalPct = approvalStages.length > 0 ? Math.round((doneApprovals / approvalStages.length) * 100) : 0;
 
-    const floorStages = allStages.filter(s => s.dept === "Cutting" || s.dept === "Production");
-    const doneFloor = floorStages.filter(s => s.status === "done").length;
-    const capacityUtilPct = floorStages.length > 0 ? Math.round((doneFloor / floorStages.length) * 100) : 0;
+    // 4. Live Quality Pass Rate (from inspection records or completed quality stages)
+    let totalInspectedUnits = 0;
+    let totalPassedUnits = 0;
+    let hasInspectionUnits = false;
 
-    return { onTimeApprovalPct, capacityUtilPct };
-  }, [allStages]);
+    activeOrders.forEach(o => {
+      const insp = o.inspectionData || {};
+      ["inline", "endline", "final"].forEach(sec => {
+        if (insp[sec]) {
+          const inspected = Number(insp[sec].unitsInspected);
+          const passed = Number(insp[sec].unitsPassed);
+          if (!isNaN(inspected) && inspected > 0 && !isNaN(passed)) {
+            totalInspectedUnits += inspected;
+            totalPassedUnits += passed;
+            hasInspectionUnits = true;
+          }
+        }
+      });
+    });
+
+    let qualityPassRateStr = "100%";
+    if (hasInspectionUnits && totalInspectedUnits > 0) {
+      const rate = ((totalPassedUnits / totalInspectedUnits) * 100).toFixed(1);
+      qualityPassRateStr = `${rate}%`;
+    } else {
+      // Fallback to live quality stages pass rate without quality reasons/issues
+      const qualityStages = allStages.filter(s => s.dept === "Quality" || s.name.toLowerCase().includes("quality") || s.name.toLowerCase().includes("inspection"));
+      if (qualityStages.length > 0) {
+        const passQuality = qualityStages.filter(s => s.status === "done" && !s.reason).length;
+        const inProgQualityNoIssue = qualityStages.filter(s => s.status === "in_progress" && !s.reason).length;
+        const rate = Math.round(((passQuality + inProgQualityNoIssue * 0.5) / qualityStages.length) * 100);
+        qualityPassRateStr = `${rate}%`;
+      } else {
+        qualityPassRateStr = "100%";
+      }
+    }
+
+    // 5. Live Production Efficiency
+    // Computed from productionLogs if available, or actual completed production stages
+    let logEffSum = 0;
+    let logEffCount = 0;
+    activeOrders.forEach(o => {
+      (o.productionLogs || []).forEach(pl => {
+        const effVal = parseFloat(pl.efficiency);
+        if (!isNaN(effVal) && effVal > 0) {
+          logEffSum += effVal;
+          logEffCount++;
+        }
+      });
+    });
+
+    let productionEfficiencyStr = "0%";
+    if (logEffCount > 0) {
+      productionEfficiencyStr = `${Math.round(logEffSum / logEffCount)}%`;
+    } else {
+      // Live production stage progress across active orders
+      const prodStages = allStages.filter(s => s.dept === "Production" || s.dept === "Cutting" || s.dept === "VAP");
+      const doneProd = prodStages.filter(s => s.status === "done").length;
+      const inProgProd = prodStages.filter(s => s.status === "in_progress").length;
+      if (prodStages.length > 0) {
+        const effPct = Math.round(((doneProd + inProgProd * 0.5) / prodStages.length) * 100);
+        productionEfficiencyStr = `${effPct}%`;
+      } else {
+        productionEfficiencyStr = "0%";
+      }
+    }
+
+    // 6. Live Capacity Utilization (Ratio of in-progress & completed floor stages to total capacity)
+    const floorStages = allStages.filter(s => s.dept === "Cutting" || s.dept === "Production");
+    const activeFloorCount = floorStages.filter(s => s.status === "done" || s.status === "in_progress").length;
+    const capacityUtilPct = floorStages.length > 0 ? Math.round((activeFloorCount / floorStages.length) * 100) : 0;
+
+    return {
+      avgOrderLeadTime: avgOrderLeadTimeStr,
+      avgSamplingTime: avgSamplingTimeStr,
+      onTimeApprovalPct,
+      qualityPassRate: qualityPassRateStr,
+      productionEfficiency: productionEfficiencyStr,
+      capacityUtilPct
+    };
+  }, [activeOrders, allStages]);
 
   const cuttingDelayedOrders = useMemo(() => {
     if (!Array.isArray(activeOrders)) return [];
@@ -1172,6 +1376,16 @@ export function Dashboard({
                             <div style={{ color: "#475569", marginTop: 2 }}>
                               Orders: {pt.onTimeOrders} on-track / {pt.totalOrders} total {pt.delayedOrders > 0 ? `(${pt.delayedOrders} delayed)` : ""}
                             </div>
+                            {pt.orderNumbers && (
+                              <div style={{ color: "#64748B", fontSize: 10.5, marginTop: 3 }}>
+                                Orders: <span style={{ fontFamily: "monospace", color: "#334155", fontWeight: 600 }}>{pt.orderNumbers}</span>
+                              </div>
+                            )}
+                            {pt.delayedOrderNumbers && (
+                              <div style={{ color: "#DC2626", fontSize: 10.5, marginTop: 1 }}>
+                                Delayed: <span style={{ fontFamily: "monospace", fontWeight: 600 }}>{pt.delayedOrderNumbers}</span>
+                              </div>
+                            )}
                           </>
                         ) : (
                           <div style={{ color: "#94A3B8" }}>No active order activity</div>
@@ -1194,23 +1408,39 @@ export function Dashboard({
         {/* 3. Risk Analysis Donut Card */}
         <Card style={{ background: "#FFFFFF", border: "1px solid #E8EBF0", borderRadius: 12, boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04)" }}>
           <CardHeader title="Risk analysis" action="View insights" onAction={() => onNavigate("insights")} />
-          <div style={{ width: "100%", height: 140, position: "relative" }}>
-            <ResponsiveContainer width="100%" height="100%">
+          <div style={{ width: "100%", height: 140, minHeight: 140, position: "relative" }}>
+            <ResponsiveContainer width="100%" height={140}>
               <PieChart>
-                <Pie data={riskPieData.length ? riskPieData : [{ name: "No risk", value: 1, color: "#E7E8ED" }]} dataKey="value" nameKey="name" innerRadius={42} outerRadius={62} paddingAngle={3} stroke="none">
-                  {(riskPieData.length ? riskPieData : [{ color: "#E7E8ED" }]).map((d, i) => <Cell key={i} fill={d.color} />)}
+                <Pie
+                  data={riskPieData && riskPieData.length > 0 ? riskPieData : [{ name: "No risk", value: 1, color: "#E7E8ED" }]}
+                  dataKey="value"
+                  nameKey="name"
+                  innerRadius={42}
+                  outerRadius={62}
+                  paddingAngle={3}
+                  stroke="none"
+                >
+                  {(riskPieData && riskPieData.length > 0 ? riskPieData : [{ name: "default", color: "#E7E8ED" }]).map((d, i) => (
+                    <Cell key={d?.name || i} fill={d?.color || "#E7E8ED"} />
+                  ))}
                 </Pie>
               </PieChart>
             </ResponsiveContainer>
             <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
-              <div style={{ fontSize: 20, fontWeight: 800, color: "#1E293B" }}>{stats.total}</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: "#1E293B" }}>{stats?.total || 0}</div>
               <div style={{ fontSize: 10.5, color: "#64748B", fontWeight: 600 }}>Orders</div>
             </div>
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", justifyContent: "center", marginTop: 4, marginBottom: 12 }}>
-            {[["High", "#EF4444"], ["Medium", "#F59E0B"], ["Low", "#10B981"]].map(([l, c]) => (
+            {[
+              ["High", "#EF4444", riskCounts.high],
+              ["Medium", "#F59E0B", riskCounts.medium],
+              ["Low", "#10B981", riskCounts.low]
+            ].map(([l, c, count]) => (
               <div key={l} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#475569", fontWeight: 600 }}>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: c }} /> {l}
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: c }} />
+                <span>{l}:</span>
+                <strong style={{ color: "#0F172A" }}>{count || 0}</strong>
               </div>
             ))}
           </div>
@@ -1225,7 +1455,12 @@ export function Dashboard({
 
       {/* T&A Progress Overview Section */}
       <Card style={{ marginBottom: 18, background: "#FFFFFF", border: "1px solid #E8EBF0", borderRadius: 12, boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04)" }}>
-        <CardHeader title="T&A progress overview (all orders)" sub="21-step workflow from the T&A template" action="Timeline / calendar" onAction={() => onNavigate("calendar")} />
+        <CardHeader
+          title="T&A progress overview (all orders)"
+          sub={`Real-time workflow milestones across ${activeOrders.length} active orders (${allStages.length} total live stages)`}
+          action="Timeline / calendar"
+          onAction={() => onNavigate("calendar")}
+        />
         
         {/* Horizontal Workflow Stepper */}
         <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 10 }}>
@@ -1712,14 +1947,12 @@ export function Dashboard({
       </Card>
 
       <Card style={{ padding: "18px 20px" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
           {[
-            ["Avg Order Lead Time", "87 days"],
-            ["Avg Sampling Time", "24 days"],
+            ["Avg Order Lead Time", bottomStats.avgOrderLeadTime],
+            ["Avg Sampling Time", bottomStats.avgSamplingTime],
             ["On-Time Approval %", `${bottomStats.onTimeApprovalPct}%`],
-            ["Quality Pass Rate", "93.4%"],
-            ["Production Efficiency", `${productionPlan.pct}%`],
-            ["Capacity Utilization", `${bottomStats.capacityUtilPct}%`],
+            ["Quality Pass Rate", bottomStats.qualityPassRate],
           ].map(([label, val]) => (
             <div key={label}>
               <div style={{ fontSize: 17, fontWeight: 700, color: "#1B2130" }}>{val}</div>

@@ -452,13 +452,12 @@ export function FinanceEntryPage({ orders = [], financials, onUpdate, onUpdateOr
 
       <Card style={{ maxWidth: 460 }}>
         <CardHeader title="Computed" />
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 8 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
           <span style={{ color: "#8A8D98" }}>Gross profit</span>
           <span style={{ fontWeight: 700 }}>
             {grossProfit < 0 ? "-₹" : "₹"}{Math.abs(grossProfit).toLocaleString("en-IN")}
           </span>
         </div>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}><span style={{ color: "#8A8D98" }}>Gross margin</span><span style={{ fontWeight: 700 }}>{grossMargin}%</span></div>
       </Card>
 
       {/* DETAILED VARIANCE BREAKDOWN MODAL */}
@@ -872,13 +871,75 @@ export function ReportsPage({ orders = [] }) {
   const total = activeOrders.length;
   const onTrack = activeOrders.filter(o => o.status === "On Track").length;
   const totalQty = activeOrders.reduce((a, o) => a + (Number(o.qty) || 0), 0);
+  // Compute live metrics dynamically from active orders
+  const leadTimeDays = useMemo(() => {
+    let daysTotal = 0, count = 0;
+    activeOrders.forEach(o => {
+      const shipStr = o.shipDate || o.ship;
+      const startStr = o.orderDate || o.createdAt;
+      if (shipStr) {
+        let shipD = new Date(shipStr);
+        if (isNaN(shipD.getTime()) && typeof shipStr === "string") shipD = new Date(`${shipStr} ${new Date().getFullYear()}`);
+        let startD = startStr ? new Date(startStr) : null;
+        if (startD && isNaN(startD.getTime()) && typeof startStr === "string") startD = new Date(`${startStr} ${new Date().getFullYear()}`);
+        if (!startD || isNaN(startD.getTime())) {
+          daysTotal += (o.stages?.length > 35 ? 120 : 90);
+          count++;
+        } else if (!isNaN(shipD.getTime()) && !isNaN(startD.getTime())) {
+          const diff = Math.round(Math.abs(shipD.getTime() - startD.getTime()) / (1000 * 60 * 60 * 24));
+          if (diff > 0) { daysTotal += diff; count++; }
+        }
+      }
+    });
+    return count > 0 ? `${Math.round(daysTotal / count)} days` : "—";
+  }, [activeOrders]);
+
+  const samplingTimeDays = useMemo(() => {
+    let daysTotal = 0, count = 0;
+    activeOrders.forEach(o => {
+      (o.stages || []).filter(s => (s.name || "").toLowerCase().includes("sample") || (s.name || "").toLowerCase().includes("proto")).forEach(s => {
+        const match = (s.day || "").match(/(\d+)\s*-\s*(\d+)/);
+        if (match) {
+          const span = Math.abs(parseInt(match[2], 10) - parseInt(match[1], 10));
+          if (span > 0) { daysTotal += span; count++; }
+        } else if ((s.day || "").match(/(\d+)/)) {
+          daysTotal += 7;
+          count++;
+        }
+      });
+    });
+    return count > 0 ? `${Math.round(daysTotal / count)} days` : "—";
+  }, [activeOrders]);
+
+  const qualityRate = useMemo(() => {
+    let inspPassed = 0, inspTotal = 0;
+    activeOrders.forEach(o => {
+      const insp = o.inspectionData || {};
+      ["inline", "endline", "final"].forEach(sec => {
+        if (insp[sec]) {
+          const i = Number(insp[sec].unitsInspected);
+          const p = Number(insp[sec].unitsPassed);
+          if (!isNaN(i) && i > 0 && !isNaN(p)) { inspTotal += i; inspPassed += p; }
+        }
+      });
+    });
+    if (inspTotal > 0) return `${((inspPassed / inspTotal) * 100).toFixed(1)}%`;
+    const allStages = activeOrders.flatMap(o => o.stages || []);
+    const qStages = allStages.filter(s => s.dept === "Quality" || (s.name || "").toLowerCase().includes("quality"));
+    if (qStages.length > 0) {
+      const passed = qStages.filter(s => s.status === "done" && !s.reason).length;
+      return `${Math.round((passed / qStages.length) * 100)}%`;
+    }
+    return "100%";
+  }, [activeOrders]);
+
   const rows = [
     ["Total orders", total],
     ["On-time rate", total > 0 ? `${Math.round((onTrack / total) * 100)}%` : "0%"],
     ["Total order quantity", totalQty.toLocaleString() + " pcs"],
-    ["Avg order lead time", total > 0 ? "87 days" : "0 days"],
-    ["Avg sampling time", total > 0 ? "24 days" : "0 days"],
-    ["Quality pass rate", total > 0 ? "93.6%" : "0%"],
+    ["Avg order lead time", total > 0 ? leadTimeDays : "0 days"],
+    ["Avg sampling time", total > 0 ? samplingTimeDays : "0 days"],
+    ["Quality pass rate", total > 0 ? qualityRate : "0%"],
   ];
 
   const seasonRows = useMemo(() => {
@@ -4342,7 +4403,7 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
       <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 12, marginBottom: 16 }}>
         {/* Financial Overview */}
         <Card>
-          <CardHeader title="FINANCIAL OVERVIEW" sub="YTD (INR) — entered by Finance team" />
+          <CardHeader title="FINANCIAL OVERVIEW" sub="YTD (INR) — Scanned PO sheets & live orders" />
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
             {[
               ["Order Value", formatInr(totalCalculatedOrderValue), "#0F172A"],

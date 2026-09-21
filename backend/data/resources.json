@@ -229,98 +229,498 @@
         {
           "name": "Order Confirmation & Enquiry",
           "dept": "Program",
-          "status": "in_progress",
-          "assignee": "Unassigned",
+          "status": "done",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 1",
-          "completedAt": null,
           "completedOn": null,
           "updatedAt": "2026-05-12T09:00:00.000Z",
-          "flaggedAt": null
+          "completedAt": "2026-09-21T07:03:36.334Z",
+          "completedBy": "Admin"
         },
         {
           "name": "Yarn/Fabric Booking",
           "dept": "Purchase – Fabric",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "done",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 1",
-          "completedAt": null,
           "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedAt": "2026-09-21T07:03:39.309Z",
+          "completedBy": "Admin",
+          "updatedAt": "2026-09-21T07:03:36.336Z"
         },
         {
           "name": "Work order",
           "dept": "Program",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "done",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 2",
-          "completedAt": null,
           "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedAt": "2026-09-21T07:03:40.822Z",
+          "completedBy": "Admin",
+          "updatedAt": "2026-09-21T07:03:39.310Z"
         },
         {
           "name": "Costing",
           "dept": "Costing",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "done",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 2-3",
-          "completedAt": null,
           "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedAt": "2026-09-21T07:03:42.988Z",
+          "completedBy": "Admin",
+          "updatedAt": "2026-09-21T07:03:40.822Z"
         },
         {
           "name": "CAD release",
           "dept": "CAD",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "done",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 3",
-          "completedAt": null,
           "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedAt": "2026-09-21T07:03:45.445Z",
+          "completedBy": "Admin",
+          "updatedAt": "2026-09-21T07:03:42.988Z"
         },
         {
           "name": "Program Passing",
           "dept": "Program",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "done",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 3-5",
-          "completedAt": null,
           "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedAt": "2026-09-21T07:03:46.246Z",
+          "completedBy": "Admin",
+          "updatedAt": "2026-09-21T07:03:45.445Z"
         },
         {
           "name": "Trims Plan",
           "dept": "Purchase – Trims",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "done",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 4-7",
-          "completedAt": null,
           "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedAt": "2026-09-21T07:03:47.229Z",
+          "completedBy": "Admin",
+          "updatedAt": "2026-09-21T07:03:46.253Z"
         },
         {
           "name": "Lab Dip Approval",
           "dept": "Merchandising",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "in_progress",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 5-10",
-          "completedAt": null,
           "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "updatedAt": "2026-09-21T07:03:47.237Z",
+          "colourways": [
+            {
+              "color": "qqqqqqqqq",
+              "qty": 100,
+              "status": "in_progress",
+              "completedQty": 50,
+              "reason": "",
+              "customReason": "",
+              "logs": [
+                {
+                  "id": "log-1789974286857-1ahi",
+                  "date": "21 Sept 2026",
+                  "time": "12:34",
+                  "qty": 1,
+                  "completedSoFar": 50,
+                  "note": "+1 pcs added"
+                },
+                {
+                  "id": "log-1789974284002-eee1",
+                  "date": "21 Sept 2026",
+                  "time": "12:34",
+                  "qty": -1,
+                  "completedSoFar": 49,
+                  "note": "-1 pcs adjusted"
+                },
+                {
+                  "id": "log-1789974250063-zp84",
+                  "date": "21 Sept 2026",
+                  "time": "12:34",
+                  "qty": 45,
+                  "completedSoFar": 50,
+                  "note": "+45 pcs added"
+                },
+                {
+                  "id": "log-1789974249352-5h9f",
+                  "date": "21 Sept 2026",
+                  "time": "12:34",
+                  "qty": 5,
+                  "completedSoFar": 5,
+                  "note": "+5 pcs added"
+                },
+                {
+                  "id": "log-1789974248626-kzut",
+                  "date": "21 Sept 2026",
+                  "time": "12:34",
+                  "qty": -1,
+                  "completedSoFar": 0,
+                  "note": "-1 pcs adjusted"
+                },
+                {
+                  "id": "log-1789974247170-vrd0",
+                  "date": "21 Sept 2026",
+                  "time": "12:34",
+                  "qty": -9,
+                  "completedSoFar": 1,
+                  "note": "-9 pcs adjusted"
+                },
+                {
+                  "id": "log-1789974246440-xmtb",
+                  "date": "21 Sept 2026",
+                  "time": "12:34",
+                  "qty": -90,
+                  "completedSoFar": 10,
+                  "note": "-90 pcs adjusted"
+                },
+                {
+                  "id": "log-1789974240060-4iok",
+                  "date": "21 Sept 2026",
+                  "time": "12:34",
+                  "qty": 50,
+                  "completedSoFar": 100,
+                  "note": "+50 pcs added"
+                },
+                {
+                  "id": "log-1789974239853-nigu",
+                  "date": "21 Sept 2026",
+                  "time": "12:33",
+                  "qty": 50,
+                  "completedSoFar": 50,
+                  "note": "+50 pcs added"
+                }
+              ]
+            },
+            {
+              "color": "www",
+              "qty": 250,
+              "status": "done",
+              "completedQty": 250,
+              "reason": "",
+              "customReason": "",
+              "logs": [
+                {
+                  "id": "log-1789974372254-addm",
+                  "date": "21 Sept 2026",
+                  "time": "12:36",
+                  "qty": 220,
+                  "completedSoFar": 250,
+                  "note": "Marked Full Done"
+                },
+                {
+                  "id": "log-1789974362590-fhi3",
+                  "date": "21 Sept 2026",
+                  "time": "12:36",
+                  "qty": 1,
+                  "completedSoFar": 30,
+                  "note": "+1 pcs added"
+                },
+                {
+                  "id": "log-1789974362543-sqjb",
+                  "date": "21 Sept 2026",
+                  "time": "12:36",
+                  "qty": 1,
+                  "completedSoFar": 29,
+                  "note": "+1 pcs added"
+                },
+                {
+                  "id": "log-1789974362491-iwl9",
+                  "date": "21 Sept 2026",
+                  "time": "12:36",
+                  "qty": 1,
+                  "completedSoFar": 28,
+                  "note": "+1 pcs added"
+                },
+                {
+                  "id": "log-1789974362442-o10x",
+                  "date": "21 Sept 2026",
+                  "time": "12:36",
+                  "qty": 1,
+                  "completedSoFar": 27,
+                  "note": "+1 pcs added"
+                },
+                {
+                  "id": "log-1789974362392-42cq",
+                  "date": "21 Sept 2026",
+                  "time": "12:36",
+                  "qty": 1,
+                  "completedSoFar": 26,
+                  "note": "+1 pcs added"
+                },
+                {
+                  "id": "log-1789974362340-y2tm",
+                  "date": "21 Sept 2026",
+                  "time": "12:36",
+                  "qty": 1,
+                  "completedSoFar": 25,
+                  "note": "+1 pcs added"
+                },
+                {
+                  "id": "log-1789974362293-3f3k",
+                  "date": "21 Sept 2026",
+                  "time": "12:36",
+                  "qty": 1,
+                  "completedSoFar": 24,
+                  "note": "+1 pcs added"
+                },
+                {
+                  "id": "log-1789974362242-a1te",
+                  "date": "21 Sept 2026",
+                  "time": "12:36",
+                  "qty": 1,
+                  "completedSoFar": 23,
+                  "note": "+1 pcs added"
+                },
+                {
+                  "id": "log-1789974362198-n9aj",
+                  "date": "21 Sept 2026",
+                  "time": "12:36",
+                  "qty": 1,
+                  "completedSoFar": 22,
+                  "note": "+1 pcs added"
+                },
+                {
+                  "id": "log-1789974362141-jgsb",
+                  "date": "21 Sept 2026",
+                  "time": "12:36",
+                  "qty": 1,
+                  "completedSoFar": 21,
+                  "note": "+1 pcs added"
+                },
+                {
+                  "id": "log-1789974362090-8p53",
+                  "date": "21 Sept 2026",
+                  "time": "12:36",
+                  "qty": 1,
+                  "completedSoFar": 20,
+                  "note": "+1 pcs added"
+                },
+                {
+                  "id": "log-1789974362041-al78",
+                  "date": "21 Sept 2026",
+                  "time": "12:36",
+                  "qty": 1,
+                  "completedSoFar": 19,
+                  "note": "+1 pcs added"
+                },
+                {
+                  "id": "log-1789974361991-mw70",
+                  "date": "21 Sept 2026",
+                  "time": "12:36",
+                  "qty": 1,
+                  "completedSoFar": 18,
+                  "note": "+1 pcs added"
+                },
+                {
+                  "id": "log-1789974361941-r07y",
+                  "date": "21 Sept 2026",
+                  "time": "12:36",
+                  "qty": 1,
+                  "completedSoFar": 17,
+                  "note": "+1 pcs added"
+                },
+                {
+                  "id": "log-1789974361891-g54j",
+                  "date": "21 Sept 2026",
+                  "time": "12:36",
+                  "qty": 1,
+                  "completedSoFar": 16,
+                  "note": "+1 pcs added"
+                },
+                {
+                  "id": "log-1789974361843-t5fy",
+                  "date": "21 Sept 2026",
+                  "time": "12:36",
+                  "qty": 1,
+                  "completedSoFar": 15,
+                  "note": "+1 pcs added"
+                },
+                {
+                  "id": "log-1789974361792-4oxv",
+                  "date": "21 Sept 2026",
+                  "time": "12:36",
+                  "qty": 1,
+                  "completedSoFar": 14,
+                  "note": "+1 pcs added"
+                },
+                {
+                  "id": "log-1789974361743-c6wp",
+                  "date": "21 Sept 2026",
+                  "time": "12:36",
+                  "qty": 1,
+                  "completedSoFar": 13,
+                  "note": "+1 pcs added"
+                },
+                {
+                  "id": "log-1789974361691-j1mx",
+                  "date": "21 Sept 2026",
+                  "time": "12:36",
+                  "qty": 1,
+                  "completedSoFar": 12,
+                  "note": "+1 pcs added"
+                },
+                {
+                  "id": "log-1789974361642-omb1",
+                  "date": "21 Sept 2026",
+                  "time": "12:36",
+                  "qty": 1,
+                  "completedSoFar": 11,
+                  "note": "+1 pcs added"
+                },
+                {
+                  "id": "log-1789974361593-q2fo",
+                  "date": "21 Sept 2026",
+                  "time": "12:36",
+                  "qty": 1,
+                  "completedSoFar": 10,
+                  "note": "+1 pcs added"
+                },
+                {
+                  "id": "log-1789974361540-lhh2",
+                  "date": "21 Sept 2026",
+                  "time": "12:36",
+                  "qty": 1,
+                  "completedSoFar": 9,
+                  "note": "+1 pcs added"
+                },
+                {
+                  "id": "log-1789974361492-wu0y",
+                  "date": "21 Sept 2026",
+                  "time": "12:36",
+                  "qty": 1,
+                  "completedSoFar": 8,
+                  "note": "+1 pcs added"
+                },
+                {
+                  "id": "log-1789974361441-lvc8",
+                  "date": "21 Sept 2026",
+                  "time": "12:36",
+                  "qty": 1,
+                  "completedSoFar": 7,
+                  "note": "+1 pcs added"
+                },
+                {
+                  "id": "log-1789974361193-tci4",
+                  "date": "21 Sept 2026",
+                  "time": "12:36",
+                  "qty": 1,
+                  "completedSoFar": 6,
+                  "note": "+1 pcs added"
+                },
+                {
+                  "id": "log-1789974354407-cir5",
+                  "date": "21 Sept 2026",
+                  "time": "12:35",
+                  "qty": 1,
+                  "completedSoFar": 5,
+                  "note": "+1 pcs added"
+                },
+                {
+                  "id": "log-1789974354070-lif3",
+                  "date": "21 Sept 2026",
+                  "time": "12:35",
+                  "qty": 1,
+                  "completedSoFar": 4,
+                  "note": "+1 pcs added"
+                },
+                {
+                  "id": "log-1789974353750-2sbf",
+                  "date": "21 Sept 2026",
+                  "time": "12:35",
+                  "qty": 1,
+                  "completedSoFar": 3,
+                  "note": "+1 pcs added"
+                },
+                {
+                  "id": "log-1789974353382-djge",
+                  "date": "21 Sept 2026",
+                  "time": "12:35",
+                  "qty": 1,
+                  "completedSoFar": 2,
+                  "note": "+1 pcs added"
+                },
+                {
+                  "id": "log-1789974352597-3yn8",
+                  "date": "21 Sept 2026",
+                  "time": "12:35",
+                  "qty": 1,
+                  "completedSoFar": 1,
+                  "note": "+1 pcs added"
+                }
+              ]
+            },
+            {
+              "color": "eee",
+              "qty": 300,
+              "status": "in_progress",
+              "completedQty": 100,
+              "reason": "",
+              "customReason": "",
+              "logs": [
+                {
+                  "id": "log-1789974395387-0hkm",
+                  "date": "21 Sept 2026",
+                  "time": "12:36",
+                  "qty": 90,
+                  "completedSoFar": 100,
+                  "note": "+90 pcs added"
+                },
+                {
+                  "id": "log-1789974395088-a4t0",
+                  "date": "21 Sept 2026",
+                  "time": "12:36",
+                  "qty": 9,
+                  "completedSoFar": 10,
+                  "note": "+9 pcs added"
+                },
+                {
+                  "id": "log-1789974393327-hrpn",
+                  "date": "21 Sept 2026",
+                  "time": "12:36",
+                  "qty": 1,
+                  "completedSoFar": 1,
+                  "note": "+1 pcs added"
+                }
+              ]
+            },
+            {
+              "color": "rrrr",
+              "qty": 122,
+              "status": "in_progress",
+              "completedQty": 22,
+              "reason": "",
+              "customReason": "",
+              "logs": [
+                {
+                  "id": "log-1789974440330-3mya",
+                  "date": "21 Sept 2026",
+                  "time": "12:37",
+                  "qty": 20,
+                  "completedSoFar": 22,
+                  "note": "+20 pcs added"
+                },
+                {
+                  "id": "log-1789974440171-x377",
+                  "date": "21 Sept 2026",
+                  "time": "12:37",
+                  "qty": 2,
+                  "completedSoFar": 2,
+                  "note": "+2 pcs added"
+                }
+              ]
+            }
+          ]
         },
         {
           "name": "Yarn to Knitting",
@@ -329,34 +729,159 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 5-10",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Artwork Approval",
           "dept": "Merchandising",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "in_progress",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 1-20",
-          "completedAt": null,
           "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "updatedAt": "2026-09-21T07:21:03.201Z",
+          "updatedBy": "Admin",
+          "colourways": [
+            {
+              "color": "qqqqqqqqq",
+              "qty": 100,
+              "status": "done",
+              "completedQty": 100,
+              "reason": "",
+              "customReason": "",
+              "logs": [
+                {
+                  "id": "log-1789975384773-3qyt",
+                  "date": "21 Sept 2026",
+                  "time": "12:53",
+                  "qty": 10,
+                  "completedSoFar": 100,
+                  "note": "+10 pcs added"
+                },
+                {
+                  "id": "log-1789975349669-fuyr",
+                  "date": "21 Sept 2026",
+                  "time": "12:52",
+                  "qty": 40,
+                  "completedSoFar": 90,
+                  "note": "+40 pcs added"
+                },
+                {
+                  "id": "log-1789975263198-5vo0",
+                  "date": "21 Sept 2026",
+                  "time": "12:51",
+                  "qty": 50,
+                  "completedSoFar": 50,
+                  "note": "+50 pcs added"
+                }
+              ]
+            },
+            {
+              "color": "www",
+              "qty": 250,
+              "status": "in_progress",
+              "completedQty": 100,
+              "reason": "",
+              "customReason": "",
+              "logs": [
+                {
+                  "id": "log-1789975328924-zu9k",
+                  "date": "21 Sept 2026",
+                  "time": "12:52",
+                  "qty": 100,
+                  "completedSoFar": 100,
+                  "note": "+100 pcs added"
+                }
+              ]
+            },
+            {
+              "color": "eee",
+              "qty": 300,
+              "status": "in_progress",
+              "completedQty": 100,
+              "reason": "",
+              "customReason": "",
+              "logs": [
+                {
+                  "id": "log-1789982343656-2ldi",
+                  "date": "21 Sept 2026",
+                  "time": "14:49",
+                  "qty": 100,
+                  "completedSoFar": 100,
+                  "note": "+100 pcs added"
+                }
+              ]
+            },
+            {
+              "color": "rrrr",
+              "qty": 122,
+              "status": "pending",
+              "completedQty": 0,
+              "reason": "",
+              "customReason": "",
+              "logs": []
+            }
+          ]
         },
         {
           "name": "Dyeing",
           "dept": "Purchase – Fabric",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "in_progress",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 11-25",
-          "completedAt": null,
           "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedAt": null,
+          "completedBy": null,
+          "updatedAt": "2026-09-21T10:31:59.284Z",
+          "updatedBy": "Admin",
+          "colourways": [
+            {
+              "color": "qqqqqqqqq",
+              "qty": 100,
+              "status": "done",
+              "completedQty": 100,
+              "reason": "",
+              "customReason": "",
+              "logs": [
+                {
+                  "id": "log-1789986719276-0vbw",
+                  "date": "21 Sept 2026",
+                  "time": "16:01",
+                  "qty": 100,
+                  "completedSoFar": 100,
+                  "note": "+100 pcs added"
+                }
+              ]
+            },
+            {
+              "color": "www",
+              "qty": 250,
+              "status": "pending",
+              "completedQty": 0,
+              "reason": "",
+              "customReason": "",
+              "logs": []
+            },
+            {
+              "color": "eee",
+              "qty": 300,
+              "status": "pending",
+              "completedQty": 0,
+              "reason": "",
+              "customReason": "",
+              "logs": []
+            },
+            {
+              "color": "rrrr",
+              "qty": 122,
+              "status": "pending",
+              "completedQty": 0,
+              "reason": "",
+              "customReason": "",
+              "logs": []
+            }
+          ]
         },
         {
           "name": "Sewing Trims IH",
@@ -365,10 +890,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 15",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Packing Trims IH",
@@ -377,10 +899,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 25",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Fabric IH",
@@ -389,10 +908,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 25",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Lot Card Approval",
@@ -401,10 +917,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 25-30",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "PP Sample",
@@ -413,10 +926,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 25-35",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "PP Meeting",
@@ -425,10 +935,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 30-33",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "PP Approval",
@@ -437,10 +944,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 35-47",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Shrinkage closure",
@@ -449,10 +953,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 33-35",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Size Set Sample",
@@ -461,10 +962,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 35-38",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Size Set approval",
@@ -473,10 +971,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 38-40",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Cutting",
@@ -485,10 +980,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 37-42",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "VAP Send",
@@ -498,10 +990,7 @@
           "reason": null,
           "planned": "Day 42-44",
           "supplier": "Elite Print & Embro",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "TOP Sample Sent",
@@ -510,10 +999,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 50-55",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Shipment Booking",
@@ -522,10 +1008,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 65-70",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Testing",
@@ -534,10 +1017,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 50-55",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "TOP Sample Approval",
@@ -546,10 +1026,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 72",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Print / Emb / Hotfix Complete",
@@ -559,10 +1036,7 @@
           "reason": null,
           "planned": "Day 45-60",
           "supplier": "Elite Print & Embro",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Reshape & Feeding",
@@ -571,10 +1045,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 60-62",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Production",
@@ -583,10 +1054,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 63-78",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "CIP Start",
@@ -595,10 +1063,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 78-85",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "FI",
@@ -607,10 +1072,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 86",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Garment OCR",
@@ -619,10 +1081,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 89",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "EX-FTY",
@@ -631,10 +1090,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 90",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         }
       ],
       "preProd": {
@@ -645,10 +1101,14 @@
           "approvedAt": null
         },
         "poSheet": {
-          "values": {},
-          "status": "draft",
-          "approvedBy": null,
-          "approvedAt": null
+          "values": {
+            "poNumber": "0OT",
+            "poQty": 4470,
+            "orderValue": 725900
+          },
+          "status": "approved",
+          "approvedBy": "Managing Director",
+          "approvedAt": "21/09/2026"
         },
         "programSheet": {
           "values": {},
@@ -715,13 +1175,14 @@
         }
       ],
       "risk": "low",
-      "status": "On Track",
+      "status": "At Risk",
       "completed": false,
       "isDeleted": false,
       "completedAt": null,
       "deletedAt": null,
       "createdAt": "2026-09-19T07:00:05.988Z",
-      "orderId": "111"
+      "orderId": "111",
+      "resource": "orders"
     },
     {
       "template": "90",
@@ -959,7 +1420,6 @@
           "completedAt": "2026-09-18T16:18:37.068Z",
           "completedOn": null,
           "updatedAt": "2026-05-12T09:00:00.000Z",
-          "flaggedAt": null,
           "completedBy": "Admin"
         },
         {
@@ -971,8 +1431,6 @@
           "planned": "Day 1",
           "completedAt": "2026-09-18T16:18:37.068Z",
           "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null,
           "completedBy": "Admin"
         },
         {
@@ -985,7 +1443,6 @@
           "completedAt": "2026-09-14T05:25:10.508Z",
           "completedOn": null,
           "updatedAt": "2026-09-14T05:25:08.536Z",
-          "flaggedAt": null,
           "updatedBy": "www",
           "completedBy": "www"
         },
@@ -999,7 +1456,6 @@
           "completedAt": "2026-09-18T16:18:37.068Z",
           "completedOn": null,
           "updatedAt": "2026-09-14T05:25:10.508Z",
-          "flaggedAt": null,
           "completedBy": "Admin"
         },
         {
@@ -1012,299 +1468,856 @@
           "completedAt": "2026-09-19T06:35:20.356Z",
           "completedOn": null,
           "updatedAt": "2026-09-19T06:35:17.325Z",
-          "flaggedAt": null,
           "completedBy": "Admin",
           "updatedBy": "Admin"
         },
         {
           "name": "Program Passing",
           "dept": "Program",
-          "status": "in_progress",
+          "status": "done",
           "assignee": "Assigned",
           "reason": null,
           "planned": "Day 3-5",
-          "completedAt": null,
+          "completedAt": "2026-09-21T08:32:00.089Z",
           "completedOn": null,
           "updatedAt": "2026-09-19T06:35:20.383Z",
-          "flaggedAt": null
+          "completedBy": "Admin"
         },
         {
           "name": "Trims Plan",
           "dept": "Purchase – Trims",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "done",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 4-7",
-          "completedAt": null,
+          "completedAt": "2026-09-21T08:32:01.697Z",
           "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "updatedAt": "2026-09-21T08:32:00.091Z",
+          "completedBy": "Admin"
         },
         {
           "name": "Lab Dip Approval",
           "dept": "Merchandising",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "done",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 5-10",
-          "completedAt": null,
+          "completedAt": "2026-09-21T08:32:05.593Z",
           "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "updatedAt": "2026-09-21T08:32:01.697Z",
+          "completedBy": "Admin",
+          "colourways": [
+            {
+              "color": "red",
+              "qty": 500,
+              "status": "done",
+              "completedQty": 500,
+              "reason": "",
+              "customReason": "",
+              "logs": [
+                {
+                  "id": "log-1789979525587-9tal",
+                  "date": "21 Sept 2026",
+                  "time": "14:02",
+                  "qty": 500,
+                  "completedSoFar": 500,
+                  "note": "Mark All Done (+ 500 pcs)"
+                }
+              ]
+            },
+            {
+              "color": "black",
+              "qty": 250,
+              "status": "done",
+              "completedQty": 250,
+              "reason": "",
+              "customReason": "",
+              "logs": [
+                {
+                  "id": "log-1789979525590-v1yn",
+                  "date": "21 Sept 2026",
+                  "time": "14:02",
+                  "qty": 250,
+                  "completedSoFar": 250,
+                  "note": "Mark All Done (+ 250 pcs)"
+                }
+              ]
+            },
+            {
+              "color": "blue",
+              "qty": 250,
+              "status": "done",
+              "completedQty": 250,
+              "reason": "",
+              "customReason": "",
+              "logs": [
+                {
+                  "id": "log-1789979525591-xpb7",
+                  "date": "21 Sept 2026",
+                  "time": "14:02",
+                  "qty": 250,
+                  "completedSoFar": 250,
+                  "note": "Mark All Done (+ 250 pcs)"
+                }
+              ]
+            }
+          ]
         },
         {
           "name": "Yarn to Knitting",
           "dept": "Purchase – Fabric",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "done",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 5-10",
-          "completedAt": null,
+          "completedAt": "2026-09-21T08:32:12.040Z",
           "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "updatedAt": "2026-09-21T08:32:05.594Z",
+          "completedBy": "Admin"
         },
         {
           "name": "Artwork Approval",
           "dept": "Merchandising",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "done",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 1-20",
-          "completedAt": null,
+          "completedAt": "2026-09-21T08:32:15.193Z",
           "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "updatedAt": "2026-09-21T08:32:12.040Z",
+          "completedBy": "Admin",
+          "colourways": [
+            {
+              "color": "red",
+              "qty": 500,
+              "status": "done",
+              "completedQty": 500,
+              "reason": "",
+              "customReason": "",
+              "logs": [
+                {
+                  "id": "log-1789979535190-k41g",
+                  "date": "21 Sept 2026",
+                  "time": "14:02",
+                  "qty": 500,
+                  "completedSoFar": 500,
+                  "note": "Mark All Done (+ 500 pcs)"
+                }
+              ]
+            },
+            {
+              "color": "black",
+              "qty": 250,
+              "status": "done",
+              "completedQty": 250,
+              "reason": "",
+              "customReason": "",
+              "logs": [
+                {
+                  "id": "log-1789979535192-4yn0",
+                  "date": "21 Sept 2026",
+                  "time": "14:02",
+                  "qty": 250,
+                  "completedSoFar": 250,
+                  "note": "Mark All Done (+ 250 pcs)"
+                }
+              ]
+            },
+            {
+              "color": "blue",
+              "qty": 250,
+              "status": "done",
+              "completedQty": 250,
+              "reason": "",
+              "customReason": "",
+              "logs": [
+                {
+                  "id": "log-1789979535193-qkmz",
+                  "date": "21 Sept 2026",
+                  "time": "14:02",
+                  "qty": 250,
+                  "completedSoFar": 250,
+                  "note": "Mark All Done (+ 250 pcs)"
+                }
+              ]
+            }
+          ]
         },
         {
           "name": "Dyeing",
           "dept": "Purchase – Fabric",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "done",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 11-25",
-          "completedAt": null,
+          "completedAt": "2026-09-21T08:32:21.618Z",
           "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "updatedAt": "2026-09-21T08:32:15.193Z",
+          "completedBy": "Admin",
+          "colourways": [
+            {
+              "color": "red",
+              "qty": 500,
+              "status": "done",
+              "completedQty": 500,
+              "reason": "",
+              "customReason": "",
+              "logs": [
+                {
+                  "id": "log-1789979541617-0c04",
+                  "date": "21 Sept 2026",
+                  "time": "14:02",
+                  "qty": 500,
+                  "completedSoFar": 500,
+                  "note": "Mark All Done (+ 500 pcs)"
+                }
+              ]
+            },
+            {
+              "color": "black",
+              "qty": 250,
+              "status": "done",
+              "completedQty": 250,
+              "reason": "",
+              "customReason": "",
+              "logs": [
+                {
+                  "id": "log-1789979541617-kejd",
+                  "date": "21 Sept 2026",
+                  "time": "14:02",
+                  "qty": 250,
+                  "completedSoFar": 250,
+                  "note": "Mark All Done (+ 250 pcs)"
+                }
+              ]
+            },
+            {
+              "color": "blue",
+              "qty": 250,
+              "status": "done",
+              "completedQty": 250,
+              "reason": "",
+              "customReason": "",
+              "logs": [
+                {
+                  "id": "log-1789979541617-qpt1",
+                  "date": "21 Sept 2026",
+                  "time": "14:02",
+                  "qty": 250,
+                  "completedSoFar": 250,
+                  "note": "Mark All Done (+ 250 pcs)"
+                }
+              ]
+            }
+          ]
         },
         {
           "name": "Sewing Trims IH",
           "dept": "Purchase – Trims",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "done",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 15",
-          "completedAt": null,
+          "completedAt": "2026-09-21T08:32:24.104Z",
           "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "updatedAt": "2026-09-21T08:32:21.618Z",
+          "completedBy": "Admin"
         },
         {
           "name": "Packing Trims IH",
           "dept": "Purchase – Trims",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "done",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 25",
-          "completedAt": null,
+          "completedAt": "2026-09-21T08:32:25.360Z",
           "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "updatedAt": "2026-09-21T08:32:24.104Z",
+          "completedBy": "Admin"
         },
         {
           "name": "Fabric IH",
           "dept": "Store",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "done",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 25",
-          "completedAt": null,
+          "completedAt": "2026-09-21T08:32:27.793Z",
           "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "updatedAt": "2026-09-21T08:32:25.360Z",
+          "completedBy": "Admin",
+          "colourways": [
+            {
+              "color": "red",
+              "qty": 500,
+              "status": "done",
+              "completedQty": 500,
+              "reason": "",
+              "customReason": "",
+              "logs": [
+                {
+                  "id": "log-1789979547792-j8gy",
+                  "date": "21 Sept 2026",
+                  "time": "14:02",
+                  "qty": 500,
+                  "completedSoFar": 500,
+                  "note": "Mark All Done (+ 500 pcs)"
+                }
+              ]
+            },
+            {
+              "color": "black",
+              "qty": 250,
+              "status": "done",
+              "completedQty": 250,
+              "reason": "",
+              "customReason": "",
+              "logs": [
+                {
+                  "id": "log-1789979547792-49xw",
+                  "date": "21 Sept 2026",
+                  "time": "14:02",
+                  "qty": 250,
+                  "completedSoFar": 250,
+                  "note": "Mark All Done (+ 250 pcs)"
+                }
+              ]
+            },
+            {
+              "color": "blue",
+              "qty": 250,
+              "status": "done",
+              "completedQty": 250,
+              "reason": "",
+              "customReason": "",
+              "logs": [
+                {
+                  "id": "log-1789979547793-62i9",
+                  "date": "21 Sept 2026",
+                  "time": "14:02",
+                  "qty": 250,
+                  "completedSoFar": 250,
+                  "note": "Mark All Done (+ 250 pcs)"
+                }
+              ]
+            }
+          ]
         },
         {
           "name": "Lot Card Approval",
           "dept": "Quality",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "done",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 25-30",
-          "completedAt": null,
+          "completedAt": "2026-09-21T08:32:38.225Z",
           "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "updatedAt": "2026-09-21T08:32:27.793Z",
+          "completedBy": "Admin",
+          "colourways": [
+            {
+              "color": "red",
+              "qty": 500,
+              "status": "done",
+              "completedQty": 500,
+              "reason": "",
+              "customReason": "",
+              "logs": [
+                {
+                  "id": "log-1789979558224-7z49",
+                  "date": "21 Sept 2026",
+                  "time": "14:02",
+                  "qty": 500,
+                  "completedSoFar": 500,
+                  "note": "Mark All Done (+ 500 pcs)"
+                }
+              ]
+            },
+            {
+              "color": "black",
+              "qty": 250,
+              "status": "done",
+              "completedQty": 250,
+              "reason": "",
+              "customReason": "",
+              "logs": [
+                {
+                  "id": "log-1789979558225-6k1f",
+                  "date": "21 Sept 2026",
+                  "time": "14:02",
+                  "qty": 250,
+                  "completedSoFar": 250,
+                  "note": "Mark All Done (+ 250 pcs)"
+                }
+              ]
+            },
+            {
+              "color": "blue",
+              "qty": 250,
+              "status": "done",
+              "completedQty": 250,
+              "reason": "",
+              "customReason": "",
+              "logs": [
+                {
+                  "id": "log-1789979558225-h1oo",
+                  "date": "21 Sept 2026",
+                  "time": "14:02",
+                  "qty": 250,
+                  "completedSoFar": 250,
+                  "note": "Mark All Done (+ 250 pcs)"
+                }
+              ]
+            }
+          ]
         },
         {
           "name": "PP Sample",
           "dept": "Sample",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "done",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 25-35",
-          "completedAt": null,
+          "completedAt": "2026-09-21T08:32:40.760Z",
           "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "updatedAt": "2026-09-21T08:32:38.225Z",
+          "completedBy": "Admin"
         },
         {
           "name": "PP Meeting",
           "dept": "Planning",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "done",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 30-33",
-          "completedAt": null,
+          "completedAt": "2026-09-21T08:32:42.880Z",
           "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "updatedAt": "2026-09-21T08:32:40.760Z",
+          "completedBy": "Admin"
         },
         {
           "name": "PP Approval",
           "dept": "Merchandising",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "done",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 35-47",
-          "completedAt": null,
+          "completedAt": "2026-09-21T08:32:43.696Z",
           "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "updatedAt": "2026-09-21T08:32:42.880Z",
+          "completedBy": "Admin"
         },
         {
           "name": "Shrinkage closure",
           "dept": "Quality",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "done",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 33-35",
-          "completedAt": null,
+          "completedAt": "2026-09-21T08:32:46.603Z",
           "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "updatedAt": "2026-09-21T08:32:43.705Z",
+          "completedBy": "Admin",
+          "colourways": [
+            {
+              "color": "red",
+              "qty": 500,
+              "status": "done",
+              "completedQty": 500,
+              "reason": "",
+              "customReason": "",
+              "logs": [
+                {
+                  "id": "log-1789979566601-4p7n",
+                  "date": "21 Sept 2026",
+                  "time": "14:02",
+                  "qty": 500,
+                  "completedSoFar": 500,
+                  "note": "Mark All Done (+ 500 pcs)"
+                }
+              ]
+            },
+            {
+              "color": "black",
+              "qty": 250,
+              "status": "done",
+              "completedQty": 250,
+              "reason": "",
+              "customReason": "",
+              "logs": [
+                {
+                  "id": "log-1789979566602-qcft",
+                  "date": "21 Sept 2026",
+                  "time": "14:02",
+                  "qty": 250,
+                  "completedSoFar": 250,
+                  "note": "Mark All Done (+ 250 pcs)"
+                }
+              ]
+            },
+            {
+              "color": "blue",
+              "qty": 250,
+              "status": "done",
+              "completedQty": 250,
+              "reason": "",
+              "customReason": "",
+              "logs": [
+                {
+                  "id": "log-1789979566602-20uy",
+                  "date": "21 Sept 2026",
+                  "time": "14:02",
+                  "qty": 250,
+                  "completedSoFar": 250,
+                  "note": "Mark All Done (+ 250 pcs)"
+                }
+              ]
+            }
+          ]
         },
         {
           "name": "Size Set Sample",
           "dept": "Sample",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "done",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 35-38",
-          "completedAt": null,
+          "completedAt": "2026-09-21T08:32:49.144Z",
           "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "updatedAt": "2026-09-21T08:32:46.603Z",
+          "completedBy": "Admin"
         },
         {
           "name": "Size Set approval",
           "dept": "Sample",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "done",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 38-40",
-          "completedAt": null,
+          "completedAt": "2026-09-21T08:32:55.009Z",
           "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "updatedAt": "2026-09-21T08:32:49.144Z",
+          "completedBy": "Admin"
         },
         {
           "name": "Cutting",
           "dept": "Cutting",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "done",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 37-42",
-          "completedAt": null,
+          "completedAt": "2026-09-21T08:32:58.338Z",
           "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "updatedAt": "2026-09-21T08:32:55.009Z",
+          "completedBy": "Admin",
+          "colourways": [
+            {
+              "color": "red",
+              "qty": 500,
+              "status": "done",
+              "completedQty": 500,
+              "reason": "",
+              "customReason": "",
+              "logs": [
+                {
+                  "id": "log-1789979578337-169v",
+                  "date": "21 Sept 2026",
+                  "time": "14:02",
+                  "qty": 500,
+                  "completedSoFar": 500,
+                  "note": "Mark All Done (+ 500 pcs)"
+                }
+              ]
+            },
+            {
+              "color": "black",
+              "qty": 250,
+              "status": "done",
+              "completedQty": 250,
+              "reason": "",
+              "customReason": "",
+              "logs": [
+                {
+                  "id": "log-1789979578337-sf55",
+                  "date": "21 Sept 2026",
+                  "time": "14:02",
+                  "qty": 250,
+                  "completedSoFar": 250,
+                  "note": "Mark All Done (+ 250 pcs)"
+                }
+              ]
+            },
+            {
+              "color": "blue",
+              "qty": 250,
+              "status": "done",
+              "completedQty": 250,
+              "reason": "",
+              "customReason": "",
+              "logs": [
+                {
+                  "id": "log-1789979578337-9cz7",
+                  "date": "21 Sept 2026",
+                  "time": "14:02",
+                  "qty": 250,
+                  "completedSoFar": 250,
+                  "note": "Mark All Done (+ 250 pcs)"
+                }
+              ]
+            }
+          ]
         },
         {
           "name": "VAP Send",
           "dept": "VAP",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "done",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 42-44",
           "supplier": "Elite Print & Embro",
-          "completedAt": null,
+          "completedAt": "2026-09-21T08:33:03.737Z",
           "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "updatedAt": "2026-09-21T08:32:58.338Z",
+          "completedBy": "Admin",
+          "colourways": [
+            {
+              "color": "red",
+              "qty": 500,
+              "status": "done",
+              "completedQty": 500,
+              "reason": "",
+              "customReason": "",
+              "logs": [
+                {
+                  "id": "log-1789979583736-8d8r",
+                  "date": "21 Sept 2026",
+                  "time": "14:03",
+                  "qty": 500,
+                  "completedSoFar": 500,
+                  "note": "Mark All Done (+ 500 pcs)"
+                }
+              ]
+            },
+            {
+              "color": "black",
+              "qty": 250,
+              "status": "done",
+              "completedQty": 250,
+              "reason": "",
+              "customReason": "",
+              "logs": [
+                {
+                  "id": "log-1789979583736-1r0y",
+                  "date": "21 Sept 2026",
+                  "time": "14:03",
+                  "qty": 250,
+                  "completedSoFar": 250,
+                  "note": "Mark All Done (+ 250 pcs)"
+                }
+              ]
+            },
+            {
+              "color": "blue",
+              "qty": 250,
+              "status": "done",
+              "completedQty": 250,
+              "reason": "",
+              "customReason": "",
+              "logs": [
+                {
+                  "id": "log-1789979583736-2krd",
+                  "date": "21 Sept 2026",
+                  "time": "14:03",
+                  "qty": 250,
+                  "completedSoFar": 250,
+                  "note": "Mark All Done (+ 250 pcs)"
+                }
+              ]
+            }
+          ]
         },
         {
           "name": "TOP Sample Sent",
           "dept": "Sample",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "done",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 50-55",
-          "completedAt": null,
+          "completedAt": "2026-09-21T08:33:06.952Z",
           "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "updatedAt": "2026-09-21T08:33:03.737Z",
+          "completedBy": "Admin"
         },
         {
           "name": "Shipment Booking",
           "dept": "Logistics & Documentation",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "done",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 65-70",
-          "completedAt": null,
+          "completedAt": "2026-09-21T08:33:08.136Z",
           "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "updatedAt": "2026-09-21T08:33:06.952Z",
+          "completedBy": "Admin"
         },
         {
           "name": "Testing",
           "dept": "Testing",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "done",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 50-55",
-          "completedAt": null,
+          "completedAt": "2026-09-21T08:33:10.672Z",
           "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "updatedAt": "2026-09-21T08:33:08.136Z",
+          "completedBy": "Admin",
+          "colourways": [
+            {
+              "color": "red",
+              "qty": 500,
+              "status": "done",
+              "completedQty": 500,
+              "reason": "",
+              "customReason": "",
+              "logs": [
+                {
+                  "id": "log-1789979590671-jfza",
+                  "date": "21 Sept 2026",
+                  "time": "14:03",
+                  "qty": 500,
+                  "completedSoFar": 500,
+                  "note": "Mark All Done (+ 500 pcs)"
+                }
+              ]
+            },
+            {
+              "color": "black",
+              "qty": 250,
+              "status": "done",
+              "completedQty": 250,
+              "reason": "",
+              "customReason": "",
+              "logs": [
+                {
+                  "id": "log-1789979590672-8kkk",
+                  "date": "21 Sept 2026",
+                  "time": "14:03",
+                  "qty": 250,
+                  "completedSoFar": 250,
+                  "note": "Mark All Done (+ 250 pcs)"
+                }
+              ]
+            },
+            {
+              "color": "blue",
+              "qty": 250,
+              "status": "done",
+              "completedQty": 250,
+              "reason": "",
+              "customReason": "",
+              "logs": [
+                {
+                  "id": "log-1789979590672-j8g2",
+                  "date": "21 Sept 2026",
+                  "time": "14:03",
+                  "qty": 250,
+                  "completedSoFar": 250,
+                  "note": "Mark All Done (+ 250 pcs)"
+                }
+              ]
+            }
+          ]
         },
         {
           "name": "TOP Sample Approval",
           "dept": "Merchandising",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "done",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 72",
-          "completedAt": null,
+          "completedAt": "2026-09-21T08:33:15.728Z",
           "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "updatedAt": "2026-09-21T08:33:10.672Z",
+          "completedBy": "Admin"
         },
         {
           "name": "Print / Emb / Hotfix Complete",
           "dept": "VAP",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "done",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 45-60",
           "supplier": "Elite Print & Embro",
-          "completedAt": null,
+          "completedAt": "2026-09-21T08:33:18.884Z",
           "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "updatedAt": "2026-09-21T08:33:15.728Z",
+          "completedBy": "Admin",
+          "colourways": [
+            {
+              "color": "red",
+              "qty": 500,
+              "status": "done",
+              "completedQty": 500,
+              "reason": "",
+              "customReason": "",
+              "logs": [
+                {
+                  "id": "log-1789979598880-jcbv",
+                  "date": "21 Sept 2026",
+                  "time": "14:03",
+                  "qty": 500,
+                  "completedSoFar": 500,
+                  "note": "Mark All Done (+ 500 pcs)"
+                }
+              ]
+            },
+            {
+              "color": "black",
+              "qty": 250,
+              "status": "done",
+              "completedQty": 250,
+              "reason": "",
+              "customReason": "",
+              "logs": [
+                {
+                  "id": "log-1789979598882-29j3",
+                  "date": "21 Sept 2026",
+                  "time": "14:03",
+                  "qty": 250,
+                  "completedSoFar": 250,
+                  "note": "Mark All Done (+ 250 pcs)"
+                }
+              ]
+            },
+            {
+              "color": "blue",
+              "qty": 250,
+              "status": "done",
+              "completedQty": 250,
+              "reason": "",
+              "customReason": "",
+              "logs": [
+                {
+                  "id": "log-1789979598883-jybb",
+                  "date": "21 Sept 2026",
+                  "time": "14:03",
+                  "qty": 250,
+                  "completedSoFar": 250,
+                  "note": "Mark All Done (+ 250 pcs)"
+                }
+              ]
+            }
+          ]
         },
         {
           "name": "Reshape & Feeding",
           "dept": "Production",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "in_progress",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 60-62",
-          "completedAt": null,
           "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "updatedAt": "2026-09-21T08:33:18.884Z"
         },
         {
           "name": "Production",
@@ -1313,10 +2326,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 63-78",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "CIP Start",
@@ -1325,10 +2335,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 78-85",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "FI",
@@ -1337,10 +2344,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 86",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Garment OCR",
@@ -1349,10 +2353,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 89",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "EX-FTY",
@@ -1361,10 +2362,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 90",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         }
       ],
       "preProd": {
@@ -1700,7 +2698,6 @@
           "completedAt": "2026-09-18T16:18:37.068Z",
           "completedOn": null,
           "updatedAt": "2026-05-12T09:00:00.000Z",
-          "flaggedAt": null,
           "completedBy": "Admin"
         },
         {
@@ -1713,7 +2710,6 @@
           "completedAt": "2026-09-19T06:37:05.074Z",
           "completedOn": null,
           "updatedAt": "2026-09-19T06:37:03.803Z",
-          "flaggedAt": null,
           "completedBy": "Admin",
           "updatedBy": "Admin"
         },
@@ -1724,10 +2720,8 @@
           "assignee": "Assigned",
           "reason": null,
           "planned": "Day 2",
-          "completedAt": null,
           "completedOn": null,
-          "updatedAt": "2026-09-19T06:37:05.080Z",
-          "flaggedAt": null
+          "updatedAt": "2026-09-19T06:37:05.080Z"
         },
         {
           "name": "Costing",
@@ -1736,10 +2730,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 2-3",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "CAD release",
@@ -1748,10 +2739,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 3",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Program Passing",
@@ -1763,7 +2751,6 @@
           "completedAt": "2026-09-19T06:37:07.981Z",
           "completedOn": null,
           "updatedAt": "2026-09-19T06:37:07.672Z",
-          "flaggedAt": null,
           "completedBy": "Admin",
           "updatedBy": "Admin"
         },
@@ -1774,10 +2761,8 @@
           "assignee": "Assigned",
           "reason": null,
           "planned": "Day 4-7",
-          "completedAt": null,
           "completedOn": null,
-          "updatedAt": "2026-09-19T06:37:07.989Z",
-          "flaggedAt": null
+          "updatedAt": "2026-09-19T06:37:07.989Z"
         },
         {
           "name": "Lab Dip Approval",
@@ -1786,10 +2771,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 5-10",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Yarn to Knitting",
@@ -1798,10 +2780,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 5-10",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Artwork Approval",
@@ -1810,10 +2789,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 1-20",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Dyeing",
@@ -1822,10 +2798,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 11-25",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Sewing Trims IH",
@@ -1834,10 +2807,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 15",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Packing Trims IH",
@@ -1846,10 +2816,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 25",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Fabric IH",
@@ -1858,10 +2825,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 25",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Lot Card Approval",
@@ -1870,10 +2834,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 25-30",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "PP Sample",
@@ -1882,10 +2843,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 25-35",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "PP Meeting",
@@ -1894,10 +2852,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 30-33",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "PP Approval",
@@ -1906,10 +2861,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 35-47",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Shrinkage closure",
@@ -1918,10 +2870,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 33-35",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Size Set Sample",
@@ -1930,10 +2879,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 35-38",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Size Set approval",
@@ -1942,10 +2888,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 38-40",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Cutting",
@@ -1954,10 +2897,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 37-42",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "VAP Send",
@@ -1967,10 +2907,7 @@
           "reason": null,
           "planned": "Day 42-44",
           "supplier": "Elite Print & Embro",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "TOP Sample Sent",
@@ -1979,10 +2916,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 50-55",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Shipment Booking",
@@ -1991,10 +2925,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 65-70",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Testing",
@@ -2003,10 +2934,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 50-55",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "TOP Sample Approval",
@@ -2015,10 +2943,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 72",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Print / Emb / Hotfix Complete",
@@ -2028,10 +2953,7 @@
           "reason": null,
           "planned": "Day 45-60",
           "supplier": "Elite Print & Embro",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Reshape & Feeding",
@@ -2040,10 +2962,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 60-62",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Production",
@@ -2052,10 +2971,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 63-78",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "CIP Start",
@@ -2064,10 +2980,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 78-85",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "FI",
@@ -2076,10 +2989,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 86",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Garment OCR",
@@ -2088,10 +2998,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 89",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "EX-FTY",
@@ -2100,10 +3007,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 90",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         }
       ],
       "preProd": {
@@ -2115,13 +3019,13 @@
         },
         "poSheet": {
           "values": {
-            "poNumber": "0OT",
-            "poQty": 4470,
-            "orderValue": 725900
+            "poNumber": "Style",
+            "poQty": 6150,
+            "orderValue": 1001
           },
-          "status": "draft",
-          "approvedBy": null,
-          "approvedAt": null
+          "status": "approved",
+          "approvedBy": "Managing Director",
+          "approvedAt": "21/09/2026"
         },
         "programSheet": {
           "values": {},
@@ -2405,8 +3309,7 @@
           "planned": "Day 1",
           "completedAt": "2026-09-18T16:18:37.068Z",
           "completedOn": null,
-          "updatedAt": "2026-05-12T09:00:00.000Z",
-          "flaggedAt": null
+          "updatedAt": "2026-05-12T09:00:00.000Z"
         },
         {
           "name": "Yarn/Fabric Booking",
@@ -2415,10 +3318,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 1",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Work order",
@@ -2427,10 +3327,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 2",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Costing",
@@ -2439,10 +3336,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 2-3",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "CAD release",
@@ -2451,10 +3345,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 3",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Program Passing",
@@ -2463,10 +3354,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 3-5",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Trims Plan",
@@ -2475,10 +3363,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 4-7",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Lab Dip Approval",
@@ -2487,10 +3372,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 5-10",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Yarn to Knitting",
@@ -2499,10 +3381,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 5-10",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Artwork Approval",
@@ -2511,10 +3390,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 1-20",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Dyeing",
@@ -2523,10 +3399,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 11-25",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Sewing Trims IH",
@@ -2535,10 +3408,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 15",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Packing Trims IH",
@@ -2547,10 +3417,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 25",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Fabric IH",
@@ -2559,10 +3426,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 25",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Lot Card Approval",
@@ -2571,10 +3435,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 25-30",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "PP Sample",
@@ -2583,10 +3444,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 25-35",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "PP Meeting",
@@ -2595,10 +3453,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 30-33",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "PP Approval",
@@ -2607,10 +3462,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 35-47",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Shrinkage closure",
@@ -2619,10 +3471,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 33-35",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Size Set Sample",
@@ -2631,10 +3480,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 35-38",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Size Set approval",
@@ -2643,10 +3489,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 38-40",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Cutting",
@@ -2655,10 +3498,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 37-42",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "VAP Send",
@@ -2668,10 +3508,7 @@
           "reason": null,
           "planned": "Day 42-44",
           "supplier": "Elite Print & Embro",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "TOP Sample Sent",
@@ -2680,10 +3517,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 50-55",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Shipment Booking",
@@ -2692,10 +3526,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 65-70",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Testing",
@@ -2704,10 +3535,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 50-55",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "TOP Sample Approval",
@@ -2716,10 +3544,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 72",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Print / Emb / Hotfix Complete",
@@ -2729,10 +3554,7 @@
           "reason": null,
           "planned": "Day 45-60",
           "supplier": "Elite Print & Embro",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Reshape & Feeding",
@@ -2741,10 +3563,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 60-62",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Production",
@@ -2753,10 +3572,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 63-78",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "CIP Start",
@@ -2765,10 +3581,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 78-85",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "FI",
@@ -2777,10 +3590,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 86",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Garment OCR",
@@ -2789,10 +3599,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 89",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "EX-FTY",
@@ -2801,10 +3608,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 90",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         }
       ],
       "preProd": {
@@ -2816,13 +3620,13 @@
         },
         "poSheet": {
           "values": {
-            "poNumber": "Style",
-            "poQty": 6150,
-            "orderValue": 1001
+            "poNumber": "0OT",
+            "poQty": 4470,
+            "orderValue": 725900
           },
-          "status": "draft",
-          "approvedBy": null,
-          "approvedAt": null
+          "status": "approved",
+          "approvedBy": "Managing Director",
+          "approvedAt": "21/09/2026"
         },
         "programSheet": {
           "values": {},
@@ -3115,7 +3919,6 @@
           "completedAt": "2026-09-09T06:26:38.398Z",
           "completedOn": null,
           "updatedAt": "2026-05-12T09:00:00.000Z",
-          "flaggedAt": null,
           "completedBy": "Admin",
           "disputed": true,
           "disputeId": "comp_1789359182722_2dbh"
@@ -3130,7 +3933,6 @@
           "completedAt": "2026-09-09T06:26:39.577Z",
           "completedOn": null,
           "updatedAt": "2026-09-09T06:26:38.398Z",
-          "flaggedAt": null,
           "completedBy": "Admin"
         },
         {
@@ -3143,7 +3945,6 @@
           "completedAt": "2026-09-09T06:26:41.122Z",
           "completedOn": null,
           "updatedAt": "2026-09-09T06:26:39.577Z",
-          "flaggedAt": null,
           "completedBy": "Admin"
         },
         {
@@ -3156,7 +3957,6 @@
           "completedAt": "2026-09-09T06:26:44.940Z",
           "completedOn": null,
           "updatedAt": "2026-09-09T06:26:41.122Z",
-          "flaggedAt": null,
           "completedBy": "Admin"
         },
         {
@@ -3169,7 +3969,6 @@
           "completedAt": "2026-09-09T06:26:47.614Z",
           "completedOn": null,
           "updatedAt": "2026-09-09T06:26:43.382Z",
-          "flaggedAt": null,
           "updatedBy": "Admin",
           "completedBy": "Admin"
         },
@@ -3182,8 +3981,7 @@
           "planned": "Day 3-5",
           "completedAt": "2026-09-18T16:18:37.068Z",
           "completedOn": null,
-          "updatedAt": "2026-09-09T06:26:44.940Z",
-          "flaggedAt": null
+          "updatedAt": "2026-09-09T06:26:44.940Z"
         },
         {
           "name": "Trims Plan",
@@ -3194,8 +3992,7 @@
           "planned": "Day 4-7",
           "completedAt": "2026-09-18T16:18:37.068Z",
           "completedOn": null,
-          "updatedAt": "2026-09-09T06:26:47.614Z",
-          "flaggedAt": null
+          "updatedAt": "2026-09-09T06:26:47.614Z"
         },
         {
           "name": "Lab Dip Approval",
@@ -3204,10 +4001,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 5-10",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Yarn to Knitting",
@@ -3216,10 +4010,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 5-10",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Artwork Approval",
@@ -3228,10 +4019,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 1-20",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Dyeing",
@@ -3240,10 +4028,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 11-25",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Sewing Trims IH",
@@ -3252,10 +4037,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 15",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Packing Trims IH",
@@ -3264,10 +4046,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 25",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Fabric IH",
@@ -3276,10 +4055,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 25",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Lot Card Approval",
@@ -3288,10 +4064,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 25-30",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "PP Sample",
@@ -3300,10 +4073,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 25-35",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "PP Meeting",
@@ -3312,10 +4082,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 30-33",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "PP Approval",
@@ -3324,10 +4091,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 35-47",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Shrinkage closure",
@@ -3336,10 +4100,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 33-35",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Size Set Sample",
@@ -3348,10 +4109,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 35-38",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Size Set approval",
@@ -3360,10 +4118,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 38-40",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Cutting",
@@ -3372,10 +4127,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 37-42",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "VAP Send",
@@ -3385,10 +4137,7 @@
           "reason": null,
           "planned": "Day 42-44",
           "supplier": "Elite Print & Embro",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "TOP Sample Sent",
@@ -3397,10 +4146,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 50-55",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Shipment Booking",
@@ -3409,10 +4155,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 65-70",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Testing",
@@ -3421,10 +4164,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 50-55",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "TOP Sample Approval",
@@ -3433,10 +4173,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 72",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Print / Emb / Hotfix Complete",
@@ -3446,10 +4183,7 @@
           "reason": null,
           "planned": "Day 45-60",
           "supplier": "Elite Print & Embro",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Reshape & Feeding",
@@ -3458,10 +4192,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 60-62",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Production",
@@ -3470,10 +4201,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 63-78",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "CIP Start",
@@ -3482,10 +4210,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 78-85",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "FI",
@@ -3494,10 +4219,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 86",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "Garment OCR",
@@ -3506,10 +4228,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 89",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         },
         {
           "name": "EX-FTY",
@@ -3518,10 +4237,7 @@
           "assignee": "Unassigned",
           "reason": null,
           "planned": "Day 90",
-          "completedAt": null,
-          "completedOn": null,
-          "updatedAt": null,
-          "flaggedAt": null
+          "completedOn": null
         }
       ],
       "preProd": {
@@ -3532,10 +4248,14 @@
           "approvedAt": null
         },
         "poSheet": {
-          "values": {},
-          "status": "draft",
-          "approvedBy": null,
-          "approvedAt": null
+          "values": {
+            "poNumber": "Style",
+            "poQty": 6150,
+            "orderValue": 1001
+          },
+          "status": "approved",
+          "approvedBy": "Managing Director",
+          "approvedAt": "21/09/2026"
         },
         "programSheet": {
           "values": {},
@@ -3826,6 +4546,501 @@
   ],
   "compliances": [],
   "notifications": [
+    {
+      "id": "notif-1789979598886-g5y9r",
+      "eventKey": "dept-task-assigned-12121212-Reshape & Feeding-Production",
+      "type": "task",
+      "title": "New Task: Reshape & Feeding",
+      "message": "Order 12121212 has moved to your department (Production). Stage \"Reshape & Feeding\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "12121212",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-21T08:33:18.886Z",
+      "isDeleted": false,
+      "targetDept": "Production",
+      "primaryId": "pri_notifications_1789979598925_ikhfo"
+    },
+    {
+      "id": "notif-1789979595729-j4of8",
+      "eventKey": "dept-task-assigned-12121212-Print / Emb / Hotfix Complete-VAP",
+      "type": "task",
+      "title": "New Task: Print / Emb / Hotfix Complete",
+      "message": "Order 12121212 has moved to your department (VAP). Stage \"Print / Emb / Hotfix Complete\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "12121212",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-21T08:33:15.729Z",
+      "isDeleted": false,
+      "targetDept": "VAP",
+      "primaryId": "pri_notifications_1789979595745_mizcb"
+    },
+    {
+      "id": "notif-1789979590673-lcoq8",
+      "eventKey": "dept-task-assigned-12121212-TOP Sample Approval-Merchandising",
+      "type": "task",
+      "title": "New Task: TOP Sample Approval",
+      "message": "Order 12121212 has moved to your department (Merchandising). Stage \"TOP Sample Approval\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "12121212",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-21T08:33:10.673Z",
+      "isDeleted": false,
+      "targetDept": "Merchandising",
+      "primaryId": "pri_notifications_1789979590693_jz1cc"
+    },
+    {
+      "id": "notif-1789979588137-6wb75",
+      "eventKey": "dept-task-assigned-12121212-Testing-Testing",
+      "type": "task",
+      "title": "New Task: Testing",
+      "message": "Order 12121212 has moved to your department (Testing). Stage \"Testing\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "12121212",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-21T08:33:08.137Z",
+      "isDeleted": false,
+      "targetDept": "Testing",
+      "primaryId": "pri_notifications_1789979588159_bv0dg"
+    },
+    {
+      "id": "notif-1789979586952-686op",
+      "eventKey": "dept-task-assigned-12121212-Shipment Booking-Logistics & Documentation",
+      "type": "task",
+      "title": "New Task: Shipment Booking",
+      "message": "Order 12121212 has moved to your department (Logistics & Documentation). Stage \"Shipment Booking\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "12121212",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-21T08:33:06.952Z",
+      "isDeleted": false,
+      "targetDept": "Logistics & Documentation",
+      "primaryId": "pri_notifications_1789979586979_aoz8w"
+    },
+    {
+      "id": "notif-1789979583737-bbx88",
+      "eventKey": "dept-task-assigned-12121212-TOP Sample Sent-Sample",
+      "type": "task",
+      "title": "New Task: TOP Sample Sent",
+      "message": "Order 12121212 has moved to your department (Sample). Stage \"TOP Sample Sent\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "12121212",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-21T08:33:03.737Z",
+      "isDeleted": false,
+      "targetDept": "Sample",
+      "primaryId": "pri_notifications_1789979583759_9sr81"
+    },
+    {
+      "id": "notif-1789979578339-q9vac",
+      "eventKey": "dept-task-assigned-12121212-VAP Send-VAP",
+      "type": "task",
+      "title": "New Task: VAP Send",
+      "message": "Order 12121212 has moved to your department (VAP). Stage \"VAP Send\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "12121212",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-21T08:32:58.339Z",
+      "isDeleted": false,
+      "targetDept": "VAP",
+      "primaryId": "pri_notifications_1789979578373_x7lnl"
+    },
+    {
+      "id": "notif-1789979575010-yj2xp",
+      "eventKey": "dept-task-assigned-12121212-Cutting-Cutting",
+      "type": "task",
+      "title": "New Task: Cutting",
+      "message": "Order 12121212 has moved to your department (Cutting). Stage \"Cutting\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "12121212",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-21T08:32:55.010Z",
+      "isDeleted": false,
+      "targetDept": "Cutting",
+      "primaryId": "pri_notifications_1789979575035_o4f9m"
+    },
+    {
+      "id": "notif-1789979569145-i5usi",
+      "eventKey": "dept-task-assigned-12121212-Size Set approval-Sample",
+      "type": "task",
+      "title": "New Task: Size Set approval",
+      "message": "Order 12121212 has moved to your department (Sample). Stage \"Size Set approval\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "12121212",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-21T08:32:49.145Z",
+      "isDeleted": false,
+      "targetDept": "Sample",
+      "primaryId": "pri_notifications_1789979569168_zx1v6"
+    },
+    {
+      "id": "notif-1789979566603-6yx8n",
+      "eventKey": "dept-task-assigned-12121212-Size Set Sample-Sample",
+      "type": "task",
+      "title": "New Task: Size Set Sample",
+      "message": "Order 12121212 has moved to your department (Sample). Stage \"Size Set Sample\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "12121212",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-21T08:32:46.603Z",
+      "isDeleted": false,
+      "targetDept": "Sample",
+      "primaryId": "pri_notifications_1789979566661_frlm7"
+    },
+    {
+      "id": "notif-1789979563705-f0lh9",
+      "eventKey": "dept-task-assigned-12121212-Shrinkage closure-Quality",
+      "type": "task",
+      "title": "New Task: Shrinkage closure",
+      "message": "Order 12121212 has moved to your department (Quality). Stage \"Shrinkage closure\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "12121212",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-21T08:32:43.705Z",
+      "isDeleted": false,
+      "targetDept": "Quality",
+      "primaryId": "pri_notifications_1789979563736_wpzam"
+    },
+    {
+      "id": "notif-1789979563697-8ven7",
+      "eventKey": "dept-task-assigned-12121212-Shrinkage closure-Quality",
+      "type": "task",
+      "title": "New Task: Shrinkage closure",
+      "message": "Order 12121212 has moved to your department (Quality). Stage \"Shrinkage closure\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "12121212",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-21T08:32:43.697Z",
+      "isDeleted": false,
+      "targetDept": "Quality",
+      "primaryId": "pri_notifications_1789979563712_66p88"
+    },
+    {
+      "id": "notif-1789979562880-uowl0",
+      "eventKey": "dept-task-assigned-12121212-PP Approval-Merchandising",
+      "type": "task",
+      "title": "New Task: PP Approval",
+      "message": "Order 12121212 has moved to your department (Merchandising). Stage \"PP Approval\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "12121212",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-21T08:32:42.880Z",
+      "isDeleted": false,
+      "targetDept": "Merchandising",
+      "primaryId": "pri_notifications_1789979562895_expca"
+    },
+    {
+      "id": "notif-1789979560761-3wxyk",
+      "eventKey": "dept-task-assigned-12121212-PP Meeting-Planning",
+      "type": "task",
+      "title": "New Task: PP Meeting",
+      "message": "Order 12121212 has moved to your department (Planning). Stage \"PP Meeting\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "12121212",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-21T08:32:40.761Z",
+      "isDeleted": false,
+      "targetDept": "Planning",
+      "primaryId": "pri_notifications_1789979560775_rbch4"
+    },
+    {
+      "id": "notif-1789979558226-3jbvr",
+      "eventKey": "dept-task-assigned-12121212-PP Sample-Sample",
+      "type": "task",
+      "title": "New Task: PP Sample",
+      "message": "Order 12121212 has moved to your department (Sample). Stage \"PP Sample\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "12121212",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-21T08:32:38.226Z",
+      "isDeleted": false,
+      "targetDept": "Sample",
+      "primaryId": "pri_notifications_1789979558249_7z0vx"
+    },
+    {
+      "id": "notif-1789979547794-a2ukd",
+      "eventKey": "dept-task-assigned-12121212-Lot Card Approval-Quality",
+      "type": "task",
+      "title": "New Task: Lot Card Approval",
+      "message": "Order 12121212 has moved to your department (Quality). Stage \"Lot Card Approval\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "12121212",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-21T08:32:27.794Z",
+      "isDeleted": false,
+      "targetDept": "Quality",
+      "primaryId": "pri_notifications_1789979547815_b1p66"
+    },
+    {
+      "id": "notif-1789979545361-3ss87",
+      "eventKey": "dept-task-assigned-12121212-Fabric IH-Store",
+      "type": "task",
+      "title": "New Task: Fabric IH",
+      "message": "Order 12121212 has moved to your department (Store). Stage \"Fabric IH\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "12121212",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-21T08:32:25.361Z",
+      "isDeleted": false,
+      "targetDept": "Store",
+      "primaryId": "pri_notifications_1789979545375_ie46e"
+    },
+    {
+      "id": "notif-1789979544105-kgtqh",
+      "eventKey": "dept-task-assigned-12121212-Packing Trims IH-Purchase – Trims",
+      "type": "task",
+      "title": "New Task: Packing Trims IH",
+      "message": "Order 12121212 has moved to your department (Purchase – Trims). Stage \"Packing Trims IH\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "12121212",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-21T08:32:24.105Z",
+      "isDeleted": false,
+      "targetDept": "Purchase – Trims",
+      "primaryId": "pri_notifications_1789979544122_zfivi"
+    },
+    {
+      "id": "notif-1789979541619-7ets3",
+      "eventKey": "dept-task-assigned-12121212-Sewing Trims IH-Purchase – Trims",
+      "type": "task",
+      "title": "New Task: Sewing Trims IH",
+      "message": "Order 12121212 has moved to your department (Purchase – Trims). Stage \"Sewing Trims IH\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "12121212",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-21T08:32:21.619Z",
+      "isDeleted": false,
+      "targetDept": "Purchase – Trims",
+      "primaryId": "pri_notifications_1789979541644_pf156"
+    },
+    {
+      "id": "notif-1789979535194-nxrtb",
+      "eventKey": "dept-task-assigned-12121212-Dyeing-Purchase – Fabric",
+      "type": "task",
+      "title": "New Task: Dyeing",
+      "message": "Order 12121212 has moved to your department (Purchase – Fabric). Stage \"Dyeing\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "12121212",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-21T08:32:15.194Z",
+      "isDeleted": false,
+      "targetDept": "Purchase – Fabric",
+      "primaryId": "pri_notifications_1789979535227_e4g2s"
+    },
+    {
+      "id": "notif-1789979532041-1w1m5",
+      "eventKey": "dept-task-assigned-12121212-Artwork Approval-Merchandising",
+      "type": "task",
+      "title": "New Task: Artwork Approval",
+      "message": "Order 12121212 has moved to your department (Merchandising). Stage \"Artwork Approval\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "12121212",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-21T08:32:12.041Z",
+      "isDeleted": false,
+      "targetDept": "Merchandising",
+      "primaryId": "pri_notifications_1789979532079_x58ys"
+    },
+    {
+      "id": "notif-1789979525596-66cyf",
+      "eventKey": "dept-task-assigned-12121212-Yarn to Knitting-Purchase – Fabric",
+      "type": "task",
+      "title": "New Task: Yarn to Knitting",
+      "message": "Order 12121212 has moved to your department (Purchase – Fabric). Stage \"Yarn to Knitting\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "12121212",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-21T08:32:05.596Z",
+      "isDeleted": false,
+      "targetDept": "Purchase – Fabric",
+      "primaryId": "pri_notifications_1789979525647_bmtew"
+    },
+    {
+      "id": "notif-1789979521698-jf3cw",
+      "eventKey": "dept-task-assigned-12121212-Lab Dip Approval-Merchandising",
+      "type": "task",
+      "title": "New Task: Lab Dip Approval",
+      "message": "Order 12121212 has moved to your department (Merchandising). Stage \"Lab Dip Approval\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "12121212",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-21T08:32:01.698Z",
+      "isDeleted": false,
+      "targetDept": "Merchandising",
+      "primaryId": "pri_notifications_1789979521716_a7mto"
+    },
+    {
+      "id": "notif-1789979520098-qmafh",
+      "eventKey": "dept-task-assigned-12121212-Trims Plan-Purchase – Trims",
+      "type": "task",
+      "title": "New Task: Trims Plan",
+      "message": "Order 12121212 has moved to your department (Purchase – Trims). Stage \"Trims Plan\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "12121212",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-21T08:32:00.098Z",
+      "isDeleted": false,
+      "targetDept": "Purchase – Trims",
+      "primaryId": "pri_notifications_1789979520121_jyrsq"
+    },
+    {
+      "id": "notif-1789974227238-9kdho",
+      "eventKey": "dept-task-assigned-111-Lab Dip Approval-Merchandising",
+      "type": "task",
+      "title": "New Task: Lab Dip Approval",
+      "message": "Order 111 has moved to your department (Merchandising). Stage \"Lab Dip Approval\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "111",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-21T07:03:47.238Z",
+      "isDeleted": false,
+      "targetDept": "Merchandising",
+      "primaryId": "pri_notifications_1789974227250_1s1xt"
+    },
+    {
+      "id": "notif-1789974227230-1sokl",
+      "eventKey": "dept-task-assigned-111-Lab Dip Approval-Merchandising",
+      "type": "task",
+      "title": "New Task: Lab Dip Approval",
+      "message": "Order 111 has moved to your department (Merchandising). Stage \"Lab Dip Approval\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "111",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-21T07:03:47.230Z",
+      "isDeleted": false,
+      "targetDept": "Merchandising",
+      "primaryId": "pri_notifications_1789974227235_n9j94"
+    },
+    {
+      "id": "notif-1789974226253-qb55t",
+      "eventKey": "dept-task-assigned-111-Trims Plan-Purchase – Trims",
+      "type": "task",
+      "title": "New Task: Trims Plan",
+      "message": "Order 111 has moved to your department (Purchase – Trims). Stage \"Trims Plan\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "111",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-21T07:03:46.253Z",
+      "isDeleted": false,
+      "targetDept": "Purchase – Trims",
+      "primaryId": "pri_notifications_1789974226267_bi1sn"
+    },
+    {
+      "id": "notif-1789974226246-0khgu",
+      "eventKey": "dept-task-assigned-111-Trims Plan-Purchase – Trims",
+      "type": "task",
+      "title": "New Task: Trims Plan",
+      "message": "Order 111 has moved to your department (Purchase – Trims). Stage \"Trims Plan\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "111",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-21T07:03:46.246Z",
+      "isDeleted": false,
+      "targetDept": "Purchase – Trims",
+      "primaryId": "pri_notifications_1789974226252_iohpl"
+    },
+    {
+      "id": "notif-1789974225446-05aw2",
+      "eventKey": "dept-task-assigned-111-Program Passing-Program",
+      "type": "task",
+      "title": "New Task: Program Passing",
+      "message": "Order 111 has moved to your department (Program). Stage \"Program Passing\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "111",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-21T07:03:45.446Z",
+      "isDeleted": false,
+      "targetDept": "Program",
+      "primaryId": "pri_notifications_1789974225455_t43d3"
+    },
+    {
+      "id": "notif-1789974222989-bctip",
+      "eventKey": "dept-task-assigned-111-CAD release-CAD",
+      "type": "task",
+      "title": "New Task: CAD release",
+      "message": "Order 111 has moved to your department (CAD). Stage \"CAD release\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "111",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-21T07:03:42.989Z",
+      "isDeleted": false,
+      "targetDept": "CAD",
+      "primaryId": "pri_notifications_1789974223002_qopa9"
+    },
+    {
+      "id": "notif-1789974220823-afobc",
+      "eventKey": "dept-task-assigned-111-Costing-Costing",
+      "type": "task",
+      "title": "New Task: Costing",
+      "message": "Order 111 has moved to your department (Costing). Stage \"Costing\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "111",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-21T07:03:40.823Z",
+      "isDeleted": false,
+      "targetDept": "Costing",
+      "primaryId": "pri_notifications_1789974220831_4m64s"
+    },
+    {
+      "id": "notif-1789974219310-555da",
+      "eventKey": "dept-task-assigned-111-Work order-Program",
+      "type": "task",
+      "title": "New Task: Work order",
+      "message": "Order 111 has moved to your department (Program). Stage \"Work order\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "111",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-21T07:03:39.310Z",
+      "isDeleted": false,
+      "targetDept": "Program",
+      "primaryId": "pri_notifications_1789974219320_98iwp"
+    },
+    {
+      "id": "notif-1789974216344-cna7n",
+      "eventKey": "dept-task-assigned-111-Yarn/Fabric Booking-Purchase – Fabric",
+      "type": "task",
+      "title": "New Task: Yarn/Fabric Booking",
+      "message": "Order 111 has moved to your department (Purchase – Fabric). Stage \"Yarn/Fabric Booking\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "111",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-21T07:03:36.344Z",
+      "isDeleted": false,
+      "targetDept": "Purchase – Fabric",
+      "primaryId": "pri_notifications_1789974216393_3vvwd"
+    },
     {
       "id": "notif-1789801205991-inhba",
       "eventKey": "order-first-stage-111-Order Confirmation & Enquiry-Program",

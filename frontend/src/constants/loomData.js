@@ -13,6 +13,78 @@ export const SHIPMENT_PERFORMANCE = [
 ];
 
 /**
+ * Robust date parser supporting "2026-11-21", "21 Nov 2026", "DEC 30", "25 May", etc.
+ */
+export function parseShipDateSafe(raw, fallbackYear = 2026) {
+  if (!raw) return null;
+  if (raw instanceof Date && !isNaN(raw.getTime())) return raw;
+  const str = String(raw).trim();
+  if (!str) return null;
+
+  // 1. Try native parse
+  let d = new Date(str);
+  if (!isNaN(d.getTime())) {
+    const y = d.getFullYear();
+    // If date string omitted year, browser might assign 2001 or current system year
+    if (y >= 2020 && y <= 2035) return d;
+  }
+
+  // 2. Try appending fallback year if year is missing or anomalous
+  const has4DigitYear = /\b(20\d{2})\b/.test(str);
+  if (!has4DigitYear) {
+    d = new Date(`${str} ${fallbackYear}`);
+    if (!isNaN(d.getTime())) return d;
+  }
+
+  return !isNaN(d.getTime()) ? d : null;
+}
+
+/**
+ * Dynamically computes an order's risk level based on:
+ * - Target ship date vs current date (overdue or approaching deadline)
+ * - Order status (Delayed / At Risk / On Track)
+ * - Flagged delay reasons and stage statuses
+ */
+export function computeDynamicOrderRisk(order) {
+  if (!order) return "low";
+  const now = new Date();
+  const rawShip = order.shipDate || order.ship;
+  const shipD = parseShipDateSafe(rawShip);
+  
+  let daysLeft = null;
+  if (shipD) {
+    daysLeft = Math.round((shipD.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  }
+
+  const stages = Array.isArray(order.stages) ? order.stages : [];
+  const hasDelayFlag = stages.some(s => Boolean(s && typeof s.reason === "string" && s.reason.trim() !== "" && s.reason !== "No delay flagged"));
+  const hasDelayedStage = stages.some(s => s && (s.status === "delayed" || (s.reason && (s.status === "in_progress" || s.status === "pending"))));
+
+  // 1. High Risk:
+  // - Order explicitly marked Delayed
+  // - Ship date has already passed and order is not done (overdue)
+  // - Critical delay flagged while status is At Risk
+  // - Target ship date is within 7 days and order has incomplete critical stages
+  if (order.status === "Delayed") return "high";
+  if (daysLeft !== null && daysLeft < 0) return "high";
+  if (hasDelayFlag && order.status === "At Risk") return "high";
+  if (daysLeft !== null && daysLeft <= 7 && (hasDelayFlag || order.status === "At Risk")) return "high";
+
+  // 2. Medium Risk:
+  // - Status is At Risk
+  // - Delay flag present
+  // - Approaching ship deadline within 21 days
+  if (order.status === "At Risk" || hasDelayFlag || hasDelayedStage) return "medium";
+  if (daysLeft !== null && daysLeft <= 21) return "medium";
+
+  // 3. Check existing risk or fallback to low
+  if (order.risk === "high" || order.risk === "medium" || order.risk === "low") {
+    return order.risk;
+  }
+  return "low";
+}
+
+/**
  * Dynamically computes 6-month shipment performance trend from active orders.
  * Evaluates orders by delivery date, completion date, and stage gate status.
  */
@@ -28,14 +100,9 @@ export function computeMonthlyShipmentPerformance(orders = [], options = {}) {
   let latestDate = new Date(currentYear, currentMonth, 1);
   activeOrders.forEach(o => {
     const raw = o.shipDate || (o.completed && o.completedAt ? o.completedAt : null) || o.ship;
-    if (raw) {
-      let d = new Date(raw);
-      if (isNaN(d.getTime()) && typeof raw === "string") {
-        d = new Date(`${raw} ${currentYear}`);
-      }
-      if (!isNaN(d.getTime()) && d.getTime() > latestDate.getTime()) {
-        latestDate = d;
-      }
+    const d = parseShipDateSafe(raw, currentYear);
+    if (d && d.getTime() > latestDate.getTime()) {
+      latestDate = d;
     }
   });
 
@@ -76,14 +143,14 @@ export function computeMonthlyShipmentPerformance(orders = [], options = {}) {
   // Criteria to check if an order is On-Time
   const isOrderOnTime = (order) => {
     if (order.status === "Delayed") return false;
-    if (order.risk === "high") return false;
+    if (computeDynamicOrderRisk(order) === "high") return false;
     const stages = order.stages || [];
-    const hasDelay = stages.some(s => s.reason || s.status === "delayed" || s.disputed);
+    const hasDelay = stages.some(s => s && (s.reason || s.status === "delayed" || s.disputed));
     if (hasDelay) return false;
-    if (order.completed && order.completedAt && order.shipDate) {
+    if (order.completed && order.completedAt && (order.shipDate || order.ship)) {
       const c = new Date(order.completedAt).getTime();
-      const s = new Date(order.shipDate).getTime();
-      if (!isNaN(c) && !isNaN(s) && c > s + 86400000) return false;
+      const s = parseShipDateSafe(order.shipDate || order.ship, currentYear)?.getTime();
+      if (!isNaN(c) && s && c > s + 86400000) return false;
     }
     return true;
   };
@@ -91,15 +158,13 @@ export function computeMonthlyShipmentPerformance(orders = [], options = {}) {
   const getOrderDates = (order) => {
     let start = null;
     let end = null;
-    if (order.orderDate) start = new Date(order.orderDate);
-    else if (order.createdAt) start = new Date(order.createdAt);
+    if (order.orderDate) start = parseShipDateSafe(order.orderDate, currentYear);
+    else if (order.createdAt) start = parseShipDateSafe(order.createdAt, currentYear);
 
-    if (order.shipDate) end = new Date(order.shipDate);
-    else if (order.completed && order.completedAt) end = new Date(order.completedAt);
-    else if (order.ship) {
-      let d = new Date(order.ship);
-      if (isNaN(d.getTime())) d = new Date(`${order.ship} ${currentYear}`);
-      if (!isNaN(d.getTime())) end = d;
+    if (order.shipDate || order.ship) {
+      end = parseShipDateSafe(order.shipDate || order.ship, currentYear);
+    } else if (order.completed && order.completedAt) {
+      end = parseShipDateSafe(order.completedAt, currentYear);
     }
 
     if (!start && end) start = new Date(end.getTime() - 90 * 86400000);
@@ -111,20 +176,23 @@ export function computeMonthlyShipmentPerformance(orders = [], options = {}) {
     return {
       startTime: start.getTime(),
       endTime: end.getTime(),
-      shipTime: end.getTime()
+      shipTime: end ? end.getTime() : null
     };
   };
 
   const result = windowMonths.map(wm => {
+    // Collect specific matching orders for transparency
     const matchingOrders = activeOrders.filter(o => {
       const dates = getOrderDates(o);
-      const shipInMonth = dates.shipTime >= wm.start && dates.shipTime <= wm.end;
+      const shipInMonth = dates.shipTime !== null && dates.shipTime >= wm.start && dates.shipTime <= wm.end;
       const activeInMonth = dates.startTime <= wm.end && dates.endTime >= wm.start;
       return shipInMonth || activeInMonth;
     });
 
     const totalOrders = matchingOrders.length;
-    const onTimeOrders = matchingOrders.filter(isOrderOnTime).length;
+    const onTimeOrdersList = matchingOrders.filter(isOrderOnTime);
+    const onTimeOrders = onTimeOrdersList.length;
+    const delayedOrdersList = matchingOrders.filter(o => !isOrderOnTime(o));
     const delayedOrders = totalOrders - onTimeOrders;
     const onTimePct = totalOrders > 0 ? Math.round((onTimeOrders / totalOrders) * 1000) / 10 : null;
 
@@ -136,7 +204,9 @@ export function computeMonthlyShipmentPerformance(orders = [], options = {}) {
       target: targetPct,
       totalOrders,
       onTimeOrders,
-      delayedOrders
+      delayedOrders,
+      orderNumbers: matchingOrders.map(o => o.id || o.primaryId).join(", "),
+      delayedOrderNumbers: delayedOrdersList.map(o => o.id || o.primaryId).join(", ")
     };
   });
 

@@ -7,7 +7,7 @@ import {
 import {
   REASONS, VAP_SUPPLIERS, DOC_TABS_CONFIG, DOC_TAB_NAMES, DOC_TAB_ICONS, CUSTOMIZABLE_TABS,
   STAGE_CHAT_TABS, TAB_ALLOWED_DEPTS, DOC_ITEM_METADATA, PRE_PROD_DOC_TYPES, allPreProdApproved,
-  HIGHLIGHT_DEPT_OPTIONS, ALL_PEOPLE, COSTING_TEMPLATES, firstNamedAssignee
+  HIGHLIGHT_DEPT_OPTIONS, ALL_PEOPLE, COSTING_TEMPLATES, firstNamedAssignee, computeDynamicOrderRisk
 } from "../../constants/loomData.js";
 import {
   Card, CardHeader, BackLink, statusPill, riskDot, gatingApproval, renderWithMentions
@@ -467,6 +467,21 @@ export function StageColourwayModal({
 
   // Initialize local colourways state from stage.colourways or orderColourways
   const initialColourways = useMemo(() => {
+    const cleanLogs = (logsList, currentDone) => {
+      if (!Array.isArray(logsList) || logsList.length === 0) {
+        return currentDone > 0 ? [{
+          id: `init-log-${Date.now()}`,
+          date: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          qty: currentDone,
+          completedSoFar: currentDone
+        }] : [];
+      }
+      // If there were typing artifact logs (like +1 pcs, +9 pcs, +90 pcs with identical date & time), collapse or clean them
+      // Keep only meaningful distinct logs
+      return logsList.filter(l => l && (Number(l.qty) !== 0 || Number(l.completedSoFar) > 0));
+    };
+
     if (Array.isArray(stage.colourways) && stage.colourways.length > 0) {
       return stage.colourways.map(c => {
         const qty = Number(c.qty) || 0;
@@ -478,7 +493,8 @@ export function StageColourwayModal({
           status,
           completedQty,
           reason: c.reason || "",
-          customReason: c.customReason || ""
+          customReason: c.customReason || "",
+          logs: cleanLogs(c.logs, completedQty)
         };
       });
     }
@@ -486,21 +502,31 @@ export function StageColourwayModal({
     return baseList.map(c => {
       const qty = Number(c.qty) || 0;
       const status = stage.status === "done" ? "done" : stage.status === "in_progress" ? "in_progress" : "pending";
+      const completedQty = status === "done" ? qty : 0;
       return {
         color: c.color,
         qty,
         status,
-        completedQty: status === "done" ? qty : 0,
+        completedQty,
         reason: stage.reason || "",
-        customReason: ""
+        customReason: "",
+        logs: cleanLogs([], completedQty)
       };
     });
   }, [stage, orderColourways, order]);
 
   const [colourways, setColourways] = useState(initialColourways);
+  // Temporary input draft values keyed by colorway index, so typing doesn't trigger intermediate logs
+  const [draftQty, setDraftQty] = useState({});
 
   useEffect(() => {
     setColourways(initialColourways);
+    // Initialize drafts
+    const drafts = {};
+    initialColourways.forEach((c, i) => {
+      drafts[i] = c.completedQty != null ? c.completedQty : 0;
+    });
+    setDraftQty(drafts);
   }, [initialColourways]);
 
   const totalPieces = colourways.reduce((sum, c) => sum + (Number(c.qty) || 0), 0);
@@ -515,36 +541,106 @@ export function StageColourwayModal({
     }
   };
 
+  const getTodayFormatted = () => {
+    return new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  };
+  const getTimeFormatted = () => {
+    return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  };
+
   const handleStatusToggle = (index) => {
     if (!canEdit) return;
     const nextList = colourways.map((c, i) => {
       if (i !== index) return c;
       const nextStatus = c.status === "pending" ? "in_progress" : c.status === "in_progress" ? "done" : "pending";
       const nextCompleted = nextStatus === "done" ? c.qty : nextStatus === "pending" ? 0 : (c.completedQty || 0);
+      const existingLogs = Array.isArray(c.logs) ? [...c.logs] : [];
+
+      if (nextStatus === "done" && nextCompleted > (c.completedQty || 0)) {
+        const diff = nextCompleted - (c.completedQty || 0);
+        existingLogs.unshift({
+          id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+          date: getTodayFormatted(),
+          time: getTimeFormatted(),
+          qty: diff,
+          completedSoFar: nextCompleted,
+          note: "Marked Full Done"
+        });
+      } else if (nextStatus === "pending" && nextCompleted === 0) {
+        existingLogs.unshift({
+          id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+          date: getTodayFormatted(),
+          time: getTimeFormatted(),
+          qty: 0,
+          completedSoFar: 0,
+          note: "Reset to Pending"
+        });
+      }
+
       return {
         ...c,
         status: nextStatus,
         completedQty: nextCompleted,
-        reason: nextStatus === "done" ? "" : c.reason
+        reason: nextStatus === "done" ? "" : c.reason,
+        logs: existingLogs
       };
     });
+    // Also sync draft
+    setDraftQty(prev => ({
+      ...prev,
+      [index]: nextList[index].completedQty
+    }));
     commitUpdates(nextList);
   };
 
-  const handleQtyChange = (index, val) => {
+  const handleDraftChange = (index, val) => {
+    setDraftQty(prev => ({
+      ...prev,
+      [index]: val
+    }));
+  };
+
+  const handleCommitQty = (index) => {
     if (!canEdit) return;
-    const num = Math.max(0, Math.min(Number(val) || 0, colourways[index].qty));
+    const rawVal = draftQty[index];
+    const num = Math.max(0, Math.min(Number(rawVal) || 0, colourways[index].qty));
+    const currentCompleted = colourways[index].completedQty || 0;
+
+    // Even if user clicked OK with same number, don't duplicate
+    if (num === currentCompleted && Array.isArray(colourways[index].logs) && colourways[index].logs.length > 0) {
+      return;
+    }
+
     const nextList = colourways.map((c, i) => {
       if (i !== index) return c;
       let nextStatus = c.status;
       if (num >= c.qty) nextStatus = "done";
       else if (num > 0) nextStatus = "in_progress";
+      else nextStatus = "pending";
+
+      const existingLogs = Array.isArray(c.logs) ? [...c.logs] : [];
+      const diff = num - currentCompleted;
+
+      if (diff !== 0 || existingLogs.length === 0) {
+        existingLogs.unshift({
+          id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+          date: getTodayFormatted(),
+          time: getTimeFormatted(),
+          qty: diff !== 0 ? diff : num,
+          completedSoFar: num,
+          note: diff > 0 ? `+${diff.toLocaleString()} pcs added` : diff < 0 ? `${diff.toLocaleString()} pcs adjusted` : `${num.toLocaleString()} pcs entered`
+        });
+      }
+
       return {
         ...c,
         completedQty: num,
-        status: nextStatus
+        status: nextStatus,
+        logs: existingLogs
       };
     });
+
+    setDraftQty(prev => ({ ...prev, [index]: num }));
     commitUpdates(nextList);
   };
 
@@ -575,12 +671,27 @@ export function StageColourwayModal({
 
   const handleMarkAllDone = () => {
     if (!canEdit) return;
-    const nextList = colourways.map(c => ({
-      ...c,
-      status: "done",
-      completedQty: c.qty,
-      reason: ""
-    }));
+    const nextList = colourways.map(c => {
+      const existingLogs = Array.isArray(c.logs) ? [...c.logs] : [];
+      const diff = c.qty - (c.completedQty || 0);
+      if (diff > 0) {
+        existingLogs.unshift({
+          id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+          date: getTodayFormatted(),
+          time: getTimeFormatted(),
+          qty: diff,
+          completedSoFar: c.qty,
+          note: "Mark All Done (+ " + diff.toLocaleString() + " pcs)"
+        });
+      }
+      return {
+        ...c,
+        status: "done",
+        completedQty: c.qty,
+        reason: "",
+        logs: existingLogs
+      };
+    });
     commitUpdates(nextList);
   };
 
@@ -605,7 +716,7 @@ export function StageColourwayModal({
           background: "#FFFFFF",
           borderRadius: 16,
           width: "100%",
-          maxWidth: 480,
+          maxWidth: 520,
           boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
           border: "1px solid #E5E7EB",
           overflow: "hidden",
@@ -719,7 +830,7 @@ export function StageColourwayModal({
                 </div>
 
                 {/* Pieces breakdown: Completed vs Pending */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#F9FAFB", padding: "6px 10px", borderRadius: 8, fontSize: 11.5, marginBottom: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#F9FAFB", padding: "6px 10px", borderRadius: 8, fontSize: 11.5, marginBottom: (Array.isArray(c.logs) && c.logs.length > 0) ? 8 : 10 }}>
                   <div style={{ color: "#4B5563" }}>
                     Completed: <strong style={{ color: "#16A34A" }}>{(Number(cCompleted) || 0).toLocaleString()}</strong> pcs
                   </div>
@@ -727,26 +838,118 @@ export function StageColourwayModal({
                     Pending: <strong style={{ color: "#DC2626" }}>{(Number(cPending) || 0).toLocaleString()}</strong> pcs
                   </div>
                   {canEdit && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                      <span style={{ fontSize: 10.5, color: "#9CA3AF" }}>Set done:</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                      <span style={{ fontSize: 10.5, color: "#64748B", fontWeight: 600 }}>Set done:</span>
                       <input
                         type="number"
                         min="0"
                         max={c.qty}
-                        value={cCompleted}
-                        onChange={(e) => handleQtyChange(i, e.target.value)}
+                        value={draftQty[i] !== undefined ? draftQty[i] : cCompleted}
+                        onChange={(e) => handleDraftChange(i, e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleCommitQty(i);
+                          }
+                        }}
                         style={{
-                          width: 60,
-                          padding: "2px 4px",
-                          fontSize: 11,
-                          border: "1px solid #D1D5DB",
-                          borderRadius: 4,
-                          textAlign: "right"
+                          width: 65,
+                          padding: "3px 6px",
+                          fontSize: 11.5,
+                          fontWeight: 600,
+                          border: "1px solid #CBD5E1",
+                          borderRadius: 6,
+                          textAlign: "right",
+                          background: "#FFFFFF",
+                          outline: "none"
                         }}
                       />
+                      <button
+                        type="button"
+                        onClick={() => handleCommitQty(i)}
+                        style={{
+                          background: "#4F46E5",
+                          color: "#FFFFFF",
+                          border: "none",
+                          borderRadius: 6,
+                          fontSize: 11,
+                          fontWeight: 700,
+                          padding: "4px 8px",
+                          cursor: "pointer"
+                        }}
+                        title="Save entry for this date"
+                      >
+                        OK
+                      </button>
                     </div>
                   )}
                 </div>
+
+                {/* Date-wise entry history for this colourway */}
+                {Array.isArray(c.logs) && c.logs.length > 0 && (
+                  <div style={{
+                    marginBottom: 10,
+                    padding: "8px 10px",
+                    background: "#F8FAFC",
+                    border: "1px solid #E2E8F0",
+                    borderRadius: 8
+                  }}>
+                    <div style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: 6,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: "#475569"
+                    }}>
+                      <span>Qty Details ({c.logs.length})</span>
+                      <span style={{ fontSize: 10.5, fontWeight: 500, color: "#64748B" }}>
+                        Recent: {c.logs[0]?.date || ""}
+                      </span>
+                    </div>
+                    <div style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 4,
+                      maxHeight: 105,
+                      overflowY: "auto",
+                      paddingRight: 2
+                    }}>
+                      {c.logs.map((log, logIdx) => (
+                        <div
+                          key={log.id || logIdx}
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            fontSize: 11,
+                            padding: "3px 6px",
+                            background: "#FFFFFF",
+                            borderRadius: 6,
+                            border: "1px solid #F1F5F9"
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#475569" }}>
+                            <span style={{ fontWeight: 600 }}>{log.date}</span>
+                            {log.time && <span style={{ fontSize: 10, color: "#94A3B8" }}>{log.time}</span>}
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{
+                              fontWeight: 700,
+                              color: log.qty > 0 ? "#16A34A" : log.qty < 0 ? "#DC2626" : "#64748B"
+                            }}>
+                              {log.qty > 0 ? `+${Number(log.qty).toLocaleString()} pcs` : `${Number(log.qty).toLocaleString()} pcs`}
+                            </span>
+                            <span style={{ fontSize: 10, color: "#64748B", background: "#F1F5F9", padding: "1px 5px", borderRadius: 4 }}>
+                              Tot: {Number(log.completedSoFar || 0).toLocaleString()} pcs
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Delay Selector (Why delayed) */}
                 <div>
@@ -3231,7 +3434,15 @@ export function OrderWorkspace({
         </div>
         <div style={{ background: "#F7F7F9", borderRadius: 10, padding: "14px 16px" }}>
           <div style={{ fontSize: 12, color: "#8A8D98" }}>Risk level</div>
-          <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4, textTransform: "capitalize", display: "flex", alignItems: "center" }}>{riskDot(order.risk)}{order.risk}</div>
+          {(() => {
+            const currentRisk = computeDynamicOrderRisk(order);
+            const riskColor = currentRisk === "high" ? "#D64545" : currentRisk === "medium" ? "#E2A83B" : "#1F9E8D";
+            return (
+              <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4, textTransform: "capitalize", display: "flex", alignItems: "center", color: riskColor }}>
+                {riskDot(currentRisk)}{currentRisk}
+              </div>
+            );
+          })()}
         </div>
         <div style={{ background: "#F7F7F9", borderRadius: 10, padding: "14px 16px" }}>
           <div style={{ fontSize: 12, color: "#8A8D98" }}>Open delay flags</div>

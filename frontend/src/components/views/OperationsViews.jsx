@@ -5825,6 +5825,10 @@ export function AuditLoggerPage({
   const [userFilter, setUserFilter] = useState("ALL");
   const [dateFilter, setDateFilter] = useState("");
 
+  // Tick state: updated every 30s so time-sensitive calculations (nowMs, heartbeat checks) stay current.
+  // Without this, dateRanges freezes at mount time and online/minutes values go stale and disappear.
+  const [tick, setTick] = useState(() => Date.now());
+
   const todayStr = new Date().toISOString().slice(0, 10);
 
   // Live auto-refresh of user sessions while on the Audit Logs page
@@ -5836,9 +5840,18 @@ export function AuditLoggerPage({
     return () => clearInterval(interval);
   }, [onRefresh]);
 
+  // Tick every 30 seconds so dateRanges / online detection stays fresh all day
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      setTick(Date.now());
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Compute dates: today start, week start (Monday), month start (1st)
+  // Re-runs every tick so nowMs is always current — prevents stale heartbeat comparisons.
   const dateRanges = useMemo(() => {
-    const now = new Date();
+    const now = new Date(tick);
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
     const dayOfWeek = (now.getDay() + 6) % 7; // 0 = Monday, 6 = Sunday
     const weekStart = new Date(todayStart);
@@ -5851,7 +5864,7 @@ export function AuditLoggerPage({
       weekStartMs: weekStart.getTime(),
       monthStartMs: monthStart.getTime()
     };
-  }, []);
+  }, [tick]);
 
   // Consolidate per-user session minutes: today, this week, this month, overall
   const userDurationStats = useMemo(() => {
@@ -5930,19 +5943,36 @@ export function AuditLoggerPage({
       const lastHeartbeatMs = sess.lastHeartbeat ? new Date(sess.lastHeartbeat).getTime() : loginMs;
       const timeSinceHeartbeatMs = dateRanges.nowMs - lastHeartbeatMs;
 
-      // Online if sess.active is true AND heartbeat/login was within the last 3 minutes
-      const isOnlineSession = sess.active && (timeSinceHeartbeatMs < 3 * 60 * 1000);
+      // Online: active session with heartbeat received within the last 5 minutes.
+      // Using 5 min window (heartbeat fires every 25s) to be robust against network delays and refresh lag.
+      const ONLINE_WINDOW_MS = 5 * 60 * 1000;
+      const isOnlineSession = sess.active && loginMs > 0 && (timeSinceHeartbeatMs < ONLINE_WINDOW_MS);
 
       if (isOnlineSession) {
+        // Live session: show total time from login up to now
         rec.isOnline = true;
-        sMins = loginMs ? Math.max(1, Math.round((dateRanges.nowMs - loginMs) / 60000)) : 1;
+        sMins = Math.max(1, Math.round((dateRanges.nowMs - loginMs) / 60000));
       } else if (sess.active) {
-        // Tab closed or inactive without clean logout
-        sMins = sess.hoursUsed ? Math.max(1, Math.round(Number(sess.hoursUsed) * 60)) : (lastHeartbeatMs > loginMs ? Math.max(1, Math.round((lastHeartbeatMs - loginMs) / 60000)) : 1);
+        // Active flag set but heartbeat gone (browser tab closed without unload, or network lost).
+        // Use: lastHeartbeat - loginTime if available, else hoursUsed, else now - loginTime as last resort.
+        if (lastHeartbeatMs > loginMs) {
+          sMins = Math.max(1, Math.round((lastHeartbeatMs - loginMs) / 60000));
+        } else if (sess.hoursUsed && Number(sess.hoursUsed) > 0.01) {
+          sMins = Math.max(1, Math.round(Number(sess.hoursUsed) * 60));
+        } else if (loginMs > 0) {
+          // Fallback: use current time minus login so the value is never blank for today's sessions
+          sMins = Math.max(1, Math.round((dateRanges.nowMs - loginMs) / 60000));
+        } else {
+          sMins = 1;
+        }
       } else if (logoutMs && loginMs && logoutMs >= loginMs) {
+        // Clean logout: exact duration
         sMins = Math.max(1, Math.round((logoutMs - loginMs) / 60000));
-      } else if (sess.hoursUsed) {
+      } else if (sess.hoursUsed && Number(sess.hoursUsed) > 0.01) {
         sMins = Math.max(1, Math.round(Number(sess.hoursUsed) * 60));
+      } else if (loginMs > 0) {
+        // Edge case: logged in today but no heartbeat/logout recorded yet — show mins from login
+        sMins = Math.max(1, Math.round((dateRanges.nowMs - loginMs) / 60000));
       }
 
       rec.overallMinutes += sMins;
