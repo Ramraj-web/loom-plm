@@ -185,11 +185,16 @@ function groupRows(rows) {
   buckets["Awaiting action"] = [];
   buckets["Not started yet"] = [];
   buckets["Completed"] = [];
-  rows.forEach(r => {
-    if (r.stage.reason) buckets[`Delayed — ${r.stage.reason}`].push(r);
-    else if (r.stage.status === "in_progress") buckets["Awaiting action"].push(r);
-    else if (r.stage.status === "pending") buckets["Not started yet"].push(r);
-    else buckets["Completed"].push(r);
+  (Array.isArray(rows) ? rows : []).forEach(r => {
+    const stage = r?.stage || {};
+    const bucket = stage.reason
+      ? `Delayed — ${stage.reason}`
+      : stage.status === "in_progress"
+        ? "Awaiting action"
+        : stage.status === "pending"
+          ? "Not started yet"
+          : "Completed";
+    (buckets[bucket] ??= []).push(r);
   });
   return Object.entries(buckets).filter(([, v]) => v.length > 0);
 }
@@ -202,9 +207,10 @@ function groupColor(label) {
 }
 
 export function GroupedTaskList({ rows, onOpenOrder, emptyText }) {
-  const groups = useMemo(() => groupRows(rows), [rows]);
+  const safeRows = Array.isArray(rows) ? rows : [];
+  const groups = useMemo(() => groupRows(safeRows), [safeRows]);
   const [openMap, setOpenMap] = useState({});
-  if (rows.length === 0) {
+  if (safeRows.length === 0) {
     return <div style={{ fontSize: 12.5, color: "#B0B2BA", padding: "12px 4px" }}>{emptyText}</div>;
   }
   const isOpen = (label) => (openMap[label] !== undefined ? openMap[label] : label !== "Completed");

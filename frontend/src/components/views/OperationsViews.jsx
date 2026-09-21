@@ -947,6 +947,8 @@ export function MyTasksPage({
   onAssignWork,
   onOpenOrder
 }) {
+  const safeOrders = Array.isArray(orders) ? orders : [];
+  const safeTasks = Array.isArray(tasks) ? tasks : [];
   const [showModal, setShowModal] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [assignPrefill, setAssignPrefill] = useState(null);
@@ -966,22 +968,22 @@ export function MyTasksPage({
       ? role.departments.map(d => d.toLowerCase())
       : [(role?.dept || "").toLowerCase()];
 
-    return collectTasks(orders, null).filter(r => {
+    return collectTasks(safeOrders, null).filter(r => {
       if (r.stage.status === "done") return false;
       if (role?.fullAccess || role?.dept === "Administrators" || role?.dept === "Executive") return true;
       return r.dept && userDeptList.includes(r.dept.toLowerCase());
     });
-  }, [orders, role]);
+  }, [safeOrders, role]);
 
   const roleCustomTasks = useMemo(() => {
     const userDeptList = Array.isArray(role?.departments) && role.departments.length > 0
       ? role.departments
       : [role?.dept || ""];
 
-    return tasks.filter(t => {
+    return safeTasks.filter(t => {
       if (t.isDeleted) return false;
       if (t.orderId) {
-        const linkedOrder = orders.find(o =>
+        const linkedOrder = safeOrders.find(o =>
           (o.primaryId && o.primaryId === t.orderId) ||
           (o._id && o._id === t.orderId) ||
           o.id === t.orderId
@@ -991,7 +993,7 @@ export function MyTasksPage({
       if (role?.fullAccess || role?.dept === "Administrators" || role?.dept === "Executive") return true;
       return userDeptList.includes(t.dept) || t.dept === "All";
     });
-  }, [tasks, role, orders]);
+  }, [safeTasks, role, safeOrders]);
 
   const [deptFilter, setDeptFilter] = useState("all");
 
