@@ -586,6 +586,23 @@ export default function LoomPLM() {
 
     // 1. Ensure user has an active session ID for this browser tab
     let sessId = existingSessionId;
+    if (sessId) {
+      setCurrentSessionId(sessId);
+      setUserSessions(prev => {
+        const existing = prev.find(s => s.id === sessId);
+        if (!existing || existing.userId !== activeUser.id) return prev;
+        const resumedSession = {
+          ...existing,
+          active: true,
+          logoutTime: null,
+          lastHeartbeat: nowIso,
+          date: todayStr
+        };
+        const updated = prev.map(s => s.id === sessId ? resumedSession : s);
+        if (window.storage) window.storage.set("user_sessions", JSON.stringify(updated), true);
+        return updated;
+      });
+    }
     if (!sessId) {
       sessId = `sess_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
       setCurrentSessionId(sessId);
@@ -969,7 +986,19 @@ export default function LoomPLM() {
           setStageComplaints(storageMap.stage_complaints);
         }
         if (Array.isArray(storageMap.user_sessions)) {
-          const cleaned = storageMap.user_sessions.map(s => ({ ...s, location: sanitizeLocationString(s.location) }));
+          const browserSessionId = currentSessionId || sessionStorage.getItem("loom_active_session_id");
+          const cleaned = storageMap.user_sessions.map(s => {
+            const isCurrentBrowserSession = browserSessionId && s.id === browserSessionId && s.userId === activeUser?.id;
+            return {
+              ...s,
+              ...(isCurrentBrowserSession ? { active: true, logoutTime: null, lastHeartbeat: new Date().toISOString() } : {}),
+              location: sanitizeLocationString(s.location)
+            };
+          });
+          if (browserSessionId) {
+            const currentSession = cleaned.find(s => s.id === browserSessionId);
+            if (currentSession && window.storage) window.storage.set("user_sessions", JSON.stringify(cleaned), true);
+          }
           setUserSessions(cleaned);
         }
         if (Array.isArray(storageMap.audit_logs)) {
@@ -983,9 +1012,10 @@ export default function LoomPLM() {
       setLastRefreshedAt(new Date());
       setIsRefreshing(false);
     }
-  }, [loadAccessState]);
+  }, [loadAccessState, activeUser, currentSessionId]);
 
-  // Heartbeat & unload handler to accurately track session hours used
+  // Heartbeat to accurately track session hours used. A page refresh must not be treated as logout;
+  // explicit sign-out below is the only action that closes the session.
   useEffect(() => {
     if (!currentSessionId || !activeUser) return undefined;
 
@@ -1014,35 +1044,8 @@ export default function LoomPLM() {
       }
     }, 25000);
 
-    const handleBeforeUnload = () => {
-      const nowIso = new Date().toISOString();
-      let logoutSession = null;
-      setUserSessions(prev => {
-        const updated = prev.map(s => {
-          if (s.id === currentSessionId && s.active) {
-            const loginMs = new Date(s.loginTime).getTime();
-            const nowMs = new Date(nowIso).getTime();
-            const hours = Math.max(0.01, Number(((nowMs - loginMs) / (1000 * 60 * 60)).toFixed(2)));
-            logoutSession = { ...s, logoutTime: nowIso, hoursUsed: hours, active: false };
-            return logoutSession;
-          }
-          return s;
-        });
-        if (window.storage) window.storage.set("user_sessions", JSON.stringify(updated), true);
-        return updated;
-      });
-      if (logoutSession) {
-        broadcastLiveUpdate({
-          type: "USER_SESSION_UPDATE",
-          session: logoutSession
-        });
-      }
-    };
-
-    window.addEventListener("beforeunload", handleBeforeUnload);
     return () => {
       clearInterval(interval);
-      window.removeEventListener("beforeunload", handleBeforeUnload);
     };
   }, [currentSessionId, activeUser]);
 
@@ -1122,7 +1125,12 @@ export default function LoomPLM() {
         try {
           const parsed = typeof sessRes.value.value === "string" ? JSON.parse(sessRes.value.value) : sessRes.value.value;
           if (Array.isArray(parsed)) {
-            setUserSessions(parsed.map(s => ({ ...s, location: sanitizeLocationString(s.location) })));
+            const browserSessionId = currentSessionId || sessionStorage.getItem("loom_active_session_id");
+            setUserSessions(parsed.map(s => ({
+              ...s,
+              ...(browserSessionId && s.id === browserSessionId && s.userId === activeUser?.id ? { active: true, logoutTime: null } : {}),
+              location: sanitizeLocationString(s.location)
+            })));
           }
         } catch (e) {}
       }
@@ -1135,7 +1143,7 @@ export default function LoomPLM() {
         } catch (e) {}
       }
     } catch (e) {}
-  }, []);
+  }, [activeUser, currentSessionId]);
 
   // Periodic full refresh only for authenticated users; module-specific live data is loaded on navigation.
   useEffect(() => {
