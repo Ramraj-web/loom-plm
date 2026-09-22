@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   Package, CheckCircle2, TriangleAlert, ArrowDownRight, Zap, Factory, Clock, CircleAlert,
-  Calendar, CheckSquare, Layers, ShieldCheck, Bell, DollarSign, ChevronRight, ChevronLeft, Truck, Users, X
+  Calendar, CheckSquare, Layers, ShieldCheck, Bell, DollarSign, ChevronRight, ChevronLeft, Truck, Users, X, Trash2
 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Legend, PieChart, Pie, Cell
@@ -103,6 +103,8 @@ export function DateWiseActivityFeed({
     }
     return <span style={{ background: "#F0F0F2", color: "#565A66", fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 999 }}>{act.status}</span>;
   };
+
+
 
   return (
     <Card style={{ marginBottom: 16 }}>
@@ -1467,7 +1469,7 @@ export function Dashboard({
           action="Timeline / calendar"
           onAction={() => onNavigate("calendar")}
         />
-        
+
         {/* Horizontal Workflow Stepper */}
         <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 10 }}>
           {stageCounts.map((s, i) => {
@@ -2115,8 +2117,89 @@ export function MyDepartmentDashboard({
   leaveRequests = [],
   debitNotes = [],
   capas = [],
-  attendance = {}
+  attendance = {},
+  onUpdateTask = () => {},
+  onDeleteTask = () => {},
+  onAssignSupplier = () => {}
 }) {
+
+   const MONTH_NAMES_FULL = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"
+];
+const MONTH_INDEX = {
+  jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+  jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
+};
+
+function toDateKey(date) {
+  if (!(date instanceof Date) || isNaN(date.getTime())) return null;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function parseTaskDueDate(dueStr, orderStartDate) {
+  if (!dueStr || typeof dueStr !== "string") return null;
+  const trimmed = dueStr.trim();
+  if (!trimmed) return null;
+
+  const fromBase = (offsetDays) => {
+    let base = new Date();
+    if (orderStartDate) {
+      const parsed = new Date(orderStartDate);
+      if (!isNaN(parsed.getTime())) base = parsed;
+    }
+    return new Date(base.getFullYear(), base.getMonth(), base.getDate() + offsetDays);
+  };
+
+  const dayMatch = trimmed.match(/^day\s*(\d+)(?:\s*[-–]\s*(\d+)|\s+(\d+))?/i);
+  if (dayMatch) {
+    return fromBase(Math.max(0, parseInt(dayMatch[1], 10) - 1));
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+    const parts = trimmed.slice(0, 10).split("-").map(Number);
+    if (parts.length === 3 && parts[1] >= 1 && parts[1] <= 12) {
+      return new Date(parts[0], parts[1] - 1, parts[2]);
+    }
+  }
+
+  const named = trimmed.match(/^(\d{1,2})(?:\s*[-–]\s*\d{1,2})?\s+([A-Za-z]{3,9})(?:\s+(\d{4}))?/);
+  if (named) {
+    const month = MONTH_INDEX[named[2].slice(0, 3).toLowerCase()];
+    if (month != null) {
+      let year = named[3] ? parseInt(named[3], 10) : new Date().getFullYear();
+      if (orderStartDate) {
+        const parsed = new Date(orderStartDate);
+        if (!isNaN(parsed.getTime()) && !named[3]) year = parsed.getFullYear();
+      }
+      return new Date(year, month, parseInt(named[1], 10));
+    }
+  }
+
+  const fallback = new Date(trimmed);
+  if (!isNaN(fallback.getTime())) return new Date(fallback.getFullYear(), fallback.getMonth(), fallback.getDate());
+  return null;
+}
+
+function formatDateKeyLabel(key) {
+  if (!key) return "";
+  const [y, m, d] = key.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  if (isNaN(date.getTime())) return key;
+  return date.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+}
+
+function calendarTaskTone(item) {
+  if (item.kind === "tna") {
+    if (item.stage?.reason) return { bg: "#FEE2E2", fg: "#991B1B", border: "#FECACA", bar: "#EF4444" };
+    if (item.stage?.status === "in_progress") return { bg: "#FEF3C7", fg: "#92400E", border: "#FDE68A", bar: "#F59E0B" };
+    if (item.stage?.status === "pending") return { bg: "#F1F5F9", fg: "#475569", border: "#E2E8F0", bar: "#94A3B8" };
+    return { bg: "#D1FAE5", fg: "#065F46", border: "#A7F3D0", bar: "#10B981" };
+  }
+  if (item.priority === "high" || item.status === "delayed") return { bg: "#FEE2E2", fg: "#991B1B", border: "#FECACA", bar: "#EF4444" };
+  if (item.status === "done") return { bg: "#D1FAE5", fg: "#065F46", border: "#A7F3D0", bar: "#10B981" };
+  return { bg: "#E0F2FE", fg: "#075985", border: "#BAE6FD", bar: "#0EA5E9" };
+}
   const rows = collectTasks(orders, role.dept);
   const openRows = rows.filter(r => r.stage.status !== "done");
   const delayedRows = rows.filter(r => r.stage.reason);
@@ -2126,6 +2209,145 @@ export function MyDepartmentDashboard({
   rows.forEach(r => { if (r.stage.reason) reasonCounts[r.stage.reason] = (reasonCounts[r.stage.reason] || 0) + 1; });
   const reasonArr = Object.entries(reasonCounts).sort((a, b) => b[1] - a[1]);
   const reasonTotal = reasonArr.reduce((a, [, c]) => a + c, 0) || 1;
+  const today = useMemo(() => {
+      const d = new Date();
+      return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    }, []);
+
+  // Which task source(s) the calendar shows: all tasks, only T&A stages, or only custom tasks
+  const [taskTab, setTaskTab] = useState("all");
+
+  // Guard against a non-array orders prop and reuse it for order lookups below
+  const safeOrders = useMemo(() => (Array.isArray(orders) ? orders : []), [orders]);
+
+  // T&A stage rows are already scoped to this department by collectTasks above
+  const filteredTnaRows = rows;
+
+  // Custom tasks scoped to this department (tasks without a dept are treated as general/visible to all)
+  const filteredCustomTasks = useMemo(() => {
+    return (customTasks || []).filter(t => !t.dept || t.dept === role.dept);
+  }, [customTasks, role]);
+
+  const priorityColors = {
+    low: { bg: "#F1F5F9", fg: "#475569" },
+    medium: { bg: "#FEF3C7", fg: "#92400E" },
+    high: { bg: "#FEE2E2", fg: "#991B1B" }
+  };
+
+  const [calMonth, setCalMonth] = useState(today.getMonth());
+    const [calYear, setCalYear] = useState(today.getFullYear());
+    const [selectedDateKey, setSelectedDateKey] = useState(toDateKey(today));
+    const calendarItems = useMemo(() => {
+        const items = [];
+        if (taskTab === "all" || taskTab === "tna") {
+          filteredTnaRows.forEach((r, idx) => {
+            const due = parseTaskDueDate(r.stage?.planned, r.order?.orderDate || r.order?.createdAt || r.order?.ship);
+            items.push({
+              id: `tna-${r.order?.primaryId || r.order?.id}-${r.stageIdx ?? idx}`,
+              kind: "tna",
+              dateKey: toDateKey(due),
+              title: r.stage?.name || "Stage task",
+              dueLabel: r.stage?.planned || "—",
+              status: r.stage?.status,
+              order: r.order,
+              stage: r.stage,
+              dept: r.dept,
+              reason: r.stage?.reason
+            });
+          });
+        }
+        if (taskTab === "all" || taskTab === "custom") {
+          filteredCustomTasks.forEach(t => {
+            const linkedOrder = safeOrders.find(o =>
+              (o.primaryId && o.primaryId === t.orderId) ||
+              (o._id && o._id === t.orderId) ||
+              o.id === t.orderId
+            );
+            const due = parseTaskDueDate(t.dueDate, linkedOrder?.orderDate || linkedOrder?.createdAt);
+            items.push({
+              id: `custom-${t.id}`,
+              kind: "custom",
+              dateKey: toDateKey(due),
+              title: t.title,
+              dueLabel: t.dueDate || "—",
+              status: t.status,
+              task: t,
+              order: linkedOrder,
+              dept: t.dept,
+              assignee: t.assignee,
+              priority: t.priority,
+              notes: t.notes
+            });
+          });
+        }
+        return items;
+      }, [filteredTnaRows, filteredCustomTasks, taskTab, safeOrders]);
+
+      const tasksByDate = useMemo(() => {
+        const map = {};
+        calendarItems.forEach(item => {
+          const key = item.dateKey || "unscheduled";
+          if (!map[key]) map[key] = [];
+          map[key].push(item);
+        });
+        return map;
+      }, [calendarItems]);
+
+      const calendarDays = useMemo(() => {
+        const firstDayIndex = new Date(calYear, calMonth, 1).getDay();
+        const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+        const days = [];
+        const prevMonthDays = new Date(calYear, calMonth, 0).getDate();
+        for (let i = firstDayIndex - 1; i >= 0; i--) {
+          days.push({ day: prevMonthDays - i, isCurrentMonth: false, key: null, tasks: [] });
+        }
+        for (let day = 1; day <= daysInMonth; day++) {
+          const key = `${calYear}-${String(calMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+          const isToday = today.getFullYear() === calYear && today.getMonth() === calMonth && today.getDate() === day;
+          days.push({
+            day,
+            isCurrentMonth: true,
+            isToday,
+            key,
+            tasks: tasksByDate[key] || []
+          });
+        }
+        const totalCells = days.length > 35 ? 42 : 35;
+        const remaining = totalCells - days.length;
+        for (let i = 1; i <= remaining; i++) {
+          days.push({ day: i, isCurrentMonth: false, key: null, tasks: [] });
+        }
+        return days;
+      }, [calYear, calMonth, today, tasksByDate]);
+
+      const selectedDayTasks = selectedDateKey ? (tasksByDate[selectedDateKey] || []) : [];
+      const unscheduledTasks = tasksByDate.unscheduled || [];
+
+      const shiftMonth = (delta) => {
+        const next = new Date(calYear, calMonth + delta, 1);
+        setCalYear(next.getFullYear());
+        setCalMonth(next.getMonth());
+      };
+
+      const jumpToToday = () => {
+        setCalYear(today.getFullYear());
+        setCalMonth(today.getMonth());
+        setSelectedDateKey(toDateKey(today));
+      };
+
+      const [didAutoJump, setDidAutoJump] = useState(false);
+      useEffect(() => {
+        if (didAutoJump) return;
+        const keys = calendarItems.map(i => i.dateKey).filter(Boolean).sort();
+        if (!keys.length) return;
+        const todayKey = toDateKey(today);
+        const next = keys.find(k => k >= todayKey) || keys[0];
+        const [y, m] = next.split("-").map(Number);
+        setSelectedDateKey(next);
+        setCalYear(y);
+        setCalMonth(m - 1);
+        setDidAutoJump(true);
+      }, [calendarItems, didAutoJump, today]);
 
   return (
     <div>
@@ -2145,27 +2367,340 @@ export function MyDepartmentDashboard({
         </Card>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 16, marginBottom: 16 }}>
-        <Card>
-          <CardHeader title="Your orders" action="My tasks" onAction={() => onNavigate("tasks")} />
-          {linkedOrders.length === 0 ? (
-            <div style={{ fontSize: 12.5, color: "#B0B2BA" }}>No orders currently touch your department.</div>
-          ) : linkedOrders.map(o => (
-            <div
-              key={o.id}
-              onClick={() => onOpenOrder(o.id)}
-              style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 4px", borderBottom: "1px solid #F5F5F7", cursor: "pointer" }}
-              onMouseEnter={e => e.currentTarget.style.background = "#FAFAFB"}
-              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-            >
-              <div>
-                <div style={{ fontFamily: "monospace", fontSize: 11, color: "#8A8D98" }}>{o.id}</div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "#1B2130" }}>{o.style} <span style={{ color: "#8A8D98", fontWeight: 400 }}>· {o.buyer}</span></div>
-              </div>
-              {statusPill(o.status)}
+       <div style={{ display: "grid", gridTemplateColumns: "1.45fr 1fr", gap: 16, alignItems: "start" }}>
+              <Card style={{ padding: "16px 18px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 8, flexWrap: "wrap" }}>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#0F172A", display: "flex", alignItems: "center", gap: 6 }}>
+                      <Calendar size={16} color="#0F766E" />
+                      Task calendar
+                    </div>
+                    <div style={{ fontSize: 11.5, color: "#64748B", marginTop: 2 }}>
+                      {calendarItems.filter(i => i.dateKey).length} dated · {unscheduledTasks.length} unscheduled
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    <div style={{ display: "inline-flex", background: "#F1F5F9", padding: "2px", borderRadius: 8, border: "1px solid #E2E8F0" }}>
+                      {[
+                        { key: "all", label: "All" },
+                        { key: "tna", label: "T&A" },
+                        { key: "custom", label: "Custom" }
+                      ].map(tab => (
+                        <button
+                          key={tab.key}
+                          type="button"
+                          onClick={() => setTaskTab(tab.key)}
+                          style={{
+                            padding: "4px 9px",
+                            fontSize: 11,
+                            fontWeight: 600,
+                            borderRadius: 6,
+                            border: "none",
+                            background: taskTab === tab.key ? "#FFFFFF" : "transparent",
+                            color: taskTab === tab.key ? "#0F766E" : "#64748B",
+                            boxShadow: taskTab === tab.key ? "0 1px 2px rgba(0,0,0,0.08)" : "none",
+                            cursor: "pointer"
+                          }}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => shiftMonth(-1)}
+                      style={{ background: "#F1F5F9", border: "1px solid #E2E8F0", borderRadius: 6, width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#475569" }}
+                    >
+                      <ChevronLeft size={15} />
+                    </button>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", minWidth: 132, textAlign: "center" }}>
+                      {MONTH_NAMES_FULL[calMonth]} {calYear}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => shiftMonth(1)}
+                      style={{ background: "#F1F5F9", border: "1px solid #E2E8F0", borderRadius: 6, width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#475569" }}
+                    >
+                      <ChevronRight size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={jumpToToday}
+                      style={{
+                        marginLeft: 4,
+                        padding: "4px 9px",
+                        borderRadius: 6,
+                        fontSize: 11,
+                        fontWeight: 600,
+                        border: "1px solid #0F766E",
+                        background: "#ECFDF5",
+                        color: "#0F766E",
+                        cursor: "pointer"
+                      }}
+                    >
+                      Today
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", textAlign: "center", fontSize: 10.5, fontWeight: 700, color: "#64748B", paddingBottom: 6 }}>
+                  <span>SUN</span><span>MON</span><span>TUE</span><span>WED</span><span>THU</span><span>FRI</span><span>SAT</span>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 5 }}>
+                  {calendarDays.map((c, i) => {
+                    const hasTasks = c.tasks && c.tasks.length > 0;
+                    const isSelected = selectedDateKey && selectedDateKey === c.key;
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        disabled={!c.isCurrentMonth}
+                        onClick={() => {
+                          if (c.key) setSelectedDateKey(c.key);
+                        }}
+                        style={{
+                          minHeight: 72,
+                          borderRadius: 8,
+                          fontFamily: "inherit",
+                          color: "inherit",
+                          border: isSelected
+                            ? "1.5px solid #0F766E"
+                            : c.isToday
+                              ? "1.5px solid #14B8A6"
+                              : hasTasks
+                                ? "1px solid #99F6E4"
+                                : "1px solid #F1F5F9",
+                          background: isSelected
+                            ? "#ECFDF5"
+                            : c.isToday
+                              ? "#F0FDFA"
+                              : hasTasks
+                                ? "#F8FFFC"
+                                : c.isCurrentMonth
+                                  ? "#FFFFFF"
+                                  : "#F8FAFC",
+                          padding: "5px 6px",
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "stretch",
+                          cursor: c.isCurrentMonth ? "pointer" : "default",
+                          opacity: c.isCurrentMonth ? 1 : 0.35,
+                          textAlign: "left"
+                        }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span style={{ fontSize: 11.5, fontWeight: c.isToday || hasTasks ? 800 : 500, color: c.isToday ? "#0F766E" : "#1E293B" }}>
+                            {c.day}
+                          </span>
+                          {hasTasks && (
+                            <span style={{ fontSize: 9, fontWeight: 700, background: "#0F766E", color: "#FFFFFF", borderRadius: 999, padding: "0 5px", lineHeight: "14px" }}>
+                              {c.tasks.length}
+                            </span>
+                          )}
+                        </div>
+                        {hasTasks && (
+                          <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 2 }}>
+                            {c.tasks.slice(0, 2).map(t => {
+                              const tone = calendarTaskTone(t);
+                              return (
+                                <div
+                                  key={t.id}
+                                  style={{
+                                    fontSize: 9,
+                                    fontWeight: 600,
+                                    color: tone.fg,
+                                    background: tone.bg,
+                                    borderRadius: 4,
+                                    padding: "1px 4px",
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap"
+                                  }}
+                                >
+                                  {t.title}
+                                </div>
+                              );
+                            })}
+                            {c.tasks.length > 2 && (
+                              <span style={{ fontSize: 9, color: "#64748B", fontWeight: 600 }}>+{c.tasks.length - 2} more</span>
+                            )}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div style={{ display: "flex", gap: 12, marginTop: 12, flexWrap: "wrap", fontSize: 11, color: "#64748B" }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: 999, background: "#F59E0B" }} /> In progress</span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: 999, background: "#EF4444" }} /> Delayed / high</span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: 999, background: "#0EA5E9" }} /> Custom task</span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: 999, background: "#10B981" }} /> Done</span>
+                </div>
+              </Card>
+
+              <Card style={{ padding: "16px 18px", minHeight: 420 }}>
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#0F172A" }}>
+                    {selectedDateKey ? formatDateKeyLabel(selectedDateKey) : "Task details"}
+                  </div>
+                  <div style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>
+                    {selectedDayTasks.length} task{selectedDayTasks.length === 1 ? "" : "s"} on this date
+                  </div>
+                </div>
+
+                {selectedDayTasks.length === 0 ? (
+                  <div style={{ padding: "36px 8px", textAlign: "center", color: "#94A3B8", fontSize: 13 }}>
+                    No tasks scheduled for this date. Click a highlighted day on the calendar.
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: 560, overflowY: "auto" }}>
+                    {selectedDayTasks.map(item => {
+                      const tone = calendarTaskTone(item);
+                      const t = item.task;
+                      const isDone = item.status === "done";
+                      const pStyle = t ? (priorityColors[t.priority] || priorityColors.medium) : null;
+                      return (
+                        <div
+                          key={item.id}
+                          style={{
+                            border: `1px solid ${tone.border}`,
+                            background: "#FFFFFF",
+                            borderRadius: 10,
+                            padding: "12px 12px 12px 14px",
+                            borderLeft: `4px solid ${tone.bar}`,
+                            opacity: isDone ? 0.7 : 1
+                          }}
+                        >
+                          <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
+                            <div style={{ fontWeight: 700, fontSize: 13, color: isDone ? "#8A8D98" : "#0F172A", textDecoration: isDone ? "line-through" : "none" }}>
+                              {item.title}
+                            </div>
+                            {item.kind === "tna" ? statusPill(item.status) : (
+                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                {pStyle && (
+                                  <span style={{ background: pStyle.bg, color: pStyle.fg, fontSize: 10.5, fontWeight: 700, padding: "2px 7px", borderRadius: 999, textTransform: "capitalize" }}>
+                                    {item.priority}
+                                  </span>
+                                )}
+                                {statusPill(item.status)}
+                              </div>
+                            )}
+                          </div>
+
+                          <div style={{ fontSize: 11.5, color: "#64748B", marginTop: 6, display: "flex", flexWrap: "wrap", gap: "4px 10px" }}>
+                            {item.order && (
+                              <span
+                                onClick={() => onOpenOrder && onOpenOrder(item.order.primaryId || item.order.id, item.order.primaryId)}
+                                style={{ color: "#0F766E", fontWeight: 700, cursor: "pointer", fontFamily: "monospace" }}
+                              >
+                                {item.order.id}{item.order.style ? ` · ${item.order.style}` : ""}
+                              </span>
+                            )}
+                            {item.dept && <span>{item.dept}</span>}
+                            <span>Due {item.dueLabel}</span>
+                            {item.assignee && <span>{item.assignee}</span>}
+                          </div>
+
+                          {item.reason && (
+                            <div style={{ fontSize: 11.5, color: "#991B1B", marginTop: 6, fontWeight: 600 }}>Flag: {item.reason}</div>
+                          )}
+                          {item.notes && (
+                            <div style={{ fontSize: 11.5, color: "#64748B", marginTop: 6 }}>{item.notes}</div>
+                          )}
+
+                          {item.kind === "custom" && t && (
+                            <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
+                              <label style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, color: "#334155", cursor: "pointer" }}>
+                                <input
+                                  type="checkbox"
+                                  checked={isDone}
+                                  onChange={e => onUpdateTask(t.id, { status: e.target.checked ? "done" : "in_progress" })}
+                                  style={{ cursor: "pointer", accentColor: "#1F9E8D" }}
+                                />
+                                Mark done
+                              </label>
+                              <button
+                                onClick={() => onAssignSupplier({ orderId: t.orderId || "", dept: t.dept || "Merchandising", taskName: t.title })}
+                                style={{
+                                  background: "#F0EFFB",
+                                  color: "#534AB7",
+                                  border: "1px solid #D6D2F3",
+                                  borderRadius: 6,
+                                  padding: "4px 8px",
+                                  fontSize: 11.5,
+                                  fontWeight: 600,
+                                  cursor: "pointer",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 3
+                                }}
+                              >
+                                <Layers size={12} />
+                                Assign Supplier
+                              </button>
+                              <button
+                                onClick={() => onDeleteTask(t.id)}
+                                style={{
+                                  background: "#FCEBEB",
+                                  color: "#791F1F",
+                                  border: "none",
+                                  borderRadius: 6,
+                                  padding: "4px 8px",
+                                  fontSize: 11.5,
+                                  fontWeight: 600,
+                                  cursor: "pointer",
+                                  display: "inline-flex",
+                                  alignItems: "center"
+                                }}
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          )}
+
+                          {item.kind === "tna" && item.order && (
+                            <button
+                              onClick={() => onOpenOrder && onOpenOrder(item.order.primaryId || item.order.id, item.order.primaryId)}
+                              style={{
+                                marginTop: 10,
+                                background: "#ECFDF5",
+                                color: "#0F766E",
+                                border: "1px solid #A7F3D0",
+                                borderRadius: 6,
+                                padding: "5px 10px",
+                                fontSize: 11.5,
+                                fontWeight: 600,
+                                cursor: "pointer"
+                              }}
+                            >
+                              Open order
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {unscheduledTasks.length > 0 && (
+                  <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid #F1F5F9" }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#475569", marginBottom: 8 }}>
+                      Unscheduled ({unscheduledTasks.length})
+                    </div>
+                    {unscheduledTasks.map(item => (
+                      <div key={item.id} style={{ fontSize: 12, color: "#334155", padding: "6px 0", borderBottom: "1px solid #F8FAFC" }}>
+                        {item.title}
+                        {item.dueLabel && item.dueLabel !== "—" ? <span style={{ color: "#94A3B8" }}> · {item.dueLabel}</span> : null}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
             </div>
-          ))}
-        </Card>
+
+        <div style={{ display: "grid", gap: 16, marginBottom: 16, marginTop:16 }}>
 
         <Card>
           <CardHeader title="Top delay reasons in your department" />
