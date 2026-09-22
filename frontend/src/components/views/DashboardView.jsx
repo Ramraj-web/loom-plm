@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import {
   Package, CheckCircle2, TriangleAlert, ArrowDownRight, Zap, Factory, Clock, CircleAlert,
-  Calendar, CheckSquare, Layers, ShieldCheck, Bell, DollarSign, ChevronRight, ChevronLeft, Truck, Users
+  Calendar, CheckSquare, Layers, ShieldCheck, Bell, DollarSign, ChevronRight, ChevronLeft, Truck, Users, X
 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Legend, PieChart, Pie, Cell
@@ -882,10 +882,16 @@ export function Dashboard({
 
   const stageCounts = useMemo(() => {
     return TA_STAGES.map((s, i) => {
-      const count = activeOrders.filter(o => o.stages && o.stages[i] && (o.stages[i].status === "done" || o.stages[i].status === "in_progress")).length;
-      return { name: s.name, count };
+      const matchingOrders = activeOrders.filter(o => {
+        const status = o?.stages?.[i]?.status;
+        return ["done", "in_progress", "pending"].includes(status);
+      });
+      const count = matchingOrders.filter(o => o.stages[i].status === "done" || o.stages[i].status === "in_progress").length;
+      return { name: s.name, day: s.day, dept: s.dept, count, orders: matchingOrders, stageIdx: i };
     });
   }, [activeOrders]);
+
+  const [selectedStageIdx, setSelectedStageIdx] = useState(null);
 
   const summary = useMemo(() => {
     const completed = allStages.filter(s => s.status === "done").length;
@@ -1466,27 +1472,156 @@ export function Dashboard({
         <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 10 }}>
           {stageCounts.map((s, i) => {
             const Icon = STAGE_ICON_SET_BASE[i % STAGE_ICON_SET_BASE.length];
+            const isSelected = selectedStageIdx === i;
             return (
               <div
                 key={s.name}
+                onClick={() => setSelectedStageIdx(isSelected ? null : i)}
                 style={{
                   flex: "0 0 68px",
                   textAlign: "center",
-                  background: "#F8FAFC",
+                  background: isSelected ? "#EEF2FF" : "#F8FAFC",
                   padding: "8px 4px",
                   borderRadius: 8,
-                  border: "1px solid #F1F5F9"
+                  border: isSelected ? "2px solid #4F46E5" : "1px solid #F1F5F9",
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
+                  transform: isSelected ? "scale(1.04)" : "scale(1)",
+                  boxShadow: isSelected ? "0 2px 8px rgba(79,70,229,0.18)" : "none"
                 }}
+                onMouseEnter={e => { if (!isSelected) { e.currentTarget.style.background = "#F1F5F9"; e.currentTarget.style.borderColor = "#C7D2FE"; } }}
+                onMouseLeave={e => { if (!isSelected) { e.currentTarget.style.background = "#F8FAFC"; e.currentTarget.style.borderColor = "#F1F5F9"; } }}
               >
-                <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#EEF2FF", border: "1px solid #E0E7FF", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto" }}>
-                  <Icon size={14} color="#4F46E5" />
+                <div style={{ width: 30, height: 30, borderRadius: "50%", background: isSelected ? "#4F46E5" : "#EEF2FF", border: isSelected ? "1px solid #4338CA" : "1px solid #E0E7FF", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto", transition: "all 0.15s ease" }}>
+                  <Icon size={14} color={isSelected ? "#FFFFFF" : "#4F46E5"} />
                 </div>
-                <div style={{ fontSize: 9.5, color: "#64748B", fontWeight: 600, marginTop: 6, lineHeight: 1.25, height: 24, overflow: "hidden" }}>{s.name}</div>
-                <div style={{ fontSize: 13.5, fontWeight: 800, color: "#0F172A", marginTop: 2 }}>{s.count}</div>
+                <div style={{ fontSize: 9.5, color: isSelected ? "#312E81" : "#64748B", fontWeight: 600, marginTop: 6, lineHeight: 1.25, height: 24, overflow: "hidden" }}>{s.name}</div>
+                <div style={{ fontSize: 13.5, fontWeight: 800, color: isSelected ? "#4F46E5" : "#0F172A", marginTop: 2 }}>{s.count}</div>
               </div>
             );
           })}
         </div>
+
+        {/* Expanded Stage Detail Panel */}
+        {selectedStageIdx !== null && stageCounts[selectedStageIdx] && (() => {
+          const sel = stageCounts[selectedStageIdx];
+          const stageOrders = sel.orders || [];
+          const doneOrders = stageOrders.filter(o => o.stages[sel.stageIdx]?.status === "done");
+          const inProgressOrders = stageOrders.filter(o => o.stages[sel.stageIdx]?.status === "in_progress");
+          const pendingOrders = stageOrders.filter(o => o.stages[sel.stageIdx]?.status === "pending");
+          return (
+            <div style={{
+              background: "linear-gradient(135deg, #F8FAFC 0%, #EEF2FF 100%)",
+              border: "1px solid #E0E7FF",
+              borderRadius: 10,
+              padding: "16px 18px",
+              marginBottom: 10,
+              animation: "fadeIn 0.2s ease"
+            }}>
+              {/* Header */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+                <div>
+                  <div style={{ fontSize: 14.5, fontWeight: 800, color: "#1E1B4B", display: "flex", alignItems: "center", gap: 8 }}>
+                    {(() => { const Ic = STAGE_ICON_SET_BASE[selectedStageIdx % STAGE_ICON_SET_BASE.length]; return <Ic size={16} color="#4F46E5" />; })()}
+                    {sel.name}
+                  </div>
+                  <div style={{ display: "flex", gap: 14, marginTop: 5, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 11, color: "#64748B", fontWeight: 500 }}>Department: <strong style={{ color: "#334155" }}>{sel.dept}</strong></span>
+                    <span style={{ fontSize: 11, color: "#64748B", fontWeight: 500 }}>T&A: <strong style={{ color: "#334155" }}>{sel.day}</strong></span>
+                    <span style={{ fontSize: 11, background: "#DBEAFE", color: "#1E40AF", fontWeight: 700, padding: "1px 8px", borderRadius: 999 }}>{stageOrders.length} order{stageOrders.length !== 1 ? "s" : ""}</span>
+                    <span style={{ fontSize: 11, background: "#DCFCE7", color: "#166534", fontWeight: 700, padding: "1px 8px", borderRadius: 999 }}>{doneOrders.length} done</span>
+                    <span style={{ fontSize: 11, background: "#FEF3C7", color: "#92400E", fontWeight: 700, padding: "1px 8px", borderRadius: 999 }}>{inProgressOrders.length} in progress</span>
+                    <span style={{ fontSize: 11, background: "#F1F5F9", color: "#64748B", fontWeight: 700, padding: "1px 8px", borderRadius: 999 }}>{pendingOrders.length} pending</span>
+                  </div>
+                </div>
+                <div
+                  onClick={() => setSelectedStageIdx(null)}
+                  style={{ cursor: "pointer", padding: 4, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center" }}
+                  onMouseEnter={e => e.currentTarget.style.background = "#E0E7FF"}
+                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                  title="Close details"
+                >
+                  <X size={16} color="#64748B" />
+                </div>
+              </div>
+
+              {/* Orders Table */}
+              {stageOrders.length === 0 ? (
+                <div style={{ fontSize: 12, color: "#94A3B8", padding: "12px 0", textAlign: "center" }}>No orders have this stage yet.</div>
+              ) : (
+                <div style={{ maxHeight: 280, overflowY: "auto", overflowX: "hidden" }}>
+                  {/* Table Header */}
+                  <div style={{
+                    display: "grid",
+                    gridTemplateColumns: "1.1fr 1.3fr 0.9fr 0.8fr 1.6fr",
+                    gap: 8,
+                    fontSize: 10.5,
+                    color: "#64748B",
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: 0.3,
+                    paddingBottom: 6,
+                    borderBottom: "1px solid #E2E8F0",
+                    marginBottom: 4
+                  }}>
+                    <div>Order / PO</div>
+                    <div>Style / Buyer</div>
+                    <div>Due info</div>
+                    <div>Stage Status</div>
+                    <div>Delay / Reason</div>
+                  </div>
+
+                  {/* Order Rows */}
+                  {stageOrders.map(o => {
+                    const stage = o.stages[sel.stageIdx];
+                    const status = stage?.status || "pending";
+                    const reason = stage?.reason || "";
+                    const dueInfo = stage?.planned || stage?.dueDate || sel.day || "—";
+                    return (
+                      <div
+                        key={o.id || o.primaryId}
+                        onClick={() => onOpenOrder && onOpenOrder(o.primaryId || o.id, o.primaryId)}
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1.1fr 1.3fr 0.9fr 0.8fr 1.6fr",
+                          gap: 8,
+                          alignItems: "center",
+                          fontSize: 11.5,
+                          padding: "8px 4px",
+                          borderBottom: "1px solid #F1F5F9",
+                          cursor: "pointer",
+                          borderRadius: 6,
+                          transition: "background 0.12s ease"
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = "#FFFFFF"}
+                        onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                        title={`Click to open order ${o.id || o.primaryId}`}
+                      >
+                        <div style={{ fontWeight: 700, color: "#4F46E5", display: "flex", alignItems: "center", gap: 4 }}>
+                          <Package size={12} color="#4F46E5" />
+                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.id || o.primaryId}</span>
+                        </div>
+                        <div style={{ color: "#334155", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          <span style={{ fontWeight: 600 }}>{o.style || "—"}</span>
+                          {o.buyer && <span style={{ color: "#94A3B8", marginLeft: 4 }}>· {o.buyer}</span>}
+                        </div>
+                        <div style={{ color: "#475569", fontWeight: 600 }}>{dueInfo}</div>
+                        <div>{statusPill(status)}</div>
+                        <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {reason ? (
+                            <span style={{ fontSize: 10.5, color: "#DC2626", fontWeight: 600 }}>⚠ {reason}</span>
+                          ) : (
+                            <span style={{ fontSize: 10.5, color: "#94A3B8" }}>No delay</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* 4 Summary Stat Chips */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginTop: 16, paddingTop: 14, borderTop: "1px solid #F1F5F9" }}>

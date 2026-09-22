@@ -3462,8 +3462,61 @@ export function EmployeePerformancePanel({ orders = [], roster = [], attendance 
  */
 export function TopPerformer3DSpotlight({ performer, isSidebarCollapsed = false, onViewDetails }) {
   const [isHovered, setIsHovered] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(() => {
+    try {
+      return sessionStorage.getItem("hide_top_performer_badge") === "true";
+    } catch (e) {
+      return false;
+    }
+  });
 
   if (!performer) return null;
+
+  if (isMinimized) {
+    return (
+      <button
+        type="button"
+        aria-label="Show Top Performer"
+        title="Show Top Performer"
+        onClick={() => {
+          setIsMinimized(false);
+          try {
+            sessionStorage.removeItem("hide_top_performer_badge");
+          } catch (storageError) {}
+        }}
+        style={{
+          position: "fixed",
+          bottom: 20,
+          left: isSidebarCollapsed ? 84 : 228,
+          zIndex: 90,
+          width: 42,
+          height: 42,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 0,
+          border: "1px solid rgba(245, 158, 11, 0.7)",
+          borderRadius: "50%",
+          background: "linear-gradient(145deg, #1E1B4B 0%, #0F172A 100%)",
+          color: "#FDE68A",
+          fontSize: 21,
+          cursor: "pointer",
+          boxShadow: "0 8px 18px rgba(0, 0, 0, 0.4), 0 0 14px rgba(245, 158, 11, 0.22)",
+          transition: "left 0.22s ease, transform 0.18s ease, box-shadow 0.18s ease"
+        }}
+        onMouseEnter={e => {
+          e.currentTarget.style.transform = "translateY(-3px) scale(1.06)";
+          e.currentTarget.style.boxShadow = "0 12px 22px rgba(0, 0, 0, 0.5), 0 0 20px rgba(245, 158, 11, 0.4)";
+        }}
+        onMouseLeave={e => {
+          e.currentTarget.style.transform = "translateY(0) scale(1)";
+          e.currentTarget.style.boxShadow = "0 8px 18px rgba(0, 0, 0, 0.4), 0 0 14px rgba(245, 158, 11, 0.22)";
+        }}
+      >
+        ★
+      </button>
+    );
+  }
 
   const isPresent = performer.attendance === "present";
   const initials = String(performer.name || "★")
@@ -3512,6 +3565,48 @@ export function TopPerformer3DSpotlight({ performer, isSidebarCollapsed = false,
           background: "linear-gradient(90deg, transparent 0%, #F59E0B 30%, #FDE047 50%, #F59E0B 70%, transparent 100%)"
         }}
       />
+
+      <button
+        type="button"
+        aria-label="Minimize top performer badge"
+        onClick={e => {
+          e.stopPropagation();
+          setIsMinimized(true);
+          try {
+            sessionStorage.setItem("hide_top_performer_badge", "true");
+          } catch (storageError) {}
+        }}
+        style={{
+          position: "absolute",
+          top: 7,
+          right: 7,
+          width: 20,
+          height: 20,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 0,
+          border: "1px solid rgba(253, 230, 138, 0.45)",
+          borderRadius: 6,
+          background: "rgba(15, 23, 42, 0.55)",
+          color: "#FDE68A",
+          cursor: "pointer",
+          zIndex: 4,
+          transition: "background 0.15s ease, color 0.15s ease, border-color 0.15s ease"
+        }}
+        onMouseEnter={e => {
+          e.currentTarget.style.background = "rgba(245, 158, 11, 0.3)";
+          e.currentTarget.style.color = "#FFFFFF";
+          e.currentTarget.style.borderColor = "rgba(253, 230, 138, 0.9)";
+        }}
+        onMouseLeave={e => {
+          e.currentTarget.style.background = "rgba(15, 23, 42, 0.55)";
+          e.currentTarget.style.color = "#FDE68A";
+          e.currentTarget.style.borderColor = "rgba(253, 230, 138, 0.45)";
+        }}
+      >
+        <X size={12} strokeWidth={2.5} />
+      </button>
 
       {/* Top Header: Badge & Live Status */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 3 }}>
@@ -3687,6 +3782,137 @@ export function TopPerformer3DSpotlight({ performer, isSidebarCollapsed = false,
   );
 }
 
+function ExecutiveOrderDrilldownDrawer({
+  orders,
+  activeDrillDown,
+  filter,
+  onFilterChange,
+  onClose,
+  onOpenOrder,
+  onNavigate,
+  formatInr
+}) {
+  useEffect(() => {
+    const handleKeyDown = event => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  if (!activeDrillDown) return null;
+
+  const getOrderValue = order => {
+    const qty = Number(order?.qty) || Number(order?.preProd?.poSheet?.values?.poQty) || 0;
+    const poValues = order?.preProd?.poSheet?.values || {};
+    if (Number(poValues.orderValue) > 0) return Number(poValues.orderValue);
+    if (Number(order?.orderValue) > 0) return Number(order.orderValue);
+    const fob = Number(poValues.fobPrice || order?.fobPrice || order?.fob || order?.fobRate) || 0;
+    return fob * (qty || 1);
+  };
+  const getCurrentStage = order => (order?.stages || []).find(stage => stage?.status === "in_progress") ||
+    (order?.stages || []).find(stage => stage?.status !== "done" && stage?.status !== "completed") ||
+    (order?.stages || []).at(-1);
+  const isDelayed = order => order?.status === "Delayed" || (order?.stages || []).some(stage => stage?.reason);
+  const isShipped = order => order?.status === "Shipped" || ((order?.stages || []).length > 0 && order.stages.every(stage => ["done", "completed"].includes(stage?.status)));
+  const matchesQuickFilter = order => {
+    if (filter === "all") return true;
+    if (filter === "on-track") return order?.status === "On Track" && !isDelayed(order);
+    if (filter === "delayed") return isDelayed(order);
+    if (filter === "in-cutting") return (order?.stages || []).some(stage => stage?.dept === "Cutting" && !["done", "completed"].includes(stage?.status));
+    if (filter === "in-sewing") return (order?.stages || []).some(stage => /sewing/i.test(stage?.name || "") && !["done", "completed"].includes(stage?.status));
+    if (filter === "shipped") return isShipped(order);
+    return true;
+  };
+
+  const selectedOrders = (orders || []).filter(order => {
+    if (order?.isDeleted === true) return false;
+    const field = activeDrillDown.type === "buyer" ? order?.buyer : order?.country;
+    return field === activeDrillDown.value;
+  });
+  const filteredOrders = selectedOrders.filter(matchesQuickFilter);
+  const totalValue = selectedOrders.reduce((sum, order) => sum + getOrderValue(order), 0);
+  const delayedCount = selectedOrders.filter(isDelayed).length;
+  const title = `${activeDrillDown.type === "buyer" ? "Buyer" : "Country"} Insights: ${activeDrillDown.value}`;
+  const filters = [
+    ["all", "All"],
+    ["on-track", "On-Track"],
+    ["delayed", "Delayed"],
+    ["in-cutting", "In Cutting"],
+    ["in-sewing", "In Sewing"],
+    ["shipped", "Shipped"]
+  ];
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 1000, pointerEvents: "auto" }}>
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(15, 23, 42, 0.35)", backdropFilter: "blur(3px)" }} />
+      <aside style={{ position: "absolute", top: 0, right: 0, height: "100%", width: "min(760px, 94vw)", background: "#FFFFFF", boxShadow: "-12px 0 35px rgba(15, 23, 42, 0.16)", display: "flex", flexDirection: "column", transform: "translateX(0)", transition: "transform 300ms ease" }}>
+        <div style={{ padding: "20px 24px 16px", borderBottom: "1px solid #E2E8F0", background: "linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 100%)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 11, color: "#64748B", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>Executive drill-down</div>
+              <h2 style={{ margin: "4px 0 0", fontSize: 20, color: "#0F172A" }}>{title}</h2>
+            </div>
+            <button type="button" onClick={onClose} aria-label="Close order insights" style={{ border: "1px solid #E2E8F0", borderRadius: 8, width: 32, height: 32, background: "#FFFFFF", color: "#64748B", cursor: "pointer", fontSize: 17 }}>✕</button>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginTop: 16 }}>
+            {[
+              ["Orders", selectedOrders.length, "#2563EB"],
+              ["Quantity", `${selectedOrders.reduce((sum, order) => sum + (Number(order?.qty) || 0), 0).toLocaleString()} pcs`, "#0F766E"],
+              ["Value", formatInr(totalValue), "#7C3AED"],
+              ["Delayed", delayedCount, delayedCount > 0 ? "#DC2626" : "#16A34A"]
+            ].map(([label, value, color]) => (
+              <div key={label} style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, padding: "9px 10px" }}>
+                <div style={{ fontSize: 10, color: "#64748B", fontWeight: 700 }}>{label}</div>
+                <div style={{ fontSize: 15, color, fontWeight: 800, marginTop: 3 }}>{value}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", padding: "12px 24px", borderBottom: "1px solid #E2E8F0" }}>
+          {filters.map(([value, label]) => (
+            <button key={value} type="button" onClick={() => onFilterChange(value)} style={{ border: filter === value ? "1px solid #4F46E5" : "1px solid #E2E8F0", borderRadius: 999, padding: "5px 10px", background: filter === value ? "#EEF2FF" : "#FFFFFF", color: filter === value ? "#4338CA" : "#64748B", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{label}</button>
+          ))}
+        </div>
+        <div style={{ flex: 1, overflow: "auto", padding: "0 24px" }}>
+          {filteredOrders.length === 0 ? (
+            <div style={{ padding: "70px 20px", textAlign: "center", color: "#64748B" }}>
+              <div style={{ fontSize: 34, marginBottom: 10 }}>◌</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#334155" }}>No orders found for this selection</div>
+              <div style={{ fontSize: 12, marginTop: 4 }}>Try another quick filter.</div>
+            </div>
+          ) : (
+            <div style={{ minWidth: 680 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "0.9fr 1.2fr 0.9fr 0.9fr 0.9fr 1fr 0.8fr 0.9fr", gap: 8, padding: "14px 0 8px", borderBottom: "1px solid #E2E8F0", color: "#64748B", fontSize: 10, fontWeight: 800, textTransform: "uppercase" }}>
+                <div>Order / PO</div><div>Style</div><div>Buyer</div><div>Country</div><div>Qty</div><div>Current Stage</div><div>Status</div><div>Actions</div>
+              </div>
+              {filteredOrders.map(order => {
+                const currentStage = getCurrentStage(order);
+                const delayed = isDelayed(order);
+                return (
+                  <div key={order.primaryId || order.id} style={{ display: "grid", gridTemplateColumns: "0.9fr 1.2fr 0.9fr 0.9fr 0.9fr 1fr 0.8fr 0.9fr", gap: 8, alignItems: "center", padding: "11px 0", borderBottom: "1px solid #F1F5F9", fontSize: 11.5 }}>
+                    <button type="button" onClick={() => onOpenOrder && onOpenOrder(order.primaryId || order.id, order.primaryId)} style={{ padding: 0, border: 0, background: "none", textAlign: "left", color: "#2563EB", fontFamily: "monospace", fontWeight: 700, cursor: "pointer" }}>{order.id || order.primaryId}</button>
+                    <div style={{ color: "#334155", fontWeight: 600 }}>{order.style || "—"}</div>
+                    <div>{order.buyer || "—"}</div>
+                    <div>{order.country || "—"}</div>
+                    <div>{(Number(order.qty) || 0).toLocaleString()}</div>
+                    <div style={{ color: "#475569" }}>{currentStage?.name || "Order Started"}</div>
+                    <span style={{ justifySelf: "start", background: delayed ? "#FEF2F2" : "#ECFDF5", color: delayed ? "#B91C1C" : "#047857", borderRadius: 999, padding: "3px 7px", fontSize: 10, fontWeight: 800 }}>{delayed ? "Delayed" : order.status || "On Track"}</span>
+                    <button type="button" onClick={() => onOpenOrder && onOpenOrder(order.primaryId || order.id, order.primaryId)} style={{ border: "1px solid #C7D2FE", borderRadius: 6, padding: "5px 7px", background: "#EEF2FF", color: "#4338CA", fontSize: 10, fontWeight: 800, cursor: "pointer" }}>Open Order</button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        <div style={{ padding: "14px 24px", borderTop: "1px solid #E2E8F0", background: "#F8FAFC" }}>
+          <button type="button" onClick={() => { localStorage.setItem("loom_orders_drilldown_filter", JSON.stringify(activeDrillDown)); onNavigate && onNavigate("orders"); onClose(); }} style={{ width: "100%", border: 0, borderRadius: 9, padding: "10px 14px", background: "#4F46E5", color: "#FFFFFF", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>View filtered in Orders Master Page →</button>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
 export function ExecutiveOverviewPage({ orders, attendance, financials, roster, customTasks = [], leaveRequests = [], users = [], teams = [], complaints = [], onResolveComplaint, isAdmin = false, onOpenOrder, onNavigate, onApproveCosting, onRejectCosting, onRefresh, isRefreshing = false, lastRefreshedAt = null, onOpenDept, isSidebarCollapsed = false }) {
   // Only consider active, non-deleted orders for MD Executive Dashboard metrics
   const activeOrders = useMemo(() => (orders || []).filter(o => o.isDeleted !== true && o.completed !== true), [orders]);
@@ -3821,13 +4047,13 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
   const capacityUtilization = Math.round((presentCount / (roster.length || 1)) * 100);
 
   // 4. Department Performance
-  const depts = ["Merchandising", "Program", "Planning", "Purchase – Fabric", "Purchase – Trims", "Quality", "Cutting", "Production", "Finishing", "Logistics & Documentation"];
+  const depts = ["Merchandising", "Program", "Planning", "Purchase – Fabric", "Purchase – Trims", "Quality", "Cutting", "Production", "Logistics & Documentation"];
   const deptStats = depts.map(d => {
     const dStages = allStages.filter(s => s.dept === d);
     const total = dStages.length;
     const completed = dStages.filter(s => s.status === "done").length;
     const delayed = dStages.filter(s => s.reason).length;
-    const rate = total > 0 ? Math.round((completed / total) * 100) : 100;
+    const rate = total > 0 ? Math.round((completed / total) * 100) : 0;
     return { name: d, total, completed, delayed, rate };
   });
 
@@ -3855,6 +4081,13 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
 
   // 6. Top 5 Performing Employees (Overall Performance with Work Breakdown)
   const [selectedPerformer, setSelectedPerformer] = useState(null);
+  const [activeDrillDown, setActiveDrillDown] = useState(null);
+  const [drillDownFilter, setDrillDownFilter] = useState("all");
+
+  const openDrillDown = (type, value) => {
+    setDrillDownFilter("all");
+    setActiveDrillDown({ type, value });
+  };
 
   const topPerformers = useMemo(() => {
     const activeOrders = orders.filter(order => order.isDeleted !== true);
@@ -4129,7 +4362,7 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
           </div>
         </Card> */}
            <Card>
-          <CardHeader title="ORDERS BY BUYER" />
+          <CardHeader title="ORDERS BY BUYER" sub="Click a buyer to drill down" />
           {buyerData.length === 0 ? (
             <div style={{ fontSize: 12, color: "#94A3B8", textAlign: "center", padding: "20px 0" }}>No buyers recorded.</div>
           ) : (
@@ -4137,7 +4370,14 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
               <MiniDonut data={buyerData} size={84} centerLabel={totalOrders} labelColor="#0F172A" />
               <div style={{ flex: 1 }}>
                 {buyerData.map(b => (
-                  <div key={b.name} style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 4, fontSize: 11 }}>
+                  <div
+                    key={b.name}
+                    onClick={() => openDrillDown("buyer", b.name)}
+                    title="Click to drill down"
+                    style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 4, fontSize: 11, cursor: "pointer", borderRadius: 6, padding: "3px 5px", transition: "transform 0.15s ease, background 0.15s ease, border-color 0.15s ease", border: "1px solid transparent" }}
+                    onMouseEnter={e => { e.currentTarget.style.background = "#F8FAFC"; e.currentTarget.style.borderColor = "#C7D2FE"; e.currentTarget.style.transform = "translateX(2px)"; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.transform = "translateX(0)"; }}
+                  >
                     <span style={{ width: 7, height: 7, borderRadius: 999, background: b.color }} />
                     <span style={{ color: "#475569", flex: 1 }}>{b.name}</span>
                     <span style={{ color: "#0F172A", fontWeight: 700 }}>{b.value}</span>
@@ -4150,12 +4390,19 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
 
         {/* Orders by Country */}
         <Card>
-          <CardHeader title="ORDERS BY COUNTRY" />
+          <CardHeader title="ORDERS BY COUNTRY" sub="Click a country to drill down" />
           {countryArr.length === 0 ? (
             <div style={{ fontSize: 12, color: "#94A3B8", textAlign: "center", padding: "20px 0" }}>No country data.</div>
           ) : (
             countryArr.map(([country, count]) => (
-              <div key={country} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 7, fontSize: 11 }}>
+              <div
+                key={country}
+                onClick={() => openDrillDown("country", country)}
+                title="Click to drill down"
+                style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 7, fontSize: 11, cursor: "pointer", borderRadius: 6, padding: "3px 5px", transition: "transform 0.15s ease, background 0.15s ease, border-color 0.15s ease", border: "1px solid transparent" }}
+                onMouseEnter={e => { e.currentTarget.style.background = "#F8FAFC"; e.currentTarget.style.borderColor = "#BFDBFE"; e.currentTarget.style.transform = "translateX(2px)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.transform = "translateX(0)"; }}
+              >
                 <Globe size={11} color="#64748B" style={{ flexShrink: 0 }} />
                 <span style={{ color: "#475569", width: 70, flexShrink: 0 }}>{country}</span>
                 <div style={{ flex: 1, height: 5, background: "#F1F5F9", borderRadius: 999 }}>
@@ -4310,15 +4557,15 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
         </Card>
 
         {/* Department Performance (substituting Critical Alerts box per user request) */}
-        <Card>
+        <Card style={{ overflow: "hidden" }}>
           <CardHeader title="DEPARTMENT PERFORMANCE" sub="Stage completion & delay tracking per division" />
-          <div style={{ display: "grid", gridTemplateColumns: "1.8fr 1fr 1.2fr 1fr", fontSize: 10.5, color: "#64748B", fontWeight: 700, paddingBottom: 6, borderBottom: "1px solid #F1F5F9" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.8fr) minmax(0, 0.9fr) minmax(0, 1.2fr) minmax(0, 0.8fr)", gap: 4, fontSize: 10.5, color: "#64748B", fontWeight: 700, paddingBottom: 6, borderBottom: "1px solid #F1F5F9" }}>
             <div>DEPARTMENT</div>
             <div style={{ textAlign: "center" }}>STAGES</div>
             <div>ON-TIME RATE</div>
             <div style={{ textAlign: "right" }}>DELAYS</div>
           </div>
-          <div style={{ maxHeight: 200, overflowY: "auto" }}>
+          <div style={{ maxHeight: 200, overflowY: "auto", overflowX: "hidden" }}>
             {deptStats.map(d => (
               <div
                 key={d.name}
@@ -4331,22 +4578,23 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
                 }}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "1.8fr 1fr 1.2fr 1fr",
+                  gridTemplateColumns: "minmax(0, 1.8fr) minmax(0, 0.9fr) minmax(0, 1.2fr) minmax(0, 0.8fr)",
                   alignItems: "center",
                   fontSize: 11.5,
                   padding: "7px 6px",
                   borderBottom: "1px solid #F8FAFC",
                   cursor: "pointer",
                   borderRadius: 6,
-                  transition: "all 0.15s ease"
+                  transition: "all 0.15s ease",
+                  gap: 4
                 }}
                 onMouseEnter={e => e.currentTarget.style.background = "#F1F5F9"}
                 onMouseLeave={e => e.currentTarget.style.background = "transparent"}
                 title={`Click to open ${d.name} department page`}
               >
-                <div style={{ fontWeight: 600, color: "#1E293B", display: "flex", alignItems: "center", gap: 6 }}>
-                  <span>{d.name}</span>
-                  <span style={{ fontSize: 11, color: "#6366F1", fontWeight: 700 }}>→</span>
+                <div style={{ fontWeight: 600, color: "#1E293B", display: "flex", alignItems: "center", gap: 6, minWidth: 0, overflow: "hidden" }}>
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</span>
+                  <span style={{ fontSize: 11, color: "#6366F1", fontWeight: 700, flexShrink: 0 }}>→</span>
                 </div>
                 <div style={{ textAlign: "center", color: "#64748B", fontSize: 11 }}>
                   {d.completed} / {d.total}
@@ -4552,6 +4800,17 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
       </div>
 
       {/* Performer Work Details Modal */}
+      <ExecutiveOrderDrilldownDrawer
+        orders={activeOrders}
+        activeDrillDown={activeDrillDown}
+        filter={drillDownFilter}
+        onFilterChange={setDrillDownFilter}
+        onClose={() => setActiveDrillDown(null)}
+        onOpenOrder={onOpenOrder}
+        onNavigate={onNavigate}
+        formatInr={formatInr}
+      />
+
       {selectedPerformer && (
         <div
           onClick={() => setSelectedPerformer(null)}

@@ -751,6 +751,22 @@
               "customReason": "",
               "logs": [
                 {
+                  "id": "log-1790058532175-eal6",
+                  "date": "22 Sept 2026",
+                  "time": "11:58",
+                  "qty": 100,
+                  "completedSoFar": 100,
+                  "note": "Marked Full Done"
+                },
+                {
+                  "id": "log-1790058529695-i45i",
+                  "date": "22 Sept 2026",
+                  "time": "11:58",
+                  "qty": 100,
+                  "completedSoFar": 100,
+                  "note": "Marked Full Done"
+                },
+                {
                   "id": "log-1789975384773-3qyt",
                   "date": "21 Sept 2026",
                   "time": "12:53",
@@ -821,7 +837,9 @@
               "customReason": "",
               "logs": []
             }
-          ]
+          ],
+          "completedAt": null,
+          "completedBy": null
         },
         {
           "name": "Dyeing",
@@ -831,8 +849,6 @@
           "reason": null,
           "planned": "Day 11-25",
           "completedOn": null,
-          "completedAt": null,
-          "completedBy": null,
           "updatedAt": "2026-09-21T10:31:59.284Z",
           "updatedBy": "Admin",
           "colourways": [

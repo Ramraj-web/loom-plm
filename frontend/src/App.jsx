@@ -3759,6 +3759,8 @@ export default function LoomPLM() {
         <DepartmentDetail
           deptName={selectedDept}
           orders={orders}
+          customTasks={customTasks}
+          complaints={stageComplaints}
           onBack={() => navigate(previousView === "departmentDetail" ? "departments" : previousView || "departments")}
           onOpenOrder={openOrder}
           orgStructure={orgStructure}
@@ -3803,6 +3805,8 @@ export default function LoomPLM() {
         <DepartmentDetail
           deptName={role.dept}
           orders={orders}
+          customTasks={customTasks}
+          complaints={stageComplaints}
           onBack={() => navigate("dashboard")}
           onOpenOrder={openOrder}
           orgStructure={orgStructure}

@@ -79,6 +79,18 @@ export function OrdersPage({
   const activeOrders = useMemo(() => deduplicateList(orders.filter(o => o.isDeleted !== true && o.isDeleted !== "true" && !o.deletedAt && o.completed !== true)), [orders]);
   const completedOrders = useMemo(() => deduplicateList(orders.filter(o => o.completed === true && o.isDeleted !== true && o.isDeleted !== "true" && !o.deletedAt)), [orders]);
   const deletedOrders = useMemo(() => deduplicateList(orders.filter(o => o.isDeleted === true || o.isDeleted === "true" || !!o.deletedAt)), [orders]);
+  const [masterFilter, setMasterFilter] = useState(() => {
+    try {
+      const saved = localStorage.getItem("loom_orders_drilldown_filter");
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
+  });
+  const visibleActiveOrders = useMemo(() => {
+    if (!masterFilter?.type || !masterFilter?.value) return activeOrders;
+    return activeOrders.filter(order => order?.[masterFilter.type] === masterFilter.value);
+  }, [activeOrders, masterFilter]);
 
   const addColorBreakdownRow = () => {
     setForm(prev => ({
@@ -194,7 +206,7 @@ export function OrdersPage({
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 700, color: "#151B2E", margin: 0 }}>Orders</h1>
           <div style={{ fontSize: 13, color: "#8A8D98", marginTop: 4 }}>
-            {activeOrders.length} active order{activeOrders.length === 1 ? "" : "s"} · {completedOrders.length} completed · {deletedOrders.length} in history
+            {visibleActiveOrders.length} active order{visibleActiveOrders.length === 1 ? "" : "s"} · {completedOrders.length} completed · {deletedOrders.length} in history
           </div>
         </div>
         <button
@@ -230,8 +242,13 @@ export function OrdersPage({
           <div>
             <span style={{ fontSize: 14, fontWeight: 700, color: "#1B2130" }}>Active Orders</span>
             <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, background: "#E1F5EE", color: "#085041", padding: "2px 8px", borderRadius: 999 }}>
-              {activeOrders.length} active
+              {visibleActiveOrders.length} active
             </span>
+            {masterFilter && (
+              <button type="button" onClick={() => { setMasterFilter(null); localStorage.removeItem("loom_orders_drilldown_filter"); }} style={{ marginLeft: 8, border: "1px solid #C7D2FE", borderRadius: 999, background: "#EEF2FF", color: "#4338CA", padding: "2px 8px", fontSize: 10.5, cursor: "pointer" }}>
+                Filter: {masterFilter.type} = {masterFilter.value} ×
+              </button>
+            )}
           </div>
         </div>
 
@@ -257,12 +274,12 @@ export function OrdersPage({
           <div style={{ textAlign: "right" }}>Actions</div>
         </div>
 
-        {activeOrders.length === 0 ? (
+        {visibleActiveOrders.length === 0 ? (
           <div style={{ padding: "32px 0", textAlign: "center", color: "#8A8D98", fontSize: 13 }}>
-            No active orders. Click <strong>+ Add Order</strong> above to create one.
+            {masterFilter ? "No orders found for this filter." : <>No active orders. Click <strong>+ Add Order</strong> above to create one.</>}
           </div>
         ) : (
-          activeOrders.map(o => (
+          visibleActiveOrders.map(o => (
             <div
               key={o.primaryId || o.id}
               style={{
@@ -4905,6 +4922,8 @@ export function DepartmentsPage({ orders, onOpenDept, orgStructure, deptDescript
 export function DepartmentDetail({
   deptName,
   orders,
+  customTasks = [],
+  complaints = [],
   onBack,
   onOpenOrder,
   orgStructure,
@@ -5121,6 +5140,9 @@ export function DepartmentDetail({
         deptName={deptName}
         roles={roles}
         mappedUsers={mappedUsers}
+        orders={orders}
+        tasks={customTasks}
+        complaints={complaints}
         allDeptTasks={allDeptTasks}
         doneTasks={doneTasks}
         processTasks={processTasks}
