@@ -590,16 +590,35 @@ export default function LoomPLM() {
       setCurrentSessionId(sessId);
       setUserSessions(prev => {
         const existing = prev.find(s => s.id === sessId);
-        if (!existing || existing.userId !== activeUser.id) return prev;
-        const resumedSession = {
-          ...existing,
-          active: true,
-          logoutTime: null,
-          lastHeartbeat: nowIso,
-          date: todayStr
-        };
-        const updated = prev.map(s => s.id === sessId ? resumedSession : s);
+        const resumedSession = existing && existing.userId === activeUser.id
+          ? {
+              ...existing,
+              active: true,
+              logoutTime: null,
+              lastHeartbeat: nowIso,
+              date: todayStr
+            }
+          : {
+              id: sessId,
+              userId: activeUser.id,
+              username: activeUser.username,
+              name: activeUser.name,
+              dept: currentRole.dept,
+              loginTime: nowIso,
+              logoutTime: null,
+              lastHeartbeat: nowIso,
+              hoursUsed: 0.01,
+              active: true,
+              date: todayStr,
+              device: dev.deviceSummary,
+              deviceType: dev.deviceType,
+              location: "Detecting..."
+            };
+        const updated = existing && existing.userId === activeUser.id
+          ? prev.map(s => s.id === sessId ? resumedSession : s)
+          : [resumedSession, ...prev.filter(s => s.id !== sessId)];
         if (window.storage) window.storage.set("user_sessions", JSON.stringify(updated), true);
+        broadcastLiveUpdate({ type: "USER_SESSION_UPDATE", session: resumedSession });
         return updated;
       });
     }
@@ -616,6 +635,7 @@ export default function LoomPLM() {
         dept: currentRole.dept,
         loginTime: nowIso,
         logoutTime: null,
+        lastHeartbeat: nowIso,
         hoursUsed: 0.01,
         active: true,
         date: todayStr,
@@ -1060,7 +1080,19 @@ export default function LoomPLM() {
           try {
             const parsed = typeof event.value === "string" ? JSON.parse(event.value) : event.value;
             if (Array.isArray(parsed)) {
-              setUserSessions(parsed.map(s => ({ ...s, location: sanitizeLocationString(s.location) })));
+              let storedUser = null;
+              try {
+                storedUser = JSON.parse(localStorage.getItem("loom_active_user") || "null");
+              } catch (e) {}
+              const browserSessionId = sessionStorage.getItem("loom_active_session_id");
+              const nowIso = new Date().toISOString();
+              setUserSessions(parsed.map(s => ({
+                ...s,
+                ...(browserSessionId && s.id === browserSessionId && s.userId === storedUser?.id
+                  ? { active: true, logoutTime: null, lastHeartbeat: nowIso }
+                  : {}),
+                location: sanitizeLocationString(s.location)
+              })));
             }
           } catch (e) {}
         } else if (event.key === "audit_logs" && event.value) {
@@ -1126,9 +1158,10 @@ export default function LoomPLM() {
           const parsed = typeof sessRes.value.value === "string" ? JSON.parse(sessRes.value.value) : sessRes.value.value;
           if (Array.isArray(parsed)) {
             const browserSessionId = currentSessionId || sessionStorage.getItem("loom_active_session_id");
+            const resumedAt = new Date().toISOString();
             setUserSessions(parsed.map(s => ({
               ...s,
-              ...(browserSessionId && s.id === browserSessionId && s.userId === activeUser?.id ? { active: true, logoutTime: null } : {}),
+              ...(browserSessionId && s.id === browserSessionId && s.userId === activeUser?.id ? { active: true, logoutTime: null, lastHeartbeat: resumedAt } : {}),
               location: sanitizeLocationString(s.location)
             })));
           }
@@ -1688,6 +1721,7 @@ export default function LoomPLM() {
       dept: nextRole.dept,
       loginTime: nowIso,
       logoutTime: null,
+        lastHeartbeat: nowIso,
       hoursUsed: 0.01,
       active: true,
       date: todayStr,
