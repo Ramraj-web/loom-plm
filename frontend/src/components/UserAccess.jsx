@@ -100,6 +100,8 @@ export function UserAccessPage({ users, teams, onChangeUsers, onChangeTeams, rot
   const [showUserFormPassword, setShowUserFormPassword] = useState(false);
   const [userForm, setUserForm] = useState({ name: "", employeeId: "", email: "", username: "", password: "", teamId: teams[0]?.id || "", teamIds: [teams[0]?.id || ""] });
   const [teamName, setTeamName] = useState("");
+  const [showNewDeptInput, setShowNewDeptInput] = useState(false);
+  const [newDeptName, setNewDeptName] = useState("");
   const teamMap = useMemo(() => Object.fromEntries(teams.map(team => [team.id, team])), [teams]);
   const resetUser = () => { setEditing(null); setShowUserFormPassword(false); setUserForm({ name: "", employeeId: "", email: "", username: "", password: "", teamId: teams[0]?.id || "", teamIds: [teams[0]?.id || ""] }); };
   const submitUser = event => {
@@ -273,6 +275,69 @@ export function UserAccessPage({ users, teams, onChangeUsers, onChangeTeams, rot
                       </label>
                     );
                   })}
+
+                  {/* Inline Add Department */}
+                  {showNewDeptInput ? (
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "#F0FDF4", border: "1px solid #86EFAC", borderRadius: 6, padding: "3px 8px" }}>
+                      <input
+                        autoFocus
+                        type="text"
+                        value={newDeptName}
+                        onChange={e => setNewDeptName(e.target.value)}
+                        placeholder="Department name…"
+                        onKeyDown={e => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            const name = newDeptName.trim();
+                            if (!name) return;
+                            const exists = teams.find(t => t.name.toLowerCase() === name.toLowerCase());
+                            if (exists) { alert(`"${name}" already exists!`); return; }
+                            const newTeam = { id: makeId("team"), name, permissions: ["dashboard", "orders", "tasks", "attendance"] };
+                            onChangeTeams([...teams, newTeam]);
+                            setUserForm(prev => ({ ...prev, teamIds: [...(prev.teamIds || []), newTeam.id], teamId: prev.teamId || newTeam.id }));
+                            setNewDeptName("");
+                            setShowNewDeptInput(false);
+                          }
+                          if (e.key === "Escape") { setNewDeptName(""); setShowNewDeptInput(false); }
+                        }}
+                        style={{ border: "none", outline: "none", background: "transparent", fontSize: 12, width: 140, color: "#166534" }}
+                      />
+                      <button
+                        type="button"
+                        title="Create department"
+                        onClick={() => {
+                          const name = newDeptName.trim();
+                          if (!name) return;
+                          const exists = teams.find(t => t.name.toLowerCase() === name.toLowerCase());
+                          if (exists) { alert(`"${name}" already exists!`); return; }
+                          const newTeam = { id: makeId("team"), name, permissions: ["dashboard", "orders", "tasks", "attendance"] };
+                          onChangeTeams([...teams, newTeam]);
+                          setUserForm(prev => ({ ...prev, teamIds: [...(prev.teamIds || []), newTeam.id], teamId: prev.teamId || newTeam.id }));
+                          setNewDeptName("");
+                          setShowNewDeptInput(false);
+                        }}
+                        style={{ background: "#16A34A", border: "none", borderRadius: 4, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", padding: "1px 7px", lineHeight: 1.4 }}
+                      >✓</button>
+                      <button
+                        type="button"
+                        title="Cancel"
+                        onClick={() => { setNewDeptName(""); setShowNewDeptInput(false); }}
+                        style={{ background: "none", border: "none", color: "#6B7280", fontSize: 15, cursor: "pointer", padding: "0 2px", lineHeight: 1 }}
+                      >✕</button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setShowNewDeptInput(true)}
+                      title="Add a new department"
+                      style={{
+                        display: "inline-flex", alignItems: "center", gap: 4,
+                        background: "#F9FAFB", border: "1.5px dashed #9CA3AF",
+                        borderRadius: 6, padding: "5px 10px", fontSize: 12,
+                        fontWeight: 600, color: "#6B7280", cursor: "pointer"
+                      }}
+                    >+ Add</button>
+                  )}
                 </div>
               </label>
             </div>

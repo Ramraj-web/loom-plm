@@ -229,6 +229,2794 @@
         {
           "name": "Order Confirmation & Enquiry",
           "dept": "Program",
+          "status": "in_progress",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 1",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": "2026-05-12T09:00:00.000Z",
+          "flaggedAt": null
+        },
+        {
+          "name": "Yarn/Fabric Booking",
+          "dept": "Purchase – Fabric",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 1",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Work order",
+          "dept": "Program",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 2",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Costing",
+          "dept": "Costing",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 2-3",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "CAD release",
+          "dept": "CAD",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 3",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Program Passing",
+          "dept": "Program",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 3-5",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Trims Plan",
+          "dept": "Purchase – Trims",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 4-7",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Lab Dip Approval",
+          "dept": "Merchandising",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 5-10",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Yarn to Knitting",
+          "dept": "Process",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 5-10",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Artwork Approval",
+          "dept": "Merchandising",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 1-20",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Dyeing",
+          "dept": "Process",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 11-25",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Sewing Trims IH",
+          "dept": "Purchase – Trims",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 15",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Packing Trims IH",
+          "dept": "Purchase – Trims",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 25",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Fabric IH",
+          "dept": "Warehouse",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 25",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Lot Card Approval",
+          "dept": "Quality",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 25-30",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "PP Sample",
+          "dept": "Sample",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 25-35",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "PP Meeting",
+          "dept": "Planning",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 30-33",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "PP Approval",
+          "dept": "Merchandising",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 35-47",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Shrinkage closure",
+          "dept": "Quality",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 33-35",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Size Set Sample",
+          "dept": "Sample",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 35-38",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Size Set approval",
+          "dept": "Sample",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 38-40",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Cutting",
+          "dept": "Cutting",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 37-42",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "VAP Send",
+          "dept": "VAP",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 42-44",
+          "supplier": "Elite Print & Embro",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "TOP Sample Sent",
+          "dept": "Sample",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 50-55",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Shipment Booking",
+          "dept": "Logistics & Documentation",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 65-70",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Testing",
+          "dept": "Testing",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 50-55",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "TOP Sample Approval",
+          "dept": "Merchandising",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 72",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Print / Emb / Hotfix Complete",
+          "dept": "VAP",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 45-60",
+          "supplier": "Elite Print & Embro",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Reshape & Feeding",
+          "dept": "Production",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 60-62",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Production",
+          "dept": "Production",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 63-78",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "CIP Start",
+          "dept": "Quality",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 78-85",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "FI",
+          "dept": "Quality",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 86",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Garment OCR",
+          "dept": "Production",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 89",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "EX-FTY",
+          "dept": "Logistics & Documentation",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 90",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        }
+      ],
+      "preProd": {
+        "techPack": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "poSheet": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "programSheet": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "cmtPlanning": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "accPlanning": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "grading": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        }
+      },
+      "primaryId": "888",
+      "id": "888",
+      "style": "888",
+      "buyer": "Zara",
+      "country": "Spain",
+      "season": "AW26",
+      "qty": 999,
+      "orderDate": "2026-09-23",
+      "shipDate": "2026-12-22",
+      "ship": "22 Dec 2026",
+      "color": "",
+      "colors": [],
+      "colorBreakdown": [],
+      "risk": "low",
+      "status": "On Track",
+      "completed": false,
+      "isDeleted": false,
+      "completedAt": null,
+      "deletedAt": null,
+      "createdAt": "2026-09-23T11:39:19.192Z",
+      "orderId": "888"
+    },
+    {
+      "template": "90",
+      "costingTemplate": "fabric",
+      "costingRows": [
+        {
+          "label": "Fabric",
+          "section": "Fabric",
+          "isHeader": true
+        },
+        {
+          "label": "Fabric 1",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Fabric 2",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Dyeing",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Finishing — peach/sueded/acid wash/bio wash",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Compacting",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Trims & Accessories",
+          "section": "Trims & Accessories",
+          "isHeader": true
+        },
+        {
+          "label": "Sewing Thread",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Zip / Buttons / Elastic",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Main Label",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Care Label",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Disclaimer Tag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Hang Tag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Oversize Tag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Tissue",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Fusing Sticker / Label",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Polybag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Carton",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "VAP",
+          "section": "VAP",
+          "isHeader": true
+        },
+        {
+          "label": "Print / Embroidery / Hot Fix Stone",
+          "section": "VAP",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "CMT",
+          "section": "CMT",
+          "isHeader": true
+        },
+        {
+          "label": "Cutting",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Power Table",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Singer",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Checking",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Ironing",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Packing",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Quality Inspection",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Overheads",
+          "section": "Overheads",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Rejection",
+          "section": "Rejection",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Commercial Costs",
+          "section": "Commercial Costs",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Profit",
+          "section": "Profit",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        }
+      ],
+      "vapCount": 1,
+      "shippedQty": 0,
+      "plannedCost": 0,
+      "actualCost": 0,
+      "stages": [
+        {
+          "name": "Order Confirmation & Enquiry",
+          "dept": "Program",
+          "status": "in_progress",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 1",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": "2026-05-12T09:00:00.000Z",
+          "flaggedAt": null
+        },
+        {
+          "name": "Yarn/Fabric Booking",
+          "dept": "Purchase – Fabric",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 1",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Work order",
+          "dept": "Program",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 2",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Costing",
+          "dept": "Costing",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 2-3",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "CAD release",
+          "dept": "CAD",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 3",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Program Passing",
+          "dept": "Program",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 3-5",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Trims Plan",
+          "dept": "Purchase – Trims",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 4-7",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Lab Dip Approval",
+          "dept": "Merchandising",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 5-10",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Yarn to Knitting",
+          "dept": "Purchase",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 5-10",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Artwork Approval",
+          "dept": "Merchandising",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 1-20",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Dyeing",
+          "dept": "Purchase",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 11-25",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Sewing Trims IH",
+          "dept": "Purchase – Trims",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 15",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Packing Trims IH",
+          "dept": "Purchase – Trims",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 25",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Fabric IH",
+          "dept": "Warehouse",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 25",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Lot Card Approval",
+          "dept": "Quality",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 25-30",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "PP Sample",
+          "dept": "Sample",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 25-35",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "PP Meeting",
+          "dept": "Planning",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 30-33",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "PP Approval",
+          "dept": "Merchandising",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 35-47",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Shrinkage closure",
+          "dept": "Quality",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 33-35",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Size Set Sample",
+          "dept": "Sample",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 35-38",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Size Set approval",
+          "dept": "Sample",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 38-40",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Cutting",
+          "dept": "Cutting",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 37-42",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "VAP Send",
+          "dept": "VAP",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 42-44",
+          "supplier": "Elite Print & Embro",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "TOP Sample Sent",
+          "dept": "Sample",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 50-55",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Shipment Booking",
+          "dept": "Logistics & Documentation",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 65-70",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Testing",
+          "dept": "Testing",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 50-55",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "TOP Sample Approval",
+          "dept": "Merchandising",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 72",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Print / Emb / Hotfix Complete",
+          "dept": "VAP",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 45-60",
+          "supplier": "Elite Print & Embro",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Reshape & Feeding",
+          "dept": "Production",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 60-62",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Production",
+          "dept": "Production",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 63-78",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "CIP Start",
+          "dept": "Quality",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 78-85",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "FI",
+          "dept": "Quality",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 86",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Garment OCR",
+          "dept": "Production",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 89",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "EX-FTY",
+          "dept": "Logistics & Documentation",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 90",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        }
+      ],
+      "preProd": {
+        "techPack": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "poSheet": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "programSheet": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "cmtPlanning": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "accPlanning": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "grading": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        }
+      },
+      "primaryId": "4444",
+      "id": "4444",
+      "style": "4444444",
+      "buyer": "Zara",
+      "country": "Spain",
+      "season": "AW26",
+      "qty": 4444,
+      "orderDate": "2026-09-23",
+      "shipDate": "2026-12-22",
+      "ship": "22 Dec 2026",
+      "color": "",
+      "colors": [],
+      "colorBreakdown": [],
+      "risk": "low",
+      "status": "On Track",
+      "completed": false,
+      "isDeleted": false,
+      "completedAt": null,
+      "deletedAt": null,
+      "createdAt": "2026-09-23T11:15:37.907Z",
+      "orderId": "4444"
+    },
+    {
+      "template": "90",
+      "costingTemplate": "fabric",
+      "costingRows": [
+        {
+          "label": "Fabric",
+          "section": "Fabric",
+          "isHeader": true
+        },
+        {
+          "label": "Fabric 1",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Fabric 2",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Dyeing",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Finishing — peach/sueded/acid wash/bio wash",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Compacting",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Trims & Accessories",
+          "section": "Trims & Accessories",
+          "isHeader": true
+        },
+        {
+          "label": "Sewing Thread",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Zip / Buttons / Elastic",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Main Label",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Care Label",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Disclaimer Tag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Hang Tag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Oversize Tag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Tissue",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Fusing Sticker / Label",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Polybag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Carton",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "VAP",
+          "section": "VAP",
+          "isHeader": true
+        },
+        {
+          "label": "Print / Embroidery / Hot Fix Stone",
+          "section": "VAP",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "CMT",
+          "section": "CMT",
+          "isHeader": true
+        },
+        {
+          "label": "Cutting",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Power Table",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Singer",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Checking",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Ironing",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Packing",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Quality Inspection",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Overheads",
+          "section": "Overheads",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Rejection",
+          "section": "Rejection",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Commercial Costs",
+          "section": "Commercial Costs",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Profit",
+          "section": "Profit",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        }
+      ],
+      "vapCount": 1,
+      "shippedQty": 0,
+      "plannedCost": 0,
+      "actualCost": 0,
+      "stages": [
+        {
+          "name": "Order Confirmation & Enquiry",
+          "dept": "Program",
+          "status": "in_progress",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 1",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": "2026-05-12T09:00:00.000Z",
+          "flaggedAt": null
+        },
+        {
+          "name": "Yarn/Fabric Booking",
+          "dept": "Purchase – Fabric",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 1",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Work order",
+          "dept": "Program",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 2",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Costing",
+          "dept": "Costing",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 2-3",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "CAD release",
+          "dept": "CAD",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 3",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Program Passing",
+          "dept": "Program",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 3-5",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Trims Plan",
+          "dept": "Purchase – Trims",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 4-7",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Lab Dip Approval",
+          "dept": "Merchandising",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 5-10",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Yarn to Knitting",
+          "dept": "Purchase – Fabric",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 5-10",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Artwork Approval",
+          "dept": "Merchandising",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 1-20",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Dyeing",
+          "dept": "Purchase – Fabric",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 11-25",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Sewing Trims IH",
+          "dept": "Purchase – Trims",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 15",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Packing Trims IH",
+          "dept": "Purchase – Trims",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 25",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Fabric IH",
+          "dept": "Warehouse",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 25",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Lot Card Approval",
+          "dept": "Quality",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 25-30",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "PP Sample",
+          "dept": "Sample",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 25-35",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "PP Meeting",
+          "dept": "Planning",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 30-33",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "PP Approval",
+          "dept": "Merchandising",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 35-47",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Shrinkage closure",
+          "dept": "Quality",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 33-35",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Size Set Sample",
+          "dept": "Sample",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 35-38",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Size Set approval",
+          "dept": "Sample",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 38-40",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Cutting",
+          "dept": "Cutting",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 37-42",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "VAP Send",
+          "dept": "VAP",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 42-44",
+          "supplier": "Elite Print & Embro",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "TOP Sample Sent",
+          "dept": "Sample",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 50-55",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Shipment Booking",
+          "dept": "Logistics & Documentation",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 65-70",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Testing",
+          "dept": "Testing",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 50-55",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "TOP Sample Approval",
+          "dept": "Merchandising",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 72",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Print / Emb / Hotfix Complete",
+          "dept": "VAP",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 45-60",
+          "supplier": "Elite Print & Embro",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Reshape & Feeding",
+          "dept": "Production",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 60-62",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Production",
+          "dept": "Production",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 63-78",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "CIP Start",
+          "dept": "Quality",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 78-85",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "FI",
+          "dept": "Quality",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 86",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Garment OCR",
+          "dept": "Production",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 89",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "EX-FTY",
+          "dept": "Logistics & Documentation",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 90",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        }
+      ],
+      "preProd": {
+        "techPack": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "poSheet": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "programSheet": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "cmtPlanning": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "accPlanning": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "grading": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        }
+      },
+      "primaryId": "3333",
+      "id": "3333",
+      "style": "3333",
+      "buyer": "Zara",
+      "country": "Spain",
+      "season": "AW26",
+      "qty": 3333,
+      "orderDate": "2026-09-23",
+      "shipDate": "2026-12-22",
+      "ship": "22 Dec 2026",
+      "color": "",
+      "colors": [],
+      "colorBreakdown": [],
+      "risk": "low",
+      "status": "On Track",
+      "completed": false,
+      "isDeleted": false,
+      "completedAt": null,
+      "deletedAt": null,
+      "createdAt": "2026-09-23T10:34:04.921Z",
+      "orderId": "3333"
+    },
+    {
+      "template": "90",
+      "costingTemplate": "fabric",
+      "costingRows": [
+        {
+          "label": "Fabric",
+          "section": "Fabric",
+          "isHeader": true
+        },
+        {
+          "label": "Fabric 1",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Fabric 2",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Dyeing",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Finishing — peach/sueded/acid wash/bio wash",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Compacting",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Trims & Accessories",
+          "section": "Trims & Accessories",
+          "isHeader": true
+        },
+        {
+          "label": "Sewing Thread",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Zip / Buttons / Elastic",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Main Label",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Care Label",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Disclaimer Tag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Hang Tag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Oversize Tag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Tissue",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Fusing Sticker / Label",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Polybag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Carton",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "VAP",
+          "section": "VAP",
+          "isHeader": true
+        },
+        {
+          "label": "Print / Embroidery / Hot Fix Stone",
+          "section": "VAP",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "CMT",
+          "section": "CMT",
+          "isHeader": true
+        },
+        {
+          "label": "Cutting",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Power Table",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Singer",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Checking",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Ironing",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Packing",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Quality Inspection",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Overheads",
+          "section": "Overheads",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Rejection",
+          "section": "Rejection",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Commercial Costs",
+          "section": "Commercial Costs",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Profit",
+          "section": "Profit",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        }
+      ],
+      "vapCount": 1,
+      "shippedQty": 0,
+      "plannedCost": 0,
+      "actualCost": 0,
+      "stages": [
+        {
+          "name": "Order Confirmation & Enquiry",
+          "dept": "Program",
+          "status": "in_progress",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 1",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": "2026-05-12T09:00:00.000Z",
+          "flaggedAt": null
+        },
+        {
+          "name": "Yarn/Fabric Booking",
+          "dept": "Purchase – Fabric",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 1",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Work order",
+          "dept": "Program",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 2",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Costing",
+          "dept": "Costing",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 2-3",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "CAD release",
+          "dept": "CAD",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 3",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Program Passing",
+          "dept": "Program",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 3-5",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Trims Plan",
+          "dept": "Purchase – Trims",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 4-7",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Lab Dip Approval",
+          "dept": "Merchandising",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 5-10",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Yarn to Knitting",
+          "dept": "Purchase – Fabric",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 5-10",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Artwork Approval",
+          "dept": "Merchandising",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 1-20",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Dyeing",
+          "dept": "Purchase – Fabric",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 11-25",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Sewing Trims IH",
+          "dept": "Purchase – Trims",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 15",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Packing Trims IH",
+          "dept": "Purchase – Trims",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 25",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Fabric IH",
+          "dept": "Warehouse",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 25",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Lot Card Approval",
+          "dept": "Quality",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 25-30",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "PP Sample",
+          "dept": "Sample",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 25-35",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "PP Meeting",
+          "dept": "Planning",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 30-33",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "PP Approval",
+          "dept": "Merchandising",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 35-47",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Shrinkage closure",
+          "dept": "Quality",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 33-35",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Size Set Sample",
+          "dept": "Sample",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 35-38",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Size Set approval",
+          "dept": "Sample",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 38-40",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Cutting",
+          "dept": "Cutting",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 37-42",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "VAP Send",
+          "dept": "VAP",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 42-44",
+          "supplier": "Elite Print & Embro",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "TOP Sample Sent",
+          "dept": "Sample",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 50-55",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Shipment Booking",
+          "dept": "Logistics & Documentation",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 65-70",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Testing",
+          "dept": "Testing",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 50-55",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "TOP Sample Approval",
+          "dept": "Merchandising",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 72",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Print / Emb / Hotfix Complete",
+          "dept": "VAP",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 45-60",
+          "supplier": "Elite Print & Embro",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Reshape & Feeding",
+          "dept": "Production",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 60-62",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Production",
+          "dept": "Production",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 63-78",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "CIP Start",
+          "dept": "Quality",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 78-85",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "FI",
+          "dept": "Quality",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 86",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "Garment OCR",
+          "dept": "Production",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 89",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        },
+        {
+          "name": "EX-FTY",
+          "dept": "Logistics & Documentation",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "planned": "Day 90",
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null
+        }
+      ],
+      "preProd": {
+        "techPack": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "poSheet": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "programSheet": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "cmtPlanning": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "accPlanning": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "grading": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        }
+      },
+      "primaryId": "111",
+      "id": "111",
+      "style": "111111",
+      "buyer": "Zara",
+      "country": "Spain",
+      "season": "AW26",
+      "qty": 11111,
+      "orderDate": "2026-09-23",
+      "shipDate": "2026-12-22",
+      "ship": "22 Dec 2026",
+      "color": "",
+      "colors": [],
+      "colorBreakdown": [],
+      "risk": "low",
+      "status": "On Track",
+      "completed": false,
+      "isDeleted": false,
+      "completedAt": null,
+      "deletedAt": null,
+      "createdAt": "2026-09-23T10:33:27.018Z",
+      "orderId": "111"
+    },
+    {
+      "template": "90",
+      "costingTemplate": "fabric",
+      "costingRows": [
+        {
+          "label": "Fabric",
+          "section": "Fabric",
+          "isHeader": true
+        },
+        {
+          "label": "Fabric 1",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Fabric 2",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Dyeing",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Finishing — peach/sueded/acid wash/bio wash",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Compacting",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Trims & Accessories",
+          "section": "Trims & Accessories",
+          "isHeader": true
+        },
+        {
+          "label": "Sewing Thread",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Zip / Buttons / Elastic",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Main Label",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Care Label",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Disclaimer Tag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Hang Tag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Oversize Tag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Tissue",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Fusing Sticker / Label",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Polybag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Carton",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "VAP",
+          "section": "VAP",
+          "isHeader": true
+        },
+        {
+          "label": "Print / Embroidery / Hot Fix Stone",
+          "section": "VAP",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "CMT",
+          "section": "CMT",
+          "isHeader": true
+        },
+        {
+          "label": "Cutting",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Power Table",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Singer",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Checking",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Ironing",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Packing",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Quality Inspection",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Overheads",
+          "section": "Overheads",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Rejection",
+          "section": "Rejection",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Commercial Costs",
+          "section": "Commercial Costs",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Profit",
+          "section": "Profit",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        }
+      ],
+      "vapCount": 1,
+      "shippedQty": 0,
+      "plannedCost": 0,
+      "actualCost": 0,
+      "stages": [
+        {
+          "name": "Order Confirmation & Enquiry",
+          "dept": "Program",
           "status": "done",
           "assignee": "Assigned",
           "reason": null,
@@ -3997,7 +6785,8 @@
           "planned": "Day 3-5",
           "completedAt": "2026-09-18T16:18:37.068Z",
           "completedOn": null,
-          "updatedAt": "2026-09-09T06:26:44.940Z"
+          "updatedAt": "2026-09-09T06:26:44.940Z",
+          "completedBy": "Admin"
         },
         {
           "name": "Trims Plan",
@@ -4008,43 +6797,55 @@
           "planned": "Day 4-7",
           "completedAt": "2026-09-18T16:18:37.068Z",
           "completedOn": null,
-          "updatedAt": "2026-09-09T06:26:47.614Z"
+          "updatedAt": "2026-09-09T06:26:47.614Z",
+          "completedBy": "Admin"
         },
         {
           "name": "Lab Dip Approval",
           "dept": "Merchandising",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "done",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 5-10",
-          "completedOn": null
+          "completedOn": null,
+          "completedAt": "2026-09-23T11:34:20.948Z",
+          "completedBy": "Admin",
+          "updatedAt": "2026-09-23T11:34:20.085Z",
+          "updatedBy": "Admin"
         },
         {
           "name": "Yarn to Knitting",
           "dept": "Purchase – Fabric",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "done",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 5-10",
-          "completedOn": null
+          "completedOn": null,
+          "completedAt": "2026-09-23T11:34:22.760Z",
+          "completedBy": "Admin",
+          "updatedAt": "2026-09-23T11:34:20.948Z"
         },
         {
           "name": "Artwork Approval",
           "dept": "Merchandising",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "done",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 1-20",
-          "completedOn": null
+          "completedOn": null,
+          "completedAt": "2026-09-23T11:34:24.218Z",
+          "completedBy": "Admin",
+          "updatedAt": "2026-09-23T11:34:22.771Z"
         },
         {
           "name": "Dyeing",
           "dept": "Purchase – Fabric",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "in_progress",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 11-25",
-          "completedOn": null
+          "completedOn": null,
+          "updatedAt": "2026-09-23T11:34:24.218Z"
         },
         {
           "name": "Sewing Trims IH",
@@ -4076,38 +6877,48 @@
         {
           "name": "Lot Card Approval",
           "dept": "Quality",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "done",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 25-30",
-          "completedOn": null
+          "completedOn": null,
+          "completedAt": "2026-09-23T11:34:30.231Z",
+          "completedBy": "Admin",
+          "updatedAt": "2026-09-23T11:34:29.560Z",
+          "updatedBy": "Admin"
         },
         {
           "name": "PP Sample",
           "dept": "Sample",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "in_progress",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 25-35",
-          "completedOn": null
+          "completedOn": null,
+          "updatedAt": "2026-09-23T11:34:30.231Z"
         },
         {
           "name": "PP Meeting",
           "dept": "Planning",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "done",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 30-33",
-          "completedOn": null
+          "completedOn": null,
+          "completedAt": "2026-09-23T11:34:41.009Z",
+          "completedBy": "Admin",
+          "updatedAt": "2026-09-23T11:34:37.573Z",
+          "updatedBy": "Admin"
         },
         {
           "name": "PP Approval",
           "dept": "Merchandising",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "in_progress",
+          "assignee": "Assigned",
           "reason": null,
           "planned": "Day 35-47",
-          "completedOn": null
+          "completedOn": null,
+          "updatedAt": "2026-09-23T11:34:41.009Z"
         },
         {
           "name": "Shrinkage closure",
@@ -4562,6 +7373,156 @@
   ],
   "compliances": [],
   "notifications": [
+    {
+      "id": "notif-1790163559195-pkb5m",
+      "eventKey": "order-first-stage-888-Order Confirmation & Enquiry-Program",
+      "type": "task",
+      "title": "Initial Task Ready: Order Confirmation & Enquiry",
+      "message": "New Order #888 (888) initiated. Stage \"Order Confirmation & Enquiry\" is pending action for Program.",
+      "relatedModule": "orders",
+      "relatedId": "888",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-23T11:39:19.195Z",
+      "isDeleted": false,
+      "targetDept": "Program",
+      "primaryId": "pri_notifications_1790163559224_55fle"
+    },
+    {
+      "id": "notif-1790163281010-3j3b7",
+      "eventKey": "dept-task-assigned-EEE-PP Approval-Merchandising",
+      "type": "task",
+      "title": "New Task: PP Approval",
+      "message": "Order EEE has moved to your department (Merchandising). Stage \"PP Approval\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "EEE",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-23T11:34:41.010Z",
+      "isDeleted": false,
+      "targetDept": "Merchandising",
+      "primaryId": "pri_notifications_1790163281031_jjvvs"
+    },
+    {
+      "id": "notif-1790163270232-uepfq",
+      "eventKey": "dept-task-assigned-EEE-PP Sample-Sample",
+      "type": "task",
+      "title": "New Task: PP Sample",
+      "message": "Order EEE has moved to your department (Sample). Stage \"PP Sample\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "EEE",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-23T11:34:30.232Z",
+      "isDeleted": false,
+      "targetDept": "Sample",
+      "primaryId": "pri_notifications_1790163270254_9btmi"
+    },
+    {
+      "id": "notif-1790163264219-afa5j",
+      "eventKey": "dept-task-assigned-EEE-Dyeing-Purchase – Fabric",
+      "type": "task",
+      "title": "New Task: Dyeing",
+      "message": "Order EEE has moved to your department (Purchase – Fabric). Stage \"Dyeing\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "EEE",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-23T11:34:24.219Z",
+      "isDeleted": false,
+      "targetDept": "Purchase – Fabric",
+      "primaryId": "pri_notifications_1790163264243_908bi"
+    },
+    {
+      "id": "notif-1790163262771-e7ytx",
+      "eventKey": "dept-task-assigned-EEE-Artwork Approval-Merchandising",
+      "type": "task",
+      "title": "New Task: Artwork Approval",
+      "message": "Order EEE has moved to your department (Merchandising). Stage \"Artwork Approval\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "EEE",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-23T11:34:22.771Z",
+      "isDeleted": false,
+      "targetDept": "Merchandising",
+      "primaryId": "pri_notifications_1790163262821_3knn4"
+    },
+    {
+      "id": "notif-1790163262761-kocef",
+      "eventKey": "dept-task-assigned-EEE-Artwork Approval-Merchandising",
+      "type": "task",
+      "title": "New Task: Artwork Approval",
+      "message": "Order EEE has moved to your department (Merchandising). Stage \"Artwork Approval\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "EEE",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-23T11:34:22.761Z",
+      "isDeleted": false,
+      "targetDept": "Merchandising",
+      "primaryId": "pri_notifications_1790163262776_qrjqp"
+    },
+    {
+      "id": "notif-1790163260951-rki3n",
+      "eventKey": "dept-task-assigned-EEE-Yarn to Knitting-Purchase – Fabric",
+      "type": "task",
+      "title": "New Task: Yarn to Knitting",
+      "message": "Order EEE has moved to your department (Purchase – Fabric). Stage \"Yarn to Knitting\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "EEE",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-23T11:34:20.951Z",
+      "isDeleted": false,
+      "targetDept": "Purchase – Fabric",
+      "primaryId": "pri_notifications_1790163260961_wsu9z"
+    },
+    {
+      "id": "notif-1790162137911-cd4g8",
+      "eventKey": "order-first-stage-4444-Order Confirmation & Enquiry-Program",
+      "type": "task",
+      "title": "Initial Task Ready: Order Confirmation & Enquiry",
+      "message": "New Order #4444 (4444444) initiated. Stage \"Order Confirmation & Enquiry\" is pending action for Program.",
+      "relatedModule": "orders",
+      "relatedId": "4444",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-23T11:15:37.911Z",
+      "isDeleted": false,
+      "targetDept": "Program",
+      "primaryId": "pri_notifications_1790162137939_1tl07"
+    },
+    {
+      "id": "notif-1790159644922-t1w9t",
+      "eventKey": "order-first-stage-3333-Order Confirmation & Enquiry-Program",
+      "type": "task",
+      "title": "Initial Task Ready: Order Confirmation & Enquiry",
+      "message": "New Order #3333 (3333) initiated. Stage \"Order Confirmation & Enquiry\" is pending action for Program.",
+      "relatedModule": "orders",
+      "relatedId": "3333",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-23T10:34:04.922Z",
+      "isDeleted": false,
+      "targetDept": "Program",
+      "primaryId": "pri_notifications_1790159644937_tbtpx"
+    },
+    {
+      "id": "notif-1790159607020-0xsfj",
+      "eventKey": "order-first-stage-111-Order Confirmation & Enquiry-Program",
+      "type": "task",
+      "title": "Initial Task Ready: Order Confirmation & Enquiry",
+      "message": "New Order #111 (111111) initiated. Stage \"Order Confirmation & Enquiry\" is pending action for Program.",
+      "relatedModule": "orders",
+      "relatedId": "111",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-09-23T10:33:27.020Z",
+      "isDeleted": false,
+      "targetDept": "Program",
+      "primaryId": "pri_notifications_1790159607045_ivfoi"
+    },
     {
       "id": "notif-1789979598886-g5y9r",
       "eventKey": "dept-task-assigned-12121212-Reshape & Feeding-Production",
@@ -6078,6 +9039,21 @@
   "supplierWork": [],
   "users": [
     {
+      "name": "warehouse",
+      "employeeId": "11",
+      "email": "11",
+      "username": "ware",
+      "password": "house",
+      "teamId": "team-warehouse",
+      "teamIds": [
+        "team-warehouse"
+      ],
+      "id": "user-1790160025090-eiri2",
+      "active": true,
+      "primaryId": "pri_users_1790160025162_yc9nm",
+      "resource": "users"
+    },
+    {
       "name": "ww",
       "employeeId": "ww",
       "email": "",
@@ -6088,7 +9064,9 @@
         "team-purchase-trims"
       ],
       "id": "user-1789361861072-ealkf",
-      "active": true
+      "active": true,
+      "primaryId": "user-1789361861072-ealkf",
+      "resource": "users"
     },
     {
       "name": "111",
@@ -6101,7 +9079,9 @@
         "team-purchase-fabric"
       ],
       "id": "user-1789361833837-pmssb",
-      "active": true
+      "active": true,
+      "primaryId": "user-1789361833837-pmssb",
+      "resource": "users"
     },
     {
       "name": "cad",
@@ -6114,7 +9094,9 @@
         "team-cad"
       ],
       "id": "user-1789361764861-han1o",
-      "active": true
+      "active": true,
+      "primaryId": "user-1789361764861-han1o",
+      "resource": "users"
     },
     {
       "name": "mathan",
@@ -6127,7 +9109,9 @@
         "team-merchandising"
       ],
       "id": "user-1789361729812-a9suc",
-      "active": true
+      "active": true,
+      "primaryId": "user-1789361729812-a9suc",
+      "resource": "users"
     },
     {
       "name": "www",
@@ -6142,7 +9126,9 @@
         "team-costing"
       ],
       "id": "user-1789357806651-uww7s",
-      "active": true
+      "active": true,
+      "primaryId": "user-1789357806651-uww7s",
+      "resource": "users"
     },
     {
       "id": "user-md",
@@ -6152,7 +9138,9 @@
       "username": "md",
       "password": "md123",
       "teamId": "team-md",
-      "active": true
+      "active": true,
+      "primaryId": "user-md",
+      "resource": "users"
     },
     {
       "id": "user-admin",
@@ -6162,10 +9150,552 @@
       "username": "admin",
       "password": "admin123",
       "teamId": "team-admin",
-      "active": true
+      "active": true,
+      "primaryId": "user-admin",
+      "resource": "users"
     }
   ],
-  "teams": [],
+  "teams": [
+    {
+      "id": "team-1790163463603-9l6dy",
+      "name": "Process",
+      "permissions": [
+        "dashboard",
+        "orders",
+        "tasks",
+        "attendance"
+      ],
+      "primaryId": "pri_teams_1790163463903_hxle8"
+    },
+    {
+      "id": "team-admin",
+      "name": "Administrators",
+      "permissions": [
+        "dashboard",
+        "orders",
+        "tasks",
+        "approvals",
+        "attendance",
+        "reports",
+        "settings"
+      ],
+      "primaryId": "pri_teams_1790160923037_tkcjz"
+    },
+    {
+      "id": "team-md",
+      "name": "Executive (MD)",
+      "permissions": [
+        "dashboard",
+        "orders",
+        "tasks",
+        "approvals",
+        "attendance",
+        "reports",
+        "settings"
+      ],
+      "primaryId": "pri_teams_1790160923041_7nno5"
+    },
+    {
+      "id": "team-merchandising",
+      "name": "Merchandising",
+      "permissions": [
+        "dashboard",
+        "tasks",
+        "attendance",
+        "orders",
+        "approvals",
+        "reports"
+      ],
+      "primaryId": "pri_teams_1790160923046_izt78"
+    },
+    {
+      "id": "team-program",
+      "name": "Program",
+      "permissions": [
+        "dashboard",
+        "tasks",
+        "attendance",
+        "orders",
+        "approvals",
+        "reports"
+      ],
+      "primaryId": "pri_teams_1790160923051_ecqlw"
+    },
+    {
+      "id": "team-planning",
+      "name": "Planning",
+      "permissions": [
+        "dashboard",
+        "tasks",
+        "attendance",
+        "orders",
+        "approvals",
+        "reports"
+      ],
+      "primaryId": "pri_teams_1790160923055_smh2w"
+    },
+    {
+      "id": "team-purchase-fabric",
+      "name": "Purchase – Fabric",
+      "permissions": [
+        "dashboard",
+        "tasks",
+        "attendance",
+        "orders",
+        "approvals"
+      ],
+      "primaryId": "pri_teams_1790160923060_8fh54"
+    },
+    {
+      "id": "team-purchase-trims",
+      "name": "Purchase – Trims",
+      "permissions": [
+        "dashboard",
+        "tasks",
+        "attendance",
+        "orders",
+        "approvals"
+      ],
+      "primaryId": "pri_teams_1790160923063_xcuzj"
+    },
+    {
+      "id": "team-warehouse",
+      "name": "Warehouse",
+      "permissions": [
+        "dashboard",
+        "tasks",
+        "attendance",
+        "orders"
+      ],
+      "primaryId": "pri_teams_1790160923068_nzfr0"
+    },
+    {
+      "id": "team-testing",
+      "name": "Testing",
+      "permissions": [
+        "dashboard",
+        "tasks",
+        "attendance",
+        "orders"
+      ],
+      "primaryId": "pri_teams_1790160923075_31amt"
+    },
+    {
+      "id": "team-store",
+      "name": "Store",
+      "permissions": [
+        "dashboard",
+        "tasks",
+        "attendance",
+        "orders"
+      ],
+      "primaryId": "pri_teams_1790160923080_2log2"
+    },
+    {
+      "id": "team-cutting",
+      "name": "Cutting",
+      "permissions": [
+        "dashboard",
+        "tasks",
+        "attendance",
+        "orders",
+        "approvals"
+      ],
+      "primaryId": "pri_teams_1790160923085_rh2m3"
+    },
+    {
+      "id": "team-production",
+      "name": "Production",
+      "permissions": [
+        "dashboard",
+        "tasks",
+        "attendance",
+        "orders",
+        "approvals"
+      ],
+      "primaryId": "pri_teams_1790160923092_utluy"
+    },
+    {
+      "id": "team-iot",
+      "name": "IoT",
+      "permissions": [
+        "dashboard",
+        "tasks",
+        "attendance",
+        "orders"
+      ],
+      "primaryId": "pri_teams_1790160923101_f0bc2"
+    },
+    {
+      "id": "team-finishing",
+      "name": "Finishing",
+      "permissions": [
+        "dashboard",
+        "tasks",
+        "attendance",
+        "orders",
+        "approvals"
+      ],
+      "primaryId": "pri_teams_1790160923108_emgep"
+    },
+    {
+      "id": "team-quality",
+      "name": "Quality",
+      "permissions": [
+        "dashboard",
+        "tasks",
+        "attendance",
+        "orders",
+        "approvals"
+      ],
+      "primaryId": "pri_teams_1790160923114_tegjj"
+    },
+    {
+      "id": "team-sample",
+      "name": "Sample",
+      "permissions": [
+        "dashboard",
+        "tasks",
+        "attendance",
+        "orders",
+        "approvals",
+        "reports"
+      ],
+      "primaryId": "pri_teams_1790160923120_cpws4"
+    },
+    {
+      "id": "team-cad",
+      "name": "CAD",
+      "permissions": [
+        "dashboard",
+        "tasks",
+        "attendance",
+        "orders"
+      ],
+      "primaryId": "pri_teams_1790160923127_nxjid"
+    },
+    {
+      "id": "team-costing",
+      "name": "Costing",
+      "permissions": [
+        "dashboard",
+        "tasks",
+        "attendance",
+        "orders",
+        "approvals",
+        "reports"
+      ],
+      "primaryId": "pri_teams_1790160923135_ml2f5"
+    },
+    {
+      "id": "team-logistics-documentation",
+      "name": "Logistics & Documentation",
+      "permissions": [
+        "dashboard",
+        "tasks",
+        "attendance",
+        "orders"
+      ],
+      "primaryId": "pri_teams_1790160923141_11mwt"
+    },
+    {
+      "id": "team-vap",
+      "name": "VAP",
+      "permissions": [
+        "dashboard",
+        "tasks",
+        "attendance",
+        "orders"
+      ],
+      "primaryId": "pri_teams_1790160923147_a1oln"
+    },
+    {
+      "id": "team-compliance-certification",
+      "name": "Compliance & Certification",
+      "permissions": [
+        "dashboard",
+        "tasks",
+        "attendance",
+        "orders"
+      ],
+      "primaryId": "pri_teams_1790160923152_qvzwq"
+    },
+    {
+      "id": "team-1790160922992-4h0z4",
+      "name": "Purchase",
+      "permissions": [
+        "dashboard",
+        "orders",
+        "tasks",
+        "attendance"
+      ],
+      "primaryId": "pri_teams_1790160923159_gqa1h"
+    },
+    {
+      "id": "team-1790160922992-4h0z4",
+      "name": "Purchase",
+      "permissions": [
+        "dashboard",
+        "orders",
+        "tasks",
+        "attendance"
+      ],
+      "primaryId": "pri_teams_1790160923159_gqa1h"
+    },
+    {
+      "id": "team-compliance-certification",
+      "name": "Compliance & Certification",
+      "permissions": [
+        "dashboard",
+        "tasks",
+        "attendance",
+        "orders"
+      ],
+      "primaryId": "pri_teams_1790160923152_qvzwq"
+    },
+    {
+      "id": "team-vap",
+      "name": "VAP",
+      "permissions": [
+        "dashboard",
+        "tasks",
+        "attendance",
+        "orders"
+      ],
+      "primaryId": "pri_teams_1790160923147_a1oln"
+    },
+    {
+      "id": "team-logistics-documentation",
+      "name": "Logistics & Documentation",
+      "permissions": [
+        "dashboard",
+        "tasks",
+        "attendance",
+        "orders"
+      ],
+      "primaryId": "pri_teams_1790160923141_11mwt"
+    },
+    {
+      "id": "team-costing",
+      "name": "Costing",
+      "permissions": [
+        "dashboard",
+        "tasks",
+        "attendance",
+        "orders",
+        "approvals",
+        "reports"
+      ],
+      "primaryId": "pri_teams_1790160923135_ml2f5"
+    },
+    {
+      "id": "team-cad",
+      "name": "CAD",
+      "permissions": [
+        "dashboard",
+        "tasks",
+        "attendance",
+        "orders"
+      ],
+      "primaryId": "pri_teams_1790160923127_nxjid"
+    },
+    {
+      "id": "team-sample",
+      "name": "Sample",
+      "permissions": [
+        "dashboard",
+        "tasks",
+        "attendance",
+        "orders",
+        "approvals",
+        "reports"
+      ],
+      "primaryId": "pri_teams_1790160923120_cpws4"
+    },
+    {
+      "id": "team-quality",
+      "name": "Quality",
+      "permissions": [
+        "dashboard",
+        "tasks",
+        "attendance",
+        "orders",
+        "approvals"
+      ],
+      "primaryId": "pri_teams_1790160923114_tegjj"
+    },
+    {
+      "id": "team-finishing",
+      "name": "Finishing",
+      "permissions": [
+        "dashboard",
+        "tasks",
+        "attendance",
+        "orders",
+        "approvals"
+      ],
+      "primaryId": "pri_teams_1790160923108_emgep"
+    },
+    {
+      "id": "team-iot",
+      "name": "IoT",
+      "permissions": [
+        "dashboard",
+        "tasks",
+        "attendance",
+        "orders"
+      ],
+      "primaryId": "pri_teams_1790160923101_f0bc2"
+    },
+    {
+      "id": "team-production",
+      "name": "Production",
+      "permissions": [
+        "dashboard",
+        "tasks",
+        "attendance",
+        "orders",
+        "approvals"
+      ],
+      "primaryId": "pri_teams_1790160923092_utluy"
+    },
+    {
+      "id": "team-cutting",
+      "name": "Cutting",
+      "permissions": [
+        "dashboard",
+        "tasks",
+        "attendance",
+        "orders",
+        "approvals"
+      ],
+      "primaryId": "pri_teams_1790160923085_rh2m3"
+    },
+    {
+      "id": "team-store",
+      "name": "Store",
+      "permissions": [
+        "dashboard",
+        "tasks",
+        "attendance",
+        "orders"
+      ],
+      "primaryId": "pri_teams_1790160923080_2log2"
+    },
+    {
+      "id": "team-testing",
+      "name": "Testing",
+      "permissions": [
+        "dashboard",
+        "tasks",
+        "attendance",
+        "orders"
+      ],
+      "primaryId": "pri_teams_1790160923075_31amt"
+    },
+    {
+      "id": "team-warehouse",
+      "name": "Warehouse",
+      "permissions": [
+        "dashboard",
+        "tasks",
+        "attendance",
+        "orders"
+      ],
+      "primaryId": "pri_teams_1790160923068_nzfr0"
+    },
+    {
+      "id": "team-purchase-trims",
+      "name": "Purchase – Trims",
+      "permissions": [
+        "dashboard",
+        "tasks",
+        "attendance",
+        "orders",
+        "approvals"
+      ],
+      "primaryId": "pri_teams_1790160923063_xcuzj"
+    },
+    {
+      "id": "team-purchase-fabric",
+      "name": "Purchase – Fabric",
+      "permissions": [
+        "dashboard",
+        "tasks",
+        "attendance",
+        "orders",
+        "approvals"
+      ],
+      "primaryId": "pri_teams_1790160923060_8fh54"
+    },
+    {
+      "id": "team-planning",
+      "name": "Planning",
+      "permissions": [
+        "dashboard",
+        "tasks",
+        "attendance",
+        "orders",
+        "approvals",
+        "reports"
+      ],
+      "primaryId": "pri_teams_1790160923055_smh2w"
+    },
+    {
+      "id": "team-program",
+      "name": "Program",
+      "permissions": [
+        "dashboard",
+        "tasks",
+        "attendance",
+        "orders",
+        "approvals",
+        "reports"
+      ],
+      "primaryId": "pri_teams_1790160923051_ecqlw"
+    },
+    {
+      "id": "team-merchandising",
+      "name": "Merchandising",
+      "permissions": [
+        "dashboard",
+        "tasks",
+        "attendance",
+        "orders",
+        "approvals",
+        "reports"
+      ],
+      "primaryId": "pri_teams_1790160923046_izt78"
+    },
+    {
+      "id": "team-md",
+      "name": "Executive (MD)",
+      "permissions": [
+        "dashboard",
+        "orders",
+        "tasks",
+        "approvals",
+        "attendance",
+        "reports",
+        "settings"
+      ],
+      "primaryId": "pri_teams_1790160923041_7nno5"
+    },
+    {
+      "id": "team-admin",
+      "name": "Administrators",
+      "permissions": [
+        "dashboard",
+        "orders",
+        "tasks",
+        "approvals",
+        "attendance",
+        "reports",
+        "settings"
+      ],
+      "primaryId": "pri_teams_1790160923037_tkcjz"
+    }
+  ],
   "dashboard_rotation": [],
   "user_sessions": [],
   "audit_logs": []

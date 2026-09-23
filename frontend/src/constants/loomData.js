@@ -50,7 +50,7 @@ export function computeDynamicOrderRisk(order) {
   const now = new Date();
   const rawShip = order.shipDate || order.ship;
   const shipD = parseShipDateSafe(rawShip);
-  
+
   let daysLeft = null;
   if (shipD) {
     daysLeft = Math.round((shipD.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
@@ -320,7 +320,7 @@ export function calculateSupplierMetrics(supplier, orders = [], supplierWork = [
             processedKeys.add(key);
             const isDelayed = Boolean(stage.reason || o.status === "Delayed");
             const isQualityIssue = Boolean(stage.reason === "Quality rework" || (stage.reason && stage.reason.toLowerCase().includes("quality")));
-            
+
             matchingItems.push({
               id: `stage-${o.id}-${idx}`,
               order: o,
@@ -406,7 +406,7 @@ export function calculateSupplierMetrics(supplier, orders = [], supplierWork = [
  */
 export function isSameDay(targetDate, checkDate) {
   if (!targetDate || !checkDate) return false;
-  
+
   let tYear, tMonth, tDay;
   if (typeof targetDate === "string") {
     const trimmedT = targetDate.trim();
@@ -452,7 +452,7 @@ export function isSameDay(targetDate, checkDate) {
     const trimmed = checkDate.trim();
     const monthNames = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
     const lower = trimmed.toLowerCase();
-    
+
     // Check "12 May" or "12 May 2026" or "12-May-2026"
     const textMatch = lower.match(/^(\d{1,2})[\s\-]+([a-z]{3})(?:[\s\-]+(\d{4}))?$/);
     if (textMatch) {
@@ -904,12 +904,12 @@ export const TA_STAGES_90 = [
   { name: "Program Passing", day: "Day 3-5", dept: "Program" },
   { name: "Trims Plan", day: "Day 4-7", dept: "Purchase – Trims" },
   { name: "Lab Dip Approval", day: "Day 5-10", dept: "Merchandising" },
-  { name: "Yarn to Knitting", day: "Day 5-10", dept: "Purchase – Fabric" },
+  { name: "Yarn to Knitting", day: "Day 5-10", dept: "Process" },
   { name: "Artwork Approval", day: "Day 1-20", dept: "Merchandising" },
-  { name: "Dyeing", day: "Day 11-25", dept: "Purchase – Fabric" },
+  { name: "Dyeing", day: "Day 11-25", dept: "Process" },
   { name: "Sewing Trims IH", day: "Day 15", dept: "Purchase – Trims" },
   { name: "Packing Trims IH", day: "Day 25", dept: "Purchase – Trims" },
-  { name: "Fabric IH", day: "Day 25", dept: "Store" },
+  { name: "Fabric IH", day: "Day 25", dept: "Warehouse" },
   { name: "Lot Card Approval", day: "Day 25-30", dept: "Quality" },
   { name: "PP Sample", day: "Day 25-35", dept: "Sample" },
   { name: "PP Meeting", day: "Day 30-33", dept: "Planning" },
@@ -946,7 +946,7 @@ export const TA_STAGES_120 = [
   { name: "Dyeing", day: "Day 15-33", dept: "Purchase – Fabric" },
   { name: "Sewing Trims IH", day: "Day 20", dept: "Purchase – Trims" },
   { name: "Packing Trims IH", day: "Day 33", dept: "Purchase – Trims" },
-  { name: "Fabric IH", day: "Day 33", dept: "Store" },
+  { name: "Fabric IH", day: "Day 33", dept: "Warehouse" },
   { name: "Lot Card Approval", day: "Day 33-40", dept: "Quality" },
   { name: "PP Sample", day: "Day 33-47", dept: "Sample" },
   { name: "PP Meeting", day: "Day 40-44", dept: "Planning" },
