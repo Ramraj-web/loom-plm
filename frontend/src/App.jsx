@@ -807,6 +807,9 @@ export default function LoomPLM() {
         }
       }
 
+      const resolvedTemplate = mergedOrder.template || existing?.template || "90";
+      const expectedStageCount = makeStages(resolvedTemplate, 0, null).length;
+
       mergedList.push({
         ...existing,
         ...mergedOrder,
@@ -817,18 +820,18 @@ export default function LoomPLM() {
         isDeleted: mergedOrder.isDeleted ?? existing?.isDeleted ?? false,
         completedAt: mergedOrder.completedAt || existing?.completedAt || null,
         deletedAt: mergedOrder.deletedAt || existing?.deletedAt || null,
-        template: mergedOrder.template || existing?.template || "90",
+        template: resolvedTemplate,
         costingTemplate: mergedOrder.costingTemplate || existing?.costingTemplate || "fabric",
         costingRows: mergedOrder.costingRows || existing?.costingRows || buildCostingRows(mergedOrder.costingTemplate || existing?.costingTemplate || "fabric"),
         vapCount: mergedOrder.vapCount ?? existing?.vapCount ?? 1,
         shippedQty: mergedOrder.shippedQty ?? existing?.shippedQty ?? 0,
         plannedCost: mergedOrder.plannedCost ?? existing?.plannedCost ?? 0,
         actualCost: mergedOrder.actualCost ?? existing?.actualCost ?? 0,
-        stages: ((mergedOrder.stages && mergedOrder.stages.length === 34)
+        stages: ((mergedOrder.stages && mergedOrder.stages.length === expectedStageCount)
           ? mergedOrder.stages
-          : (existing?.stages && existing.stages.length === 34)
+          : (existing?.stages && existing.stages.length === expectedStageCount)
             ? existing.stages
-            : makeStages(mergedOrder.template || existing?.template || "90", 0, null)).map((s, sIdx) => {
+            : makeStages(resolvedTemplate, 0, null)).map((s, sIdx) => {
               const existingStage = existing?.stages?.[sIdx];
               return {
                 ...s,
