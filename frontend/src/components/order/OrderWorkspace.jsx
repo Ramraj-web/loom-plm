@@ -264,7 +264,7 @@ export const COLOURWAY_REQUIRED_STAGES = [
   "lot card approval",
   "shrinkage closure",
   "cutting",
-  "vap send",
+  "print",
   "testing",
   "print / emb / hotfix complete",
   "print/emb/ hotfix complete",
@@ -3493,6 +3493,10 @@ export function OrderWorkspace({
             if (onUpdateStages) {
               onUpdateStages(orderId, updatedStages);
             }
+            // Persist as the "last aligned stages" template for future new orders
+            try {
+              localStorage.setItem("loom_last_aligned_stages", JSON.stringify(updatedStages));
+            } catch (e) { /* ignore */ }
             setShowAlignModal(false);
           }}
         />

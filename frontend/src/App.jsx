@@ -3870,6 +3870,7 @@ export default function LoomPLM() {
         isAdmin={isAdmin}
         onOpenOrder={openOrder}
         onAddOrder={addOrder}
+        onUpdateStages={updateStages}
         onCompleteOrder={completeOrder}
         onUncompleteOrder={uncompleteOrder}
         onDeleteOrder={deleteOrder}

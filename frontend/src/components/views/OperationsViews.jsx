@@ -31,6 +31,7 @@ export function OrdersPage({
   isAdmin = false,
   onOpenOrder,
   onAddOrder,
+  onUpdateStages,
   onCompleteOrder,
   onUncompleteOrder,
   onDeleteOrder,
@@ -40,6 +41,40 @@ export function OrdersPage({
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDeletedSection, setShowDeletedSection] = useState(false);
   const [alignModalOrder, setAlignModalOrder] = useState(null);
+
+  // Remember the last saved stage layout so every new order starts from it.
+  // Persisted to localStorage so it survives page refresh and component remounts.
+  const [lastAlignedStages, setLastAlignedStages] = useState(() => {
+    // 1. Try localStorage first — most reliable (survives refresh)
+    try {
+      const stored = localStorage.getItem("loom_last_aligned_stages");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) { /* ignore parse errors */ }
+
+    // 2. Fallback: derive from the most recently created active order
+    const activeOrders = orders.filter(o => !o.isDeleted && !o.completed);
+    if (activeOrders.length > 0) {
+      const sorted = [...activeOrders].sort((a, b) =>
+        new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
+      );
+      const latest = sorted[0];
+      if (Array.isArray(latest?.stages) && latest.stages.length > 0) {
+        return JSON.parse(JSON.stringify(latest.stages));
+      }
+    }
+    return null;
+  });
+
+  // Helper: update state AND persist to localStorage atomically
+  const saveLastAlignedStages = (stages) => {
+    try {
+      localStorage.setItem("loom_last_aligned_stages", JSON.stringify(stages));
+    } catch (e) { /* storage full or private mode — ignore */ }
+    setLastAlignedStages(stages);
+  };
 
   const todayIso = new Date().toISOString().split("T")[0];
   const defaultShipIso = new Date(Date.now() + 90 * 86400000).toISOString().split("T")[0];
@@ -178,8 +213,22 @@ export function OrdersPage({
 
     if (onAddOrder) onAddOrder(newOrder);
 
-    // Open T&A Stage Alignment Dialog for this newly created order
-    setAlignModalOrder(newOrder);
+    // Open T&A Stage Alignment Dialog for this newly created order.
+    // Pre-fill with lastAlignedStages (from the most recently configured order)
+    // so the user doesn't have to redo the same stage setup every time.
+    const seedStages = lastAlignedStages
+      ? lastAlignedStages.map(s => ({
+          ...s,
+          status: "pending",
+          assignee: s.assignee || "Unassigned",
+          reason: null,
+          completedAt: null,
+          completedOn: null,
+          updatedAt: null,
+          flaggedAt: null
+        }))
+      : undefined;
+    setAlignModalOrder(seedStages ? { ...newOrder, stages: seedStages } : newOrder);
 
     setForm({
       id: "",
@@ -937,14 +986,13 @@ export function OrdersPage({
           isOpen={Boolean(alignModalOrder)}
           onClose={() => setAlignModalOrder(null)}
           onSaveStages={(orderId, updatedStages, tmpl) => {
-            if (onAddOrder) {
-              // Also update stages in orders state if onAddOrder/onUpdateStages available
-              const found = orders.find(o => o.id === orderId);
-              if (found) {
-                found.stages = updatedStages;
-                found.template = tmpl;
-              }
+            // Properly save stages through the state updater so React re-renders
+            // and the backend persists the changes
+            if (onUpdateStages) {
+              onUpdateStages(orderId, updatedStages);
             }
+            // Remember this layout permanently — next new order will start with these stages
+            saveLastAlignedStages(JSON.parse(JSON.stringify(updatedStages)));
             setAlignModalOrder(null);
           }}
         />

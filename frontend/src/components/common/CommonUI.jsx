@@ -249,15 +249,20 @@ export function GroupedTaskList({ rows, onOpenOrder, emptyText }) {
                     onMouseLeave={e => e.currentTarget.style.background = "transparent"}
                   >
                     <div>
-                      <div style={{ fontFamily: "monospace", fontSize: 11, color: "#8A8D98", display: "flex", alignItems: "center", gap: 6 }}>
+                      <div style={{ fontFamily: "monospace", fontSize: 11, color: "#8A8D98", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                         <span>{order.id}</span>
+                        {order.buyer && (
+                          <span style={{ fontSize: 9.5, background: "#E6F7F4", color: "#0D7A68", padding: "1px 7px", borderRadius: 20, fontWeight: 700, letterSpacing: 0.2, border: "1px solid #A7E3D8", fontFamily: "inherit" }}>
+                            {order.buyer}
+                          </span>
+                        )}
                         {order.color && (
                           <span style={{ fontSize: 9.5, background: "#EFF6FF", color: "#1D4ED8", padding: "1px 5px", borderRadius: 4, fontWeight: 600 }}>
                             {order.color}
                           </span>
                         )}
                       </div>
-                      <div style={{ fontWeight: 600, color: "#1B2130" }}>{order.style}</div>
+                      <div style={{ fontWeight: 600, color: "#1B2130", marginTop: 2 }}>{order.style}</div>
                     </div>
                     <div>{stage.name} <span style={{ color: "#B0B2BA", fontSize: 10.5 }}>· {stage.dept}</span></div>
                     <div>{stage.planned}</div>
