@@ -5901,6 +5901,32 @@ export function OrderStageAlignmentModal({
 }
 
 
+// Disjoint interval union: merges overlapping or concurrent session intervals so user screen time
+// is strictly true to real wall-clock elapsed time and never calculates/ticks faster than 1 min per min.
+function mergeAndSumIntervals(intervals) {
+  if (!intervals || intervals.length === 0) return 0;
+  const valid = intervals.filter(([s, e]) => e > s).sort((a, b) => a[0] - b[0]);
+  if (valid.length === 0) return 0;
+
+  const merged = [valid[0].slice()];
+  for (let i = 1; i < valid.length; i++) {
+    const cur = valid[i];
+    const prev = merged[merged.length - 1];
+    if (cur[0] <= prev[1]) {
+      prev[1] = Math.max(prev[1], cur[1]);
+    } else {
+      merged.push(cur.slice());
+    }
+  }
+
+  let totalMs = 0;
+  merged.forEach(([s, e]) => {
+    totalMs += (e - s);
+  });
+  if (totalMs <= 0) return 0;
+  return Math.max(1, Math.round(totalMs / 60000));
+}
+
 export function AuditLoggerPage({
   auditLogs = [],
   userSessions = [],
@@ -5987,6 +6013,10 @@ export function AuditLoggerPage({
         dept: primaryDept,
         departments: userDepts,
         sessions: [],
+        todayIntervals: [],
+        weekIntervals: [],
+        monthIntervals: [],
+        overallIntervals: [],
         todayMinutes: 0,
         weekMinutes: 0,
         monthMinutes: 0,
@@ -6024,6 +6054,10 @@ export function AuditLoggerPage({
           dept: sess.dept || "General",
           departments: [sess.dept || "General"],
           sessions: [],
+          todayIntervals: [],
+          weekIntervals: [],
+          monthIntervals: [],
+          overallIntervals: [],
           todayMinutes: 0,
           weekMinutes: 0,
           monthMinutes: 0,
@@ -6041,12 +6075,35 @@ export function AuditLoggerPage({
       if (!Array.isArray(rec.sessions)) rec.sessions = [];
       rec.sessions.push(sess);
 
-      // Calculate session duration in minutes
-      let sMins = 0;
       const loginMs = sess.loginTime ? new Date(sess.loginTime).getTime() : 0;
       const logoutMs = sess.logoutTime ? new Date(sess.logoutTime).getTime() : 0;
       const lastHeartbeatMs = sess.lastHeartbeat ? new Date(sess.lastHeartbeat).getTime() : loginMs;
       const timeSinceHeartbeatMs = dateRanges.nowMs - lastHeartbeatMs;
+
+      // Online: active session with heartbeat received within the last 5 minutes.
+      const ONLINE_WINDOW_MS = 5 * 60 * 1000;
+      const isOnlineSession = sess.active && loginMs > 0 && (timeSinceHeartbeatMs < ONLINE_WINDOW_MS);
+
+      if (isOnlineSession) {
+        rec.isOnline = true;
+      }
+
+      // Calculate realistic endMs for this session
+      let endMs = loginMs;
+      if (isOnlineSession) {
+        endMs = dateRanges.nowMs;
+      } else if (logoutMs && loginMs && logoutMs >= loginMs) {
+        endMs = logoutMs;
+      } else if (lastHeartbeatMs > loginMs) {
+        endMs = lastHeartbeatMs;
+      } else if (sess.hoursUsed && Number(sess.hoursUsed) > 0.01) {
+        endMs = loginMs + Math.round(Number(sess.hoursUsed) * 3600000);
+      } else if (loginMs > 0) {
+        endMs = loginMs + 60000;
+      }
+
+      // Clamp endMs between loginMs and nowMs
+      endMs = Math.min(dateRanges.nowMs, Math.max(loginMs, endMs));
 
       // Check if session belongs to today (local calendar day)
       const isToday = (loginMs > 0 && loginMs >= dateRanges.todayStartMs) || (sess.date && sess.date === todayStr);
@@ -6056,39 +6113,30 @@ export function AuditLoggerPage({
         rec.todayLogins = (rec.todayLogins || 0) + 1;
       }
 
-      // Online: active session with heartbeat received within the last 5 minutes.
-      const ONLINE_WINDOW_MS = 5 * 60 * 1000;
-      const isOnlineSession = sess.active && loginMs > 0 && (timeSinceHeartbeatMs < ONLINE_WINDOW_MS);
+      if (loginMs > 0 && endMs >= loginMs) {
+        // Overall
+        rec.overallIntervals.push([loginMs, endMs]);
 
-      if (isOnlineSession) {
-        // Live session: show total time from login up to now
-        rec.isOnline = true;
-        sMins = Math.max(1, Math.round((dateRanges.nowMs - loginMs) / 60000));
-      } else if (logoutMs && loginMs && logoutMs >= loginMs) {
-        // Clean logout: exact duration
-        sMins = Math.max(1, Math.round((logoutMs - loginMs) / 60000));
-      } else if (lastHeartbeatMs > loginMs) {
-        // Closed tab or disconnected: duration from login to last recorded heartbeat
-        sMins = Math.max(1, Math.round((lastHeartbeatMs - loginMs) / 60000));
-      } else if (sess.hoursUsed && Number(sess.hoursUsed) > 0.01) {
-        sMins = Math.max(1, Math.round(Number(sess.hoursUsed) * 60));
-      } else if (loginMs > 0 && isToday) {
-        // Edge case: logged in today but no heartbeat/logout recorded yet
-        sMins = Math.max(1, Math.round((dateRanges.nowMs - loginMs) / 60000));
-      } else {
-        sMins = 1;
-      }
+        // Today: overlap with [todayStartMs, nowMs]
+        const todayStart = Math.max(loginMs, dateRanges.todayStartMs);
+        const todayEnd = Math.min(endMs, dateRanges.nowMs);
+        if (todayEnd > todayStart || isToday) {
+          rec.todayIntervals.push([todayStart, Math.max(todayStart, todayEnd)]);
+        }
 
-      rec.overallMinutes += sMins;
+        // Week: overlap with [weekStartMs, nowMs]
+        const weekStart = Math.max(loginMs, dateRanges.weekStartMs);
+        const weekEnd = Math.min(endMs, dateRanges.nowMs);
+        if (weekEnd > weekStart) {
+          rec.weekIntervals.push([weekStart, weekEnd]);
+        }
 
-      if (isToday) {
-        rec.todayMinutes += sMins;
-      }
-      if (loginMs >= dateRanges.weekStartMs) {
-        rec.weekMinutes += sMins;
-      }
-      if (loginMs >= dateRanges.monthStartMs) {
-        rec.monthMinutes += sMins;
+        // Month: overlap with [monthStartMs, nowMs]
+        const monthStart = Math.max(loginMs, dateRanges.monthStartMs);
+        const monthEnd = Math.min(endMs, dateRanges.nowMs);
+        if (monthEnd > monthStart) {
+          rec.monthIntervals.push([monthStart, monthEnd]);
+        }
       }
 
       // Track last login info
@@ -6097,6 +6145,14 @@ export function AuditLoggerPage({
         rec.lastDevice = sess.device || sess.deviceType;
         rec.lastLocation = sess.location;
       }
+    });
+
+    // 3. Merge overlapping intervals for each user so screen time is strictly true to real elapsed time
+    userMap.forEach(rec => {
+      rec.todayMinutes = mergeAndSumIntervals(rec.todayIntervals);
+      rec.weekMinutes = mergeAndSumIntervals(rec.weekIntervals);
+      rec.monthMinutes = mergeAndSumIntervals(rec.monthIntervals);
+      rec.overallMinutes = mergeAndSumIntervals(rec.overallIntervals);
     });
 
     return Array.from(userMap.values()).sort((a, b) => {

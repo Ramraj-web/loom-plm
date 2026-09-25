@@ -822,7 +822,15 @@ export default function LoomPLM() {
       targetSession = newSession;
 
       setUserSessions(prev => {
-        const updated = [newSession, ...prev.filter(s => s.id !== sessId)];
+        const updated = [
+          newSession,
+          ...prev.filter(s => s.id !== sessId).map(s => {
+            if (s.userId === activeUser.id && s.active) {
+              return { ...s, active: false, logoutTime: s.lastHeartbeat || nowIso };
+            }
+            return s;
+          })
+        ];
         if (window.storage) window.storage.set("user_sessions", JSON.stringify(updated), true);
         return updated;
       });
@@ -845,6 +853,11 @@ export default function LoomPLM() {
                 existing.forEach(s => { if (s && s.id) map.set(s.id, s); });
                 cur.forEach(s => { if (s && s.id) map.set(s.id, s); });
                 if (sessId && targetSession) {
+                  for (const [id, s] of map.entries()) {
+                    if (s.userId === activeUser.id && s.active && id !== sessId) {
+                      map.set(id, { ...s, active: false, logoutTime: s.lastHeartbeat || nowIso });
+                    }
+                  }
                   const existingSess = map.get(sessId) || targetSession;
                   map.set(sessId, { ...existingSess, active: true, logoutTime: null, lastHeartbeat: nowIso });
                 }
@@ -1836,7 +1849,15 @@ export default function LoomPLM() {
     });
 
     setUserSessions(prev => {
-      const updated = [newSession, ...prev];
+      const updated = [
+        newSession,
+        ...prev.map(s => {
+          if (s.userId === user.id && s.active && s.id !== sessId) {
+            return { ...s, active: false, logoutTime: s.lastHeartbeat || nowIso };
+          }
+          return s;
+        })
+      ];
       if (window.storage) window.storage.set("user_sessions", JSON.stringify(updated), true);
       return updated;
     });
@@ -1853,8 +1874,15 @@ export default function LoomPLM() {
                 const map = new Map();
                 existing.forEach(s => { if (s && s.id) map.set(s.id, s); });
                 cur.forEach(s => { if (s && s.id) map.set(s.id, s); });
+                for (const [id, s] of map.entries()) {
+                  if (s.userId === user.id && s.active && id !== sessId) {
+                    map.set(id, { ...s, active: false, logoutTime: s.lastHeartbeat || nowIso });
+                  }
+                }
                 map.set(sessId, newSession);
-                return Array.from(map.values()).sort((a, b) => new Date(b.loginTime || 0) - new Date(a.loginTime || 0));
+                const merged = Array.from(map.values()).sort((a, b) => new Date(b.loginTime || 0) - new Date(a.loginTime || 0));
+                if (window.storage) window.storage.set("user_sessions", JSON.stringify(merged), true);
+                return merged;
               });
             }
           } catch (e) {}
