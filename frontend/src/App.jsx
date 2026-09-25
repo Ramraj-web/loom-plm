@@ -14,6 +14,7 @@ import {
   ORG_STRUCTURE, ROLE_OPTIONS, STAFF_LIST, seedAttendance, INITIAL_LEAVE_REQUESTS,
   INITIAL_FINANCIALS, INITIAL_CERTIFICATIONS, INITIAL_COMPLIANCES, INITIAL_DEBIT_NOTES, INITIAL_CAPAS,
   INITIAL_ORDERS, INITIAL_NOTIFICATIONS, VAP_SUPPLIERS, buildCostingRows, makeStages, initPreProd,
+  TA_TEMPLATES, TA_STAGES_90,
   NOTIFICATION_PRIORITY_STYLE, formatTimeAgo, DEFAULT_DEPT_DESCRIPTIONS, INITIAL_SUPPLIERS, INITIAL_SUPPLIER_WORK,
   INITIAL_CUSTOM_TASKS, INITIAL_DEPARTMENT_CHECKLISTS, firstNamedAssignee
 } from "./constants/loomData.js";
@@ -194,13 +195,186 @@ export function applyReadStatusAndDedupe(notifs = []) {
   return Array.from(map.values()).sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 }
 
+// Deduplicate and normalize orders, merging any phantom duplicates (ord_<baseId>_<hash>) into their real parent orders
+export const normalizeAndDeduplicateOrders = (rawOrders, prev = []) => {
+  if (!Array.isArray(rawOrders)) return [];
+  const realOrders = rawOrders.filter(bo => !["GKT-1054", "ST-7788", "JKT-2231", "TR-8899", "DR-5566", "PL-3321"].includes(bo.id));
+
+  // Extract underlying base ID from any order ID string
+  const cleanBaseId = (idStr) => {
+    let str = String(idStr || "").trim();
+    while (str.startsWith("ord_")) {
+      str = str.replace(/^ord_/, "");
+    }
+    str = str.replace(/_[a-z0-9]{4,12}$/i, "");
+    return str.trim();
+  };
+
+  // Group raw orders by their canonical uppercase base ID
+  const groups = new Map();
+  const phantomIdsToDelete = [];
+
+  realOrders.forEach(bo => {
+    const rawId = String(bo.id || bo.orderId || bo.primaryId || "");
+    const baseKey = cleanBaseId(rawId).toUpperCase();
+    if (!baseKey) return;
+
+    if (!groups.has(baseKey)) {
+      groups.set(baseKey, []);
+    }
+    groups.get(baseKey).push(bo);
+
+    if (rawId.startsWith("ord_") || /_[a-z0-9]{4,12}$/i.test(rawId)) {
+      phantomIdsToDelete.push(rawId);
+    }
+  });
+
+  // Permanently clean phantom duplicate documents from backend asynchronously
+  if (phantomIdsToDelete.length > 0) {
+    phantomIdsToDelete.forEach(dId => {
+      resourcesApi.delete("orders", dId, "?permanent=true").catch(() => {});
+    });
+  }
+
+  const mergedList = [];
+  groups.forEach((orderList, baseKey) => {
+    // Pick best canonical base
+    const sorted = [...orderList].sort((a, b) => {
+      const aIsClean = !String(a.id || "").startsWith("ord_") && !/_[a-z0-9]{4,12}$/i.test(String(a.id || ""));
+      const bIsClean = !String(b.id || "").startsWith("ord_") && !/_[a-z0-9]{4,12}$/i.test(String(b.id || ""));
+      if (aIsClean && !bIsClean) return -1;
+      if (!aIsClean && bIsClean) return 1;
+      return 0;
+    });
+
+    const canonicalBase = sorted[0];
+    const existing = prev.find(p => cleanBaseId(p.id).toUpperCase() === baseKey || cleanBaseId(p.primaryId).toUpperCase() === baseKey);
+
+    // Merge attributes across any duplicates
+    const mergedOrder = { ...canonicalBase };
+    mergedOrder.id = cleanBaseId(canonicalBase.id) || baseKey;
+    mergedOrder.primaryId = mergedOrder.id;
+    mergedOrder.orderId = mergedOrder.id;
+
+    for (let i = 1; i < sorted.length; i++) {
+      const other = sorted[i];
+      if (Array.isArray(other.stages) && Array.isArray(mergedOrder.stages)) {
+        other.stages.forEach((dStage, idx) => {
+          const mStage = mergedOrder.stages[idx];
+          if (dStage.status === "done" && mStage && mStage.status !== "done") {
+            mergedOrder.stages[idx] = { ...dStage };
+          }
+        });
+      }
+      if (other.status && other.status !== "On Track") mergedOrder.status = other.status;
+      if (other.completed && !mergedOrder.completed) {
+        mergedOrder.completed = true;
+        mergedOrder.completedAt = other.completedAt || new Date().toISOString();
+      }
+      if (other.isDeleted && !mergedOrder.isDeleted) {
+        mergedOrder.isDeleted = true;
+        mergedOrder.deletedAt = other.deletedAt || new Date().toISOString();
+      }
+    }
+
+    const resolvedTemplate = mergedOrder.template || existing?.template || "90";
+    const templateStages = TA_TEMPLATES[resolvedTemplate] || TA_STAGES_90;
+    const expectedStageCount = templateStages.length;
+
+    const sourceStages = ((mergedOrder.stages && mergedOrder.stages.length === expectedStageCount)
+      ? mergedOrder.stages
+      : (existing?.stages && existing.stages.length === expectedStageCount)
+        ? existing.stages
+        : makeStages(resolvedTemplate, 0, null));
+
+    mergedList.push({
+      ...existing,
+      ...mergedOrder,
+      id: mergedOrder.id,
+      primaryId: mergedOrder.id,
+      orderId: mergedOrder.id,
+      completed: mergedOrder.completed ?? existing?.completed ?? false,
+      isDeleted: mergedOrder.isDeleted ?? existing?.isDeleted ?? false,
+      completedAt: mergedOrder.completedAt || existing?.completedAt || null,
+      deletedAt: mergedOrder.deletedAt || existing?.deletedAt || null,
+      template: resolvedTemplate,
+      costingTemplate: mergedOrder.costingTemplate || existing?.costingTemplate || "fabric",
+      costingRows: mergedOrder.costingRows || existing?.costingRows || buildCostingRows(mergedOrder.costingTemplate || existing?.costingTemplate || "fabric"),
+      vapCount: mergedOrder.vapCount ?? existing?.vapCount ?? 1,
+      shippedQty: mergedOrder.shippedQty ?? existing?.shippedQty ?? 0,
+      plannedCost: mergedOrder.plannedCost ?? existing?.plannedCost ?? 0,
+      actualCost: mergedOrder.actualCost ?? existing?.actualCost ?? 0,
+      stages: sourceStages.map((s, sIdx) => {
+        const existingStage = existing?.stages?.[sIdx];
+        const tmplStage = templateStages[sIdx];
+
+        let stageName = s.name;
+        let stageDept = s.dept;
+        let stagePlanned = s.planned;
+
+        // Ensure stage 23 (Print / Emb / Outsource) and 24 (Print / Emb / IH) reflect updated template
+        if (
+          sIdx === 23 ||
+          s.name === "Print / Emb / Hotfix Complete" ||
+          s.name === "Print/emb/out source" ||
+          s.name === "Print / Emb Complete" ||
+          s.name === "print / emb / hotfix complete"
+        ) {
+          stageName = tmplStage?.name || "Print / Emb / Outsource";
+          stageDept = tmplStage?.dept || "Cutting";
+          stagePlanned = tmplStage?.day || (resolvedTemplate === "120" ? "Day 56-59" : "Day 42-44");
+        } else if (
+          sIdx === 24 ||
+          s.name === "VAP Send" ||
+          s.name === "vap send" ||
+          (sIdx === 24 && s.name === "Print")
+        ) {
+          stageName = tmplStage?.name || "Print / Emb / IH";
+          stageDept = tmplStage?.dept || "Merchandising";
+          stagePlanned = tmplStage?.day || (resolvedTemplate === "120" ? "Day 60-80" : "Day 45-60");
+        } else if (tmplStage && (s.name.toLowerCase() === tmplStage.name.toLowerCase())) {
+          stageName = tmplStage.name;
+          stageDept = tmplStage.dept;
+        }
+
+        return {
+          ...s,
+          name: stageName,
+          dept: stageDept,
+          planned: stagePlanned || s.planned || tmplStage?.day,
+          status: s.status || existingStage?.status || "pending",
+          reason: s.reason !== undefined ? s.reason : (existingStage?.reason || null),
+          completedAt: s.completedAt || existingStage?.completedAt || (s.status === "done" ? (existingStage?.completedAt || new Date().toISOString()) : undefined),
+          completedBy: s.completedBy || existingStage?.completedBy || undefined,
+          updatedAt: s.updatedAt || existingStage?.updatedAt || undefined,
+          updatedBy: s.updatedBy || existingStage?.updatedBy || undefined,
+          flaggedAt: s.flaggedAt || existingStage?.flaggedAt || undefined,
+          delayedDate: s.delayedDate || existingStage?.delayedDate || undefined,
+          revisedDateStr: s.revisedDateStr || existingStage?.revisedDateStr || undefined,
+          colourways: Array.isArray(s.colourways) && s.colourways.length > 0 ? s.colourways : (existingStage?.colourways || s.colourways)
+        };
+      }),
+      preProd: mergedOrder.preProd || existing?.preProd || initPreProd(),
+    });
+  });
+
+  // Strictly one single item per uppercase base order ID
+  const resultMap = new Map();
+  mergedList.forEach(item => {
+    const key = cleanBaseId(item.id).toUpperCase();
+    if (key) resultMap.set(key, item);
+  });
+
+  return Array.from(resultMap.values());
+};
+
 export default function LoomPLM() {
   const [orders, setOrders] = useState(() => {
     try {
       const cached = localStorage.getItem("loom_orders_cache");
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) return normalizeAndDeduplicateOrders(parsed);
       }
     } catch (e) {}
     return [];
@@ -724,143 +898,6 @@ export default function LoomPLM() {
     return () => window.clearInterval(timer);
   }, [rotation, activeUser, users, teams]);
 
-  // Deduplicate and normalize orders, merging any phantom duplicates (ord_<baseId>_<hash>) into their real parent orders
-  // Deduplicate and normalize orders, merging any phantom duplicates (ord_<baseId>_<hash>) into their real parent orders
-  const normalizeAndDeduplicateOrders = (rawOrders, prev = []) => {
-    if (!Array.isArray(rawOrders)) return [];
-    const realOrders = rawOrders.filter(bo => !["GKT-1054", "ST-7788", "JKT-2231", "TR-8899", "DR-5566", "PL-3321"].includes(bo.id));
-
-    // Extract underlying base ID from any order ID string
-    const cleanBaseId = (idStr) => {
-      let str = String(idStr || "").trim();
-      while (str.startsWith("ord_")) {
-        str = str.replace(/^ord_/, "");
-      }
-      str = str.replace(/_[a-z0-9]{4,12}$/i, "");
-      return str.trim();
-    };
-
-    // Group raw orders by their canonical uppercase base ID
-    const groups = new Map();
-    const phantomIdsToDelete = [];
-
-    realOrders.forEach(bo => {
-      const rawId = String(bo.id || bo.orderId || bo.primaryId || "");
-      const baseKey = cleanBaseId(rawId).toUpperCase();
-      if (!baseKey) return;
-
-      if (!groups.has(baseKey)) {
-        groups.set(baseKey, []);
-      }
-      groups.get(baseKey).push(bo);
-
-      if (rawId.startsWith("ord_") || /_[a-z0-9]{4,12}$/i.test(rawId)) {
-        phantomIdsToDelete.push(rawId);
-      }
-    });
-
-    // Permanently clean phantom duplicate documents from backend asynchronously
-    if (phantomIdsToDelete.length > 0) {
-      phantomIdsToDelete.forEach(dId => {
-        resourcesApi.delete("orders", dId, "?permanent=true").catch(() => {});
-      });
-    }
-
-    const mergedList = [];
-    groups.forEach((orderList, baseKey) => {
-      // Pick best canonical base
-      const sorted = [...orderList].sort((a, b) => {
-        const aIsClean = !String(a.id || "").startsWith("ord_") && !/_[a-z0-9]{4,12}$/i.test(String(a.id || ""));
-        const bIsClean = !String(b.id || "").startsWith("ord_") && !/_[a-z0-9]{4,12}$/i.test(String(b.id || ""));
-        if (aIsClean && !bIsClean) return -1;
-        if (!aIsClean && bIsClean) return 1;
-        return 0;
-      });
-
-      const canonicalBase = sorted[0];
-      const existing = prev.find(p => cleanBaseId(p.id).toUpperCase() === baseKey || cleanBaseId(p.primaryId).toUpperCase() === baseKey);
-
-      // Merge attributes across any duplicates
-      const mergedOrder = { ...canonicalBase };
-      mergedOrder.id = cleanBaseId(canonicalBase.id) || baseKey;
-      mergedOrder.primaryId = mergedOrder.id;
-      mergedOrder.orderId = mergedOrder.id;
-
-      for (let i = 1; i < sorted.length; i++) {
-        const other = sorted[i];
-        if (Array.isArray(other.stages) && Array.isArray(mergedOrder.stages)) {
-          other.stages.forEach((dStage, idx) => {
-            const mStage = mergedOrder.stages[idx];
-            if (dStage.status === "done" && mStage && mStage.status !== "done") {
-              mergedOrder.stages[idx] = { ...dStage };
-            }
-          });
-        }
-        if (other.status && other.status !== "On Track") mergedOrder.status = other.status;
-        if (other.completed && !mergedOrder.completed) {
-          mergedOrder.completed = true;
-          mergedOrder.completedAt = other.completedAt || new Date().toISOString();
-        }
-        if (other.isDeleted && !mergedOrder.isDeleted) {
-          mergedOrder.isDeleted = true;
-          mergedOrder.deletedAt = other.deletedAt || new Date().toISOString();
-        }
-      }
-
-      const resolvedTemplate = mergedOrder.template || existing?.template || "90";
-      const expectedStageCount = makeStages(resolvedTemplate, 0, null).length;
-
-      mergedList.push({
-        ...existing,
-        ...mergedOrder,
-        id: mergedOrder.id,
-        primaryId: mergedOrder.id,
-        orderId: mergedOrder.id,
-        completed: mergedOrder.completed ?? existing?.completed ?? false,
-        isDeleted: mergedOrder.isDeleted ?? existing?.isDeleted ?? false,
-        completedAt: mergedOrder.completedAt || existing?.completedAt || null,
-        deletedAt: mergedOrder.deletedAt || existing?.deletedAt || null,
-        template: resolvedTemplate,
-        costingTemplate: mergedOrder.costingTemplate || existing?.costingTemplate || "fabric",
-        costingRows: mergedOrder.costingRows || existing?.costingRows || buildCostingRows(mergedOrder.costingTemplate || existing?.costingTemplate || "fabric"),
-        vapCount: mergedOrder.vapCount ?? existing?.vapCount ?? 1,
-        shippedQty: mergedOrder.shippedQty ?? existing?.shippedQty ?? 0,
-        plannedCost: mergedOrder.plannedCost ?? existing?.plannedCost ?? 0,
-        actualCost: mergedOrder.actualCost ?? existing?.actualCost ?? 0,
-        stages: ((mergedOrder.stages && mergedOrder.stages.length === expectedStageCount)
-          ? mergedOrder.stages
-          : (existing?.stages && existing.stages.length === expectedStageCount)
-            ? existing.stages
-            : makeStages(resolvedTemplate, 0, null)).map((s, sIdx) => {
-              const existingStage = existing?.stages?.[sIdx];
-              return {
-                ...s,
-                status: s.status || existingStage?.status || "pending",
-                reason: s.reason !== undefined ? s.reason : (existingStage?.reason || null),
-                completedAt: s.completedAt || existingStage?.completedAt || (s.status === "done" ? (existingStage?.completedAt || new Date().toISOString()) : undefined),
-                completedBy: s.completedBy || existingStage?.completedBy || undefined,
-                updatedAt: s.updatedAt || existingStage?.updatedAt || undefined,
-                updatedBy: s.updatedBy || existingStage?.updatedBy || undefined,
-                flaggedAt: s.flaggedAt || existingStage?.flaggedAt || undefined,
-                delayedDate: s.delayedDate || existingStage?.delayedDate || undefined,
-                revisedDateStr: s.revisedDateStr || existingStage?.revisedDateStr || undefined,
-                colourways: Array.isArray(s.colourways) && s.colourways.length > 0 ? s.colourways : (existingStage?.colourways || s.colourways)
-              };
-            }),
-        preProd: mergedOrder.preProd || existing?.preProd || initPreProd(),
-      });
-    });
-
-    // Strictly one single item per uppercase base order ID
-    const resultMap = new Map();
-    mergedList.forEach(item => {
-      const key = cleanBaseId(item.id).toUpperCase();
-      if (key) resultMap.set(key, item);
-    });
-
-    return Array.from(resultMap.values());
-  };
-
   // Master refresh function to pull fresh data from backend and storage
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefreshedAt, setLastRefreshedAt] = useState(() => new Date());
@@ -1239,7 +1276,7 @@ export default function LoomPLM() {
     lastViewFetchRef.current[targetView] = now;
 
     try {
-      if (["dashboard", "orders", "tasks", "approvals", "departments", "calendar", "reports", "compliance", "supplierPerformance", "finance", "myDepartment", "executiveOverview"].includes(targetView)) {
+      if (["dashboard", "orders", "order", "tasks", "approvals", "departments", "calendar", "reports", "compliance", "supplierPerformance", "finance", "myDepartment", "executiveOverview"].includes(targetView)) {
         const backendOrders = await resourcesApi.list("orders", "?all=true");
         if (Array.isArray(backendOrders)) {
           setOrders(prev => normalizeAndDeduplicateOrders(backendOrders, prev));
@@ -2710,9 +2747,34 @@ export default function LoomPLM() {
       // Detect stage completions / delays and attach timestamps
       const nowIso = new Date().toISOString();
       const currentUserName = role?.label || activeUser?.name || "User";
+      const is120 = o.template === "120";
+      const tmplList = TA_TEMPLATES[o.template || "90"] || TA_STAGES_90;
       const updatedStages = stages.map((s, idx) => {
         const prevStage = o.stages?.[idx];
+        const tmpl = tmplList[idx];
         const res = { ...s };
+        if (
+          idx === 23 ||
+          s.name === "Print / Emb / Hotfix Complete" ||
+          s.name === "Print/emb/out source" ||
+          s.name === "Print / Emb Complete" ||
+          s.name === "print / emb / hotfix complete"
+        ) {
+          res.name = tmpl?.name || "Print / Emb / Outsource";
+          res.dept = tmpl?.dept || "Cutting";
+          res.planned = tmpl?.day || (is120 ? "Day 56-59" : "Day 42-44");
+          delete res.supplier;
+        } else if (
+          idx === 24 ||
+          s.name === "VAP Send" ||
+          s.name === "vap send" ||
+          (idx === 24 && s.name === "Print")
+        ) {
+          res.name = tmpl?.name || "Print / Emb / IH";
+          res.dept = tmpl?.dept || "Merchandising";
+          res.planned = tmpl?.day || (is120 ? "Day 60-80" : "Day 45-60");
+          delete res.supplier;
+        }
         if (s.status === "done") {
           res.completedAt = s.completedAt || prevStage?.completedAt || nowIso;
           res.completedBy = res.completedBy || prevStage?.completedBy || currentUserName;
@@ -3279,9 +3341,50 @@ export default function LoomPLM() {
     }
   };
 
-  const selectedOrder = orders.find(o =>
+  const selectedOrderRaw = orders.find(o =>
     selectedId && ((o.primaryId && o.primaryId === selectedId) || (o._id && o._id === selectedId))
   ) || orders.find(o => o.id === selectedId);
+
+  const selectedOrder = useMemo(() => {
+    if (!selectedOrderRaw) return null;
+    if (!Array.isArray(selectedOrderRaw.stages)) return selectedOrderRaw;
+    const is120 = selectedOrderRaw.template === "120";
+    const tmplList = TA_TEMPLATES[selectedOrderRaw.template || "90"] || TA_STAGES_90;
+    const normalizedStages = selectedOrderRaw.stages.map((s, idx) => {
+      const tmpl = tmplList[idx];
+      if (
+        idx === 23 ||
+        s.name === "Print / Emb / Hotfix Complete" ||
+        s.name === "Print/emb/out source" ||
+        s.name === "Print / Emb Complete" ||
+        s.name === "print / emb / hotfix complete"
+      ) {
+        return {
+          ...s,
+          name: tmpl?.name || "Print / Emb / Outsource",
+          dept: tmpl?.dept || "Cutting",
+          planned: tmpl?.day || (is120 ? "Day 56-59" : "Day 42-44"),
+          supplier: undefined
+        };
+      }
+      if (
+        idx === 24 ||
+        s.name === "VAP Send" ||
+        s.name === "vap send" ||
+        (idx === 24 && s.name === "Print")
+      ) {
+        return {
+          ...s,
+          name: tmpl?.name || "Print / Emb / IH",
+          dept: tmpl?.dept || "Merchandising",
+          planned: tmpl?.day || (is120 ? "Day 60-80" : "Day 45-60"),
+          supplier: undefined
+        };
+      }
+      return s;
+    });
+    return { ...selectedOrderRaw, stages: normalizedStages };
+  }, [selectedOrderRaw]);
   const canSeeAll = !!role.fullAccess;
   const canAccess = permission => canSeeAll || role.permissions?.includes(permission);
   const personName = (role.label.match(/\(([^)]+)\)/) || [])[1] || role.label;

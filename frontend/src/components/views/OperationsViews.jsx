@@ -26,6 +26,30 @@ function formatDisplayShipDate(isoDateStr) {
   return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
 }
 
+export function sanitizeStages(stgs) {
+  if (!Array.isArray(stgs)) return stgs;
+  return stgs.map((s, idx) => {
+    if (
+      idx === 23 ||
+      s.name === "Print / Emb / Hotfix Complete" ||
+      s.name === "Print/emb/out source" ||
+      s.name === "Print / Emb Complete" ||
+      s.name === "print / emb / hotfix complete"
+    ) {
+      return { ...s, name: "Print / Emb / Outsource", dept: "Cutting", planned: s.planned || "Day 42-44", supplier: undefined };
+    }
+    if (
+      idx === 24 ||
+      s.name === "VAP Send" ||
+      s.name === "vap send" ||
+      (idx === 24 && s.name === "Print")
+    ) {
+      return { ...s, name: "Print / Emb / IH", dept: "Merchandising", planned: s.planned || "Day 45-60", supplier: undefined };
+    }
+    return s;
+  });
+}
+
 export function OrdersPage({
   orders = [],
   isAdmin = false,
@@ -50,7 +74,7 @@ export function OrdersPage({
       const stored = localStorage.getItem("loom_last_aligned_stages");
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) return sanitizeStages(parsed);
       }
     } catch (e) { /* ignore parse errors */ }
 
@@ -62,7 +86,7 @@ export function OrdersPage({
       );
       const latest = sorted[0];
       if (Array.isArray(latest?.stages) && latest.stages.length > 0) {
-        return JSON.parse(JSON.stringify(latest.stages));
+        return sanitizeStages(JSON.parse(JSON.stringify(latest.stages)));
       }
     }
     return null;
@@ -5410,7 +5434,7 @@ export function OrderStageAlignmentModal({
   const [selectedTemplate, setSelectedTemplate] = useState(currentTemplate);
   const [stages, setStages] = useState(() => {
     if (Array.isArray(order.stages) && order.stages.length > 0) {
-      return JSON.parse(JSON.stringify(order.stages));
+      return sanitizeStages(JSON.parse(JSON.stringify(order.stages)));
     }
     return makeStages(currentTemplate, 0, null);
   });

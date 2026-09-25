@@ -266,6 +266,10 @@ export const COLOURWAY_REQUIRED_STAGES = [
   "cutting",
   "print",
   "testing",
+  "print / emb / outsource",
+  "print/emb/outsource",
+  "print / emb / ih",
+  "print/emb/ih",
   "print / emb / hotfix complete",
   "print/emb/ hotfix complete",
   "print / emb complete",
@@ -3083,7 +3087,46 @@ export function OrderWorkspace({
   const [showAlignModal, setShowAlignModal] = useState(false);
   const [disputeModalData, setDisputeModalData] = useState(null);
   const [colourwayModalStageIdx, setColourwayModalStageIdx] = useState(null);
-  const cuttingIdx = order.stages.findIndex(s => s.name === "Cutting");
+
+  // Normalize order stages so Print / Emb / Outsource (23) and Print / Emb / IH (24) are always guaranteed
+  const orderStages = useMemo(() => {
+    if (!Array.isArray(order?.stages)) return [];
+    const is120 = order?.template === "120";
+    return order.stages.map((s, idx) => {
+      if (
+        idx === 23 ||
+        s.name === "Print / Emb / Hotfix Complete" ||
+        s.name === "Print/emb/out source" ||
+        s.name === "Print / Emb Complete" ||
+        s.name === "print / emb / hotfix complete"
+      ) {
+        return {
+          ...s,
+          name: "Print / Emb / Outsource",
+          dept: "Cutting",
+          planned: is120 ? "Day 56-59" : "Day 42-44",
+          supplier: undefined
+        };
+      }
+      if (
+        idx === 24 ||
+        s.name === "VAP Send" ||
+        s.name === "vap send" ||
+        (idx === 24 && s.name === "Print")
+      ) {
+        return {
+          ...s,
+          name: "Print / Emb / IH",
+          dept: "Merchandising",
+          planned: is120 ? "Day 60-80" : "Day 45-60",
+          supplier: undefined
+        };
+      }
+      return s;
+    });
+  }, [order?.stages, order?.template]);
+
+  const cuttingIdx = orderStages.findIndex(s => s.name === "Cutting");
   const bulkGateOpen = allPreProdApproved(order);
 
   // Align & Reorder stages permission: Only Admin, MD / Executive, and Merchandiser
@@ -3124,7 +3167,7 @@ export function OrderWorkspace({
   }, [order.colorBreakdown, order.colors, order.qty]);
 
   const handleUpdateStageColourways = (stageIdx, updatedColourways) => {
-    const currentStage = order.stages[stageIdx];
+    const currentStage = orderStages[stageIdx];
     if (!currentStage) return;
 
     const allDone = updatedColourways.length > 0 && updatedColourways.every(c => c.status === "done");
@@ -3146,7 +3189,7 @@ export function OrderWorkspace({
       });
     const nextReason = flagged.length > 0 ? flagged.join(" · ") : null;
 
-    const stages = order.stages.map((s, i) => {
+    const stages = orderStages.map((s, i) => {
       if (i !== stageIdx) return s;
       return {
         ...s,
@@ -3163,13 +3206,13 @@ export function OrderWorkspace({
   };
 
   const cycle = (idx) => {
-    if (gatingApproval(order.stages, idx)) return;
-    const current = order.stages[idx];
+    if (gatingApproval(orderStages, idx)) return;
+    const current = orderStages[idx];
     if (current && current.status === "done") {
       // Completed stages stay completed — do not cycle back to pending!
       return;
     }
-    const stages = order.stages.map((s, i) => {
+    const stages = orderStages.map((s, i) => {
       if (i !== idx) return s;
       const next = s.status === "pending" ? "in_progress" : "done";
       let assignee = s.assignee;
@@ -3192,25 +3235,25 @@ export function OrderWorkspace({
   };
 
   const setReason = (idx, reason) => {
-    const stages = order.stages.map((s, i) => i === idx ? { ...s, reason } : s);
+    const stages = orderStages.map((s, i) => i === idx ? { ...s, reason } : s);
     onUpdateStages(order.id, stages);
   };
 
   const setSupplier = (idx, supplier) => {
-    const stages = order.stages.map((s, i) => i === idx ? { ...s, supplier } : s);
+    const stages = orderStages.map((s, i) => i === idx ? { ...s, supplier } : s);
     if (onAssignSupplier) {
       onAssignSupplier(order.id, idx, supplier);
     }
     onUpdateStages(order.id, stages);
   };
 
-  const doneCount = (order.stages || []).filter(s => s.status === "done").length;
-  const flaggedReasons = (order.stages || []).filter(s => s.reason).map(s => `${s.name}: ${s.reason}`);
+  const doneCount = (orderStages || []).filter(s => s.status === "done").length;
+  const flaggedReasons = (orderStages || []).filter(s => s.reason).map(s => `${s.name}: ${s.reason}`);
 
   const orderStartDate = order.orderDate || order.createdAt || order.ship;
   const stageSchedules = useMemo(
-    () => computeOrderStageSchedules(order.stages || [], orderStartDate),
-    [order.stages, orderStartDate]
+    () => computeOrderStageSchedules(orderStages || [], orderStartDate),
+    [orderStages, orderStartDate]
   );
   const maxShiftDays = stageSchedules.reduce((max, sch) => Math.max(max, sch.shiftDays || 0), 0);
 
@@ -3258,7 +3301,7 @@ export function OrderWorkspace({
         </div>
       </div>
       <div style={{ fontSize: 11, color: "#B0B2BA", margin: "6px 0 16px" }}>
-        {(order.stages || []).length} steps from the {order.template || "90"}-day T&A template — pick 120-day for styles with a longer delivery window.{orderColourways.length > 0 ? " Click any stage circle or colour badge (e.g. \"0/2 colours\") to manage color-wise pieces & delays." : " Click any stage circle to advance progress."} Stages after an approval step stay locked until approved.
+        {(orderStages || []).length} steps from the {order.template || "90"}-day T&A template — pick 120-day for styles with a longer delivery window.{orderColourways.length > 0 ? " Click any stage circle or colour badge (e.g. \"0/2 colours\") to manage color-wise pieces & delays." : " Click any stage circle to advance progress."} Stages after an approval step stay locked until approved.
       </div>
       {maxShiftDays > 0 && (
         <div style={{
@@ -3280,8 +3323,8 @@ export function OrderWorkspace({
         </div>
       )}
       <div style={{ display: "flex", gap: 2, overflowX: "auto", paddingBottom: 8 }}>
-        {(order.stages || []).map((s, i) => {
-          const gate = gatingApproval(order.stages, i);
+        {(orderStages || []).map((s, i) => {
+          const gate = gatingApproval(orderStages, i);
           
           // Strict Multi-Department Ownership:
           // Admin, Executive, fullAccess can edit any stage.
@@ -3519,11 +3562,11 @@ export function OrderWorkspace({
         />
       )}
 
-      {colourwayModalStageIdx !== null && order.stages && order.stages[colourwayModalStageIdx] && (
+      {colourwayModalStageIdx !== null && orderStages && orderStages[colourwayModalStageIdx] && (
         <StageColourwayModal
           isOpen={true}
           onClose={() => setColourwayModalStageIdx(null)}
-          stage={order.stages[colourwayModalStageIdx]}
+          stage={orderStages[colourwayModalStageIdx]}
           stageIdx={colourwayModalStageIdx}
           order={order}
           orderColourways={orderColourways}
@@ -3534,13 +3577,13 @@ export function OrderWorkspace({
               role?.fullAccess ||
               role?.dept === "Executive" ||
               role?.dept === "Administrators" ||
-              (order.stages[colourwayModalStageIdx]?.dept &&
+              (orderStages[colourwayModalStageIdx]?.dept &&
                 (Array.isArray(role?.departments) && role.departments.length > 0
                   ? role.departments.map(d => d.toLowerCase())
                   : [(role?.dept || "").toLowerCase()]
-                ).includes(order.stages[colourwayModalStageIdx].dept.toLowerCase())
+                ).includes(orderStages[colourwayModalStageIdx].dept.toLowerCase())
               )
-            ) && !gatingApproval(order.stages, colourwayModalStageIdx)
+            ) && !gatingApproval(orderStages, colourwayModalStageIdx)
           }
         />
       )}

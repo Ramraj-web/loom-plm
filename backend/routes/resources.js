@@ -110,6 +110,36 @@ const SOFT_DELETE_RESOURCES = [
   "audit_logs",
 ];
 
+export function normalizeOrderStages(record) {
+  if (!record || !Array.isArray(record.stages)) return record;
+  const is120 = record.template === "120";
+  record.stages.forEach((s, idx) => {
+    if (
+      idx === 23 ||
+      s.name === "Print / Emb / Hotfix Complete" ||
+      s.name === "Print/emb/out source" ||
+      s.name === "Print / Emb Complete" ||
+      s.name === "print / emb / hotfix complete"
+    ) {
+      s.name = "Print / Emb / Outsource";
+      s.dept = "Cutting";
+      s.planned = is120 ? "Day 56-59" : "Day 42-44";
+      delete s.supplier;
+    } else if (
+      idx === 24 ||
+      s.name === "VAP Send" ||
+      s.name === "vap send" ||
+      (idx === 24 && s.name === "Print")
+    ) {
+      s.name = "Print / Emb / IH";
+      s.dept = "Merchandising";
+      s.planned = is120 ? "Day 60-80" : "Day 45-60";
+      delete s.supplier;
+    }
+  });
+  return record;
+}
+
 function deduplicateOrders(ordersList, collection, db) {
   if (!Array.isArray(ordersList)) return ordersList;
 
@@ -176,6 +206,8 @@ function deduplicateOrders(ordersList, collection, db) {
       }
     }
 
+    normalizeOrderStages(canonical);
+
     mergedList.push(canonical);
   });
 
@@ -241,7 +273,7 @@ router.get("/:resource/:id(*)", async (req, res, next) => {
     if (SOFT_DELETE_RESOURCES.includes(resource) && req.query.all !== "true" && req.query.trash !== "true" && record.isDeleted === true) {
       return res.status(404).json({ error: "Record not found" });
     }
-    res.json(record);
+    res.json(resource === "orders" ? normalizeOrderStages(record) : record);
   } catch (error) { next(error); }
 });
 
