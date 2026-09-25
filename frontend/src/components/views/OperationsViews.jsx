@@ -5925,11 +5925,18 @@ export function AuditLoggerPage({
   // Without this, dateRanges freezes at mount time and online/minutes values go stale and disappear.
   const [tick, setTick] = useState(() => Date.now());
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = useMemo(() => {
+    const d = new Date(tick);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }, [tick]);
 
-  // Live auto-refresh of user sessions while on the Audit Logs page
+  // Live auto-refresh of user sessions immediately on mount and every 15s
   React.useEffect(() => {
     if (typeof onRefresh !== "function") return undefined;
+    onRefresh();
     const interval = setInterval(() => {
       onRefresh();
     }, 15000);
@@ -5985,6 +5992,7 @@ export function AuditLoggerPage({
         monthMinutes: 0,
         overallMinutes: 0,
         isOnline: false,
+        todayLogins: 0,
         totalLogins: 0,
         lastLoginTime: null,
         lastDevice: null,
@@ -6021,6 +6029,7 @@ export function AuditLoggerPage({
           monthMinutes: 0,
           overallMinutes: 0,
           isOnline: false,
+          todayLogins: 0,
           totalLogins: 0,
           lastLoginTime: null,
           lastDevice: null,
@@ -6031,7 +6040,6 @@ export function AuditLoggerPage({
 
       if (!Array.isArray(rec.sessions)) rec.sessions = [];
       rec.sessions.push(sess);
-      rec.totalLogins = (rec.totalLogins || 0) + 1;
 
       // Calculate session duration in minutes
       let sMins = 0;
@@ -6040,8 +6048,15 @@ export function AuditLoggerPage({
       const lastHeartbeatMs = sess.lastHeartbeat ? new Date(sess.lastHeartbeat).getTime() : loginMs;
       const timeSinceHeartbeatMs = dateRanges.nowMs - lastHeartbeatMs;
 
+      // Check if session belongs to today (local calendar day)
+      const isToday = (loginMs > 0 && loginMs >= dateRanges.todayStartMs) || (sess.date && sess.date === todayStr);
+
+      rec.totalLogins = (rec.totalLogins || 0) + 1;
+      if (isToday) {
+        rec.todayLogins = (rec.todayLogins || 0) + 1;
+      }
+
       // Online: active session with heartbeat received within the last 5 minutes.
-      // Using 5 min window (heartbeat fires every 25s) to be robust against network delays and refresh lag.
       const ONLINE_WINDOW_MS = 5 * 60 * 1000;
       const isOnlineSession = sess.active && loginMs > 0 && (timeSinceHeartbeatMs < ONLINE_WINDOW_MS);
 
@@ -6049,32 +6064,24 @@ export function AuditLoggerPage({
         // Live session: show total time from login up to now
         rec.isOnline = true;
         sMins = Math.max(1, Math.round((dateRanges.nowMs - loginMs) / 60000));
-      } else if (sess.active) {
-        // Active flag set but heartbeat gone (browser tab closed without unload, or network lost).
-        // Use: lastHeartbeat - loginTime if available, else hoursUsed, else now - loginTime as last resort.
-        if (lastHeartbeatMs > loginMs) {
-          sMins = Math.max(1, Math.round((lastHeartbeatMs - loginMs) / 60000));
-        } else if (sess.hoursUsed && Number(sess.hoursUsed) > 0.01) {
-          sMins = Math.max(1, Math.round(Number(sess.hoursUsed) * 60));
-        } else if (loginMs > 0) {
-          // Fallback: use current time minus login so the value is never blank for today's sessions
-          sMins = Math.max(1, Math.round((dateRanges.nowMs - loginMs) / 60000));
-        } else {
-          sMins = 1;
-        }
       } else if (logoutMs && loginMs && logoutMs >= loginMs) {
         // Clean logout: exact duration
         sMins = Math.max(1, Math.round((logoutMs - loginMs) / 60000));
+      } else if (lastHeartbeatMs > loginMs) {
+        // Closed tab or disconnected: duration from login to last recorded heartbeat
+        sMins = Math.max(1, Math.round((lastHeartbeatMs - loginMs) / 60000));
       } else if (sess.hoursUsed && Number(sess.hoursUsed) > 0.01) {
         sMins = Math.max(1, Math.round(Number(sess.hoursUsed) * 60));
-      } else if (loginMs > 0) {
-        // Edge case: logged in today but no heartbeat/logout recorded yet — show mins from login
+      } else if (loginMs > 0 && isToday) {
+        // Edge case: logged in today but no heartbeat/logout recorded yet
         sMins = Math.max(1, Math.round((dateRanges.nowMs - loginMs) / 60000));
+      } else {
+        sMins = 1;
       }
 
       rec.overallMinutes += sMins;
 
-      if (loginMs >= dateRanges.todayStartMs) {
+      if (isToday) {
         rec.todayMinutes += sMins;
       }
       if (loginMs >= dateRanges.weekStartMs) {
@@ -6095,9 +6102,10 @@ export function AuditLoggerPage({
     return Array.from(userMap.values()).sort((a, b) => {
       if (a.isOnline !== b.isOnline) return a.isOnline ? -1 : 1;
       if (b.todayMinutes !== a.todayMinutes) return b.todayMinutes - a.todayMinutes;
+      if (b.todayLogins !== a.todayLogins) return b.todayLogins - a.todayLogins;
       return b.overallMinutes - a.overallMinutes;
     });
-  }, [users, teams, userSessions, dateRanges]);
+  }, [users, teams, userSessions, dateRanges, todayStr]);
 
   // Filtered user stats based on search and department
   const filteredUserStats = useMemo(() => {
@@ -6175,6 +6183,7 @@ export function AuditLoggerPage({
       "This Month (Formatted)",
       "Overall (Minutes)",
       "Overall (Formatted)",
+      "Today Logins",
       "Total Logins",
       "Last Login Time",
       "Last Device",
@@ -6194,7 +6203,8 @@ export function AuditLoggerPage({
       `"${formatTime(u.monthMinutes)}"`,
       u.overallMinutes,
       `"${formatTime(u.overallMinutes)}"`,
-      u.totalLogins,
+      u.todayLogins || 0,
+      u.totalLogins || 0,
       `"${u.lastLoginTime || "Never"}"`,
       `"${(u.lastDevice || "").replace(/"/g, '""')}"`,
       `"${(sanitizeLocationString(u.lastLocation) || "").replace(/"/g, '""')}"`
@@ -6821,17 +6831,18 @@ export function AuditLoggerPage({
                           </span>
                         </td>
 
-                        {/* Total Logins */}
+                        {/* Logins Today */}
                         <td style={{ padding: "12px", textAlign: "center" }}>
                           <span style={{
                             fontSize: 11.5,
                             fontWeight: 700,
-                            color: "#475569",
-                            background: "#F1F5F9",
+                            color: (u.todayLogins || 0) > 0 ? "#059669" : "#94A3B8",
+                            background: (u.todayLogins || 0) > 0 ? "#ECFDF5" : "#F1F5F9",
                             padding: "2px 7px",
-                            borderRadius: 999
-                          }}>
-                            {u.totalLogins}
+                            borderRadius: 999,
+                            border: (u.todayLogins || 0) > 0 ? "1px solid #A7F3D0" : "1px solid #E2E8F0"
+                          }} title={`Today: ${u.todayLogins || 0} logins · All-Time: ${u.totalLogins || 0} logins`}>
+                            {u.todayLogins || 0}
                           </span>
                         </td>
 

@@ -1025,20 +1025,82 @@ ${String(message).trim()}`;
 
       if (req.method === "POST" && key) {
         const body = parsedBody;
+        let value = body.value;
+        const shared = !!body.shared;
+
+        // Intelligently merge user_sessions and audit_logs so concurrent tabs, logins, and refreshes
+        // never wipe out other active users, daily time tracking, or history
+        if (key === "user_sessions") {
+          try {
+            const incoming = typeof value === "string" ? JSON.parse(value) : value;
+            if (Array.isArray(incoming)) {
+              let existing = [];
+              if (mongoCols?.storage) {
+                const rec = await mongoCols.storage.findOne({ key, shared });
+                if (rec && rec.value) {
+                  try { existing = typeof rec.value === "string" ? JSON.parse(rec.value) : rec.value; } catch (e) {}
+                }
+              } else if (memoryStorage[bucket] && memoryStorage[bucket][key]) {
+                try { existing = typeof memoryStorage[bucket][key] === "string" ? JSON.parse(memoryStorage[bucket][key]) : memoryStorage[bucket][key]; } catch (e) {}
+              }
+
+              if (Array.isArray(existing) && existing.length > 0) {
+                const sessionMap = new Map();
+                existing.forEach(s => { if (s && s.id) sessionMap.set(s.id, s); });
+                incoming.forEach(s => {
+                  if (s && s.id) {
+                    const prevSess = sessionMap.get(s.id) || {};
+                    sessionMap.set(s.id, { ...prevSess, ...s });
+                  }
+                });
+                const merged = Array.from(sessionMap.values()).sort((a, b) => new Date(b.loginTime || 0) - new Date(a.loginTime || 0));
+                value = JSON.stringify(merged.slice(0, 500));
+              }
+            }
+          } catch (e) {
+            console.warn("Error merging user_sessions on Vercel:", e.message);
+          }
+        } else if (key === "audit_logs") {
+          try {
+            const incoming = typeof value === "string" ? JSON.parse(value) : value;
+            if (Array.isArray(incoming)) {
+              let existing = [];
+              if (mongoCols?.storage) {
+                const rec = await mongoCols.storage.findOne({ key, shared });
+                if (rec && rec.value) {
+                  try { existing = typeof rec.value === "string" ? JSON.parse(rec.value) : rec.value; } catch (e) {}
+                }
+              } else if (memoryStorage[bucket] && memoryStorage[bucket][key]) {
+                try { existing = typeof memoryStorage[bucket][key] === "string" ? JSON.parse(memoryStorage[bucket][key]) : memoryStorage[bucket][key]; } catch (e) {}
+              }
+
+              if (Array.isArray(existing) && existing.length > 0) {
+                const logMap = new Map();
+                incoming.forEach(l => { if (l && l.id) logMap.set(l.id, l); });
+                existing.forEach(l => { if (l && l.id && !logMap.has(l.id)) logMap.set(l.id, l); });
+                const merged = Array.from(logMap.values()).sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+                value = JSON.stringify(merged.slice(0, 500));
+              }
+            }
+          } catch (e) {
+            console.warn("Error merging audit_logs on Vercel:", e.message);
+          }
+        }
+
         if (mongoCols?.storage) {
           try {
             await mongoCols.storage.updateOne(
-              { key, shared: !!body.shared },
-              { $set: { key, value: body.value, shared: !!body.shared } },
+              { key, shared },
+              { $set: { key, value, shared } },
               { upsert: true }
             );
-            return res.status(200).json({ key, value: body.value, shared: !!body.shared });
+            return res.status(200).json({ key, value, shared });
           } catch (e) {
             console.error("Mongo storage POST error:", e.message);
           }
         }
-        memoryStorage[bucket][key] = body.value;
-        return res.status(200).json({ key, value: body.value, shared: !!body.shared });
+        memoryStorage[bucket][key] = value;
+        return res.status(200).json({ key, value, shared });
       }
 
       if (req.method === "DELETE" && key) {

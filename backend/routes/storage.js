@@ -165,7 +165,7 @@ router.post("/:key(*)", async (req, res, next) => {
             }
           });
           const merged = Array.from(sessionMap.values()).sort((a, b) => new Date(b.loginTime || 0) - new Date(a.loginTime || 0));
-          value = JSON.stringify(merged.slice(0, 300));
+          value = JSON.stringify(merged.slice(0, 500));
         }
       }
     } catch (e) {

@@ -760,6 +760,7 @@ export default function LoomPLM() {
 
     // 1. Ensure user has an active session ID for this browser tab
     let sessId = existingSessionId;
+    let targetSession = null;
     if (sessId) {
       setCurrentSessionId(sessId);
       setUserSessions(prev => {
@@ -788,6 +789,7 @@ export default function LoomPLM() {
               deviceType: dev.deviceType,
               location: "Detecting..."
             };
+        targetSession = resumedSession;
         const updated = existing && existing.userId === activeUser.id
           ? prev.map(s => s.id === sessId ? resumedSession : s)
           : [resumedSession, ...prev.filter(s => s.id !== sessId)];
@@ -817,6 +819,7 @@ export default function LoomPLM() {
         deviceType: dev.deviceType,
         location: "Detecting..."
       };
+      targetSession = newSession;
 
       setUserSessions(prev => {
         const updated = [newSession, ...prev.filter(s => s.id !== sessId)];
@@ -827,6 +830,31 @@ export default function LoomPLM() {
       broadcastLiveUpdate({
         type: "USER_SESSION_UPDATE",
         session: newSession
+      });
+    }
+
+    // Merge with server sessions immediately so refreshing or clearing cache never drops other users' daily sessions
+    if (window.storage?.get) {
+      window.storage.get("user_sessions", true).then(storageRes => {
+        if (storageRes?.value) {
+          try {
+            const existing = typeof storageRes.value === "string" ? JSON.parse(storageRes.value) : storageRes.value;
+            if (Array.isArray(existing) && existing.length > 0) {
+              setUserSessions(cur => {
+                const map = new Map();
+                existing.forEach(s => { if (s && s.id) map.set(s.id, s); });
+                cur.forEach(s => { if (s && s.id) map.set(s.id, s); });
+                if (sessId && targetSession) {
+                  const existingSess = map.get(sessId) || targetSession;
+                  map.set(sessId, { ...existingSess, active: true, logoutTime: null, lastHeartbeat: nowIso });
+                }
+                const merged = Array.from(map.values()).sort((a, b) => new Date(b.loginTime || 0) - new Date(a.loginTime || 0));
+                if (window.storage) window.storage.set("user_sessions", JSON.stringify(merged), true);
+                return merged;
+              });
+            }
+          } catch (e) {}
+        }
       });
     }
 
@@ -1047,23 +1075,40 @@ export default function LoomPLM() {
         }
         if (Array.isArray(storageMap.user_sessions)) {
           const browserSessionId = currentSessionId || sessionStorage.getItem("loom_active_session_id");
-          const cleaned = storageMap.user_sessions.map(s => {
-            const isCurrentBrowserSession = browserSessionId && s.id === browserSessionId && s.userId === activeUser?.id;
-            return {
-              ...s,
-              ...(isCurrentBrowserSession ? { active: true, logoutTime: null, lastHeartbeat: new Date().toISOString() } : {}),
-              location: sanitizeLocationString(s.location)
-            };
+          const sessionMap = new Map();
+          storageMap.user_sessions.forEach(s => {
+            if (s && s.id) sessionMap.set(s.id, s);
           });
-          if (browserSessionId) {
-            const currentSession = cleaned.find(s => s.id === browserSessionId);
-            if (currentSession && window.storage) window.storage.set("user_sessions", JSON.stringify(cleaned), true);
-          }
-          setUserSessions(cleaned);
+          setUserSessions(prev => {
+            prev.forEach(s => {
+              if (s && s.id && !sessionMap.has(s.id)) sessionMap.set(s.id, s);
+            });
+            const nowIso = new Date().toISOString();
+            const cleaned = Array.from(sessionMap.values()).map(s => {
+              const isCurrentBrowserSession = browserSessionId && s.id === browserSessionId && s.userId === activeUser?.id;
+              return {
+                ...s,
+                ...(isCurrentBrowserSession ? { active: true, logoutTime: null, lastHeartbeat: nowIso } : {}),
+                location: sanitizeLocationString(s.location)
+              };
+            }).sort((a, b) => new Date(b.loginTime || 0) - new Date(a.loginTime || 0));
+
+            return cleaned;
+          });
         }
         if (Array.isArray(storageMap.audit_logs)) {
-          const cleaned = storageMap.audit_logs.map(l => ({ ...l, location: sanitizeLocationString(l.location) }));
-          setAuditLogs(cleaned);
+          const logMap = new Map();
+          storageMap.audit_logs.forEach(l => {
+            if (l && l.id) logMap.set(l.id, l);
+          });
+          setAuditLogs(prev => {
+            prev.forEach(l => {
+              if (l && l.id && !logMap.has(l.id)) logMap.set(l.id, l);
+            });
+            return Array.from(logMap.values())
+              .map(l => ({ ...l, location: sanitizeLocationString(l.location) }))
+              .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+          });
         }
       }
     } catch (e) {
@@ -1199,11 +1244,16 @@ export default function LoomPLM() {
           if (Array.isArray(parsed)) {
             const browserSessionId = currentSessionId || sessionStorage.getItem("loom_active_session_id");
             const resumedAt = new Date().toISOString();
-            setUserSessions(parsed.map(s => ({
-              ...s,
-              ...(browserSessionId && s.id === browserSessionId && s.userId === activeUser?.id ? { active: true, logoutTime: null, lastHeartbeat: resumedAt } : {}),
-              location: sanitizeLocationString(s.location)
-            })));
+            setUserSessions(prev => {
+              const map = new Map();
+              parsed.forEach(s => { if (s && s.id) map.set(s.id, s); });
+              prev.forEach(s => { if (s && s.id && !map.has(s.id)) map.set(s.id, s); });
+              return Array.from(map.values()).map(s => ({
+                ...s,
+                ...(browserSessionId && s.id === browserSessionId && s.userId === activeUser?.id ? { active: true, logoutTime: null, lastHeartbeat: resumedAt } : {}),
+                location: sanitizeLocationString(s.location)
+              })).sort((a, b) => new Date(b.loginTime || 0) - new Date(a.loginTime || 0));
+            });
           }
         } catch (e) {}
       }
@@ -1211,7 +1261,14 @@ export default function LoomPLM() {
         try {
           const parsed = typeof logsRes.value.value === "string" ? JSON.parse(logsRes.value.value) : logsRes.value.value;
           if (Array.isArray(parsed)) {
-            setAuditLogs(parsed.map(l => ({ ...l, location: sanitizeLocationString(l.location) })));
+            setAuditLogs(prev => {
+              const logMap = new Map();
+              parsed.forEach(l => { if (l && l.id) logMap.set(l.id, l); });
+              prev.forEach(l => { if (l && l.id && !logMap.has(l.id)) logMap.set(l.id, l); });
+              return Array.from(logMap.values())
+                .map(l => ({ ...l, location: sanitizeLocationString(l.location) }))
+                .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+            });
           }
         } catch (e) {}
       }
