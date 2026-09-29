@@ -3,14 +3,22 @@
 let audioCtx = null;
 let userInteracted = false;
 
-// Initialize AudioContext lazily on user interaction or playback
+// Initialize AudioContext lazily — ONLY after user has interacted with the page.
+// Creating AudioContext before a gesture causes the browser's "AudioContext was
+// not allowed to start" warning.
 function getAudioContext() {
   if (typeof window === "undefined") return null;
+  // Don't create until the user has clicked/tapped/pressed a key
+  if (!userInteracted) return null;
 
   if (!audioCtx) {
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     if (AudioCtx) {
-      audioCtx = new AudioCtx();
+      try {
+        audioCtx = new AudioCtx();
+      } catch (e) {
+        return null;
+      }
     }
   }
 
@@ -25,12 +33,11 @@ function getAudioContext() {
 if (typeof window !== "undefined") {
   const unlockAudio = () => {
     userInteracted = true;
+    // Now that user has interacted, create and resume AudioContext
     const ctx = getAudioContext();
     if (ctx && ctx.state === "suspended") {
       ctx.resume().catch(() => {});
     }
-    window.removeEventListener("pointerdown", unlockAudio);
-    window.removeEventListener("keydown", unlockAudio);
   };
   window.addEventListener("pointerdown", unlockAudio, { once: true, passive: true });
   window.addEventListener("keydown", unlockAudio, { once: true, passive: true });

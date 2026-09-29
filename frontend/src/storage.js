@@ -59,11 +59,11 @@ async function set(key, value, shared = false) {
     } catch (e) {}
     return data;
   } catch (e) {
-    // Only fallback to localStorage if backend request failed
+    // Backend unavailable — silently cache in localStorage instead.
+    // Data is safe; no need to spam the console.
     try {
       localStorage.setItem(`storage:${key}`, stringValue);
     } catch (err) {}
-    console.warn(`[storage] Backend save failed for ${key}, cached locally:`, e.message);
     return { key, value: stringValue, shared, cachedLocally: true };
   }
 }

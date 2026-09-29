@@ -16,7 +16,7 @@ import {
   INITIAL_ORDERS, INITIAL_NOTIFICATIONS, VAP_SUPPLIERS, buildCostingRows, makeStages, initPreProd,
   TA_TEMPLATES, TA_STAGES_90,
   NOTIFICATION_PRIORITY_STYLE, formatTimeAgo, DEFAULT_DEPT_DESCRIPTIONS, INITIAL_SUPPLIERS, INITIAL_SUPPLIER_WORK,
-  INITIAL_CUSTOM_TASKS, INITIAL_DEPARTMENT_CHECKLISTS, firstNamedAssignee
+  INITIAL_CUSTOM_TASKS, INITIAL_DEPARTMENT_CHECKLISTS, firstNamedAssignee, DEFAULT_BUYERS
 } from "./constants/loomData.js";
 import { statusPill } from "./components/common/CommonUI.jsx";
 import { OrderWorkspace } from "./components/order/OrderWorkspace.jsx";
@@ -281,11 +281,17 @@ export const normalizeAndDeduplicateOrders = (rawOrders, prev = []) => {
     const templateStages = TA_TEMPLATES[resolvedTemplate] || TA_STAGES_90;
     const expectedStageCount = templateStages.length;
 
-    const sourceStages = ((mergedOrder.stages && mergedOrder.stages.length === expectedStageCount)
+    // Accept custom-stage arrays (length >= expected) — do NOT strip extra custom stages.
+    // Only fall back to default template when we have NO stages at all.
+    const sourceStages = (mergedOrder.stages && mergedOrder.stages.length >= expectedStageCount)
       ? mergedOrder.stages
-      : (existing?.stages && existing.stages.length === expectedStageCount)
+      : (existing?.stages && existing.stages.length >= expectedStageCount)
         ? existing.stages
-        : makeStages(resolvedTemplate, 0, null));
+        : (mergedOrder.stages && mergedOrder.stages.length > 0)
+          ? mergedOrder.stages
+          : (existing?.stages && existing.stages.length > 0)
+            ? existing.stages
+            : makeStages(resolvedTemplate, 0, null);
 
     mergedList.push({
       ...existing,
@@ -306,35 +312,40 @@ export const normalizeAndDeduplicateOrders = (rawOrders, prev = []) => {
       actualCost: mergedOrder.actualCost ?? existing?.actualCost ?? 0,
       stages: sourceStages.map((s, sIdx) => {
         const existingStage = existing?.stages?.[sIdx];
-        const tmplStage = templateStages[sIdx];
+        // tmplStage is only available for standard-template indices — custom stages (sIdx >= expectedStageCount) won't have one
+        const tmplStage = sIdx < expectedStageCount ? templateStages[sIdx] : null;
+        // Mark extra stages (beyond template count) as custom so the tracker can badge them
+        const isCustomStage = sIdx >= expectedStageCount || s.isCustom === true;
 
         let stageName = s.name;
         let stageDept = s.dept;
         let stagePlanned = s.planned;
 
-        // Ensure stage 23 (Print / Emb / Outsource) and 24 (Print / Emb / IH) reflect updated template
-        if (
-          sIdx === 23 ||
-          s.name === "Print / Emb / Hotfix Complete" ||
-          s.name === "Print/emb/out source" ||
-          s.name === "Print / Emb Complete" ||
-          s.name === "print / emb / hotfix complete"
-        ) {
-          stageName = tmplStage?.name || "Print / Emb / Outsource";
-          stageDept = tmplStage?.dept || "Cutting";
-          stagePlanned = tmplStage?.day || (resolvedTemplate === "120" ? "Day 56-59" : "Day 42-44");
-        } else if (
-          sIdx === 24 ||
-          s.name === "VAP Send" ||
-          s.name === "vap send" ||
-          (sIdx === 24 && s.name === "Print")
-        ) {
-          stageName = tmplStage?.name || "Print / Emb / IH";
-          stageDept = tmplStage?.dept || "Merchandising";
-          stagePlanned = tmplStage?.day || (resolvedTemplate === "120" ? "Day 60-80" : "Day 45-60");
-        } else if (tmplStage && (s.name.toLowerCase() === tmplStage.name.toLowerCase())) {
-          stageName = tmplStage.name;
-          stageDept = tmplStage.dept;
+        if (!isCustomStage) {
+          // Ensure stage 23 (Print / Emb / Outsource) and 24 (Print / Emb / IH) reflect updated template
+          if (
+            sIdx === 23 ||
+            s.name === "Print / Emb / Hotfix Complete" ||
+            s.name === "Print/emb/out source" ||
+            s.name === "Print / Emb Complete" ||
+            s.name === "print / emb / hotfix complete"
+          ) {
+            stageName = tmplStage?.name || "Print / Emb / Outsource";
+            stageDept = tmplStage?.dept || "Cutting";
+            stagePlanned = tmplStage?.day || (resolvedTemplate === "120" ? "Day 56-59" : "Day 42-44");
+          } else if (
+            sIdx === 24 ||
+            s.name === "VAP Send" ||
+            s.name === "vap send" ||
+            (sIdx === 24 && s.name === "Print")
+          ) {
+            stageName = tmplStage?.name || "Print / Emb / IH";
+            stageDept = tmplStage?.dept || "Merchandising";
+            stagePlanned = tmplStage?.day || (resolvedTemplate === "120" ? "Day 60-80" : "Day 45-60");
+          } else if (tmplStage && (s.name.toLowerCase() === tmplStage.name.toLowerCase())) {
+            stageName = tmplStage.name;
+            stageDept = tmplStage.dept;
+          }
         }
 
         return {
@@ -342,6 +353,7 @@ export const normalizeAndDeduplicateOrders = (rawOrders, prev = []) => {
           name: stageName,
           dept: stageDept,
           planned: stagePlanned || s.planned || tmplStage?.day,
+          isCustom: isCustomStage,
           status: s.status || existingStage?.status || "pending",
           reason: s.reason !== undefined ? s.reason : (existingStage?.reason || null),
           completedAt: s.completedAt || existingStage?.completedAt || (s.status === "done" ? (existingStage?.completedAt || new Date().toISOString()) : undefined),
@@ -399,6 +411,16 @@ export default function LoomPLM() {
   const [deptDescriptions, setDeptDescriptions] = useState(() => ({ ...DEFAULT_DEPT_DESCRIPTIONS }));
   const [suppliers, setSuppliers] = useState(() => JSON.parse(JSON.stringify(INITIAL_SUPPLIERS)));
   const [supplierWork, setSupplierWork] = useState(() => JSON.parse(JSON.stringify(INITIAL_SUPPLIER_WORK)));
+  const [buyers, setBuyers] = useState(() => {
+    try {
+      const cached = localStorage.getItem("loom_buyers_cache");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return JSON.parse(JSON.stringify(DEFAULT_BUYERS));
+  });
 
   const [financials, setFinancials] = useState(() => {
     try {
@@ -508,6 +530,12 @@ export default function LoomPLM() {
       if (financials) localStorage.setItem("loom_financials_cache", JSON.stringify(financials));
     } catch (e) { }
   }, [financials]);
+
+  useEffect(() => {
+    try {
+      if (Array.isArray(buyers)) localStorage.setItem("loom_buyers_cache", JSON.stringify(buyers));
+    } catch (e) { }
+  }, [buyers]);
 
   useEffect(() => {
     try {
@@ -958,6 +986,7 @@ export default function LoomPLM() {
         notifsRes,
         financialsRes,
         staffRes,
+        buyersRes,
       ] = await Promise.allSettled([
         loadAccessState(),
         resourcesApi.list("orders", "?all=true"),
@@ -969,7 +998,18 @@ export default function LoomPLM() {
         resourcesApi.list("notifications", "?all=true"),
         resourcesApi.list("financials"),
         resourcesApi.list("staff"),
+        resourcesApi.list("buyers"),
       ]);
+
+      if (buyersRes.status === "fulfilled" && Array.isArray(buyersRes.value) && buyersRes.value.length > 0) {
+        setBuyers(prev => {
+          const map = new Map(prev.map(b => [b.name.toLowerCase(), b]));
+          buyersRes.value.filter(b => b.isDeleted !== true).forEach(b => {
+            if (b && b.name) map.set(b.name.toLowerCase(), { ...map.get(b.name.toLowerCase()), ...b });
+          });
+          return Array.from(map.values());
+        });
+      }
 
       if (ordersRes.status === "fulfilled" && Array.isArray(ordersRes.value)) {
         setOrders(prev => normalizeAndDeduplicateOrders(ordersRes.value, prev));
@@ -1009,7 +1049,7 @@ export default function LoomPLM() {
         const storageKeys = [
           "staff_roster", "org_structure", "dept_descriptions", "attendance",
           "certifications", "compliances", "notifications", "leaveRequests",
-          "suppliers", "supplierWork", "stage_complaints", "user_sessions", "audit_logs"
+          "suppliers", "supplierWork", "stage_complaints", "user_sessions", "audit_logs", "buyers"
         ];
         const storageResults = await Promise.allSettled(storageKeys.map(k => window.storage.get(k, true)));
         const storageMap = {};
@@ -1020,6 +1060,16 @@ export default function LoomPLM() {
             } catch (e) {}
           }
         });
+
+        if (Array.isArray(storageMap.buyers) && storageMap.buyers.length > 0) {
+          setBuyers(prev => {
+            const map = new Map(prev.map(b => [b.name.toLowerCase(), b]));
+            storageMap.buyers.forEach(b => {
+              if (b && b.name) map.set(b.name.toLowerCase(), { ...map.get(b.name.toLowerCase()), ...b });
+            });
+            return Array.from(map.values());
+          });
+        }
 
         let baseRoster = storageMap.staff_roster || null;
         if (staffRes.status === "fulfilled" && Array.isArray(staffRes.value) && staffRes.value.length > 0) {
@@ -1347,9 +1397,21 @@ export default function LoomPLM() {
 
     try {
       if (["dashboard", "orders", "order", "tasks", "approvals", "departments", "calendar", "reports", "compliance", "supplierPerformance", "finance", "myDepartment", "executiveOverview"].includes(targetView)) {
-        const backendOrders = await resourcesApi.list("orders", "?all=true");
-        if (Array.isArray(backendOrders)) {
-          setOrders(prev => normalizeAndDeduplicateOrders(backendOrders, prev));
+        const [backendOrders, backendBuyers] = await Promise.allSettled([
+          resourcesApi.list("orders", "?all=true"),
+          targetView === "orders" ? resourcesApi.list("buyers") : Promise.resolve([])
+        ]);
+        if (backendOrders.status === "fulfilled" && Array.isArray(backendOrders.value)) {
+          setOrders(prev => normalizeAndDeduplicateOrders(backendOrders.value, prev));
+        }
+        if (backendBuyers.status === "fulfilled" && Array.isArray(backendBuyers.value) && backendBuyers.value.length > 0) {
+          setBuyers(prev => {
+            const map = new Map(prev.map(b => [b.name.toLowerCase(), b]));
+            backendBuyers.value.filter(b => b.isDeleted !== true).forEach(b => {
+              if (b && b.name) map.set(b.name.toLowerCase(), { ...map.get(b.name.toLowerCase()), ...b });
+            });
+            return Array.from(map.values());
+          });
         }
       }
 
@@ -2384,6 +2446,48 @@ export default function LoomPLM() {
     });
   };
 
+  const addBuyer = (newBuyer) => {
+    const buyerObj = {
+      id: newBuyer.id || `buyer-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      name: newBuyer.name.trim(),
+      merchandisers: Array.isArray(newBuyer.merchandisers) ? newBuyer.merchandisers : [],
+      createdAt: newBuyer.createdAt || new Date().toISOString()
+    };
+    setBuyers(prev => {
+      const exists = prev.some(b => b.name.toLowerCase() === buyerObj.name.toLowerCase());
+      const updated = exists
+        ? prev.map(b => b.name.toLowerCase() === buyerObj.name.toLowerCase() ? { ...b, ...buyerObj } : b)
+        : [...prev, buyerObj];
+      if (window.storage) window.storage.set("buyers", JSON.stringify(updated), true);
+      return updated;
+    });
+    try {
+      resourcesApi.create("buyers", buyerObj).catch(() => {});
+    } catch (e) {}
+  };
+
+  const updateBuyer = (buyerId, updatedData) => {
+    setBuyers(prev => {
+      const updated = prev.map(b => (b.id === buyerId || b.name === buyerId) ? { ...b, ...updatedData } : b);
+      if (window.storage) window.storage.set("buyers", JSON.stringify(updated), true);
+      return updated;
+    });
+    try {
+      resourcesApi.update("buyers", buyerId, updatedData).catch(() => {});
+    } catch (e) {}
+  };
+
+  const deleteBuyer = (buyerId) => {
+    setBuyers(prev => {
+      const updated = prev.filter(b => b.id !== buyerId && b.name !== buyerId);
+      if (window.storage) window.storage.set("buyers", JSON.stringify(updated), true);
+      return updated;
+    });
+    try {
+      resourcesApi.remove("buyers", buyerId).catch(() => {});
+    } catch (e) {}
+  };
+
   const addOrder = (newOrder) => {
     const primaryId = newOrder.id || newOrder.primaryId;
     const fullOrder = {
@@ -2411,16 +2515,40 @@ export default function LoomPLM() {
       });
     } catch (e) { }
 
-    // Trigger Notification for New Order
-    pushNotification({
-      eventKey: `order-created-${fullOrder.primaryId || fullOrder.id}`,
-      type: "order",
-      title: "New Order Added",
-      message: `Order #${fullOrder.id} (${fullOrder.style}) has been created for ${fullOrder.buyer}.`,
-      relatedModule: "orders",
-      relatedId: fullOrder.id,
-      priority: fullOrder.risk === "high" ? "high" : "medium"
-    });
+    // Find assigned merchandisers for this buyer
+    const matchedBuyer = buyers.find(b => b.name?.trim().toLowerCase() === String(fullOrder.buyer || "").trim().toLowerCase());
+    const buyerMerchandisers = matchedBuyer && Array.isArray(matchedBuyer.merchandisers) && matchedBuyer.merchandisers.length > 0
+      ? matchedBuyer.merchandisers
+      : [];
+
+    if (buyerMerchandisers.length > 0) {
+      // Dispatch order notification targeted specifically to each assigned merchandiser of this buyer
+      buyerMerchandisers.forEach(merchName => {
+        pushNotification({
+          eventKey: `order-created-${fullOrder.primaryId || fullOrder.id}-${merchName}`,
+          type: "task",
+          title: `New Order for ${fullOrder.buyer}`,
+          message: `Order #${fullOrder.id} (${fullOrder.style || "Order"}) created for ${fullOrder.buyer}. You are the assigned merchandiser.`,
+          relatedModule: "orders",
+          relatedId: fullOrder.id,
+          targetUser: merchName,
+          targetDept: "Merchandising",
+          priority: fullOrder.risk === "high" ? "high" : "medium"
+        });
+      });
+    } else {
+      // Fallback: Notify Merchandising team / general
+      pushNotification({
+        eventKey: `order-created-${fullOrder.primaryId || fullOrder.id}`,
+        type: "task",
+        title: "New Order Added",
+        message: `Order #${fullOrder.id} (${fullOrder.style}) has been created for ${fullOrder.buyer}.`,
+        relatedModule: "orders",
+        relatedId: fullOrder.id,
+        targetDept: "Merchandising",
+        priority: fullOrder.risk === "high" ? "high" : "medium"
+      });
+    }
 
     // Notify all assigned users with tasks in this new order!
     const stageAssignees = {};
@@ -2838,27 +2966,34 @@ export default function LoomPLM() {
         const prevStage = o.stages?.[idx];
         const tmpl = tmplList[idx];
         const res = { ...s };
-        if (
-          idx === 23 ||
-          s.name === "Print / Emb / Hotfix Complete" ||
-          s.name === "Print/emb/out source" ||
-          s.name === "Print / Emb Complete" ||
-          s.name === "print / emb / hotfix complete"
-        ) {
-          res.name = tmpl?.name || "Print / Emb / Outsource";
-          res.dept = tmpl?.dept || "Cutting";
-          res.planned = tmpl?.day || (is120 ? "Day 56-59" : "Day 42-44");
-          delete res.supplier;
-        } else if (
-          idx === 24 ||
-          s.name === "VAP Send" ||
-          s.name === "vap send" ||
-          (idx === 24 && s.name === "Print")
-        ) {
-          res.name = tmpl?.name || "Print / Emb / IH";
-          res.dept = tmpl?.dept || "Merchandising";
-          res.planned = tmpl?.day || (is120 ? "Day 60-80" : "Day 45-60");
-          delete res.supplier;
+        // Never override custom stages (extra stages the user added beyond the template)
+        const isCustomStage = s.isCustom === true || idx >= tmplList.length;
+        if (!isCustomStage) {
+          res.isCustom = false;
+          if (
+            idx === 23 ||
+            s.name === "Print / Emb / Hotfix Complete" ||
+            s.name === "Print/emb/out source" ||
+            s.name === "Print / Emb Complete" ||
+            s.name === "print / emb / hotfix complete"
+          ) {
+            res.name = tmpl?.name || "Print / Emb / Outsource";
+            res.dept = tmpl?.dept || "Cutting";
+            res.planned = tmpl?.day || (is120 ? "Day 56-59" : "Day 42-44");
+            delete res.supplier;
+          } else if (
+            idx === 24 ||
+            s.name === "VAP Send" ||
+            s.name === "vap send" ||
+            (idx === 24 && s.name === "Print")
+          ) {
+            res.name = tmpl?.name || "Print / Emb / IH";
+            res.dept = tmpl?.dept || "Merchandising";
+            res.planned = tmpl?.day || (is120 ? "Day 60-80" : "Day 45-60");
+            delete res.supplier;
+          }
+        } else {
+          res.isCustom = true;
         }
         if (s.status === "done") {
           res.completedAt = s.completedAt || prevStage?.completedAt || nowIso;
@@ -4059,6 +4194,12 @@ export default function LoomPLM() {
       <OrdersPage
         orders={orders}
         isAdmin={isAdmin}
+        buyers={buyers}
+        onAddBuyer={addBuyer}
+        onUpdateBuyer={updateBuyer}
+        onDeleteBuyer={deleteBuyer}
+        users={users}
+        roster={roster}
         onOpenOrder={openOrder}
         onAddOrder={addOrder}
         onUpdateStages={updateStages}
