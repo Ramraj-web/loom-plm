@@ -1110,7 +1110,15 @@ export function StageColourwayModal({
   );
 }
 
-function StageNode({ stage, idx, onCycle, onUndo, canUndo = false, onReason, onSupplierChange, onOpenDispute, lockedBy, suppliers = [], canEdit = true, roleDept = "", orderColourways = [], onOpenColourways, orderStartDate, schedule = {} }) {
+function StageNode({ stage: rawStage, idx, onCycle, onUndo, canUndo = false, onReason, onSupplierChange, onOpenDispute, lockedBy, suppliers = [], canEdit = true, roleDept = "", orderColourways = [], onOpenColourways, orderStartDate, schedule = {} }) {
+  const stage = useMemo(() => {
+    if (!rawStage) return rawStage;
+    if (String(rawStage.name || "").trim().toLowerCase() === "lot card approval") {
+      return { ...rawStage, name: "Fabric Inspection Report", dept: "Quality" };
+    }
+    return rawStage;
+  }, [rawStage]);
+
   const [open, setOpen] = useState(false);
   const locked = !!lockedBy;
   const isAllowedToEdit = !locked && canEdit;
