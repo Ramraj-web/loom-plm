@@ -10,6 +10,7 @@ export const RESOURCE_SEEDS = {
   ],
   users: [],
   teams: [],
+  buyers: [],
   dashboard_rotation: [],
   staff: [
     { id: "staff-arasinth-raja", name: "Arasinth Raja", title: "Manager", dept: "Merchandising", status: "present" },
@@ -491,6 +492,7 @@ const SOFT_DELETE_RESOURCES = [
   "compliances",
   "debitNotes",
   "capas",
+  "buyers",
   "notifications",
   "suppliers",
   "supplierWork",

@@ -16,7 +16,7 @@ import {
   INITIAL_ORDERS, INITIAL_NOTIFICATIONS, VAP_SUPPLIERS, buildCostingRows, makeStages, initPreProd,
   TA_TEMPLATES, TA_STAGES_90,
   NOTIFICATION_PRIORITY_STYLE, formatTimeAgo, DEFAULT_DEPT_DESCRIPTIONS, INITIAL_SUPPLIERS, INITIAL_SUPPLIER_WORK,
-  INITIAL_CUSTOM_TASKS, INITIAL_DEPARTMENT_CHECKLISTS, firstNamedAssignee, DEFAULT_BUYERS
+  INITIAL_CUSTOM_TASKS, INITIAL_DEPARTMENT_CHECKLISTS, firstNamedAssignee
 } from "./constants/loomData.js";
 import { statusPill } from "./components/common/CommonUI.jsx";
 import { OrderWorkspace } from "./components/order/OrderWorkspace.jsx";
@@ -33,6 +33,12 @@ import { MyChecklistPage } from "./components/views/MyChecklistPage.jsx";
 import { ProjectChatbot } from "./components/ProjectChatbot.jsx";
 import CuttingDelayAlertModal from "./components/CuttingDelayAlertModal.jsx";
 import { DEFAULT_TEAMS, DEFAULT_USERS, LoginPage, UserAccessPage } from "./components/UserAccess.jsx";
+
+// Departments whose order visibility is limited to the buyers they are mapped to (dept -> buyer field)
+const BUYER_SCOPED_DEPTS = {
+  "Merchandising": "merchandiserIds",
+  "Purchase – Fabric": "fabricManagerIds",
+};
 
 function roleForUser(user, teams, activeDeptOverride = null) {
   const userTeamIds = Array.isArray(user.teamIds) && user.teamIds.length > 0
@@ -411,16 +417,7 @@ export default function LoomPLM() {
   const [deptDescriptions, setDeptDescriptions] = useState(() => ({ ...DEFAULT_DEPT_DESCRIPTIONS }));
   const [suppliers, setSuppliers] = useState(() => JSON.parse(JSON.stringify(INITIAL_SUPPLIERS)));
   const [supplierWork, setSupplierWork] = useState(() => JSON.parse(JSON.stringify(INITIAL_SUPPLIER_WORK)));
-  const [buyers, setBuyers] = useState(() => {
-    try {
-      const cached = localStorage.getItem("loom_buyers_cache");
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (e) {}
-    return JSON.parse(JSON.stringify(DEFAULT_BUYERS));
-  });
+  const [buyers, setBuyers] = useState([]);
 
   const [financials, setFinancials] = useState(() => {
     try {
@@ -533,12 +530,6 @@ export default function LoomPLM() {
 
   useEffect(() => {
     try {
-      if (Array.isArray(buyers)) localStorage.setItem("loom_buyers_cache", JSON.stringify(buyers));
-    } catch (e) { }
-  }, [buyers]);
-
-  useEffect(() => {
-    try {
       if (Array.isArray(customTasks)) localStorage.setItem("loom_custom_tasks_cache", JSON.stringify(customTasks));
     } catch (e) { }
   }, [customTasks]);
@@ -646,6 +637,37 @@ export default function LoomPLM() {
     role?.dept === "Administrators" ||
     activeUser?.teamId === "team-admin"
   );
+
+  // Admin / MD / full-access users see every order and every notification.
+  const isOrderSuperUser = Boolean(
+    isAdmin ||
+    role?.fullAccess ||
+    role?.dept === "Executive" ||
+    role?.dept === "Executive (MD)" ||
+    activeUser?.isMD
+  );
+
+  const findBuyerForOrder = useCallback(order => {
+    if (!order) return null;
+    const buyerName = String(order.buyer || "").trim().toLowerCase();
+    return buyers.find(b => (order.buyerId && b.id === order.buyerId) || String(b.name || "").trim().toLowerCase() === buyerName) || null;
+  }, [buyers]);
+
+  // Merchandisers and fabric managers only see orders of buyers they are mapped to.
+  // Other departments are unaffected. If a buyer has nobody mapped for a department,
+  // or the order's buyer is not registered, that department keeps seeing the order.
+  const canSeeOrder = useCallback(order => {
+    if (isOrderSuperUser || !activeUser) return true;
+    const userDepts = Array.isArray(role?.departments) && role.departments.length > 0 ? role.departments : [role?.dept];
+    const scopedFields = userDepts.map(dept => BUYER_SCOPED_DEPTS[dept]);
+    if (scopedFields.some(field => !field)) return true;
+    const buyer = findBuyerForOrder(order);
+    if (!buyer) return true;
+    return scopedFields.some(field => {
+      const ids = Array.isArray(buyer[field]) ? buyer[field] : [];
+      return ids.length === 0 || ids.includes(activeUser.id);
+    });
+  }, [isOrderSuperUser, activeUser, role, findBuyerForOrder]);
 
   const uniqueUsersById = usersList => {
     const seen = new Set();
@@ -1001,14 +1023,8 @@ export default function LoomPLM() {
         resourcesApi.list("buyers"),
       ]);
 
-      if (buyersRes.status === "fulfilled" && Array.isArray(buyersRes.value) && buyersRes.value.length > 0) {
-        setBuyers(prev => {
-          const map = new Map(prev.map(b => [b.name.toLowerCase(), b]));
-          buyersRes.value.filter(b => b.isDeleted !== true).forEach(b => {
-            if (b && b.name) map.set(b.name.toLowerCase(), { ...map.get(b.name.toLowerCase()), ...b });
-          });
-          return Array.from(map.values());
-        });
+      if (buyersRes.status === "fulfilled" && Array.isArray(buyersRes.value)) {
+        setBuyers(buyersRes.value.filter(b => b && b.name && b.isDeleted !== true));
       }
 
       if (ordersRes.status === "fulfilled" && Array.isArray(ordersRes.value)) {
@@ -1049,7 +1065,7 @@ export default function LoomPLM() {
         const storageKeys = [
           "staff_roster", "org_structure", "dept_descriptions", "attendance",
           "certifications", "compliances", "notifications", "leaveRequests",
-          "suppliers", "supplierWork", "stage_complaints", "user_sessions", "audit_logs", "buyers"
+          "suppliers", "supplierWork", "stage_complaints", "user_sessions", "audit_logs"
         ];
         const storageResults = await Promise.allSettled(storageKeys.map(k => window.storage.get(k, true)));
         const storageMap = {};
@@ -1060,16 +1076,6 @@ export default function LoomPLM() {
             } catch (e) {}
           }
         });
-
-        if (Array.isArray(storageMap.buyers) && storageMap.buyers.length > 0) {
-          setBuyers(prev => {
-            const map = new Map(prev.map(b => [b.name.toLowerCase(), b]));
-            storageMap.buyers.forEach(b => {
-              if (b && b.name) map.set(b.name.toLowerCase(), { ...map.get(b.name.toLowerCase()), ...b });
-            });
-            return Array.from(map.values());
-          });
-        }
 
         let baseRoster = storageMap.staff_roster || null;
         if (staffRes.status === "fulfilled" && Array.isArray(staffRes.value) && staffRes.value.length > 0) {
@@ -1404,14 +1410,8 @@ export default function LoomPLM() {
         if (backendOrders.status === "fulfilled" && Array.isArray(backendOrders.value)) {
           setOrders(prev => normalizeAndDeduplicateOrders(backendOrders.value, prev));
         }
-        if (backendBuyers.status === "fulfilled" && Array.isArray(backendBuyers.value) && backendBuyers.value.length > 0) {
-          setBuyers(prev => {
-            const map = new Map(prev.map(b => [b.name.toLowerCase(), b]));
-            backendBuyers.value.filter(b => b.isDeleted !== true).forEach(b => {
-              if (b && b.name) map.set(b.name.toLowerCase(), { ...map.get(b.name.toLowerCase()), ...b });
-            });
-            return Array.from(map.values());
-          });
+        if (targetView === "orders" && backendBuyers.status === "fulfilled" && Array.isArray(backendBuyers.value)) {
+          setBuyers(backendBuyers.value.filter(b => b && b.name && b.isDeleted !== true));
         }
       }
 
@@ -2448,44 +2448,55 @@ export default function LoomPLM() {
 
   const addBuyer = (newBuyer) => {
     const buyerObj = {
-      id: newBuyer.id || `buyer-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      id: `buyer-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       name: newBuyer.name.trim(),
-      merchandisers: Array.isArray(newBuyer.merchandisers) ? newBuyer.merchandisers : [],
-      createdAt: newBuyer.createdAt || new Date().toISOString()
+      merchandiserIds: newBuyer.merchandiserIds || [],
+      fabricManagerIds: newBuyer.fabricManagerIds || [],
+      createdAt: new Date().toISOString()
     };
-    setBuyers(prev => {
-      const exists = prev.some(b => b.name.toLowerCase() === buyerObj.name.toLowerCase());
-      const updated = exists
-        ? prev.map(b => b.name.toLowerCase() === buyerObj.name.toLowerCase() ? { ...b, ...buyerObj } : b)
-        : [...prev, buyerObj];
-      if (window.storage) window.storage.set("buyers", JSON.stringify(updated), true);
-      return updated;
+    setBuyers(prev => [...prev, buyerObj]);
+    resourcesApi.create("buyers", buyerObj).catch(err => {
+      console.warn("Error creating buyer:", err.message);
     });
-    try {
-      resourcesApi.create("buyers", buyerObj).catch(() => {});
-    } catch (e) {}
+    logEvent({
+      eventType: "BUYER",
+      action: `Added buyer ${buyerObj.name}`,
+      targetId: buyerObj.id,
+      metadata: { buyerId: buyerObj.id, merchandiserIds: buyerObj.merchandiserIds, fabricManagerIds: buyerObj.fabricManagerIds }
+    });
   };
 
-  const updateBuyer = (buyerId, updatedData) => {
-    setBuyers(prev => {
-      const updated = prev.map(b => (b.id === buyerId || b.name === buyerId) ? { ...b, ...updatedData } : b);
-      if (window.storage) window.storage.set("buyers", JSON.stringify(updated), true);
-      return updated;
+  const updateBuyer = (buyerId, changes) => {
+    const patch = {
+      name: changes.name.trim(),
+      merchandiserIds: changes.merchandiserIds || [],
+      fabricManagerIds: changes.fabricManagerIds || [],
+      updatedAt: new Date().toISOString()
+    };
+    setBuyers(prev => prev.map(b => b.id === buyerId ? { ...b, ...patch } : b));
+    resourcesApi.patch("buyers", buyerId, patch).catch(err => {
+      console.warn("Error updating buyer:", err.message);
     });
-    try {
-      resourcesApi.update("buyers", buyerId, updatedData).catch(() => {});
-    } catch (e) {}
+    logEvent({
+      eventType: "BUYER",
+      action: `Updated buyer ${patch.name}`,
+      targetId: buyerId,
+      metadata: { buyerId, ...patch }
+    });
   };
 
   const deleteBuyer = (buyerId) => {
-    setBuyers(prev => {
-      const updated = prev.filter(b => b.id !== buyerId && b.name !== buyerId);
-      if (window.storage) window.storage.set("buyers", JSON.stringify(updated), true);
-      return updated;
+    const target = buyers.find(b => b.id === buyerId);
+    setBuyers(prev => prev.filter(b => b.id !== buyerId));
+    resourcesApi.remove("buyers", buyerId).catch(err => {
+      console.warn("Error deleting buyer:", err.message);
     });
-    try {
-      resourcesApi.remove("buyers", buyerId).catch(() => {});
-    } catch (e) {}
+    logEvent({
+      eventType: "BUYER",
+      action: `Deleted buyer ${target?.name || buyerId}`,
+      targetId: buyerId,
+      metadata: { buyerId }
+    });
   };
 
   const addOrder = (newOrder) => {
@@ -2515,29 +2526,27 @@ export default function LoomPLM() {
       });
     } catch (e) { }
 
-    // Find assigned merchandisers for this buyer
-    const matchedBuyer = buyers.find(b => b.name?.trim().toLowerCase() === String(fullOrder.buyer || "").trim().toLowerCase());
-    const buyerMerchandisers = matchedBuyer && Array.isArray(matchedBuyer.merchandisers) && matchedBuyer.merchandisers.length > 0
-      ? matchedBuyer.merchandisers
+    // Order-created notification goes only to the merchandisers and fabric managers mapped to this buyer
+    const matchedBuyer = findBuyerForOrder(fullOrder);
+    const buyerRecipients = matchedBuyer
+      ? Array.from(new Set([...(matchedBuyer.merchandiserIds || []), ...(matchedBuyer.fabricManagerIds || [])]))
       : [];
 
-    if (buyerMerchandisers.length > 0) {
-      // Dispatch order notification targeted specifically to each assigned merchandiser of this buyer
-      buyerMerchandisers.forEach(merchName => {
+    if (buyerRecipients.length > 0) {
+      buyerRecipients.forEach(userId => {
+        const isFabric = (matchedBuyer.fabricManagerIds || []).includes(userId) && !(matchedBuyer.merchandiserIds || []).includes(userId);
         pushNotification({
-          eventKey: `order-created-${fullOrder.primaryId || fullOrder.id}-${merchName}`,
+          eventKey: `order-created-${fullOrder.primaryId || fullOrder.id}-${userId}`,
           type: "task",
           title: `New Order for ${fullOrder.buyer}`,
-          message: `Order #${fullOrder.id} (${fullOrder.style || "Order"}) created for ${fullOrder.buyer}. You are the assigned merchandiser.`,
+          message: `Order #${fullOrder.id} (${fullOrder.style || "Order"}) created for ${fullOrder.buyer}. You are the assigned ${isFabric ? "fabric manager" : "merchandiser"}.`,
           relatedModule: "orders",
           relatedId: fullOrder.id,
-          targetUser: merchName,
-          targetDept: "Merchandising",
+          targetUserIds: [userId],
           priority: fullOrder.risk === "high" ? "high" : "medium"
         });
       });
     } else {
-      // Fallback: Notify Merchandising team / general
       pushNotification({
         eventKey: `order-created-${fullOrder.primaryId || fullOrder.id}`,
         type: "task",
@@ -3561,9 +3570,11 @@ export default function LoomPLM() {
     }
   };
 
-  const selectedOrderRaw = orders.find(o =>
+  const visibleOrders = useMemo(() => orders.filter(canSeeOrder), [orders, canSeeOrder]);
+
+  const selectedOrderRaw = visibleOrders.find(o =>
     selectedId && ((o.primaryId && o.primaryId === selectedId) || (o._id && o._id === selectedId))
-  ) || orders.find(o => o.id === selectedId);
+  ) || visibleOrders.find(o => o.id === selectedId);
 
   const selectedOrder = useMemo(() => {
     if (!selectedOrderRaw) return null;
@@ -4068,7 +4079,7 @@ export default function LoomPLM() {
         onDeleteProductionLog={deleteOrderProductionLog}
         onUpdateInspectionData={updateOrderInspectionData}
         onUpdateCertificates={updateOrderCertificates}
-        allOrders={orders}
+        allOrders={visibleOrders}
         people={users}
         onReportComplaint={handleReportComplaint}
         onPushNotification={pushNotification}
@@ -4100,7 +4111,7 @@ export default function LoomPLM() {
             </button>
           </div>
           <ExecutiveOverviewPage
-            orders={orders}
+            orders={visibleOrders}
             attendance={attendance}
             financials={financials}
             roster={roster}
@@ -4126,7 +4137,7 @@ export default function LoomPLM() {
       content = (
         <DepartmentDetail
           deptName={selectedDept}
-          orders={orders}
+          orders={visibleOrders}
           customTasks={customTasks}
           complaints={stageComplaints}
           onBack={() => navigate(previousView === "departmentDetail" ? "departments" : previousView || "departments")}
@@ -4147,7 +4158,7 @@ export default function LoomPLM() {
     if (role.dept === "Executive (MD)" || role.dept === "Executive") {
       content = (
         <ExecutiveOverviewPage
-          orders={orders}
+          orders={visibleOrders}
           attendance={attendance}
           financials={financials}
           roster={roster}
@@ -4172,7 +4183,7 @@ export default function LoomPLM() {
       content = (
         <DepartmentDetail
           deptName={role.dept}
-          orders={orders}
+          orders={visibleOrders}
           customTasks={customTasks}
           complaints={stageComplaints}
           onBack={() => navigate("dashboard")}
@@ -4192,14 +4203,14 @@ export default function LoomPLM() {
   } else if (view === "orders" && canAccess("orders")) {
     content = (
       <OrdersPage
-        orders={orders}
+        orders={visibleOrders}
         isAdmin={isAdmin}
         buyers={buyers}
         onAddBuyer={addBuyer}
         onUpdateBuyer={updateBuyer}
         onDeleteBuyer={deleteBuyer}
         users={users}
-        roster={roster}
+        teams={teams}
         onOpenOrder={openOrder}
         onAddOrder={addOrder}
         onUpdateStages={updateStages}
@@ -4213,7 +4224,7 @@ export default function LoomPLM() {
   } else if (view === "tasks") {
     content = (
       <MyTasksPage
-        orders={orders}
+        orders={visibleOrders}
         role={role}
         tasks={customTasks}
         suppliers={suppliers}
@@ -4235,11 +4246,11 @@ export default function LoomPLM() {
       />
     );
   } else if (view === "calendar" && canSeeAll) {
-    content = <CalendarPage orders={orders} onOpenOrder={openOrder} />;
+    content = <CalendarPage orders={visibleOrders} onOpenOrder={openOrder} />;
   } else if (view === "approvals" && canAccess("approvals")) {
     content = (
       <ApprovalsPage
-        orders={orders}
+        orders={visibleOrders}
         onOpenOrder={openOrder}
         onApproveCosting={approveOrderCosting}
         onRejectCosting={rejectOrderCosting}
@@ -4249,7 +4260,7 @@ export default function LoomPLM() {
   } else if (view === "departments" && canSeeAll) {
     content = (
       <DepartmentsPage
-        orders={orders}
+        orders={visibleOrders}
         onOpenDept={openDept}
         orgStructure={orgStructure}
         deptDescriptions={deptDescriptions}
@@ -4258,15 +4269,15 @@ export default function LoomPLM() {
       />
     );
   } else if (view === "production" && (canSeeAll || ["Cutting", "Production"].includes(role.dept))) {
-    content = <ProductionPage orders={orders} onOpenOrder={openOrder} />;
+    content = <ProductionPage orders={visibleOrders} onOpenOrder={openOrder} />;
   } else if (view === "quality" && (canSeeAll || role.dept === "Quality")) {
-    content = <QualityPage orders={orders} onOpenOrder={openOrder} />;
+    content = <QualityPage orders={visibleOrders} onOpenOrder={openOrder} />;
   } else if (view === "compliance" && (canSeeAll || role.dept === "Compliance & Certification")) {
     content = (
       <CompliancePage
         certifications={certifications}
         compliances={compliances}
-        orders={orders}
+        orders={visibleOrders}
         roster={roster}
         role={role}
         onAddCertification={addCertification}
@@ -4282,13 +4293,13 @@ export default function LoomPLM() {
       />
     );
   } else if (view === "reports" && canAccess("reports")) {
-    content = <ReportsPage orders={orders} />;
+    content = <ReportsPage orders={visibleOrders} />;
   } else if (view === "insights" && canSeeAll) {
-    content = <InsightsPage orders={orders} />;
+    content = <InsightsPage orders={visibleOrders} />;
   } else if (view === "supplierPerformance" && canSeeAll) {
     content = (
       <SupplierPerformancePage
-        orders={orders}
+        orders={visibleOrders}
         suppliers={suppliers}
         supplierWork={supplierWork}
         tasks={customTasks}
@@ -4313,9 +4324,9 @@ export default function LoomPLM() {
       />
     );
   } else if (view === "debitNotes" && canSeeAll) {
-    content = <DebitNotesPage orders={orders} notes={debitNotes} onAdd={addDebitNote} />;
+    content = <DebitNotesPage orders={visibleOrders} notes={debitNotes} onAdd={addDebitNote} />;
   } else if (view === "capas" && canSeeAll) {
-    content = <CapasPage orders={orders} capas={capas} onAdd={addCapa} onCycleStatus={cycleCapaStatus} />;
+    content = <CapasPage orders={visibleOrders} capas={capas} onAdd={addCapa} onCycleStatus={cycleCapaStatus} />;
   } else if (view === "auditLogs" && (isAdmin || isExecutive || role?.dept === "Administrators")) {
     content = (
       <AuditLoggerPage
@@ -4369,11 +4380,11 @@ export default function LoomPLM() {
       />
     );
   } else if (view === "finance" && (canSeeAll || role.dept === "Finance")) {
-    content = <FinanceEntryPage orders={orders} financials={financials} onUpdate={updateFinancials} onUpdateOrderCost={updateOrderCost} />;
+    content = <FinanceEntryPage orders={visibleOrders} financials={financials} onUpdate={updateFinancials} onUpdateOrderCost={updateOrderCost} />;
   } else if (view === "employeePerformance") {
     content = (
       <EmployeePerformancePanel
-        orders={orders}
+        orders={visibleOrders}
         roster={roster}
         attendance={attendance}
         customTasks={customTasks}
@@ -4390,7 +4401,7 @@ export default function LoomPLM() {
   } else if (view === "executiveOverview" && isExecutive) {
     content = (
       <ExecutiveOverviewPage
-        orders={orders}
+        orders={visibleOrders}
         attendance={attendance}
         financials={financials}
         roster={roster}
@@ -4419,7 +4430,7 @@ export default function LoomPLM() {
   } else if (isExecutive) {
     content = (
       <ExecutiveOverviewPage
-        orders={orders}
+        orders={visibleOrders}
         attendance={attendance}
         financials={financials}
         roster={roster}
@@ -4444,7 +4455,7 @@ export default function LoomPLM() {
   } else if (canSeeAll) {
     content = (
       <Dashboard
-        orders={orders}
+        orders={visibleOrders}
         onOpenOrder={openOrder}
         onNavigate={navigate}
         attendance={attendance}
@@ -4470,7 +4481,7 @@ export default function LoomPLM() {
   } else {
     content = (
       <MyDepartmentDashboard
-        orders={orders}
+        orders={visibleOrders}
         role={role}
         personName={personName}
         onOpenOrder={openOrder}
@@ -4492,6 +4503,17 @@ export default function LoomPLM() {
   // Filter notifications: ONLY assigned tasks and mentioned names hit the notification tray! Other events are in event logger.
   const userNotifications = notifications.filter(n => {
     if (!n || n.isDeleted === true) return false;
+
+    // Buyer-routed notifications go only to the listed users
+    if (Array.isArray(n.targetUserIds) && n.targetUserIds.length > 0) {
+      return isOrderSuperUser || n.targetUserIds.includes(activeUser?.id);
+    }
+
+    // Hide notifications about orders this user is not allowed to see
+    if (n.relatedModule === "orders" && n.relatedId) {
+      const relatedOrder = orders.find(o => o.id === n.relatedId || o.primaryId === n.relatedId);
+      if (relatedOrder && !canSeeOrder(relatedOrder)) return false;
+    }
 
     // Strict filter: only assigned tasks or mentioned names
     const isTaskAssignment = n.type === "task" ||
@@ -5078,9 +5100,9 @@ export default function LoomPLM() {
           {content}
         </div>
       </div>
-      <ProjectChatbot orders={orders} onOpenOrder={openOrder} userId={activeUser.id} />
+      <ProjectChatbot orders={visibleOrders} onOpenOrder={openOrder} userId={activeUser.id} />
       <CuttingDelayAlertModal
-        orders={orders}
+        orders={visibleOrders}
         role={role}
         activeUser={activeUser}
         onOpenOrder={openOrder}

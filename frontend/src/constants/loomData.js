@@ -1492,14 +1492,6 @@ export const BUYER_LIST = [
   "Next",
 ];
 
-export const DEFAULT_BUYERS = [
-  { id: "buyer-1", name: "Zara", merchandisers: ["Manager", "Senior", "Pro. Merch"] },
-  { id: "buyer-2", name: "H&M", merchandisers: ["Senior", "Pro. Merch"] },
-  { id: "buyer-3", name: "Uniqlo", merchandisers: ["Manager", "PPS & TOP"] },
-  { id: "buyer-4", name: "M&S", merchandisers: ["Senior", "VAP Merch"] },
-  { id: "buyer-5", name: "Next", merchandisers: ["Manager", "Senior"] },
-];
-
 export const COMPLIANCE_CATEGORIES = [
   "Buyer Requirement",
   "Factory Compliance",

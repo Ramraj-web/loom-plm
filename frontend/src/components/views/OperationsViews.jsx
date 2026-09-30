@@ -17,6 +17,7 @@ import {
 import { AssignWorkModal } from "./InsightsViews.jsx";
 import { sanitizeLocationString } from "../../utils/deviceLocation.js";
 import { DepartmentPerformanceAndKPI } from "./DepartmentKPISection.jsx";
+import { BuyerManagerModal, userNames } from "../order/BuyerManagerModal.jsx";
 
 
 function formatDisplayShipDate(isoDateStr) {
@@ -59,7 +60,7 @@ export function OrdersPage({
   onUpdateBuyer,
   onDeleteBuyer,
   users = [],
-  roster = [],
+  teams = [],
   onOpenOrder,
   onAddOrder,
   onUpdateStages,
@@ -111,65 +112,10 @@ export function OrdersPage({
   const todayIso = new Date().toISOString().split("T")[0];
   const defaultShipIso = new Date(Date.now() + 90 * 86400000).toISOString().split("T")[0];
 
-  const availableBuyers = useMemo(() => {
-    const list = Array.isArray(buyers) && buyers.length > 0 ? buyers : [
-      { id: "buyer-1", name: "Zara", merchandisers: ["Manager", "Senior", "Pro. Merch"] },
-      { id: "buyer-2", name: "H&M", merchandisers: ["Senior", "Pro. Merch"] },
-      { id: "buyer-3", name: "Uniqlo", merchandisers: ["Manager", "PPS & TOP"] },
-      { id: "buyer-4", name: "M&S", merchandisers: ["Senior", "VAP Merch"] },
-      { id: "buyer-5", name: "Next", merchandisers: ["Manager", "Senior"] },
-    ];
-    return list;
-  }, [buyers]);
-
-  // Aggregate merchandisers from Merchandising department (from users, roster, and org structure)
-  const availableMerchandisers = useMemo(() => {
-    const set = new Map();
-    // 1. From ORG_STRUCTURE['Merchandising']
-    const merchRoles = (ORG_STRUCTURE && ORG_STRUCTURE["Merchandising"]) || [];
-    merchRoles.forEach(r => {
-      if (r && r.title) {
-        set.set(r.title, { id: r.title, name: r.title, title: r.title, source: "role" });
-      }
-      if (r && r.name && r.name !== "—") {
-        set.set(r.name, { id: r.name, name: r.name, title: r.title || "Merchandiser", source: "staff" });
-      }
-    });
-
-    // 2. From roster where dept is Merchandising
-    if (Array.isArray(roster)) {
-      roster.filter(s => s && s.dept === "Merchandising" && s.name && s.name !== "—").forEach(s => {
-        set.set(s.name, { id: s.name, name: s.name, title: s.title || "Merchandiser", source: "roster" });
-      });
-    }
-
-    // 3. From users accounts where team is Merchandising
-    if (Array.isArray(users)) {
-      users.filter(u => {
-        if (!u) return false;
-        const teamName = String(u.teamId || "").toLowerCase();
-        return teamName.includes("merchandis") || (u.dept && u.dept.toLowerCase().includes("merchandis"));
-      }).forEach(u => {
-        const displayName = u.name || u.username;
-        if (displayName) {
-          set.set(displayName, { id: displayName, name: displayName, title: "Merchandiser", username: u.username, source: "user" });
-        }
-      });
-    }
-
-    return Array.from(set.values());
-  }, [roster, users]);
-
-  // Buyer Form State for Add / Edit in Buyer Modal
-  const [buyerForm, setBuyerForm] = useState({ id: null, name: "", merchandisers: [] });
-  const [isEditingBuyer, setIsEditingBuyer] = useState(false);
-  const [buyerSearchTerm, setBuyerSearchTerm] = useState("");
-  const [merchDropdownOpen, setMerchDropdownOpen] = useState(false);
-
   const [form, setForm] = useState({
     id: "",
     style: "",
-    buyer: availableBuyers[0]?.name || "Zara",
+    buyer: "",
     country: "Spain",
     season: "AW26",
     qty: "",
@@ -275,11 +221,13 @@ export function OrdersPage({
     const finalOrderDate = form.orderDate || todayIso;
 
     const orderIdClean = form.id.trim().toUpperCase();
+    const selectedBuyer = buyers.find(b => b.name === form.buyer);
     const newOrder = {
       primaryId: orderIdClean,
       id: orderIdClean,
       style: form.style.trim(),
       buyer: form.buyer.trim(),
+      buyerId: selectedBuyer?.id || null,
       country: form.country.trim(),
       season: form.season.trim(),
       qty: finalQty,
@@ -320,7 +268,7 @@ export function OrdersPage({
     setForm({
       id: "",
       style: "",
-      buyer: "Zara",
+      buyer: "",
       country: "Spain",
       season: "AW26",
       qty: "",
@@ -347,13 +295,7 @@ export function OrdersPage({
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <button
-            onClick={() => {
-              setBuyerForm({ id: null, name: "", merchandisers: [] });
-              setIsEditingBuyer(false);
-              setBuyerSearchTerm("");
-              setMerchDropdownOpen(false);
-              setShowBuyerModal(true);
-            }}
+            onClick={() => setShowBuyerModal(true)}
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -379,7 +321,7 @@ export function OrdersPage({
             onClick={() => {
               const nowIso = new Date().toISOString().split("T")[0];
               const shipIso = new Date(Date.now() + 90 * 86400000).toISOString().split("T")[0];
-              setForm(prev => ({ ...prev, orderDate: nowIso, ship: shipIso, buyer: prev.buyer || availableBuyers[0]?.name || "Zara" }));
+              setForm(prev => ({ ...prev, orderDate: nowIso, ship: shipIso, buyer: buyers.some(b => b.name === prev.buyer) ? prev.buyer : "" }));
               setShowAddModal(true);
             }}
             style={{
@@ -896,16 +838,22 @@ export function OrdersPage({
                     onChange={e => setForm({ ...form, buyer: e.target.value })}
                     style={{ width: "96%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 13, background: "#FFFFFF", cursor: "pointer" }}
                   >
-                    {availableBuyers.map(b => {
-                      const buyerName = typeof b === "string" ? b : b.name;
-                      const merchCount = Array.isArray(b.merchandisers) ? b.merchandisers.length : 0;
-                      return (
-                        <option key={b.id || buyerName} value={buyerName}>
-                          {buyerName} {merchCount > 0 ? `(${merchCount} Merchandiser${merchCount > 1 ? "s" : ""})` : ""}
-                        </option>
-                      );
-                    })}
+                    <option value="" disabled>{buyers.length === 0 ? "No buyers — use Add Buyer first" : "Select buyer"}</option>
+                    {buyers.map(b => (
+                      <option key={b.id} value={b.name}>{b.name}</option>
+                    ))}
                   </select>
+                  {(() => {
+                    const selected = buyers.find(b => b.name === form.buyer);
+                    if (!selected) return null;
+                    const merch = userNames(selected.merchandiserIds || [], users);
+                    const fabric = userNames(selected.fabricManagerIds || [], users);
+                    return (
+                      <div style={{ fontSize: 11, color: "#6B7280", marginTop: 4 }}>
+                        Merchandiser: {merch.join(", ") || "—"} · Fabric: {fabric.join(", ") || "—"}
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div>
                   <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#4B5563", marginBottom: 4 }}>Destination Country</label>
@@ -1106,466 +1054,16 @@ export function OrdersPage({
         </div>
       )}
 
-      {/* Buyer Management Modal */}
       {showBuyerModal && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(15, 23, 42, 0.55)",
-            backdropFilter: "blur(4px)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 9999,
-            padding: 16
-          }}
-          onClick={() => {
-            setShowBuyerModal(false);
-            setMerchDropdownOpen(false);
-          }}
-        >
-          <div
-            style={{
-              background: "#FFFFFF",
-              borderRadius: 14,
-              width: "100%",
-              maxWidth: 680,
-              maxHeight: "90vh",
-              overflowY: "auto",
-              padding: "24px",
-              boxShadow: "0 20px 30px -10px rgba(0, 0, 0, 0.2)",
-              position: "relative"
-            }}
-            onClick={e => e.stopPropagation()}
-          >
-            {/* Modal Header */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <div>
-                <h3 style={{ fontSize: 18, fontWeight: 700, color: "#151B2E", margin: 0 }}>Manage Buyers & Merchandisers</h3>
-                <p style={{ fontSize: 12.5, color: "#8A8D98", margin: "4px 0 0" }}>
-                  Map buyers to merchandisers so new order notifications route exclusively to their account.
-                </p>
-              </div>
-              <button
-                onClick={() => {
-                  setShowBuyerModal(false);
-                  setMerchDropdownOpen(false);
-                }}
-                style={{ background: "none", border: "none", color: "#8A8D98", cursor: "pointer", padding: 4 }}
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            {/* Buyer Form (Add / Edit) */}
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (!buyerForm.name.trim()) return;
-
-                if (isEditingBuyer && buyerForm.id) {
-                  if (onUpdateBuyer) {
-                    onUpdateBuyer(buyerForm.id, {
-                      name: buyerForm.name.trim(),
-                      merchandisers: buyerForm.merchandisers
-                    });
-                  }
-                } else {
-                  if (onAddBuyer) {
-                    onAddBuyer({
-                      name: buyerForm.name.trim(),
-                      merchandisers: buyerForm.merchandisers
-                    });
-                  }
-                }
-
-                // Reset form
-                setBuyerForm({ id: null, name: "", merchandisers: [] });
-                setIsEditingBuyer(false);
-                setMerchDropdownOpen(false);
-              }}
-              style={{
-                background: "#F8FAFC",
-                border: "1px solid #E2E8F0",
-                borderRadius: 10,
-                padding: "16px 18px",
-                marginBottom: 24
-              }}
-            >
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
-                {isEditingBuyer ? <Edit size={15} color="#2563EB" /> : <Plus size={15} color="#1F9E8D" />}
-                {isEditingBuyer ? "Edit Buyer" : "Add New Buyer"}
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
-                {/* 1. Buyer Name Textbox */}
-                <div>
-                  <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#475569", marginBottom: 6 }}>
-                    Buyer Name *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Target, Primark, Levi's"
-                    value={buyerForm.name}
-                    onChange={e => setBuyerForm({ ...buyerForm, name: e.target.value })}
-                    style={{
-                      width: "92%",
-                      padding: "8px 12px",
-                      borderRadius: 7,
-                      border: "1px solid #CBD5E1",
-                      fontSize: 13,
-                      outline: "none",
-                      background: "#FFFFFF"
-                    }}
-                  />
-                </div>
-
-                {/* 2. Merchandiser Multi-Select Dropdown */}
-                <div style={{ position: "relative" }}>
-                  <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#475569", marginBottom: 6 }}>
-                    Assigned Merchandisers (Department: Merchandising)
-                  </label>
-                  <div
-                    onClick={() => setMerchDropdownOpen(prev => !prev)}
-                    style={{
-                      width: "92%",
-                      minHeight: 36,
-                      padding: "6px 10px",
-                      borderRadius: 7,
-                      border: "1px solid #CBD5E1",
-                      fontSize: 12.5,
-                      background: "#FFFFFF",
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: 6
-                    }}
-                  >
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, flex: 1, overflow: "hidden" }}>
-                      {buyerForm.merchandisers.length === 0 ? (
-                        <span style={{ color: "#94A3B8" }}>Select merchandisers...</span>
-                      ) : (
-                        buyerForm.merchandisers.map(m => (
-                          <span
-                            key={m}
-                            style={{
-                              background: "#E0F2FE",
-                              color: "#0369A1",
-                              fontSize: 11,
-                              fontWeight: 600,
-                              padding: "2px 6px",
-                              borderRadius: 4,
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: 4
-                            }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setBuyerForm(prev => ({
-                                ...prev,
-                                merchandisers: prev.merchandisers.filter(item => item !== m)
-                              }));
-                            }}
-                          >
-                            {m}
-                            <span style={{ cursor: "pointer", fontSize: 12, lineHeight: 1 }}>×</span>
-                          </span>
-                        ))
-                      )}
-                    </div>
-                    <ChevronDown size={14} color="#64748B" />
-                  </div>
-
-                  {/* Multi-Select Dropdown Menu */}
-                  {merchDropdownOpen && (
-                    <div
-                      style={{
-                        position: "absolute",
-                        top: "100%",
-                        left: 0,
-                        width: "98%",
-                        zIndex: 100,
-                        background: "#FFFFFF",
-                        border: "1px solid #CBD5E1",
-                        borderRadius: 8,
-                        marginTop: 4,
-                        boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)",
-                        maxHeight: 210,
-                        overflowY: "auto",
-                        padding: 6
-                      }}
-                      onClick={e => e.stopPropagation()}
-                    >
-                      <div style={{ fontSize: 10.5, fontWeight: 700, color: "#64748B", textTransform: "uppercase", padding: "4px 8px 6px" }}>
-                        Merchandising Department ({availableMerchandisers.length})
-                      </div>
-                      {availableMerchandisers.map(merch => {
-                        const isSelected = buyerForm.merchandisers.includes(merch.name);
-                        return (
-                          <div
-                            key={merch.id || merch.name}
-                            onClick={() => {
-                              setBuyerForm(prev => {
-                                const current = prev.merchandisers || [];
-                                const next = isSelected
-                                  ? current.filter(m => m !== merch.name)
-                                  : [...current, merch.name];
-                                return { ...prev, merchandisers: next };
-                              });
-                            }}
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                              padding: "6px 8px",
-                              borderRadius: 6,
-                              fontSize: 12,
-                              cursor: "pointer",
-                              background: isSelected ? "#F0FDF4" : "transparent"
-                            }}
-                            onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = "#F1F5F9"; }}
-                            onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = "transparent"; }}
-                          >
-                            <div>
-                              <span style={{ fontWeight: isSelected ? 600 : 500, color: isSelected ? "#15803D" : "#1E293B" }}>
-                                {merch.name}
-                              </span>
-                              {merch.title && merch.title !== merch.name && (
-                                <span style={{ marginLeft: 6, fontSize: 10.5, color: "#64748B" }}>
-                                  ({merch.title})
-                                </span>
-                              )}
-                            </div>
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              readOnly
-                              style={{ cursor: "pointer", accentColor: "#1F9E8D" }}
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Form Buttons */}
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-                {isEditingBuyer && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setBuyerForm({ id: null, name: "", merchandisers: [] });
-                      setIsEditingBuyer(false);
-                      setMerchDropdownOpen(false);
-                    }}
-                    style={{
-                      padding: "6px 14px",
-                      borderRadius: 6,
-                      border: "1px solid #CBD5E1",
-                      background: "#FFFFFF",
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: "#64748B",
-                      cursor: "pointer"
-                    }}
-                  >
-                    Cancel
-                  </button>
-                )}
-                <button
-                  type="submit"
-                  style={{
-                    padding: "6px 16px",
-                    borderRadius: 6,
-                    border: "none",
-                    background: isEditingBuyer ? "#2563EB" : "#1F9E8D",
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: "#FFFFFF",
-                    cursor: "pointer",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6
-                  }}
-                >
-                  {isEditingBuyer ? <Check size={14} /> : <Plus size={14} />}
-                  {isEditingBuyer ? "Update Buyer" : "Save Buyer"}
-                </button>
-              </div>
-            </form>
-
-            {/* List / Table of Added Buyers */}
-            <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: "#1E293B" }}>
-                  All Buyers ({availableBuyers.length})
-                </span>
-                <input
-                  type="text"
-                  placeholder="Search buyer..."
-                  value={buyerSearchTerm}
-                  onChange={e => setBuyerSearchTerm(e.target.value)}
-                  style={{
-                    padding: "4px 10px",
-                    borderRadius: 6,
-                    border: "1px solid #CBD5E1",
-                    fontSize: 12,
-                    width: 170
-                  }}
-                />
-              </div>
-
-              <div style={{ border: "1px solid #E2E8F0", borderRadius: 8, overflow: "hidden" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 12.5 }}>
-                  <thead>
-                    <tr style={{ background: "#F8FAFC", borderBottom: "1px solid #E2E8F0" }}>
-                      <th style={{ padding: "10px 14px", fontWeight: 600, color: "#475569" }}>Buyer Name</th>
-                      <th style={{ padding: "10px 14px", fontWeight: 600, color: "#475569" }}>Assigned Merchandisers</th>
-                      <th style={{ padding: "10px 14px", fontWeight: 600, color: "#475569", width: 90, textAlign: "right" }}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {availableBuyers
-                      .filter(b => !buyerSearchTerm.trim() || b.name.toLowerCase().includes(buyerSearchTerm.toLowerCase()))
-                      .map((buyer, idx) => {
-                        const merches = Array.isArray(buyer.merchandisers) ? buyer.merchandisers : [];
-                        return (
-                          <tr
-                            key={buyer.id || buyer.name}
-                            style={{
-                              borderBottom: idx === availableBuyers.length - 1 ? "none" : "1px solid #F1F5F9",
-                              background: buyerForm.id === buyer.id ? "#F0F9FF" : "#FFFFFF"
-                            }}
-                          >
-                            <td style={{ padding: "10px 14px", fontWeight: 600, color: "#0F172A" }}>
-                              {buyer.name}
-                            </td>
-                            <td style={{ padding: "10px 14px" }}>
-                              {merches.length === 0 ? (
-                                <span style={{ color: "#94A3B8", fontStyle: "italic", fontSize: 11.5 }}>
-                                  No merchandiser assigned (defaults to all Merchandising team)
-                                </span>
-                              ) : (
-                                <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                                  {merches.map(m => (
-                                    <span
-                                      key={m}
-                                      style={{
-                                        background: "#F1F5F9",
-                                        color: "#334155",
-                                        fontSize: 11,
-                                        fontWeight: 500,
-                                        padding: "2px 8px",
-                                        borderRadius: 4,
-                                        border: "1px solid #E2E8F0"
-                                      }}
-                                    >
-                                      {m}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                            </td>
-                            <td style={{ padding: "10px 14px", textAlign: "right" }}>
-                              <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                                <button
-                                  type="button"
-                                  title="Edit Buyer"
-                                  onClick={() => {
-                                    setBuyerForm({
-                                      id: buyer.id || buyer.name,
-                                      name: buyer.name,
-                                      merchandisers: [...(buyer.merchandisers || [])]
-                                    });
-                                    setIsEditingBuyer(true);
-                                    setMerchDropdownOpen(false);
-                                  }}
-                                  style={{
-                                    background: "#EFF6FF",
-                                    border: "1px solid #BFDBFE",
-                                    borderRadius: 5,
-                                    color: "#2563EB",
-                                    cursor: "pointer",
-                                    padding: "4px 8px",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: 4,
-                                    fontSize: 11.5,
-                                    fontWeight: 600
-                                  }}
-                                >
-                                  <Edit size={12} />
-                                  Edit
-                                </button>
-                                <button
-                                  type="button"
-                                  title="Delete Buyer"
-                                  onClick={() => {
-                                    if (window.confirm(`Are you sure you want to delete buyer "${buyer.name}"?`)) {
-                                      if (onDeleteBuyer) {
-                                        onDeleteBuyer(buyer.id || buyer.name);
-                                      }
-                                      if (buyerForm.id === buyer.id) {
-                                        setBuyerForm({ id: null, name: "", merchandisers: [] });
-                                        setIsEditingBuyer(false);
-                                      }
-                                    }
-                                  }}
-                                  style={{
-                                    background: "#FEF2F2",
-                                    border: "1px solid #FECACA",
-                                    borderRadius: 5,
-                                    color: "#DC2626",
-                                    cursor: "pointer",
-                                    padding: "4px 8px",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: 4,
-                                    fontSize: 11.5,
-                                    fontWeight: 600
-                                  }}
-                                >
-                                  <Trash2 size={12} />
-                                  Delete
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <div style={{ marginTop: 20, textAlign: "right" }}>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowBuyerModal(false);
-                  setMerchDropdownOpen(false);
-                }}
-                style={{
-                  padding: "7px 18px",
-                  borderRadius: 7,
-                  border: "1px solid #D1D5DB",
-                  background: "#FFFFFF",
-                  fontSize: 12.5,
-                  fontWeight: 600,
-                  color: "#374151",
-                  cursor: "pointer"
-                }}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
+        <BuyerManagerModal
+          buyers={buyers}
+          users={users}
+          teams={teams}
+          onAdd={onAddBuyer}
+          onUpdate={onUpdateBuyer}
+          onDelete={onDeleteBuyer}
+          onClose={() => setShowBuyerModal(false)}
+        />
       )}
 
       {/* Post-Order Creation T&A Stage Alignment Dialog */}
