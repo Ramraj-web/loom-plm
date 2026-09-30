@@ -98,18 +98,55 @@ const parseDate = value => {
   return Number.isNaN(date.getTime()) ? null : date;
 };
 
-export function computeEmployeeKPIMetrics(employee, orders = [], tasks = [], complaints = [], deptName = "") {
+export function computeEmployeeKPIMetrics(employee, orders = [], tasks = [], complaints = [], deptName = "", buyers = []) {
   const employeeName = normalizeName(employee?.name || employee?.username);
+  const employeeUsername = normalizeName(employee?.username);
   const employeeId = String(employee?.id || employee?.user?.id || "");
   const today = new Date();
   today.setHours(23, 59, 59, 999);
   const assignedItems = [];
 
+  const matchesEmployee = (target) => {
+    if (!target) return false;
+    const cleanTarget = normalizeName(target);
+    if (!cleanTarget || cleanTarget === "unassigned" || cleanTarget === "assigned") return false;
+    return (
+      cleanTarget === employeeName ||
+      (employeeUsername && cleanTarget === employeeUsername) ||
+      cleanTarget.includes(employeeName) ||
+      (employeeName && employeeName.includes(cleanTarget))
+    );
+  };
+
   (Array.isArray(orders) ? orders : []).forEach(order => {
+    const buyerObj = Array.isArray(buyers) ? buyers.find(b => 
+      (order.buyerId && b.id === order.buyerId) || 
+      (b.name && String(b.name).toLowerCase() === String(order.buyer || "").trim().toLowerCase())
+    ) : null;
+
+    // Check if employee is the assigned merchandiser or fabric manager for this buyer/order
+    const isMappedToOrder = Boolean(
+      employeeId &&
+      ((Array.isArray(order?.merchandiserIds) && order.merchandiserIds.includes(employeeId)) ||
+       (Array.isArray(order?.fabricManagerIds) && order.fabricManagerIds.includes(employeeId)) ||
+       (buyerObj && Array.isArray(buyerObj.merchandiserIds) && buyerObj.merchandiserIds.includes(employeeId)) ||
+       (buyerObj && Array.isArray(buyerObj.fabricManagerIds) && buyerObj.fabricManagerIds.includes(employeeId)) ||
+       matchesEmployee(order?.merchandiser) ||
+       matchesEmployee(order?.fabricManager))
+    );
+
     (Array.isArray(order?.stages) ? order.stages : []).forEach(stage => {
       if (!stage || (deptName && stage.dept !== deptName)) return;
-      const assignee = normalizeName(stage.assignee || stage.assignedTo || stage.completedBy || stage.updatedBy);
-      if (assignee && assignee === employeeName) {
+
+      const directAssigneeMatch = matchesEmployee(stage.assignee) || matchesEmployee(stage.assignedTo);
+      const completedByMatch = matchesEmployee(stage.completedBy) || matchesEmployee(stage.updatedBy);
+
+      // If user is directly assigned or completed it:
+      if (directAssigneeMatch || completedByMatch) {
+        assignedItems.push({ ...stage, source: "stage", orderId: order.id || order.primaryId });
+      } else if (isMappedToOrder) {
+        // If stages in this department don't have personal assignees set yet, 
+        // but this employee is the designated manager for this order's buyer:
         assignedItems.push({ ...stage, source: "stage", orderId: order.id || order.primaryId });
       }
     });
@@ -117,8 +154,7 @@ export function computeEmployeeKPIMetrics(employee, orders = [], tasks = [], com
 
   (Array.isArray(tasks) ? tasks : []).forEach(task => {
     if (!task || (deptName && task.dept && task.dept !== deptName && task.dept !== "All")) return;
-    const assignee = normalizeName(task.assignedTo || task.assignee || task.userName);
-    const matchesName = assignee && assignee === employeeName;
+    const matchesName = matchesEmployee(task.assignedTo) || matchesEmployee(task.assignee) || matchesEmployee(task.userName);
     const matchesId = employeeId && String(task.userId || task.assignedUserId || "") === employeeId;
     if (matchesName || matchesId) assignedItems.push({ ...task, source: "task" });
   });
@@ -143,7 +179,7 @@ export function computeEmployeeKPIMetrics(employee, orders = [], tasks = [], com
     return !targetDate || !completedDate || completedDate <= targetDate;
   });
   const personalCompletionRate = assignedItems.length > 0 ? Math.round((completedItems.length / assignedItems.length) * 100) : 0;
-  const personalOnTimeRate = completedItems.length > 0 ? Math.round((onTimeItems.length / completedItems.length) * 100) : 100;
+  const personalOnTimeRate = completedItems.length > 0 ? Math.round((onTimeItems.length / completedItems.length) * 100) : (assignedItems.length > 0 ? 100 : 0);
   const approvalRate = approvalItems.length > 0 ? Math.round((approvalOnTime.length / approvalItems.length) * 100) : personalOnTimeRate;
 
   const employeeIssues = (Array.isArray(complaints) ? complaints : []).filter(issue => {
@@ -163,8 +199,15 @@ export function computeEmployeeKPIMetrics(employee, orders = [], tasks = [], com
   const activityWeight = Math.min(20, recentActivityCount * 5);
   const complaintDeduction = employeeIssues.reduce((sum, issue) => sum + (issue.severity === "critical" || issue.priority === "high" ? 10 : 5), 0);
   const issueDeduction = complaintDeduction + reportedIssues.length * 5;
-  const baseScore = personalCompletionRate * 0.4 + personalOnTimeRate * 0.4;
-  const overallScore = Math.min(100, Math.max(0, Math.round(baseScore + activityWeight - issueDeduction)));
+
+  let overallScore = 0;
+  if (assignedItems.length > 0) {
+    const baseScore = (personalCompletionRate * 0.6) + (personalOnTimeRate * 0.4);
+    overallScore = Math.min(100, Math.max(0, Math.round(baseScore + activityWeight - issueDeduction)));
+  } else {
+    // If no direct tasks assigned yet, score is 0 until they complete or get assigned tasks
+    overallScore = 0;
+  }
 
   return {
     assignedItems,
@@ -188,6 +231,7 @@ export function DepartmentPerformanceAndKPI({
   roles = [],
   mappedUsers = [],
   orders = [],
+  buyers = [],
   tasks = [],
   complaints = [],
   allDeptTasks = [],
@@ -265,10 +309,10 @@ export function DepartmentPerformanceAndKPI({
   const employeeMetrics = useMemo(() => {
     const metrics = {};
     staffList.forEach(staff => {
-      metrics[staff.name] = computeEmployeeKPIMetrics(staff, orders, tasks, complaints, deptName);
+      metrics[staff.name] = computeEmployeeKPIMetrics(staff, orders, tasks, complaints, deptName, buyers);
     });
     return metrics;
-  }, [staffList, orders, tasks, complaints, deptName]);
+  }, [staffList, orders, tasks, complaints, deptName, buyers]);
 
   useEffect(() => {
     try {
@@ -450,7 +494,7 @@ export function DepartmentPerformanceAndKPI({
             </div>
           ) : staffList.map(staff => {
             const isExpanded = expandedStaff === staff.name;
-            const metrics = employeeMetrics[staff.name] || computeEmployeeKPIMetrics(staff, orders, tasks, complaints, deptName);
+            const metrics = employeeMetrics[staff.name] || computeEmployeeKPIMetrics(staff, orders, tasks, complaints, deptName, buyers);
             const overallScore = calculateOverallScore(staff.name);
             const appraisal = getAppraisalRecommendation(overallScore);
             const notesText = notesState[`${deptName}_${staff.name}`] || "";

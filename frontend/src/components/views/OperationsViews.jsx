@@ -32,6 +32,12 @@ export function sanitizeStages(stgs) {
   if (!Array.isArray(stgs)) return stgs;
   return stgs.map((s, idx) => {
     if (
+      s.name === "Lot Card Approval" ||
+      s.name === "lot card approval"
+    ) {
+      return { ...s, name: "Fabric Inspection Report", dept: "Quality" };
+    }
+    if (
       idx === 23 ||
       s.name === "Print / Emb / Hotfix Complete" ||
       s.name === "Print/emb/out source" ||
@@ -5057,6 +5063,7 @@ export function DepartmentsPage({ orders, onOpenDept, orgStructure, deptDescript
 export function DepartmentDetail({
   deptName,
   orders,
+  buyers = [],
   customTasks = [],
   complaints = [],
   onBack,
@@ -5276,6 +5283,7 @@ export function DepartmentDetail({
         roles={roles}
         mappedUsers={mappedUsers}
         orders={orders}
+        buyers={buyers}
         tasks={customTasks}
         complaints={complaints}
         allDeptTasks={allDeptTasks}

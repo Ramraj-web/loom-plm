@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import {
   Calendar, CheckCircle2, Clock, Circle, Lock, ChevronDown, Upload, Send, Zap,
   AlertTriangle, FileText, ClipboardList, Package, Layers, ShieldCheck, Factory, Truck, TrendingUp,
-  Eye, Trash2, X, Download, Check
+  Eye, Trash2, X, Download, Check, RotateCcw
 } from "lucide-react";
 import {
   REASONS, VAP_SUPPLIERS, DOC_TABS_CONFIG, DOC_TAB_NAMES, DOC_TAB_ICONS, CUSTOMIZABLE_TABS,
@@ -465,7 +465,9 @@ export function StageColourwayModal({
   orderColourways = [],
   onUpdateStageColourways,
   canEdit = true,
-  onOpenDispute
+  onOpenDispute,
+  onUndo,
+  canUndo = false
 }) {
   if (!isOpen || !stage) return null;
 
@@ -1031,6 +1033,33 @@ export function StageColourwayModal({
                 Mark All Done
               </button>
             )}
+            {/* Undo button inside modal for completed stages (Admin and MD only) */}
+            {stage.status === "done" && canUndo && onUndo && (
+              <button
+                type="button"
+                onClick={() => {
+                  onUndo(stageIdx);
+                  onClose();
+                }}
+                style={{
+                  fontSize: 11.5,
+                  color: "#534AB7",
+                  background: "#F0EFFB",
+                  border: "1px solid #D6D2F3",
+                  padding: "6px 12px",
+                  borderRadius: 8,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 4
+                }}
+                title="Undo completion back to In Progress (Admin & MD only)"
+              >
+                <RotateCcw size={12} />
+                Undo Stage
+              </button>
+            )}
             {/* Report False / Dispute button inside modal for completed stages */}
             {stage.status === "done" && onOpenDispute && (
               <button
@@ -1081,7 +1110,7 @@ export function StageColourwayModal({
   );
 }
 
-function StageNode({ stage, idx, onCycle, onReason, onSupplierChange, onOpenDispute, lockedBy, suppliers = [], canEdit = true, roleDept = "", orderColourways = [], onOpenColourways, orderStartDate, schedule = {} }) {
+function StageNode({ stage, idx, onCycle, onUndo, canUndo = false, onReason, onSupplierChange, onOpenDispute, lockedBy, suppliers = [], canEdit = true, roleDept = "", orderColourways = [], onOpenColourways, orderStartDate, schedule = {} }) {
   const [open, setOpen] = useState(false);
   const locked = !!lockedBy;
   const isAllowedToEdit = !locked && canEdit;
@@ -1119,13 +1148,19 @@ function StageNode({ stage, idx, onCycle, onReason, onSupplierChange, onOpenDisp
     : hasColourways
     ? "Click to open colorway breakdown & delay tracking"
     : stage.status === "done"
-    ? "Stage completed (Stays completed; use 'Report False' to dispute)"
+    ? (canUndo ? "Stage completed — Click to undo back to In Progress (Admin/MD)" : "Stage completed (Stays completed; use 'Report False' to dispute)")
     : stage.status === "in_progress"
     ? "Click to mark as Done"
     : "Click to start (Pending → In Progress)";
 
   const handleStageClick = () => {
     if (!isAllowedToEdit) return;
+    if (stage.status === "done") {
+      if (canUndo && onUndo) {
+        onUndo(idx);
+      }
+      return;
+    }
     if (hasColourways && onOpenColourways) {
       onOpenColourways(idx);
     } else {
@@ -1286,28 +1321,52 @@ function StageNode({ stage, idx, onCycle, onReason, onSupplierChange, onOpenDisp
               (+{schedule.doneDelayDays}d late)
             </div>
           ) : null}
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onOpenDispute && onOpenDispute(stage, idx); }}
-            style={{
-              marginTop: 4,
-              background: stage.disputed ? "#FEF2F2" : "#FFF7ED",
-              color: stage.disputed ? "#DC2626" : "#C2410C",
-              border: `1px solid ${stage.disputed ? "#FCA5A5" : "#FDBA74"}`,
-              borderRadius: 5,
-              padding: "2px 6px",
-              fontSize: 9.5,
-              fontWeight: 600,
-              cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 3
-            }}
-            title="Report false stage completion to MD & Admin"
-          >
-            <AlertTriangle size={9} />
-            {stage.disputed ? "Disputed" : "Report False"}
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
+            {canUndo && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onUndo && onUndo(idx); }}
+                style={{
+                  background: "#F0EFFB",
+                  color: "#534AB7",
+                  border: "1px solid #D6D2F3",
+                  borderRadius: 5,
+                  padding: "2px 6px",
+                  fontSize: 9.5,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 3
+                }}
+                title="Undo completion back to In Progress (Admin & MD only)"
+              >
+                <RotateCcw size={9} />
+                Undo
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onOpenDispute && onOpenDispute(stage, idx); }}
+              style={{
+                background: stage.disputed ? "#FEF2F2" : "#FFF7ED",
+                color: stage.disputed ? "#DC2626" : "#C2410C",
+                border: `1px solid ${stage.disputed ? "#FCA5A5" : "#FDBA74"}`,
+                borderRadius: 5,
+                padding: "2px 6px",
+                fontSize: 9.5,
+                fontWeight: 600,
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 3
+              }}
+              title="Report false stage completion to MD & Admin"
+            >
+              <AlertTriangle size={9} />
+              {stage.disputed ? "Disputed" : "Report False"}
+            </button>
+          </div>
         </div>
       )}
       {!locked && stage.status === "in_progress" && (
@@ -3205,11 +3264,55 @@ export function OrderWorkspace({
     onUpdateStages(order.id, stages);
   };
 
+  const isMDOrAdmin = useMemo(() => {
+    if (!role) return false;
+    const deptStr = String(role.dept || "").toLowerCase();
+    const labelStr = String(role.label || "").toLowerCase();
+    const isMD = role.isMD === true || deptStr.includes("executive") || deptStr.includes("md") || labelStr.includes("managing director") || labelStr.includes("md");
+    const isAdmin = role.fullAccess === true || deptStr.includes("admin") || labelStr.includes("admin");
+    return Boolean(isMD || isAdmin);
+  }, [role]);
+
+  const undoStage = (idx) => {
+    if (!isMDOrAdmin) return;
+    const current = orderStages[idx];
+    if (!current || current.status !== "done") return;
+
+    const stages = orderStages.map((s, i) => {
+      if (i !== idx) return s;
+      // If stage has colourways, revert any done colourways back to in_progress or adjust logs
+      const revertedColourways = Array.isArray(s.colourways)
+        ? s.colourways.map(c => {
+            if (c.status === "done") {
+              return {
+                ...c,
+                status: "in_progress",
+                completedQty: Math.max(0, (c.qty || 0) - 1)
+              };
+            }
+            return c;
+          })
+        : s.colourways;
+
+      return {
+        ...s,
+        status: "in_progress",
+        colourways: revertedColourways,
+        completedAt: null,
+        completedBy: null
+      };
+    });
+
+    onUpdateStages(order.id, stages);
+  };
+
   const cycle = (idx) => {
     if (gatingApproval(orderStages, idx)) return;
     const current = orderStages[idx];
     if (current && current.status === "done") {
-      // Completed stages stay completed — do not cycle back to pending!
+      if (isMDOrAdmin) {
+        undoStage(idx);
+      }
       return;
     }
     const stages = orderStages.map((s, i) => {
@@ -3346,6 +3449,8 @@ export function OrderWorkspace({
               stage={s}
               idx={i}
               onCycle={cycle}
+              onUndo={undoStage}
+              canUndo={isMDOrAdmin}
               onReason={setReason}
               onSupplierChange={setSupplier}
               onOpenDispute={(st, index) => setDisputeModalData({ isOpen: true, stage: st, stageIdx: index })}
@@ -3572,6 +3677,8 @@ export function OrderWorkspace({
           orderColourways={orderColourways}
           onUpdateStageColourways={handleUpdateStageColourways}
           onOpenDispute={(st, index) => setDisputeModalData({ isOpen: true, stage: st, stageIdx: index })}
+          onUndo={undoStage}
+          canUndo={isMDOrAdmin}
           canEdit={
             Boolean(
               role?.fullAccess ||

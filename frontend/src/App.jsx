@@ -3590,6 +3590,16 @@ export default function LoomPLM() {
     const normalizedStages = selectedOrderRaw.stages.map((s, idx) => {
       const tmpl = tmplList[idx];
       if (
+        s.name === "Lot Card Approval" ||
+        s.name === "lot card approval"
+      ) {
+        return {
+          ...s,
+          name: "Fabric Inspection Report",
+          dept: "Quality"
+        };
+      }
+      if (
         idx === 23 ||
         s.name === "Print / Emb / Hotfix Complete" ||
         s.name === "Print/emb/out source" ||
@@ -4144,6 +4154,7 @@ export default function LoomPLM() {
         <DepartmentDetail
           deptName={selectedDept}
           orders={visibleOrders}
+          buyers={buyers}
           customTasks={customTasks}
           complaints={stageComplaints}
           onBack={() => navigate(previousView === "departmentDetail" ? "departments" : previousView || "departments")}
@@ -4190,6 +4201,7 @@ export default function LoomPLM() {
         <DepartmentDetail
           deptName={role.dept}
           orders={visibleOrders}
+          buyers={buyers}
           customTasks={customTasks}
           complaints={stageComplaints}
           onBack={() => navigate("dashboard")}
