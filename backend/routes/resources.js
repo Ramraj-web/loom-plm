@@ -103,6 +103,7 @@ const SOFT_DELETE_RESOURCES = [
   "compliances",
   "debitNotes",
   "capas",
+  "buyers",
   "notifications",
   "suppliers",
   "supplierWork",

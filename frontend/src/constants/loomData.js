@@ -911,7 +911,7 @@ export const TA_STAGES_90 = [
   { name: "Sewing Trims IH", day: "Day 15", dept: "Purchase – Trims" },
   { name: "Packing Trims IH", day: "Day 25", dept: "Purchase – Trims" },
   { name: "Fabric IH", day: "Day 25", dept: "Warehouse" },
-  { name: "Lot Card Approval", day: "Day 25-30", dept: "Quality" },
+  { name: "Fabric Inspection Report", day: "Day 25-30", dept: "Quality" },
   { name: "PP Sample", day: "Day 25-35", dept: "Sample" },
   { name: "PP Meeting", day: "Day 30-33", dept: "Planning" },
   { name: "PP Approval", day: "Day 35-47", dept: "Merchandising" },
@@ -949,7 +949,7 @@ export const TA_STAGES_120 = [
   { name: "Sewing Trims IH", day: "Day 20", dept: "Purchase – Trims" },
   { name: "Packing Trims IH", day: "Day 33", dept: "Purchase – Trims" },
   { name: "Fabric IH", day: "Day 33", dept: "Warehouse" },
-  { name: "Lot Card Approval", day: "Day 33-40", dept: "Quality" },
+  { name: "Fabric Inspection Report", day: "Day 33-40", dept: "Quality" },
   { name: "PP Sample", day: "Day 33-47", dept: "Sample" },
   { name: "PP Meeting", day: "Day 40-44", dept: "Planning" },
   { name: "PP Approval", day: "Day 47-63", dept: "Merchandising" },
@@ -1490,6 +1490,14 @@ export const BUYER_LIST = [
   "Uniqlo",
   "M&S",
   "Next",
+];
+
+export const DEFAULT_BUYERS = [
+  { id: "buyer-1", name: "Zara", merchandisers: ["Manager", "Senior", "Pro. Merch"] },
+  { id: "buyer-2", name: "H&M", merchandisers: ["Senior", "Pro. Merch"] },
+  { id: "buyer-3", name: "Uniqlo", merchandisers: ["Manager", "PPS & TOP"] },
+  { id: "buyer-4", name: "M&S", merchandisers: ["Senior", "VAP Merch"] },
+  { id: "buyer-5", name: "Next", merchandisers: ["Manager", "Senior"] },
 ];
 
 export const COMPLIANCE_CATEGORIES = [

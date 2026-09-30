@@ -12,6 +12,7 @@ export const RESOURCE_SEEDS = {
   notifications: [],
   debitNotes: [],
   capas: [],
+  buyers: [],
   suppliers: [
     {
       id: "sup-elite-print",
