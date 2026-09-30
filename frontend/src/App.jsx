@@ -653,19 +653,25 @@ export default function LoomPLM() {
     return buyers.find(b => (order.buyerId && b.id === order.buyerId) || String(b.name || "").trim().toLowerCase() === buyerName) || null;
   }, [buyers]);
 
-  // Merchandisers and fabric managers only see orders of buyers they are mapped to.
-  // Other departments are unaffected. If a buyer has nobody mapped for a department,
-  // or the order's buyer is not registered, that department keeps seeing the order.
+  // Merchandisers and fabric managers ONLY see orders of buyers they are explicitly mapped to.
+  // If a merch/fabric user is not mapped to any buyer, or not mapped to this order's buyer, they will NOT see the order.
+  // Other departments (Planning, Quality, Cutting, Production, Admin, MD, etc.) are completely unaffected and see all orders.
   const canSeeOrder = useCallback(order => {
     if (isOrderSuperUser || !activeUser) return true;
     const userDepts = Array.isArray(role?.departments) && role.departments.length > 0 ? role.departments : [role?.dept];
-    const scopedFields = userDepts.map(dept => BUYER_SCOPED_DEPTS[dept]);
-    if (scopedFields.some(field => !field)) return true;
+    const scopedFields = userDepts.map(dept => BUYER_SCOPED_DEPTS[dept]).filter(Boolean);
+
+    // If user does not belong to Merchandising or Purchase – Fabric, they can see ALL orders as usual.
+    if (scopedFields.length === 0) return true;
+
+    // For Merchandising and Purchase – Fabric:
+    // They must be explicitly assigned to this order's buyer.
     const buyer = findBuyerForOrder(order);
-    if (!buyer) return true;
+    if (!buyer) return false;
+
     return scopedFields.some(field => {
       const ids = Array.isArray(buyer[field]) ? buyer[field] : [];
-      return ids.length === 0 || ids.includes(activeUser.id);
+      return ids.includes(activeUser.id);
     });
   }, [isOrderSuperUser, activeUser, role, findBuyerForOrder]);
 
