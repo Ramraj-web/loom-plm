@@ -38,7 +38,6 @@ export function sanitizeStages(stgs) {
       return { ...s, name: "Fabric Inspection Report", dept: "Quality" };
     }
     if (
-      idx === 23 ||
       s.name === "Print / Emb / Hotfix Complete" ||
       s.name === "Print/emb/out source" ||
       s.name === "Print / Emb Complete" ||
@@ -47,10 +46,8 @@ export function sanitizeStages(stgs) {
       return { ...s, name: "Print / Emb / Outsource", dept: "Cutting", planned: s.planned || "Day 42-44", supplier: undefined };
     }
     if (
-      idx === 24 ||
       s.name === "VAP Send" ||
-      s.name === "vap send" ||
-      (idx === 24 && s.name === "Print")
+      s.name === "vap send"
     ) {
       return { ...s, name: "Print / Emb / IH", dept: "Merchandising", planned: s.planned || "Day 45-60", supplier: undefined };
     }

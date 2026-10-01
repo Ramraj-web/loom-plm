@@ -114,9 +114,8 @@ const SOFT_DELETE_RESOURCES = [
 export function normalizeOrderStages(record) {
   if (!record || !Array.isArray(record.stages)) return record;
   const is120 = record.template === "120";
-  record.stages.forEach((s, idx) => {
+  record.stages.forEach((s) => {
     if (
-      idx === 23 ||
       s.name === "Print / Emb / Hotfix Complete" ||
       s.name === "Print/emb/out source" ||
       s.name === "Print / Emb Complete" ||
@@ -127,15 +126,19 @@ export function normalizeOrderStages(record) {
       s.planned = is120 ? "Day 56-59" : "Day 42-44";
       delete s.supplier;
     } else if (
-      idx === 24 ||
       s.name === "VAP Send" ||
-      s.name === "vap send" ||
-      (idx === 24 && s.name === "Print")
+      s.name === "vap send"
     ) {
       s.name = "Print / Emb / IH";
       s.dept = "Merchandising";
       s.planned = is120 ? "Day 60-80" : "Day 45-60";
       delete s.supplier;
+    } else if (
+      s.name === "Lot Card Approval" ||
+      s.name === "lot card approval"
+    ) {
+      s.name = "Fabric Inspection Report";
+      s.dept = "Quality";
     }
   });
   return record;

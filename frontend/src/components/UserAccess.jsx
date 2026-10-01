@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Search, X, Briefcase, Filter } from "lucide-react";
 
 import { ORG_STRUCTURE } from "../constants/loomData.js";
 
@@ -94,7 +94,7 @@ export function LoginPage({ users, onLogin }) {
   </div>;
 }
 
-export function UserAccessPage({ users, teams, onChangeUsers, onChangeTeams, rotation, onChangeRotation }) {
+export function UserAccessPage({ users, teams, buyers = [], onChangeUsers, onChangeTeams, rotation, onChangeRotation }) {
   const [tab, setTab] = useState("users");
   const [editing, setEditing] = useState(null);
   const [showUserFormPassword, setShowUserFormPassword] = useState(false);
@@ -102,7 +102,58 @@ export function UserAccessPage({ users, teams, onChangeUsers, onChangeTeams, rot
   const [teamName, setTeamName] = useState("");
   const [showNewDeptInput, setShowNewDeptInput] = useState(false);
   const [newDeptName, setNewDeptName] = useState("");
+  const [userSearch, setUserSearch] = useState("");
+
   const teamMap = useMemo(() => Object.fromEntries(teams.map(team => [team.id, team])), [teams]);
+
+  // Map each user ID to the list of buyers they are assigned to (either merchandiser or fabric manager)
+  const userBuyerMap = useMemo(() => {
+    const map = {};
+    (buyers || []).forEach(b => {
+      const bName = b.name;
+      (b.merchandiserIds || []).forEach(uId => {
+        if (!map[uId]) map[uId] = [];
+        if (!map[uId].some(item => item.buyerName === bName)) {
+          map[uId].push({ buyerName: bName, role: "merchandiser" });
+        }
+      });
+      (b.fabricManagerIds || []).forEach(uId => {
+        if (!map[uId]) map[uId] = [];
+        if (!map[uId].some(item => item.buyerName === bName)) {
+          map[uId].push({ buyerName: bName, role: "fabric" });
+        }
+      });
+    });
+    return map;
+  }, [buyers]);
+
+  const allBuyersList = useMemo(() => {
+    return (buyers || []).map(b => ({ id: b.id, name: b.name })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [buyers]);
+
+  // Filtered users by search string (matches name, username, employeeId, email, department/teams, or assigned buyer)
+  const filteredUsers = useMemo(() => {
+    const q = userSearch.trim().toLowerCase();
+    if (!q) return users || [];
+
+    return (users || []).filter(u => {
+      const nameMatch = String(u.name || "").toLowerCase().includes(q);
+      const usernameMatch = String(u.username || "").toLowerCase().includes(q);
+      const empIdMatch = String(u.employeeId || "").toLowerCase().includes(q);
+      const emailMatch = String(u.email || "").toLowerCase().includes(q);
+
+      // Check if user's teams/departments match query
+      const uTeamIds = Array.isArray(u.teamIds) && u.teamIds.length > 0 ? u.teamIds : (u.teamId ? [u.teamId] : []);
+      const teamMatch = uTeamIds.some(tid => String(teamMap[tid]?.name || "").toLowerCase().includes(q));
+
+      // Check if assigned buyers match query
+      const uBuyers = userBuyerMap[u.id] || [];
+      const buyerNameMatch = uBuyers.some(ub => ub.buyerName.toLowerCase().includes(q));
+
+      return nameMatch || usernameMatch || empIdMatch || emailMatch || teamMatch || buyerNameMatch;
+    });
+  }, [users, userSearch, userBuyerMap, teamMap]);
+
   const resetUser = () => { setEditing(null); setShowUserFormPassword(false); setUserForm({ name: "", employeeId: "", email: "", username: "", password: "", teamId: teams[0]?.id || "", teamIds: [teams[0]?.id || ""] }); };
   const submitUser = event => {
     event.preventDefault();
@@ -349,52 +400,138 @@ export function UserAccessPage({ users, teams, onChangeUsers, onChangeTeams, rot
         </form>
 
         <div style={panelStyle}>
-          <div style={panelTitle}>Users</div>
-          {users.map(user => {
-            const userTeamIds = Array.isArray(user.teamIds) && user.teamIds.length > 0
-              ? user.teamIds
-              : (user.teamId ? [user.teamId] : []);
-            const userTeams = userTeamIds.map(id => teamMap[id]?.name).filter(Boolean);
-            return (
-              <div key={user.id} style={rowStyle}>
-                <div style={avatarStyle}>{user.name.slice(0, 1).toUpperCase()}</div>
-                <div style={{ flex: 1 }}>
-                  <b>{user.name}</b>
-                  <div style={{ color: "#8A8D98", fontSize: 12, marginTop: 3 }}>
-                    {user.email || user.username}
-                  </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 4 }}>
-                    {userTeams.length > 0 ? (
-                      userTeams.map(tName => (
-                        <span key={tName} style={{ fontWeight: 600, color: "#1F9E8D", background: "#E1F5EE", padding: "1px 7px", borderRadius: 4, fontSize: 11 }}>
-                          {tName}
-                        </span>
-                      ))
-                    ) : (
-                      <span style={{ color: "#9CA3AF", fontSize: 11 }}>No team</span>
-                    )}
-                  </div>
-                </div>
-                <button
-                  onClick={() => {
-                    const uTeams = Array.isArray(user.teamIds) && user.teamIds.length > 0
-                      ? user.teamIds
-                      : (user.teamId ? [user.teamId] : [teams[0]?.id || ""]);
-                    setEditing(user);
-                    setUserForm({
-                      ...user,
-                      teamId: uTeams[0] || "",
-                      teamIds: uTeams
-                    });
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={panelTitle}>Users</div>
+              <span style={{ fontSize: 12, fontWeight: 700, color: "#1F9E8D", background: "#E1F5EE", padding: "2px 8px", borderRadius: 12 }}>
+                {filteredUsers.length} of {users.length}
+              </span>
+            </div>
+
+            {/* User Search Bar */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flex: "1 1 340px", maxWidth: 440, justifyContent: "flex-end" }}>
+              <div style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                background: "#FFFFFF",
+                border: "1.5px solid #E2E8F0",
+                borderRadius: 9,
+                padding: "8px 14px",
+                width: "100%",
+                boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)",
+                transition: "border-color 0.2s, box-shadow 0.2s"
+              }}>
+                <Search size={16} color="#64748B" style={{ flexShrink: 0 }} />
+                <input
+                  type="text"
+                  value={userSearch}
+                  onChange={e => setUserSearch(e.target.value)}
+                  placeholder="Search user name, ID, email, team..."
+                  style={{
+                    border: "none",
+                    outline: "none",
+                    background: "transparent",
+                    fontSize: 13.5,
+                    width: "100%",
+                    color: "#0F172A",
+                    letterSpacing: "0.2px"
                   }}
-                  style={secondaryButtonStyle}
-                >
-                  Edit
-                </button>
-                <button onClick={() => onChangeUsers(users.filter(item => item.id !== user.id))} style={dangerButtonStyle}>Delete</button>
+                />
+                {userSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setUserSearch("")}
+                    title="Clear search"
+                    style={{ background: "none", border: "none", padding: "0 2px", cursor: "pointer", color: "#94A3B8", display: "flex", alignItems: "center" }}
+                  >
+                    <X size={15} />
+                  </button>
+                )}
               </div>
-            );
-          })}
+
+              {userSearch && (
+                <button
+                  type="button"
+                  onClick={() => setUserSearch("")}
+                  style={{
+                    padding: "7px 12px",
+                    borderRadius: 7,
+                    border: "1px solid #E2E8F0",
+                    background: "#F8FAFC",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: "#475569",
+                    cursor: "pointer",
+                    whiteSpace: "nowrap"
+                  }}
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+          </div>
+
+          {filteredUsers.length === 0 ? (
+            <div style={{ padding: "28px 16px", textAlign: "center", color: "#64748B", fontSize: 13, background: "#F8FAFC", borderRadius: 8 }}>
+              No users match your search "{userSearch}".
+            </div>
+          ) : (
+            filteredUsers.map(user => {
+              const userTeamIds = Array.isArray(user.teamIds) && user.teamIds.length > 0
+                ? user.teamIds
+                : (user.teamId ? [user.teamId] : []);
+              const userTeams = userTeamIds.map(id => teamMap[id]?.name).filter(Boolean);
+
+              return (
+                <div key={user.id} style={rowStyle}>
+                  <div style={avatarStyle}>{user.name.slice(0, 1).toUpperCase()}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <b>{user.name}</b>
+                      {user.employeeId && (
+                        <span style={{ fontSize: 11, color: "#64748B", background: "#F1F5F9", padding: "1px 6px", borderRadius: 4, fontFamily: "monospace" }}>
+                          {user.employeeId}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ color: "#8A8D98", fontSize: 12, marginTop: 2 }}>
+                      {user.email || user.username}
+                    </div>
+
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 4 }}>
+                      {userTeams.length > 0 ? (
+                        userTeams.map(tName => (
+                          <span key={tName} style={{ fontWeight: 600, color: "#1F9E8D", background: "#E1F5EE", padding: "1px 7px", borderRadius: 4, fontSize: 11 }}>
+                            {tName}
+                          </span>
+                        ))
+                      ) : (
+                        <span style={{ color: "#9CA3AF", fontSize: 11 }}>No team</span>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const uTeams = Array.isArray(user.teamIds) && user.teamIds.length > 0
+                        ? user.teamIds
+                        : (user.teamId ? [user.teamId] : [teams[0]?.id || ""]);
+                      setEditing(user);
+                      setUserForm({
+                        ...user,
+                        teamId: uTeams[0] || "",
+                        teamIds: uTeams
+                      });
+                    }}
+                    style={secondaryButtonStyle}
+                  >
+                    Edit
+                  </button>
+                  <button onClick={() => onChangeUsers(users.filter(item => item.id !== user.id))} style={dangerButtonStyle}>Delete</button>
+                </div>
+              );
+            })
+          )}
         </div>
       </>
     )}

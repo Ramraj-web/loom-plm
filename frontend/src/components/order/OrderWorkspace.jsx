@@ -3159,9 +3159,8 @@ export function OrderWorkspace({
   const orderStages = useMemo(() => {
     if (!Array.isArray(order?.stages)) return [];
     const is120 = order?.template === "120";
-    return order.stages.map((s, idx) => {
+    return order.stages.map((s) => {
       if (
-        idx === 23 ||
         s.name === "Print / Emb / Hotfix Complete" ||
         s.name === "Print/emb/out source" ||
         s.name === "Print / Emb Complete" ||
@@ -3171,22 +3170,30 @@ export function OrderWorkspace({
           ...s,
           name: "Print / Emb / Outsource",
           dept: "Cutting",
-          planned: is120 ? "Day 56-59" : "Day 42-44",
+          planned: s.planned || (is120 ? "Day 56-59" : "Day 42-44"),
           supplier: undefined
         };
       }
       if (
-        idx === 24 ||
         s.name === "VAP Send" ||
-        s.name === "vap send" ||
-        (idx === 24 && s.name === "Print")
+        s.name === "vap send"
       ) {
         return {
           ...s,
           name: "Print / Emb / IH",
           dept: "Merchandising",
-          planned: is120 ? "Day 60-80" : "Day 45-60",
+          planned: s.planned || (is120 ? "Day 60-80" : "Day 45-60"),
           supplier: undefined
+        };
+      }
+      if (
+        s.name === "Lot Card Approval" ||
+        s.name === "lot card approval"
+      ) {
+        return {
+          ...s,
+          name: "Fabric Inspection Report",
+          dept: "Quality"
         };
       }
       return s;

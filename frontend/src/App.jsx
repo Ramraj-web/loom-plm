@@ -317,7 +317,8 @@ export const normalizeAndDeduplicateOrders = (rawOrders, prev = []) => {
       plannedCost: mergedOrder.plannedCost ?? existing?.plannedCost ?? 0,
       actualCost: mergedOrder.actualCost ?? existing?.actualCost ?? 0,
       stages: sourceStages.map((s, sIdx) => {
-        const existingStage = existing?.stages?.[sIdx];
+        // Find matching existing stage by name, falling back to same index
+        const existingStage = (existing?.stages || []).find(es => es.name === s.name) || existing?.stages?.[sIdx];
         // tmplStage is only available for standard-template indices — custom stages (sIdx >= expectedStageCount) won't have one
         const tmplStage = sIdx < expectedStageCount ? templateStages[sIdx] : null;
         // Mark extra stages (beyond template count) as custom so the tracker can badge them
@@ -328,26 +329,29 @@ export const normalizeAndDeduplicateOrders = (rawOrders, prev = []) => {
         let stagePlanned = s.planned;
 
         if (!isCustomStage) {
-          // Ensure stage 23 (Print / Emb / Outsource) and 24 (Print / Emb / IH) reflect updated template
+          // Normalize legacy renamed stage names safely without assuming fixed index
           if (
-            sIdx === 23 ||
             s.name === "Print / Emb / Hotfix Complete" ||
             s.name === "Print/emb/out source" ||
             s.name === "Print / Emb Complete" ||
             s.name === "print / emb / hotfix complete"
           ) {
-            stageName = tmplStage?.name || "Print / Emb / Outsource";
-            stageDept = tmplStage?.dept || "Cutting";
-            stagePlanned = tmplStage?.day || (resolvedTemplate === "120" ? "Day 56-59" : "Day 42-44");
+            stageName = "Print / Emb / Outsource";
+            stageDept = "Cutting";
+            stagePlanned = s.planned || (resolvedTemplate === "120" ? "Day 56-59" : "Day 42-44");
           } else if (
-            sIdx === 24 ||
             s.name === "VAP Send" ||
-            s.name === "vap send" ||
-            (sIdx === 24 && s.name === "Print")
+            s.name === "vap send"
           ) {
-            stageName = tmplStage?.name || "Print / Emb / IH";
-            stageDept = tmplStage?.dept || "Merchandising";
-            stagePlanned = tmplStage?.day || (resolvedTemplate === "120" ? "Day 60-80" : "Day 45-60");
+            stageName = "Print / Emb / IH";
+            stageDept = "Merchandising";
+            stagePlanned = s.planned || (resolvedTemplate === "120" ? "Day 60-80" : "Day 45-60");
+          } else if (
+            s.name === "Lot Card Approval" ||
+            s.name === "lot card approval"
+          ) {
+            stageName = "Fabric Inspection Report";
+            stageDept = "Quality";
           } else if (tmplStage && (s.name.toLowerCase() === tmplStage.name.toLowerCase())) {
             stageName = tmplStage.name;
             stageDept = tmplStage.dept;
@@ -1572,8 +1576,23 @@ export default function LoomPLM() {
 
   // Central Notification Dispatcher with Deduplication
   const pushNotification = (notif) => {
-    // RESTRICTION: Only assigned tasks or mentioned names should trigger notifications/alerts!
-    // All other operational events (order creation, deletion, completion, etc.) are captured in eventlogger only.
+    // Check allowed notification categories: assigned tasks, mentions, disputes/complaints, order completion/delayed/created, approvals
+    const isDisputeOrComplaint = Boolean(
+      (notif.eventKey && (notif.eventKey.startsWith("complaint-") || notif.eventKey.startsWith("tna-stage-delay-"))) ||
+      (notif.title && (notif.title.toLowerCase().includes("dispute") || notif.title.toLowerCase().includes("false completion") || notif.title.toLowerCase().includes("flagged")))
+    );
+
+    const isOperationalAlert = Boolean(
+      notif.type === "approval" ||
+      notif.type === "order" ||
+      (notif.title && (
+        notif.title.toLowerCase().includes("order completed") ||
+        notif.title.toLowerCase().includes("order delayed") ||
+        notif.title.toLowerCase().includes("approval") ||
+        notif.title.toLowerCase().includes("sign-off")
+      ))
+    );
+
     const isTaskAssignment = notif.type === "task" ||
       notif.type === "assigned" ||
       notif.type === "assignment" ||
@@ -1590,7 +1609,7 @@ export default function LoomPLM() {
       (notif.title && notif.title.toLowerCase().includes("mention")) ||
       (notif.message && notif.message.includes("@"));
 
-    if (!isTaskAssignment && !isMention) {
+    if (!isTaskAssignment && !isMention && !isDisputeOrComplaint && !isOperationalAlert) {
       return;
     }
 
@@ -2986,26 +3005,29 @@ export default function LoomPLM() {
         if (!isCustomStage) {
           res.isCustom = false;
           if (
-            idx === 23 ||
             s.name === "Print / Emb / Hotfix Complete" ||
             s.name === "Print/emb/out source" ||
             s.name === "Print / Emb Complete" ||
             s.name === "print / emb / hotfix complete"
           ) {
-            res.name = tmpl?.name || "Print / Emb / Outsource";
-            res.dept = tmpl?.dept || "Cutting";
-            res.planned = tmpl?.day || (is120 ? "Day 56-59" : "Day 42-44");
+            res.name = "Print / Emb / Outsource";
+            res.dept = "Cutting";
+            res.planned = s.planned || (is120 ? "Day 56-59" : "Day 42-44");
             delete res.supplier;
           } else if (
-            idx === 24 ||
             s.name === "VAP Send" ||
-            s.name === "vap send" ||
-            (idx === 24 && s.name === "Print")
+            s.name === "vap send"
           ) {
-            res.name = tmpl?.name || "Print / Emb / IH";
-            res.dept = tmpl?.dept || "Merchandising";
-            res.planned = tmpl?.day || (is120 ? "Day 60-80" : "Day 45-60");
+            res.name = "Print / Emb / IH";
+            res.dept = "Merchandising";
+            res.planned = s.planned || (is120 ? "Day 60-80" : "Day 45-60");
             delete res.supplier;
+          } else if (
+            s.name === "Lot Card Approval" ||
+            s.name === "lot card approval"
+          ) {
+            res.name = "Fabric Inspection Report";
+            res.dept = "Quality";
           }
         } else {
           res.isCustom = true;
@@ -3600,7 +3622,6 @@ export default function LoomPLM() {
         };
       }
       if (
-        idx === 23 ||
         s.name === "Print / Emb / Hotfix Complete" ||
         s.name === "Print/emb/out source" ||
         s.name === "Print / Emb Complete" ||
@@ -3608,23 +3629,21 @@ export default function LoomPLM() {
       ) {
         return {
           ...s,
-          name: tmpl?.name || "Print / Emb / Outsource",
-          dept: tmpl?.dept || "Cutting",
-          planned: tmpl?.day || (is120 ? "Day 56-59" : "Day 42-44"),
+          name: "Print / Emb / Outsource",
+          dept: "Cutting",
+          planned: s.planned || (is120 ? "Day 56-59" : "Day 42-44"),
           supplier: undefined
         };
       }
       if (
-        idx === 24 ||
         s.name === "VAP Send" ||
-        s.name === "vap send" ||
-        (idx === 24 && s.name === "Print")
+        s.name === "vap send"
       ) {
         return {
           ...s,
-          name: tmpl?.name || "Print / Emb / IH",
-          dept: tmpl?.dept || "Merchandising",
-          planned: tmpl?.day || (is120 ? "Day 60-80" : "Day 45-60"),
+          name: "Print / Emb / IH",
+          dept: "Merchandising",
+          planned: s.planned || (is120 ? "Day 60-80" : "Day 45-60"),
           supplier: undefined
         };
       }
@@ -4443,7 +4462,7 @@ export default function LoomPLM() {
     );
   } else if (view === "settings") {
     content = (
-      <UserAccessPage users={users} teams={teams} onChangeUsers={handleUsersChange} onChangeTeams={handleTeamsChange} rotation={rotation} onChangeRotation={handleRotationChange} />
+      <UserAccessPage users={users} teams={teams} buyers={buyers} onChangeUsers={handleUsersChange} onChangeTeams={handleTeamsChange} rotation={rotation} onChangeRotation={handleRotationChange} />
     );
   } else if (isExecutive) {
     content = (
@@ -4533,7 +4552,33 @@ export default function LoomPLM() {
       if (relatedOrder && !canSeeOrder(relatedOrder)) return false;
     }
 
-    // Strict filter: only assigned tasks or mentioned names
+    // Check if notification is an operational event: order completion, delayed, dispute/complaint, pre-prod/costing approval
+    const isOrderCreation = Boolean(
+      (n.eventKey && n.eventKey.startsWith("order-created-")) ||
+      (n.title && n.title.toLowerCase().includes("new order"))
+    );
+
+    const isOrderCompleted = Boolean(
+      (n.eventKey && n.eventKey.startsWith("order-completed-")) ||
+      (n.title && n.title.toLowerCase().includes("order completed"))
+    );
+
+    const isOrderDelayed = Boolean(
+      (n.eventKey && n.eventKey.startsWith("order-delayed-")) ||
+      (n.title && (n.title.toLowerCase().includes("order delayed") || n.title.toLowerCase().includes("stage flagged")))
+    );
+
+    const isDisputeOrComplaint = Boolean(
+      (n.eventKey && (n.eventKey.startsWith("complaint-") || n.eventKey.startsWith("tna-stage-delay-"))) ||
+      (n.title && (n.title.toLowerCase().includes("dispute") || n.title.toLowerCase().includes("false completion") || n.title.toLowerCase().includes("flagged")))
+    );
+
+    const isApprovalReq = Boolean(
+      n.type === "approval" ||
+      (n.title && (n.title.toLowerCase().includes("approval") || n.title.toLowerCase().includes("sign-off")))
+    );
+
+    // Strict filter: allowed notification types in tray
     const isTaskAssignment = n.type === "task" ||
       n.type === "assigned" ||
       n.type === "assignment" ||
@@ -4550,16 +4595,52 @@ export default function LoomPLM() {
       (n.title && n.title.toLowerCase().includes("mention")) ||
       (n.message && n.message.includes("@"));
 
-    if (!isTaskAssignment && !isMention) return false;
+    // If it's not a task, mention, dispute, approval, order creation or order completion/delay, ignore
+    if (!isTaskAssignment && !isMention && !isDisputeOrComplaint && !isApprovalReq && !isOrderCompleted && !isOrderCreation && !isOrderDelayed) {
+      return false;
+    }
+
+    const isMDUser = Boolean(
+      role.isMD ||
+      activeUser?.isMD ||
+      role.dept === "Executive (MD)" ||
+      role.dept === "Executive" ||
+      String(activeUser?.role || "").toLowerCase().includes("managing director") ||
+      String(activeUser?.name || "").toLowerCase().includes("managing director") ||
+      /(^|[^a-z])md([^a-z]|$)/i.test(String(activeUser?.username || "")) ||
+      /(^|[^a-z])md([^a-z]|$)/i.test(String(activeUser?.name || ""))
+    );
 
     const isSuper = Boolean(
       role.fullAccess ||
       role.dept === "Executive" ||
+      role.dept === "Executive (MD)" ||
       role.dept === "Administrators" ||
       isAdmin ||
       activeUser?.username?.toLowerCase() === "admin" ||
       activeUser?.isMD
     );
+
+    // MD RULE: MD user should NOT receive routine stage-completion and stage-handover task notifications
+    // (e.g. stage finished and handed over to next department: dept-task-assigned-*, tna-stage-done-*, order-task-assigned-*)
+    // MD will still receive: @mentions, Stage Disputes / False Reports, Order Completed, Order Created, Costing/Approval Requests, and Order Delayed alerts!
+    const isStageHandoverTask = Boolean(
+      (n.eventKey && (
+        n.eventKey.startsWith("dept-task-assigned-") ||
+        n.eventKey.startsWith("tna-stage-done-") ||
+        n.eventKey.startsWith("order-first-stage-") ||
+        n.eventKey.startsWith("order-task-assigned-")
+      )) ||
+      (n.title && (
+        n.title.toLowerCase().startsWith("new task:") ||
+        n.title.toLowerCase().includes("stage completed") ||
+        n.title.toLowerCase().startsWith("initial task ready:")
+      ))
+    );
+
+    if (isMDUser && isStageHandoverTask && !isMention) {
+      return false;
+    }
 
     const userDeptList = Array.isArray(role?.departments) && role.departments.length > 0
       ? role.departments.map(d => d.toLowerCase())
@@ -4576,11 +4657,18 @@ export default function LoomPLM() {
       );
       if (isTarget) return true;
       if (n.targetDept && userDeptList.includes(n.targetDept.toLowerCase())) return true;
-      if (isSuper) return true;
+      if (isSuper && !isMDUser) return true;
+      // MD only receives targeted task if MD themselves was specifically tagged/targeted
+      if (isMDUser && isTarget) return true;
       return false;
     }
 
-    if (isSuper) return true;
+    // High priority operational alerts (disputes, delay, order completed) reach Super and MD
+    if (isDisputeOrComplaint || isOrderCompleted || isOrderDelayed || isApprovalReq) {
+      if (isSuper || isMDUser) return true;
+    }
+
+    if (isSuper && !isMDUser) return true;
     if (n.targetDept) {
       return userDeptList.includes(n.targetDept.toLowerCase());
     }
