@@ -3656,10 +3656,13 @@ export function OrderWorkspace({
             if (onUpdateStages) {
               onUpdateStages(orderId, updatedStages);
             }
-            // Persist as the "last aligned stages" template for future new orders
+            // Persist as the "last aligned stages" template for future new orders locally and globally
             try {
               localStorage.setItem("loom_last_aligned_stages", JSON.stringify(updatedStages));
             } catch (e) { /* ignore */ }
+            if (window.storage && window.storage.set) {
+              window.storage.set("global_last_aligned_stages", JSON.stringify(updatedStages), true);
+            }
             setShowAlignModal(false);
           }}
         />

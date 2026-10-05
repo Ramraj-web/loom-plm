@@ -421,7 +421,24 @@ export default function LoomPLM() {
   const [deptDescriptions, setDeptDescriptions] = useState(() => ({ ...DEFAULT_DEPT_DESCRIPTIONS }));
   const [suppliers, setSuppliers] = useState(() => JSON.parse(JSON.stringify(INITIAL_SUPPLIERS)));
   const [supplierWork, setSupplierWork] = useState(() => JSON.parse(JSON.stringify(INITIAL_SUPPLIER_WORK)));
-  const [buyers, setBuyers] = useState([]);
+  const [globalAlignedStages, setGlobalAlignedStagesState] = useState(() => {
+    try {
+      const cached = localStorage.getItem("loom_last_aligned_stages");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return null;
+  });
+
+  const setGlobalAlignedStages = useCallback((stages) => {
+    if (!Array.isArray(stages) || stages.length === 0) return;
+    try {
+      localStorage.setItem("loom_last_aligned_stages", JSON.stringify(stages));
+    } catch (e) {}
+    setGlobalAlignedStagesState(stages);
+  }, []);
 
   const [financials, setFinancials] = useState(() => {
     try {
@@ -1075,7 +1092,8 @@ export default function LoomPLM() {
         const storageKeys = [
           "staff_roster", "org_structure", "dept_descriptions", "attendance",
           "certifications", "compliances", "notifications", "leaveRequests",
-          "suppliers", "supplierWork", "stage_complaints", "user_sessions", "audit_logs"
+          "suppliers", "supplierWork", "stage_complaints", "user_sessions", "audit_logs",
+          "global_last_aligned_stages"
         ];
         const storageResults = await Promise.allSettled(storageKeys.map(k => window.storage.get(k, true)));
         const storageMap = {};
@@ -1086,6 +1104,10 @@ export default function LoomPLM() {
             } catch (e) {}
           }
         });
+
+        if (Array.isArray(storageMap.global_last_aligned_stages) && storageMap.global_last_aligned_stages.length > 0) {
+          setGlobalAlignedStages(storageMap.global_last_aligned_stages);
+        }
 
         let baseRoster = storageMap.staff_roster || null;
         if (staffRes.status === "fulfilled" && Array.isArray(staffRes.value) && staffRes.value.length > 0) {
@@ -1203,9 +1225,13 @@ export default function LoomPLM() {
   useEffect(() => {
     if (!currentSessionId || !activeUser) return undefined;
 
-    const interval = setInterval(() => {
+    let isSyncing = false;
+    const interval = setInterval(async () => {
+      if (isSyncing) return;
       const nowIso = new Date().toISOString();
       let updatedHeartbeatSession = null;
+      let sessionDataToSave = null;
+
       setUserSessions(prev => {
         const updated = prev.map(s => {
           if (s.id === currentSessionId && s.active) {
@@ -1217,16 +1243,28 @@ export default function LoomPLM() {
           }
           return s;
         });
-        if (window.storage) window.storage.set("user_sessions", JSON.stringify(updated), true);
+        sessionDataToSave = updated;
         return updated;
       });
+
+      if (window.storage && sessionDataToSave) {
+        isSyncing = true;
+        try {
+          await window.storage.set("user_sessions", JSON.stringify(sessionDataToSave), true);
+        } catch (e) {
+          // Handled gracefully in storage.js
+        } finally {
+          isSyncing = false;
+        }
+      }
+
       if (updatedHeartbeatSession) {
         broadcastLiveUpdate({
           type: "USER_SESSION_UPDATE",
           session: updatedHeartbeatSession
         });
       }
-    }, 25000);
+    }, 30000);
 
     return () => {
       clearInterval(interval);
@@ -1275,6 +1313,11 @@ export default function LoomPLM() {
           try {
             const parsed = typeof event.value === "string" ? JSON.parse(event.value) : event.value;
             if (parsed && typeof parsed === "object") setAttendance(parsed);
+          } catch (e) {}
+        } else if (event.key === "global_last_aligned_stages" && event.value) {
+          try {
+            const parsed = typeof event.value === "string" ? JSON.parse(event.value) : event.value;
+            if (Array.isArray(parsed) && parsed.length > 0) setGlobalAlignedStages(parsed);
           } catch (e) {}
         }
       }
@@ -2526,17 +2569,61 @@ export default function LoomPLM() {
 
   const addOrder = (newOrder) => {
     const primaryId = newOrder.id || newOrder.primaryId;
+
+    // Resolve master pipeline:
+    // 1. Explicitly provided stages in newOrder
+    // 2. Global master pipeline saved in database (globalAlignedStages)
+    // 3. Fallback: Stages from the most recently configured active order in state
+    // 4. Default 90-day template
+    let initialStages = null;
+    if (Array.isArray(newOrder.stages) && newOrder.stages.length > 0) {
+      initialStages = newOrder.stages;
+    } else if (Array.isArray(globalAlignedStages) && globalAlignedStages.length > 0) {
+      initialStages = globalAlignedStages.map(s => ({
+        ...s,
+        status: "pending",
+        reason: null,
+        completedAt: null,
+        completedOn: null,
+        updatedAt: null,
+        flaggedAt: null
+      }));
+    } else {
+      const activeOrders = orders.filter(o => !o.isDeleted && !o.completed);
+      if (activeOrders.length > 0) {
+        const sorted = [...activeOrders].sort((a, b) =>
+          new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
+        );
+        const latest = sorted[0];
+        if (Array.isArray(latest?.stages) && latest.stages.length > 0) {
+          initialStages = latest.stages.map(s => ({
+            ...s,
+            status: "pending",
+            reason: null,
+            completedAt: null,
+            completedOn: null,
+            updatedAt: null,
+            flaggedAt: null
+          }));
+        }
+      }
+    }
+
+    if (!initialStages || initialStages.length === 0) {
+      initialStages = makeStages("90", 0, null);
+    }
+
     const fullOrder = {
       template: "90",
       costingTemplate: "fabric",
       costingRows: buildCostingRows("fabric"),
       vapCount: 1,
       shippedQty: 0,
-      plannedCost:0,
-      actualCost:0,
-      stages: makeStages("90", 0, null),
+      plannedCost: 0,
+      actualCost: 0,
       preProd: initPreProd(),
       ...newOrder,
+      stages: initialStages,
       primaryId,
       orderId: newOrder.id,
       completed: false,
@@ -3178,6 +3265,14 @@ export default function LoomPLM() {
           console.warn("Error updating order stages:", err.message);
         });
       } catch (e) { }
+
+      // Persist as the global company-wide T&A pipeline so any user / device gets this workflow
+      if (Array.isArray(updatedStages) && updatedStages.length > 0) {
+        setGlobalAlignedStages(updatedStages);
+        if (window.storage && window.storage.set) {
+          window.storage.set("global_last_aligned_stages", JSON.stringify(updatedStages), true);
+        }
+      }
 
       // Broadcast stage update to all other connected users in real time
       try {
@@ -4251,6 +4346,8 @@ export default function LoomPLM() {
         onOpenOrder={openOrder}
         onAddOrder={addOrder}
         onUpdateStages={updateStages}
+        globalAlignedStages={globalAlignedStages}
+        onSaveGlobalStages={setGlobalAlignedStages}
         onCompleteOrder={completeOrder}
         onUncompleteOrder={uncompleteOrder}
         onDeleteOrder={deleteOrder}

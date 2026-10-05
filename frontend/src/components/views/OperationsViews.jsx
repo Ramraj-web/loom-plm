@@ -67,6 +67,8 @@ export function OrdersPage({
   onOpenOrder,
   onAddOrder,
   onUpdateStages,
+  globalAlignedStages = null,
+  onSaveGlobalStages = null,
   onCompleteOrder,
   onUncompleteOrder,
   onDeleteOrder,
@@ -79,9 +81,14 @@ export function OrdersPage({
   const [alignModalOrder, setAlignModalOrder] = useState(null);
 
   // Remember the last saved stage layout so every new order starts from it.
-  // Persisted to localStorage so it survives page refresh and component remounts.
+  // Prioritizes backend shared globalAlignedStages, then localStorage, then latest order stages.
   const [lastAlignedStages, setLastAlignedStages] = useState(() => {
-    // 1. Try localStorage first — most reliable (survives refresh)
+    // 1. Try globalAlignedStages from backend database first
+    if (Array.isArray(globalAlignedStages) && globalAlignedStages.length > 0) {
+      return sanitizeStages(globalAlignedStages);
+    }
+
+    // 2. Try localStorage
     try {
       const stored = localStorage.getItem("loom_last_aligned_stages");
       if (stored) {
@@ -90,7 +97,7 @@ export function OrdersPage({
       }
     } catch (e) { /* ignore parse errors */ }
 
-    // 2. Fallback: derive from the most recently created active order
+    // 3. Fallback: derive from the most recently created active order
     const activeOrders = orders.filter(o => !o.isDeleted && !o.completed);
     if (activeOrders.length > 0) {
       const sorted = [...activeOrders].sort((a, b) =>
@@ -104,12 +111,28 @@ export function OrdersPage({
     return null;
   });
 
-  // Helper: update state AND persist to localStorage atomically
+  // Sync whenever globalAlignedStages updates from backend
+  React.useEffect(() => {
+    if (Array.isArray(globalAlignedStages) && globalAlignedStages.length > 0) {
+      setLastAlignedStages(sanitizeStages(globalAlignedStages));
+    }
+  }, [globalAlignedStages]);
+
+  // Helper: update state AND persist to localStorage and backend database atomically
   const saveLastAlignedStages = (stages) => {
+    const sanitized = sanitizeStages(stages);
     try {
-      localStorage.setItem("loom_last_aligned_stages", JSON.stringify(stages));
+      localStorage.setItem("loom_last_aligned_stages", JSON.stringify(sanitized));
     } catch (e) { /* storage full or private mode — ignore */ }
-    setLastAlignedStages(stages);
+    setLastAlignedStages(sanitized);
+
+    // Save to global backend storage so incognito / other systems / other users instantly get it
+    if (onSaveGlobalStages) {
+      onSaveGlobalStages(sanitized);
+    }
+    if (window.storage && window.storage.set) {
+      window.storage.set("global_last_aligned_stages", JSON.stringify(sanitized), true);
+    }
   };
 
   const todayIso = new Date().toISOString().split("T")[0];
@@ -249,11 +272,8 @@ export function OrdersPage({
       createdAt: new Date().toISOString()
     };
 
-    if (onAddOrder) onAddOrder(newOrder);
-
-    // Open T&A Stage Alignment Dialog for this newly created order.
-    // Pre-fill with lastAlignedStages (from the most recently configured order)
-    // so the user doesn't have to redo the same stage setup every time.
+    // Seed with lastAlignedStages (from the most recently configured order / global pipeline)
+    // so the order is immediately created with the master stages, and pre-filled in the dialog.
     const seedStages = lastAlignedStages
       ? lastAlignedStages.map(s => ({
           ...s,
@@ -266,7 +286,12 @@ export function OrdersPage({
           flaggedAt: null
         }))
       : undefined;
-    setAlignModalOrder(seedStages ? { ...newOrder, stages: seedStages } : newOrder);
+
+    const orderToSubmit = seedStages ? { ...newOrder, stages: seedStages } : newOrder;
+    if (onAddOrder) onAddOrder(orderToSubmit);
+
+    // Open T&A Stage Alignment Dialog for this newly created order.
+    setAlignModalOrder(orderToSubmit);
 
     setForm({
       id: "",
