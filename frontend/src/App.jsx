@@ -421,6 +421,7 @@ export default function LoomPLM() {
   const [deptDescriptions, setDeptDescriptions] = useState(() => ({ ...DEFAULT_DEPT_DESCRIPTIONS }));
   const [suppliers, setSuppliers] = useState(() => JSON.parse(JSON.stringify(INITIAL_SUPPLIERS)));
   const [supplierWork, setSupplierWork] = useState(() => JSON.parse(JSON.stringify(INITIAL_SUPPLIER_WORK)));
+  const [buyers, setBuyers] = useState([]);
   const [globalAlignedStages, setGlobalAlignedStagesState] = useState(() => {
     try {
       const cached = localStorage.getItem("loom_last_aligned_stages");
