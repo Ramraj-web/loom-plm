@@ -6435,17 +6435,38 @@ export function AuditLoggerPage({
     return auditLogs.filter(log => {
       if (eventTypeFilter !== "ALL" && log.eventType !== eventTypeFilter) return false;
       if (userFilter !== "ALL" && log.username !== userFilter && log.userName !== userFilter) return false;
-      if (dateFilter && !((log.timestamp || "").startsWith(dateFilter))) return false;
+      if (dateFilter) {
+        if (!log.timestamp) return false;
+        // Check both ISO prefix (UTC) and client local calendar date representation
+        const isoPrefix = String(log.timestamp).slice(0, 10);
+        let localDateStr = "";
+        try {
+          const d = new Date(log.timestamp);
+          if (!isNaN(d.getTime())) {
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, "0");
+            const day = String(d.getDate()).padStart(2, "0");
+            localDateStr = `${y}-${m}-${day}`;
+          }
+        } catch (e) {}
+        if (isoPrefix !== dateFilter && localDateStr !== dateFilter) return false;
+      }
       if (searchTerm.trim()) {
         const q = searchTerm.toLowerCase();
+        const metaValues = log.metadata && typeof log.metadata === "object"
+          ? Object.values(log.metadata).filter(v => typeof v === "string" || typeof v === "number").join(" ").toLowerCase()
+          : "";
         const matches =
           (log.action && log.action.toLowerCase().includes(q)) ||
           (log.userName && log.userName.toLowerCase().includes(q)) ||
           (log.username && log.username.toLowerCase().includes(q)) ||
           (log.userDept && log.userDept.toLowerCase().includes(q)) ||
           (log.device && log.device.toLowerCase().includes(q)) ||
+          (log.deviceType && log.deviceType.toLowerCase().includes(q)) ||
           (log.location && log.location.toLowerCase().includes(q)) ||
-          (log.targetId && log.targetId.toLowerCase().includes(q));
+          (log.targetId && String(log.targetId).toLowerCase().includes(q)) ||
+          (log.eventType && log.eventType.toLowerCase().includes(q)) ||
+          (metaValues && metaValues.includes(q));
         if (!matches) return false;
       }
       return true;
@@ -6477,14 +6498,17 @@ export function AuditLoggerPage({
         `"${(l.targetId || "").replace(/"/g, '""')}"`
       ].join(",");
     });
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.join("\n")].join("\n");
-    const encodedUri = encodeURI(csvContent);
+    // Add UTF-8 BOM so Excel and spreadsheet applications display symbols/characters properly
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `loom_audit_logs_${todayStr}.csv`);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `loom_audit_logs_${dateFilter || todayStr}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const eventBadgeStyles = {
