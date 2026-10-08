@@ -13,6 +13,41 @@ export const RESOURCE_SEEDS = {
   debitNotes: [],
   capas: [],
   buyers: [],
+  units: [
+    {
+      id: "unit-1",
+      name: "Unit 1 - Main Apparel Factory",
+      code: "UNT-01",
+      location: "Tirupur Main Road",
+      lines: 12,
+      contactPerson: "S. Murugan",
+      mobile: "+91 98421 11001",
+      status: "Active",
+      isDeleted: false
+    },
+    {
+      id: "unit-2",
+      name: "Unit 2 - Knits & Outerwear",
+      code: "UNT-02",
+      location: "Avinashi SEZ Park",
+      lines: 8,
+      contactPerson: "K. Ramesh",
+      mobile: "+91 98421 22002",
+      status: "Active",
+      isDeleted: false
+    },
+    {
+      id: "unit-3",
+      name: "Unit 3 - Printing & VAP Facility",
+      code: "UNT-03",
+      location: "Angeripalayam",
+      lines: 4,
+      contactPerson: "P. Anand",
+      mobile: "+91 98421 33003",
+      status: "Active",
+      isDeleted: false
+    }
+  ],
   suppliers: [
     {
       id: "sup-elite-print",

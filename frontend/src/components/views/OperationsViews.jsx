@@ -276,15 +276,15 @@ export function OrdersPage({
     // so the order is immediately created with the master stages, and pre-filled in the dialog.
     const seedStages = lastAlignedStages
       ? lastAlignedStages.map(s => ({
-          ...s,
-          status: "pending",
-          assignee: s.assignee || "Unassigned",
-          reason: null,
-          completedAt: null,
-          completedOn: null,
-          updatedAt: null,
-          flaggedAt: null
-        }))
+        ...s,
+        status: "pending",
+        assignee: s.assignee || "Unassigned",
+        reason: null,
+        completedAt: null,
+        completedOn: null,
+        updatedAt: null,
+        flaggedAt: null
+      }))
       : undefined;
 
     const orderToSubmit = seedStages ? { ...newOrder, stages: seedStages } : newOrder;
@@ -666,129 +666,129 @@ export function OrdersPage({
 
       {/* 3. Deleted / History Orders Section */}
       {isAdmin && (
-      <Card style={{ marginBottom: 24 }}>
-        <div style={{ padding: "0 0 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div>
-            <span style={{ fontSize: 14, fontWeight: 700, color: "#1B2130" }}>Deleted Orders History</span>
-            <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, background: "#FEE2E2", color: "#991B1B", padding: "2px 8px", borderRadius: 999 }}>
-              {deletedOrders.length} deleted
-            </span>
-          </div>
-          <button
-            onClick={() => setShowDeletedSection(!showDeletedSection)}
-            style={{ background: "none", border: "none", color: "#534AB7", fontSize: 12, cursor: "pointer", fontWeight: 600 }}
-          >
-            {showDeletedSection ? "Hide" : "Show"}
-          </button>
-        </div>
-
-        {showDeletedSection && (
-          <>
-            <div style={{
-              display: "grid",
-              gridTemplateColumns: "minmax(0, 1.3fr) minmax(0, 0.9fr) minmax(0, 0.8fr) minmax(0, 0.65fr) minmax(0, 0.75fr) minmax(0, 0.9fr) minmax(0, 1.1fr) minmax(0, 0.95fr) 150px",
-              gap: 8,
-              fontSize: 11.5,
-              color: "#8A8D98",
-              padding: "0 4px 8px",
-              borderBottom: "1px solid #F0F0F2",
-              alignItems: "center"
-            }}>
-              <div>PO / Style</div>
-              <div>Buyer</div>
-              <div>Country</div>
-              <div>Season</div>
-              <div>Qty</div>
-              <div>Ship date</div>
-              <div>Color</div>
-              <div>Deleted date</div>
-              <div style={{ textAlign: "right" }}>Actions</div>
+        <Card style={{ marginBottom: 24 }}>
+          <div style={{ padding: "0 0 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <span style={{ fontSize: 14, fontWeight: 700, color: "#1B2130" }}>Deleted Orders History</span>
+              <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, background: "#FEE2E2", color: "#991B1B", padding: "2px 8px", borderRadius: 999 }}>
+                {deletedOrders.length} deleted
+              </span>
             </div>
+            <button
+              onClick={() => setShowDeletedSection(!showDeletedSection)}
+              style={{ background: "none", border: "none", color: "#534AB7", fontSize: 12, cursor: "pointer", fontWeight: 600 }}
+            >
+              {showDeletedSection ? "Hide" : "Show"}
+            </button>
+          </div>
 
-            {deletedOrders.length === 0 ? (
-              <div style={{ padding: "20px 0", textAlign: "center", color: "#8A8D98", fontSize: 12.5 }}>
-                No deleted orders in history.
+          {showDeletedSection && (
+            <>
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: "minmax(0, 1.3fr) minmax(0, 0.9fr) minmax(0, 0.8fr) minmax(0, 0.65fr) minmax(0, 0.75fr) minmax(0, 0.9fr) minmax(0, 1.1fr) minmax(0, 0.95fr) 150px",
+                gap: 8,
+                fontSize: 11.5,
+                color: "#8A8D98",
+                padding: "0 4px 8px",
+                borderBottom: "1px solid #F0F0F2",
+                alignItems: "center"
+              }}>
+                <div>PO / Style</div>
+                <div>Buyer</div>
+                <div>Country</div>
+                <div>Season</div>
+                <div>Qty</div>
+                <div>Ship date</div>
+                <div>Color</div>
+                <div>Deleted date</div>
+                <div style={{ textAlign: "right" }}>Actions</div>
               </div>
-            ) : (
-              deletedOrders.map(o => (
-                <div
-                  key={o.primaryId || o.id}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "minmax(0, 1.3fr) minmax(0, 0.9fr) minmax(0, 0.8fr) minmax(0, 0.65fr) minmax(0, 0.75fr) minmax(0, 0.9fr) minmax(0, 1.1fr) minmax(0, 0.95fr) 150px",
-                    gap: 8,
-                    alignItems: "center",
-                    fontSize: 12.5,
-                    padding: "12px 4px",
-                    borderBottom: "1px solid #F5F5F7",
-                    opacity: 0.85
-                  }}
-                >
-                  <div style={{ overflow: "hidden" }}>
-                    <div style={{ fontFamily: "monospace", fontSize: 11.5, color: "#8A8D98", textDecoration: "line-through" }}>{o.id}</div>
-                    <div style={{ fontWeight: 600, color: "#6B7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={o.style}>{o.style}</div>
-                  </div>
-                  <div style={{ color: "#6B7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={o.buyer}>{o.buyer}</div>
-                  <div style={{ color: "#6B7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={o.country}>{o.country}</div>
-                  <div style={{ color: "#6B7280", whiteSpace: "nowrap" }}>{o.season || "SS26"}</div>
-                  <div style={{ color: "#6B7280", whiteSpace: "nowrap" }}>{Number(o.qty || 0).toLocaleString()}</div>
-                  <div style={{ color: "#6B7280", whiteSpace: "nowrap" }}>{o.ship}</div>
-                  <div style={{ color: o.color ? "#6B7280" : "#9CA3AF", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.color || "—"}</div>
-                  <div style={{ fontSize: 11.5, color: "#9CA3AF", whiteSpace: "nowrap" }}>
-                    {o.deletedAt ? new Date(o.deletedAt).toLocaleDateString() : "Archived"}
-                  </div>
-                  <div style={{ textAlign: "right", display: "flex", justifyContent: "flex-end", gap: 6, alignItems: "center" }}>
-                    <button
-                      onClick={() => onRestoreOrder && onRestoreOrder(o.primaryId || o.id)}
-                      title="Restore order back to active list"
-                      style={{
-                        background: "#E1F5EE",
-                        color: "#085041",
-                        border: "none",
-                        borderRadius: 6,
-                        padding: "4px 8px",
-                        fontSize: 11,
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 3
-                      }}
-                    >
-                      <RotateCcw size={11} />
-                      Restore
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (window.confirm(`Are you sure you want to PERMANENTLY delete order ${o.id}? This cannot be undone.`)) {
-                          onPermanentDeleteOrder && onPermanentDeleteOrder(o.primaryId || o.id);
-                        }
-                      }}
-                      title="Permanently delete order forever"
-                      style={{
-                        background: "#FCEBEB",
-                        color: "#DC2626",
-                        border: "1px solid #FECACA",
-                        borderRadius: 6,
-                        padding: "4px 8px",
-                        fontSize: 11,
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 3
-                      }}
-                    >
-                      <Trash2 size={11} />
-                      Delete Forever
-                    </button>
-                  </div>
+
+              {deletedOrders.length === 0 ? (
+                <div style={{ padding: "20px 0", textAlign: "center", color: "#8A8D98", fontSize: 12.5 }}>
+                  No deleted orders in history.
                 </div>
-              ))
-            )}
-          </>
-        )}
-      </Card>
+              ) : (
+                deletedOrders.map(o => (
+                  <div
+                    key={o.primaryId || o.id}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "minmax(0, 1.3fr) minmax(0, 0.9fr) minmax(0, 0.8fr) minmax(0, 0.65fr) minmax(0, 0.75fr) minmax(0, 0.9fr) minmax(0, 1.1fr) minmax(0, 0.95fr) 150px",
+                      gap: 8,
+                      alignItems: "center",
+                      fontSize: 12.5,
+                      padding: "12px 4px",
+                      borderBottom: "1px solid #F5F5F7",
+                      opacity: 0.85
+                    }}
+                  >
+                    <div style={{ overflow: "hidden" }}>
+                      <div style={{ fontFamily: "monospace", fontSize: 11.5, color: "#8A8D98", textDecoration: "line-through" }}>{o.id}</div>
+                      <div style={{ fontWeight: 600, color: "#6B7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={o.style}>{o.style}</div>
+                    </div>
+                    <div style={{ color: "#6B7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={o.buyer}>{o.buyer}</div>
+                    <div style={{ color: "#6B7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={o.country}>{o.country}</div>
+                    <div style={{ color: "#6B7280", whiteSpace: "nowrap" }}>{o.season || "SS26"}</div>
+                    <div style={{ color: "#6B7280", whiteSpace: "nowrap" }}>{Number(o.qty || 0).toLocaleString()}</div>
+                    <div style={{ color: "#6B7280", whiteSpace: "nowrap" }}>{o.ship}</div>
+                    <div style={{ color: o.color ? "#6B7280" : "#9CA3AF", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.color || "—"}</div>
+                    <div style={{ fontSize: 11.5, color: "#9CA3AF", whiteSpace: "nowrap" }}>
+                      {o.deletedAt ? new Date(o.deletedAt).toLocaleDateString() : "Archived"}
+                    </div>
+                    <div style={{ textAlign: "right", display: "flex", justifyContent: "flex-end", gap: 6, alignItems: "center" }}>
+                      <button
+                        onClick={() => onRestoreOrder && onRestoreOrder(o.primaryId || o.id)}
+                        title="Restore order back to active list"
+                        style={{
+                          background: "#E1F5EE",
+                          color: "#085041",
+                          border: "none",
+                          borderRadius: 6,
+                          padding: "4px 8px",
+                          fontSize: 11,
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 3
+                        }}
+                      >
+                        <RotateCcw size={11} />
+                        Restore
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (window.confirm(`Are you sure you want to PERMANENTLY delete order ${o.id}? This cannot be undone.`)) {
+                            onPermanentDeleteOrder && onPermanentDeleteOrder(o.primaryId || o.id);
+                          }
+                        }}
+                        title="Permanently delete order forever"
+                        style={{
+                          background: "#FCEBEB",
+                          color: "#DC2626",
+                          border: "1px solid #FECACA",
+                          borderRadius: 6,
+                          padding: "4px 8px",
+                          fontSize: 11,
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 3
+                        }}
+                      >
+                        <Trash2 size={11} />
+                        Delete Forever
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </>
+          )}
+        </Card>
       )}
 
       {/* Add Order Modal */}
@@ -1106,8 +1106,6 @@ export function OrdersPage({
             if (onUpdateStages) {
               onUpdateStages(orderId, updatedStages);
             }
-            // Remember this layout permanently — next new order will start with these stages
-            saveLastAlignedStages(JSON.parse(JSON.stringify(updatedStages)));
             setAlignModalOrder(null);
           }}
         />
@@ -2085,7 +2083,7 @@ export function CompliancePage({
   onOpenOrder
 }) {
   const [activeTab, setActiveTab] = useState("compliances"); // "compliances" | "history"
-  
+
   // Modals state
   const [showAddCertModal, setShowAddCertModal] = useState(false);
   const [showAddCompModal, setShowAddCompModal] = useState(false);
@@ -2177,7 +2175,7 @@ export function CompliancePage({
     const total = activeCerts.length;
     const approved = activeCerts.filter(c => c.status === "Approved" || c.status === "approved").length;
     const pendingReview = activeCerts.filter(c => c.status === "Under Review" || c.status === "Applied" || c.status === "applied" || c.status === "Draft").length;
-    
+
     let expired = 0;
     let expiringSoon = 0;
     activeCerts.forEach(c => {
@@ -3323,8 +3321,8 @@ export function CompliancePage({
                   const effective = getEffectiveCertStatus(selectedCert);
                   const isCurrent = (effective === step) || (selectedCert.status === step);
                   const isPast = (step === "Applied" && ["Under Review", "Approved", "Active", "Expiring Soon", "Expired"].includes(effective)) ||
-                                 (step === "Under Review" && ["Approved", "Active", "Expiring Soon", "Expired"].includes(effective)) ||
-                                 (step === "Approved" && ["Active", "Expiring Soon", "Expired"].includes(effective));
+                    (step === "Under Review" && ["Approved", "Active", "Expiring Soon", "Expired"].includes(effective)) ||
+                    (step === "Approved" && ["Active", "Expiring Soon", "Expired"].includes(effective));
 
                   return (
                     <div key={step} style={{ textAlign: "center", flex: 1, position: "relative", zIndex: 2 }}>
@@ -3902,8 +3900,8 @@ export function AttendancePage({
     const session = userSessions.find(s =>
       (s.date === todayStr || (s.loginTime && s.loginTime.startsWith(todayStr))) &&
       ((s.userId && s.userId === person.id) ||
-       (s.username && person.username && s.username.toLowerCase() === person.username.toLowerCase()) ||
-       (s.name && person.name && s.name.toLowerCase() === person.name.toLowerCase()))
+        (s.username && person.username && s.username.toLowerCase() === person.username.toLowerCase()) ||
+        (s.name && person.name && s.name.toLowerCase() === person.name.toLowerCase()))
     );
 
     if (session || attendance[person.name] === "present") {
@@ -4196,205 +4194,205 @@ export function AttendancePage({
             <Card style={{ padding: "16px 18px" }}><div style={{ fontSize: 12, color: "#8A8D98" }}>On leave today</div><div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: "#E2A83B" }}>{counts.leave}</div></Card>
           </div>
 
-      <Card style={{ marginBottom: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 0 12px" }}>
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#1B2130" }}>Leave requests</div>
-            <div style={{ fontSize: 11.5, color: "#8A8D98" }}>{pending.length} pending approval</div>
-          </div>
-          <button
-            onClick={() => setShowAddLeave(!showAddLeave)}
-            style={{ fontSize: 12, fontWeight: 600, color: "#534AB7", background: "#F5F3FF", border: "1px solid #E0DBF5", borderRadius: 7, padding: "5px 12px", cursor: "pointer" }}
-          >
-            {showAddLeave ? "Cancel" : "+ Request leave"}
-          </button>
-        </div>
-
-        {showAddLeave && (
-          <div style={{ background: "#F8F7FF", border: "1px solid #E4E0F8", borderRadius: 8, padding: "12px", marginBottom: 14 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr 1.2fr auto", gap: 8, alignItems: "end" }}>
+          <Card style={{ marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 0 12px" }}>
               <div>
-                <label style={{ fontSize: 11, color: "#8A8D98", display: "block", marginBottom: 4 }}>Staff member</label>
-                <select
-                  value={leaveForm.name}
-                  onChange={e => {
-                    const found = roster.find(s => s.name === e.target.value);
-                    setLeaveForm(f => ({ ...f, name: e.target.value, dept: found ? found.dept : f.dept }));
-                  }}
-                  style={{ width: "100%", padding: "6px 8px", borderRadius: 6, border: "1px solid #D5CEF2", fontSize: 12 }}
-                >
-                  <option value="">Select staff...</option>
-                  {roster.map(s => <option key={s.name} value={s.name}>{s.name} ({s.dept})</option>)}
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#1B2130" }}>Leave requests</div>
+                <div style={{ fontSize: 11.5, color: "#8A8D98" }}>{pending.length} pending approval</div>
+              </div>
+              <button
+                onClick={() => setShowAddLeave(!showAddLeave)}
+                style={{ fontSize: 12, fontWeight: 600, color: "#534AB7", background: "#F5F3FF", border: "1px solid #E0DBF5", borderRadius: 7, padding: "5px 12px", cursor: "pointer" }}
+              >
+                {showAddLeave ? "Cancel" : "+ Request leave"}
+              </button>
+            </div>
+
+            {showAddLeave && (
+              <div style={{ background: "#F8F7FF", border: "1px solid #E4E0F8", borderRadius: 8, padding: "12px", marginBottom: 14 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr 1.2fr auto", gap: 8, alignItems: "end" }}>
+                  <div>
+                    <label style={{ fontSize: 11, color: "#8A8D98", display: "block", marginBottom: 4 }}>Staff member</label>
+                    <select
+                      value={leaveForm.name}
+                      onChange={e => {
+                        const found = roster.find(s => s.name === e.target.value);
+                        setLeaveForm(f => ({ ...f, name: e.target.value, dept: found ? found.dept : f.dept }));
+                      }}
+                      style={{ width: "100%", padding: "6px 8px", borderRadius: 6, border: "1px solid #D5CEF2", fontSize: 12 }}
+                    >
+                      <option value="">Select staff...</option>
+                      {roster.map(s => <option key={s.name} value={s.name}>{s.name} ({s.dept})</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, color: "#8A8D98", display: "block", marginBottom: 4 }}>From</label>
+                    <input value={leaveForm.from} onChange={e => setLeaveForm(f => ({ ...f, from: e.target.value }))} placeholder="e.g. 2 Jun" style={{ width: "100%", padding: "6px 8px", borderRadius: 6, border: "1px solid #D5CEF2", fontSize: 12 }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, color: "#8A8D98", display: "block", marginBottom: 4 }}>To</label>
+                    <input value={leaveForm.to} onChange={e => setLeaveForm(f => ({ ...f, to: e.target.value }))} placeholder="e.g. 4 Jun" style={{ width: "100%", padding: "6px 8px", borderRadius: 6, border: "1px solid #D5CEF2", fontSize: 12 }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, color: "#8A8D98", display: "block", marginBottom: 4 }}>Reason</label>
+                    <input value={leaveForm.reason} onChange={e => setLeaveForm(f => ({ ...f, reason: e.target.value }))} placeholder="e.g. Personal / Medical" style={{ width: "100%", padding: "6px 8px", borderRadius: 6, border: "1px solid #D5CEF2", fontSize: 12 }} />
+                  </div>
+                  <button onClick={submitLeave} style={{ fontSize: 12, fontWeight: 600, color: "#fff", background: "#534AB7", border: "none", borderRadius: 6, padding: "7px 14px", cursor: "pointer" }}>Submit</button>
+                </div>
+              </div>
+            )}
+
+            {leaveRequests.length === 0 ? (
+              <div style={{ fontSize: 12.5, color: "#B0B2BA" }}>No leave requests.</div>
+            ) : leaveRequests.map(l => (
+              <div key={l.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 4px", borderBottom: "1px solid #F5F5F7" }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#1B2130" }}>{l.name} <span style={{ color: "#8A8D98", fontWeight: 400 }}>· {l.dept}</span></div>
+                  <div style={{ fontSize: 11.5, color: "#8A8D98" }}>{l.from} – {l.to} · {l.reason}</div>
+                </div>
+                {l.status === "pending" ? (
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={() => onApprove(l.id)} style={{ fontSize: 12, fontWeight: 600, color: "#085041", background: "#E1F5EE", border: "none", borderRadius: 7, padding: "6px 12px", cursor: "pointer" }}>Approve</button>
+                    <button onClick={() => onReject(l.id)} style={{ fontSize: 12, fontWeight: 600, color: "#791F1F", background: "#FCEBEB", border: "none", borderRadius: 7, padding: "6px 12px", cursor: "pointer" }}>Reject</button>
+                  </div>
+                ) : (
+                  <span style={{ fontSize: 12, fontWeight: 600, color: l.status === "approved" ? "#085041" : "#791F1F" }}>{l.status === "approved" ? "Approved" : "Rejected"}</span>
+                )}
+              </div>
+            ))}
+          </Card>
+
+
+          {/* future enhancemenst */}
+          <Card style={{ marginBottom: 16 }}>
+            <CardHeader title="Add a joiner" sub="Add anyone new who's joined the team — changes persist immediately" />
+            <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr 1.2fr auto", gap: 8, alignItems: "end" }}>
+              <div>
+                <label style={{ fontSize: 11, color: "#8A8D98", display: "block", marginBottom: 4 }}>Name</label>
+                <input value={form.name} onChange={e => set("name", e.target.value)} placeholder="Full name" style={{ width: "94%", padding: "7px 8px", borderRadius: 7, border: "1px solid #E7E8ED", fontSize: 12.5 }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: "#8A8D98", display: "block", marginBottom: 4 }}>Title</label>
+                <input value={form.title} onChange={e => set("title", e.target.value)} placeholder="e.g. Junior / Incharge" style={{ width: "94%", padding: "7px 8px", borderRadius: 7, border: "1px solid #E7E8ED", fontSize: 12.5 }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: "#8A8D98", display: "block", marginBottom: 4 }}>Department</label>
+                <select value={form.dept} onChange={e => set("dept", e.target.value)} style={{ width: "100%", padding: "7px 8px", borderRadius: 7, border: "1px solid #E7E8ED", fontSize: 12.5 }}>
+                  {Object.keys(ORG_STRUCTURE).map(d => <option key={d} value={d}>{d}</option>)}
                 </select>
               </div>
-              <div>
-                <label style={{ fontSize: 11, color: "#8A8D98", display: "block", marginBottom: 4 }}>From</label>
-                <input value={leaveForm.from} onChange={e => setLeaveForm(f => ({ ...f, from: e.target.value }))} placeholder="e.g. 2 Jun" style={{ width: "100%", padding: "6px 8px", borderRadius: 6, border: "1px solid #D5CEF2", fontSize: 12 }} />
-              </div>
-              <div>
-                <label style={{ fontSize: 11, color: "#8A8D98", display: "block", marginBottom: 4 }}>To</label>
-                <input value={leaveForm.to} onChange={e => setLeaveForm(f => ({ ...f, to: e.target.value }))} placeholder="e.g. 4 Jun" style={{ width: "100%", padding: "6px 8px", borderRadius: 6, border: "1px solid #D5CEF2", fontSize: 12 }} />
-              </div>
-              <div>
-                <label style={{ fontSize: 11, color: "#8A8D98", display: "block", marginBottom: 4 }}>Reason</label>
-                <input value={leaveForm.reason} onChange={e => setLeaveForm(f => ({ ...f, reason: e.target.value }))} placeholder="e.g. Personal / Medical" style={{ width: "100%", padding: "6px 8px", borderRadius: 6, border: "1px solid #D5CEF2", fontSize: 12 }} />
-              </div>
-              <button onClick={submitLeave} style={{ fontSize: 12, fontWeight: 600, color: "#fff", background: "#534AB7", border: "none", borderRadius: 6, padding: "7px 14px", cursor: "pointer" }}>Submit</button>
+              <button onClick={submitAdd} style={{ fontSize: 12.5, fontWeight: 600, color: "#fff", background: "#1F9E8D", border: "none", borderRadius: 8, padding: "8px 16px", cursor: "pointer" }}>Add</button>
             </div>
-          </div>
-        )}
+          </Card>
 
-        {leaveRequests.length === 0 ? (
-          <div style={{ fontSize: 12.5, color: "#B0B2BA" }}>No leave requests.</div>
-        ) : leaveRequests.map(l => (
-          <div key={l.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 4px", borderBottom: "1px solid #F5F5F7" }}>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "#1B2130" }}>{l.name} <span style={{ color: "#8A8D98", fontWeight: 400 }}>· {l.dept}</span></div>
-              <div style={{ fontSize: 11.5, color: "#8A8D98" }}>{l.from} – {l.to} · {l.reason}</div>
+          <Card>
+            <CardHeader title="Today's roster" sub="Click a status pill to cycle it — edit or remove team members" />
+            <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr 1.1fr 1.6fr 0.9fr", fontSize: 11, color: "#6B7280", padding: "0 4px 8px", borderBottom: "1px solid #F0F0F2" }}>
+              <div>Name & Account</div><div>Title</div><div>Department</div><div>Today's Attendance Status</div><div style={{ textAlign: "right" }}>Actions</div>
             </div>
-            {l.status === "pending" ? (
-              <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => onApprove(l.id)} style={{ fontSize: 12, fontWeight: 600, color: "#085041", background: "#E1F5EE", border: "none", borderRadius: 7, padding: "6px 12px", cursor: "pointer" }}>Approve</button>
-                <button onClick={() => onReject(l.id)} style={{ fontSize: 12, fontWeight: 600, color: "#791F1F", background: "#FCEBEB", border: "none", borderRadius: 7, padding: "6px 12px", cursor: "pointer" }}>Reject</button>
+            {unifiedStaff.length === 0 ? (
+              <div style={{ padding: "32px 16px", textAlign: "center", color: "#8A8D98", fontSize: 13 }}>
+                No staff members in the roster yet. Use the "Add a joiner" form above to add team members.
               </div>
-            ) : (
-              <span style={{ fontSize: 12, fontWeight: 600, color: l.status === "approved" ? "#085041" : "#791F1F" }}>{l.status === "approved" ? "Approved" : "Rejected"}</span>
-            )}
-          </div>
-        ))}
-      </Card>
+            ) : unifiedStaff.map(s => {
+              const isEditing = editingName === s.name;
+              const att = getStaffAttendance(s);
+              const st = ATTENDANCE_STATUS_STYLE[att.status] || ATTENDANCE_STATUS_STYLE.absent;
 
-      
-    {/* future enhancemenst */}
-      <Card style={{ marginBottom: 16 }}>
-        <CardHeader title="Add a joiner" sub="Add anyone new who's joined the team — changes persist immediately" />
-        <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr 1.2fr auto", gap: 8, alignItems: "end" }}>
-          <div>
-            <label style={{ fontSize: 11, color: "#8A8D98", display: "block", marginBottom: 4 }}>Name</label>
-            <input value={form.name} onChange={e => set("name", e.target.value)} placeholder="Full name" style={{ width: "94%", padding: "7px 8px", borderRadius: 7, border: "1px solid #E7E8ED", fontSize: 12.5 }} />
-          </div>
-          <div>
-            <label style={{ fontSize: 11, color: "#8A8D98", display: "block", marginBottom: 4 }}>Title</label>
-            <input value={form.title} onChange={e => set("title", e.target.value)} placeholder="e.g. Junior / Incharge" style={{ width: "94%", padding: "7px 8px", borderRadius: 7, border: "1px solid #E7E8ED", fontSize: 12.5 }} />
-          </div>
-          <div>
-            <label style={{ fontSize: 11, color: "#8A8D98", display: "block", marginBottom: 4 }}>Department</label>
-            <select value={form.dept} onChange={e => set("dept", e.target.value)} style={{ width: "100%", padding: "7px 8px", borderRadius: 7, border: "1px solid #E7E8ED", fontSize: 12.5 }}>
-              {Object.keys(ORG_STRUCTURE).map(d => <option key={d} value={d}>{d}</option>)}
-            </select>
-          </div>
-          <button onClick={submitAdd} style={{ fontSize: 12.5, fontWeight: 600, color: "#fff", background: "#1F9E8D", border: "none", borderRadius: 8, padding: "8px 16px", cursor: "pointer" }}>Add</button>
-        </div>
-      </Card>
+              if (isEditing) {
+                return (
+                  <div key={s.name} style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr 1.1fr 1.6fr 0.9fr", alignItems: "center", fontSize: 12.5, padding: "8px 4px", borderBottom: "1px solid #F7F7F9", background: "#FAF9FE" }}>
+                    <div>
+                      <input value={editForm.name} onChange={e => setEdit("name", e.target.value)} style={{ width: "90%", padding: "4px 6px", borderRadius: 5, border: "1px solid #D5CEF2", fontSize: 12 }} />
+                    </div>
+                    <div>
+                      <input value={editForm.title} onChange={e => setEdit("title", e.target.value)} style={{ width: "90%", padding: "4px 6px", borderRadius: 5, border: "1px solid #D5CEF2", fontSize: 12 }} />
+                    </div>
+                    <div>
+                      <select value={editForm.dept} onChange={e => setEdit("dept", e.target.value)} style={{ width: "90%", padding: "4px 6px", borderRadius: 5, border: "1px solid #D5CEF2", fontSize: 12 }}>
+                        {Object.keys(ORG_STRUCTURE).map(d => <option key={d} value={d}>{d}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <span style={{ background: st.bg, color: st.fg, fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 999 }}>{st.label}</span>
+                    </div>
+                    <div style={{ textAlign: "right", display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                      <button onClick={saveEdit} style={{ fontSize: 11, fontWeight: 600, color: "#fff", background: "#1F9E8D", border: "none", borderRadius: 5, padding: "4px 8px", cursor: "pointer" }}>Save</button>
+                      <button onClick={() => setEditingName(null)} style={{ fontSize: 11, color: "#8A8D98", background: "none", border: "none", cursor: "pointer" }}>Cancel</button>
+                    </div>
+                  </div>
+                );
+              }
 
-      <Card>
-        <CardHeader title="Today's roster" sub="Click a status pill to cycle it — edit or remove team members" />
-        <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr 1.1fr 1.6fr 0.9fr", fontSize: 11, color: "#6B7280", padding: "0 4px 8px", borderBottom: "1px solid #F0F0F2" }}>
-          <div>Name & Account</div><div>Title</div><div>Department</div><div>Today's Attendance Status</div><div style={{ textAlign: "right" }}>Actions</div>
-        </div>
-        {unifiedStaff.length === 0 ? (
-          <div style={{ padding: "32px 16px", textAlign: "center", color: "#8A8D98", fontSize: 13 }}>
-            No staff members in the roster yet. Use the "Add a joiner" form above to add team members.
-          </div>
-        ) : unifiedStaff.map(s => {
-          const isEditing = editingName === s.name;
-          const att = getStaffAttendance(s);
-          const st = ATTENDANCE_STATUS_STYLE[att.status] || ATTENDANCE_STATUS_STYLE.absent;
-
-          if (isEditing) {
-            return (
-              <div key={s.name} style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr 1.1fr 1.6fr 0.9fr", alignItems: "center", fontSize: 12.5, padding: "8px 4px", borderBottom: "1px solid #F7F7F9", background: "#FAF9FE" }}>
-                <div>
-                  <input value={editForm.name} onChange={e => setEdit("name", e.target.value)} style={{ width: "90%", padding: "4px 6px", borderRadius: 5, border: "1px solid #D5CEF2", fontSize: 12 }} />
+              return (
+                <div key={s.name} style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr 1.1fr 1.6fr 0.9fr", alignItems: "center", fontSize: 12.5, padding: "9px 4px", borderBottom: "1px solid #F7F7F9" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ width: 26, height: 26, borderRadius: "50%", background: "#F3F4F6", color: "#4B5563", fontWeight: 700, fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      {(s.name || "U").slice(0, 1).toUpperCase()}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 600, color: "#1B2130" }}>{s.name}</div>
+                      {s.username && <div style={{ fontSize: 11, color: "#9CA3AF", fontFamily: "monospace" }}>@{s.username}</div>}
+                    </div>
+                  </div>
+                  <div style={{ color: "#8A8D98" }}>{s.title}</div>
+                  <div style={{ color: "#8A8D98" }}>{s.dept}</div>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
+                      <span
+                        onClick={() => onCycle(s.name)}
+                        title="Click to cycle status (Present / On Leave / Absent)"
+                        style={{ cursor: "pointer", background: st.bg, color: st.fg, fontSize: 11.5, fontWeight: 700, padding: "3px 10px", borderRadius: 999 }}
+                      >
+                        {att.status === "present" ? "✓ Present" : att.status === "leave" ? "🏖 On leave" : "✕ Absent"}
+                      </span>
+                      {att.status === "present" && (
+                        <span style={{ fontSize: 11, color: "#059669", display: "inline-flex", alignItems: "center", gap: 4, background: "#ECFDF5", padding: "2px 7px", borderRadius: 6 }}>
+                          {att.deviceType === "Mobile" ? <Smartphone size={12} color="#534AB7" /> : <Laptop size={12} color="#1F9E8D" />}
+                          {att.inTime && <span>In: {att.inTime}</span>}
+                          {att.location && <span title={sanitizeLocationString(att.location)}>· 📍 {sanitizeLocationString(att.location).split("(")[0].trim()}</span>}
+                        </span>
+                      )}
+                      {att.status === "leave" && att.reason && (
+                        <span style={{ fontSize: 11, color: "#92400E", background: "#FEF3C7", padding: "2px 6px", borderRadius: 4 }}>
+                          {att.reason}
+                        </span>
+                      )}
+                      {att.status === "absent" && (
+                        <span style={{ fontSize: 10.5, color: "#9CA3AF" }}>(No login today)</span>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right", display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
+                    <button
+                      onClick={() => {
+                        setLeaveForm(f => ({ ...f, name: s.name, dept: s.dept, reason: "Personal" }));
+                        setShowAddLeave(true);
+                      }}
+                      title="Mark or request leave for this staff"
+                      style={{ fontSize: 11, color: "#534AB7", background: "#EDE9FE", border: "none", borderRadius: 5, padding: "3px 7px", cursor: "pointer", fontWeight: 600 }}
+                    >
+                      On leave
+                    </button>
+                    <button
+                      onClick={() => startEdit(s)}
+                      style={{ fontSize: 11, color: "#378ADD", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => onRemoveStaff(s.name)}
+                      title="Remove — no longer with the company"
+                      style={{ fontSize: 11, color: "#B0812E", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
+                    >
+                      Remove
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  <input value={editForm.title} onChange={e => setEdit("title", e.target.value)} style={{ width: "90%", padding: "4px 6px", borderRadius: 5, border: "1px solid #D5CEF2", fontSize: 12 }} />
-                </div>
-                <div>
-                  <select value={editForm.dept} onChange={e => setEdit("dept", e.target.value)} style={{ width: "90%", padding: "4px 6px", borderRadius: 5, border: "1px solid #D5CEF2", fontSize: 12 }}>
-                    {Object.keys(ORG_STRUCTURE).map(d => <option key={d} value={d}>{d}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <span style={{ background: st.bg, color: st.fg, fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 999 }}>{st.label}</span>
-                </div>
-                <div style={{ textAlign: "right", display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                  <button onClick={saveEdit} style={{ fontSize: 11, fontWeight: 600, color: "#fff", background: "#1F9E8D", border: "none", borderRadius: 5, padding: "4px 8px", cursor: "pointer" }}>Save</button>
-                  <button onClick={() => setEditingName(null)} style={{ fontSize: 11, color: "#8A8D98", background: "none", border: "none", cursor: "pointer" }}>Cancel</button>
-                </div>
-              </div>
-            );
-          }
-
-          return (
-            <div key={s.name} style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr 1.1fr 1.6fr 0.9fr", alignItems: "center", fontSize: 12.5, padding: "9px 4px", borderBottom: "1px solid #F7F7F9" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <div style={{ width: 26, height: 26, borderRadius: "50%", background: "#F3F4F6", color: "#4B5563", fontWeight: 700, fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  {(s.name || "U").slice(0, 1).toUpperCase()}
-                </div>
-                <div>
-                  <div style={{ fontWeight: 600, color: "#1B2130" }}>{s.name}</div>
-                  {s.username && <div style={{ fontSize: 11, color: "#9CA3AF", fontFamily: "monospace" }}>@{s.username}</div>}
-                </div>
-              </div>
-              <div style={{ color: "#8A8D98" }}>{s.title}</div>
-              <div style={{ color: "#8A8D98" }}>{s.dept}</div>
-              <div>
-                <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
-                  <span
-                    onClick={() => onCycle(s.name)}
-                    title="Click to cycle status (Present / On Leave / Absent)"
-                    style={{ cursor: "pointer", background: st.bg, color: st.fg, fontSize: 11.5, fontWeight: 700, padding: "3px 10px", borderRadius: 999 }}
-                  >
-                    {att.status === "present" ? "✓ Present" : att.status === "leave" ? "🏖 On leave" : "✕ Absent"}
-                  </span>
-                  {att.status === "present" && (
-                    <span style={{ fontSize: 11, color: "#059669", display: "inline-flex", alignItems: "center", gap: 4, background: "#ECFDF5", padding: "2px 7px", borderRadius: 6 }}>
-                      {att.deviceType === "Mobile" ? <Smartphone size={12} color="#534AB7" /> : <Laptop size={12} color="#1F9E8D" />}
-                      {att.inTime && <span>In: {att.inTime}</span>}
-                      {att.location && <span title={sanitizeLocationString(att.location)}>· 📍 {sanitizeLocationString(att.location).split("(")[0].trim()}</span>}
-                    </span>
-                  )}
-                  {att.status === "leave" && att.reason && (
-                    <span style={{ fontSize: 11, color: "#92400E", background: "#FEF3C7", padding: "2px 6px", borderRadius: 4 }}>
-                      {att.reason}
-                    </span>
-                  )}
-                  {att.status === "absent" && (
-                    <span style={{ fontSize: 10.5, color: "#9CA3AF" }}>(No login today)</span>
-                  )}
-                </div>
-              </div>
-              <div style={{ textAlign: "right", display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
-                <button
-                  onClick={() => {
-                    setLeaveForm(f => ({ ...f, name: s.name, dept: s.dept, reason: "Personal" }));
-                    setShowAddLeave(true);
-                  }}
-                  title="Mark or request leave for this staff"
-                  style={{ fontSize: 11, color: "#534AB7", background: "#EDE9FE", border: "none", borderRadius: 5, padding: "3px 7px", cursor: "pointer", fontWeight: 600 }}
-                >
-                  On leave
-                </button>
-                <button
-                  onClick={() => startEdit(s)}
-                  style={{ fontSize: 11, color: "#378ADD", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={() => onRemoveStaff(s.name)}
-                  title="Remove — no longer with the company"
-                  style={{ fontSize: 11, color: "#B0812E", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
-                >
-                  Remove
-                </button>
-              </div>
-            </div>
-          );
-        })}
-        </Card>
-      </>
+              );
+            })}
+          </Card>
+        </>
       )}
     </div>
   );
@@ -4579,7 +4577,7 @@ export function EditDepartmentModal({
         {/* Modal Scrollable Body */}
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
           <div style={{ padding: "20px 24px", overflowY: "auto", flex: 1 }}>
-            
+
             {/* Department Name & Description */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16, marginBottom: 22 }}>
               <div>
@@ -5148,7 +5146,7 @@ export function DepartmentDetail({
   return (
     <div>
       <BackLink onClick={onBack} label="Back to departments" />
-      
+
       {/* Department Heading with Edit Button */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
         <div>
@@ -5695,7 +5693,7 @@ export function OrderStageAlignmentModal({
 
         {/* Template Selector Bar */}
         <div style={{ padding: "12px 24px", background: "#F3F4F6", borderBottom: "1px solid #E5E7EB", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {/* <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <span style={{ fontSize: 12.5, fontWeight: 700, color: "#374151" }}>T&A Template:</span>
             <div style={{ display: "flex", gap: 6 }}>
               <button
@@ -5731,7 +5729,7 @@ export function OrderStageAlignmentModal({
                 120-Day Extended Dye/Print ({TA_STAGES_120.length} stages)
               </button>
             </div>
-          </div>
+          </div> */}
           <div style={{ fontSize: 12, color: "#6B7280", fontWeight: 600 }}>
             Total Pipeline Steps: <b style={{ color: "#1F2937" }}>{stages.length}</b>
           </div>
@@ -6448,7 +6446,7 @@ export function AuditLoggerPage({
             const day = String(d.getDate()).padStart(2, "0");
             localDateStr = `${y}-${m}-${day}`;
           }
-        } catch (e) {}
+        } catch (e) { }
         if (isoPrefix !== dateFilter && localDateStr !== dateFilter) return false;
       }
       if (searchTerm.trim()) {

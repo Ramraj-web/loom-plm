@@ -1,7 +1,10 @@
-import React, { useMemo, useState } from "react";
-import { Eye, EyeOff, Search, X, Briefcase, Filter } from "lucide-react";
+import React, { useMemo, useState, useEffect } from "react";
+import {
+  Eye, EyeOff, Search, X, Briefcase, Filter, Plus, Trash2, Edit2,
+  Layers, ArrowUp, ArrowDown, GripVertical, CheckCircle, Factory, MapPin, Check
+} from "lucide-react";
 
-import { ORG_STRUCTURE } from "../constants/loomData.js";
+import { ORG_STRUCTURE, TA_STAGES_90, TA_STAGES_120 } from "../constants/loomData.js";
 
 const PERMISSIONS = [
   ["dashboard", "Dashboard"], ["orders", "Orders"], ["tasks", "Tasks"],
@@ -94,7 +97,19 @@ export function LoginPage({ users, onLogin }) {
   </div>;
 }
 
-export function UserAccessPage({ users, teams, buyers = [], onChangeUsers, onChangeTeams, rotation, onChangeRotation }) {
+export function UserAccessPage({
+  users = [],
+  teams = [],
+  buyers = [],
+  onChangeUsers,
+  onChangeTeams,
+  rotation,
+  onChangeRotation,
+  globalAlignedStages = null,
+  onSaveGlobalMasterStages = null,
+  units = [],
+  onChangeUnits = null
+}) {
   const [tab, setTab] = useState("users");
   const [editing, setEditing] = useState(null);
   const [showUserFormPassword, setShowUserFormPassword] = useState(false);
@@ -103,6 +118,185 @@ export function UserAccessPage({ users, teams, buyers = [], onChangeUsers, onCha
   const [showNewDeptInput, setShowNewDeptInput] = useState(false);
   const [newDeptName, setNewDeptName] = useState("");
   const [userSearch, setUserSearch] = useState("");
+
+  // ===== Master T&A Stages State =====
+  const [masterStages, setMasterStages] = useState(() => {
+    try {
+      const explicit = localStorage.getItem("loom_master_ta_stages_explicit");
+      if (explicit) {
+        const parsed = JSON.parse(explicit);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {}
+    return []; // Fresh, completely empty page by default!
+  });
+
+  useEffect(() => {
+    if (window.storage && window.storage.get) {
+      window.storage.get("global_master_ta_stages_explicit", true).then(res => {
+        if (res?.value) {
+          try {
+            const parsed = typeof res.value === "string" ? JSON.parse(res.value) : res.value;
+            if (Array.isArray(parsed)) setMasterStages(parsed);
+          } catch (e) {}
+        }
+      }).catch(() => {});
+    }
+  }, []);
+
+  const [newStageName, setNewStageName] = useState("");
+  const [newStageDept, setNewStageDept] = useState("Merchandising");
+  const [newStageDays, setNewStageDays] = useState(3);
+  const [newStagePosition, setNewStagePosition] = useState(-1);
+  const [stageEditingIdx, setStageEditingIdx] = useState(null);
+  const [stageEditData, setStageEditData] = useState({ name: "", dept: "Merchandising", days: 3 });
+  const [stageSuccessMsg, setStageSuccessMsg] = useState("");
+
+  const handleAddMasterStage = (e) => {
+    e.preventDefault();
+    if (!newStageName.trim()) return;
+    const daysNum = Math.max(1, Number(newStageDays) || 1);
+    const newStage = {
+      id: `mstg-${Date.now()}`,
+      name: newStageName.trim(),
+      dept: newStageDept,
+      days: daysNum,
+      planned: `${daysNum} Days`
+    };
+    const pos = Number(newStagePosition);
+    let nextList;
+    if (pos === -1) {
+      nextList = [...masterStages, newStage];
+    } else if (pos === 0) {
+      nextList = [newStage, ...masterStages];
+    } else {
+      const at = Math.min(Math.max(pos, 0), masterStages.length);
+      nextList = [...masterStages.slice(0, at), newStage, ...masterStages.slice(at)];
+    }
+    setMasterStages(nextList);
+    setNewStageName("");
+    setNewStageDays(3);
+    setNewStagePosition(-1);
+  };
+
+  const moveMasterStage = (index, delta) => {
+    const target = index + delta;
+    if (target < 0 || target >= masterStages.length) return;
+    const copy = [...masterStages];
+    const temp = copy[index];
+    copy[index] = copy[target];
+    copy[target] = temp;
+    setMasterStages(copy);
+  };
+
+  const deleteMasterStage = (index) => {
+    setMasterStages(masterStages.filter((_, i) => i !== index));
+  };
+
+  const startEditMasterStage = (idx) => {
+    const stg = masterStages[idx];
+    setStageEditingIdx(idx);
+    setStageEditData({ name: stg.name, dept: stg.dept || "Merchandising", days: stg.days || 3 });
+  };
+
+  const saveEditMasterStage = (idx) => {
+    if (!stageEditData.name.trim()) return;
+    const daysNum = Math.max(1, Number(stageEditData.days) || 1);
+    const updated = [...masterStages];
+    updated[idx] = {
+      ...updated[idx],
+      name: stageEditData.name.trim(),
+      dept: stageEditData.dept,
+      days: daysNum,
+      planned: `${daysNum} Days`
+    };
+    setMasterStages(updated);
+    setStageEditingIdx(null);
+  };
+
+  const saveAllMasterStages = () => {
+    try {
+      localStorage.setItem("loom_master_ta_stages_explicit", JSON.stringify(masterStages));
+      localStorage.setItem("loom_last_aligned_stages", JSON.stringify(masterStages));
+    } catch (e) {}
+    if (onSaveGlobalMasterStages) {
+      onSaveGlobalMasterStages(masterStages);
+    }
+    if (window.storage && window.storage.set) {
+      window.storage.set("global_master_ta_stages_explicit", JSON.stringify(masterStages), true);
+      window.storage.set("global_last_aligned_stages", JSON.stringify(masterStages), true);
+    }
+    setStageSuccessMsg("✓ Master T&A Stages saved successfully! All newly created orders will replicate this workflow pipeline.");
+    setTimeout(() => setStageSuccessMsg(""), 4000);
+  };
+
+  // ===== Units State =====
+  const [unitList, setUnitList] = useState(units || []);
+  useEffect(() => {
+    setUnitList(units || []);
+  }, [units]);
+
+  const [unitEditingId, setUnitEditingId] = useState(null);
+  const [unitForm, setUnitForm] = useState({
+    name: "",
+    code: "",
+    location: "",
+    lines: 4,
+    contactPerson: "",
+    mobile: "",
+    status: "Active"
+  });
+
+  const handleSaveUnit = (e) => {
+    e.preventDefault();
+    if (!unitForm.name.trim() || !unitForm.code.trim()) return;
+    const unitObj = {
+      id: unitEditingId || `unit-${Date.now()}`,
+      name: unitForm.name.trim(),
+      code: unitForm.code.trim().toUpperCase(),
+      location: unitForm.location.trim(),
+      lines: Number(unitForm.lines) || 1,
+      contactPerson: unitForm.contactPerson.trim(),
+      mobile: unitForm.mobile.trim(),
+      status: unitForm.status || "Active",
+      isDeleted: false
+    };
+
+    let updated;
+    if (unitEditingId) {
+      updated = unitList.map(u => u.id === unitEditingId ? unitObj : u);
+    } else {
+      updated = [...unitList, unitObj];
+    }
+    setUnitList(updated);
+    if (onChangeUnits) {
+      onChangeUnits(updated);
+    }
+    setUnitEditingId(null);
+    setUnitForm({ name: "", code: "", location: "", lines: 4, contactPerson: "", mobile: "", status: "Active" });
+  };
+
+  const startEditUnit = (u) => {
+    setUnitEditingId(u.id);
+    setUnitForm({
+      name: u.name || "",
+      code: u.code || "",
+      location: u.location || "",
+      lines: u.lines || 4,
+      contactPerson: u.contactPerson || "",
+      mobile: u.mobile || "",
+      status: u.status || "Active"
+    });
+  };
+
+  const handleDeleteUnit = (id) => {
+    if (!window.confirm("Are you sure you want to delete this Unit?")) return;
+    const updated = unitList.filter(u => u.id !== id);
+    setUnitList(updated);
+    if (onChangeUnits) {
+      onChangeUnits(updated);
+    }
+  };
 
   const teamMap = useMemo(() => Object.fromEntries(teams.map(team => [team.id, team])), [teams]);
 
@@ -201,21 +395,28 @@ export function UserAccessPage({ users, teams, buyers = [], onChangeUsers, onCha
   return <div style={{ paddingBottom: 40 }}>
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: 22 }}>
       <div>
-        <h1 style={{ margin: 0, fontSize: 22, color: "#1B2130" }}>User & Team Management</h1>
+        <h1 style={{ margin: 0, fontSize: 22, color: "#1B2130" }}>Settings & System Setup</h1>
         <div style={{ color: "#8A8D98", fontSize: 13.5, marginTop: 4 }}>
-          Create users, assign department teams, and control access permissions
+          Manage user access, department teams, Master T&A Stages, and Manufacturing Units
         </div>
       </div>
       {tab === "users" && <button onClick={resetUser} style={primaryButtonStyle}>Add new user</button>}
+      {tab === "ta_stages" && (
+        <button onClick={saveAllMasterStages} style={{ ...primaryButtonStyle, marginTop: 0, background: "#4F46E5", display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <CheckCircle size={16} /> Save Master T&A Pipeline
+        </button>
+      )}
     </div>
 
-    <div style={{ display: "flex", gap: 4, marginBottom: 18 }}>
+    <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" }}>
       {[
         ["users", `Users (${users.length})`],
         ["teams", `Teams / Departments (${teams.length})`],
+        ["ta_stages", `T&A Stages (Master setup)`],
+        ["units", `Units (${unitList.length})`],
         ["display", "Big-screen display"]
       ].map(([key, label]) => (
-        <button key={key} onClick={() => setTab(key)} style={{ ...tabButtonStyle, ...(tab === key ? activeTabStyle : {}) }}>
+        <button key={key} onClick={() => setTab(key)} style={{ ...tabButtonStyle, borderRadius: 8, fontWeight: 600, fontSize: 13, ...(tab === key ? activeTabStyle : {}) }}>
           {label}
         </button>
       ))}
@@ -599,6 +800,445 @@ export function UserAccessPage({ users, teams, buyers = [], onChangeUsers, onCha
           ))}
         </div>
       </>
+    )}
+
+    {/* TAB 3: Master T&A Stages Setup */}
+    {tab === "ta_stages" && (
+      <div>
+        {stageSuccessMsg && (
+          <div style={{ padding: "12px 16px", background: "#ECFDF5", border: "1px solid #A7F3D0", borderRadius: 8, color: "#065F46", fontSize: 13, fontWeight: 700, marginBottom: 16 }}>
+            {stageSuccessMsg}
+          </div>
+        )}
+
+        {/* Master T&A Explanation Header */}
+        <div style={{ ...panelStyle, background: "linear-gradient(135deg, #F5F3FF 0%, #EFF6FF 100%)", border: "1px solid #DDD6FE" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: 16, color: "#4338CA", fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
+                <Layers size={18} color="#4F46E5" /> Master T&A Workflow Pipeline Setup
+              </h3>
+              <p style={{ margin: "4px 0 0", fontSize: 12.5, color: "#475569" }}>
+                Add manual entries for each stage, assign department, and enter how many days in that stage.
+                Newly created orders automatically replicate these master stages.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Add Manual Stage Entry Form */}
+        <div style={panelStyle}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#1B2130", marginBottom: 12 }}>
+            ＋ Add Manual Entry T&A Stage
+          </div>
+          <form onSubmit={handleAddMasterStage}>
+            <div style={{ display: "grid", gridTemplateColumns: "1.8fr 1.2fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
+              <div>
+                <label style={labelStyle}>
+                  Stage Name *
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Lab Dip Approval / Fabric Booking"
+                    value={newStageName}
+                    onChange={e => setNewStageName(e.target.value)}
+                    style={inputStyle}
+                  />
+                </label>
+              </div>
+              <div>
+                <label style={labelStyle}>
+                  Select Department *
+                  <select
+                    value={newStageDept}
+                    onChange={e => setNewStageDept(e.target.value)}
+                    style={{ ...inputStyle, background: "#fff" }}
+                  >
+                    {ALL_DEPARTMENTS.map(dept => (
+                      <option key={dept} value={dept}>{dept}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <div>
+                <label style={labelStyle}>
+                  Duration (Days) *
+                  <input
+                    type="number"
+                    min="1"
+                    max="180"
+                    required
+                    value={newStageDays}
+                    onChange={e => setNewStageDays(e.target.value)}
+                    style={inputStyle}
+                  />
+                </label>
+              </div>
+              <div>
+                <label style={labelStyle}>
+                  Position
+                  <select
+                    value={newStagePosition}
+                    onChange={e => setNewStagePosition(e.target.value)}
+                    style={{ ...inputStyle, background: "#fff" }}
+                  >
+                    <option value={-1}>At End (Default)</option>
+                    <option value={0}>At Beginning (Priority 1)</option>
+                    {masterStages.map((stg, i) => (
+                      <option key={i} value={i + 1}>After #{i + 1}: {stg.name}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            </div>
+            <button type="submit" style={{ ...primaryButtonStyle, marginTop: 4, background: "#4F46E5", display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <Plus size={15} /> Add Stage to Master List
+            </button>
+          </form>
+        </div>
+
+        {/* Master Stages Table / Cards List */}
+        <div style={panelStyle}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#1B2130" }}>
+              Master T&A Stages ({masterStages.length} total steps)
+            </div>
+            <button
+              onClick={saveAllMasterStages}
+              style={{ ...primaryButtonStyle, marginTop: 0, background: "#4F46E5", padding: "8px 14px", fontSize: 12.5 }}
+            >
+              ✓ Save Master T&A Pipeline
+            </button>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {masterStages.length === 0 ? (
+              <div style={{ padding: "36px 20px", textAlign: "center", background: "#F8FAFC", border: "1.5px dashed #CBD5E1", borderRadius: 10, color: "#64748B" }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "#334155", marginBottom: 6 }}>No T&A Stages Added Yet</div>
+                <div style={{ fontSize: 12.5, maxWidth: 460, margin: "0 auto" }}>
+                  Use the manual entry form above to enter each stage name, select the department, and specify how many days in that stage.
+                </div>
+              </div>
+            ) : (
+              masterStages.map((stage, idx) => {
+              const isEditing = stageEditingIdx === idx;
+              return (
+                <div
+                  key={stage.id || `${stage.name}-${idx}`}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "10px 14px",
+                    background: idx % 2 === 0 ? "#F9FAFB" : "#FFFFFF",
+                    border: "1px solid #E5E7EB",
+                    borderRadius: 8,
+                    gap: 12
+                  }}
+                >
+                  {/* Sequence Badge */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
+                    <div
+                      style={{
+                        width: 26,
+                        height: 26,
+                        borderRadius: 999,
+                        background: "#4F46E5",
+                        color: "#FFFFFF",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 12,
+                        fontWeight: 700,
+                        flexShrink: 0
+                      }}
+                    >
+                      {idx + 1}
+                    </div>
+
+                    {isEditing ? (
+                      <div style={{ display: "flex", gap: 8, flex: 1, alignItems: "center" }}>
+                        <input
+                          type="text"
+                          value={stageEditData.name}
+                          onChange={e => setStageEditData({ ...stageEditData, name: e.target.value })}
+                          style={{ ...inputStyle, padding: "5px 8px", fontSize: 12, flex: 2 }}
+                        />
+                        <select
+                          value={stageEditData.dept}
+                          onChange={e => setStageEditData({ ...stageEditData, dept: e.target.value })}
+                          style={{ ...inputStyle, padding: "5px 8px", fontSize: 12, flex: 1.5 }}
+                        >
+                          {ALL_DEPARTMENTS.map(d => (
+                            <option key={d} value={d}>{d}</option>
+                          ))}
+                        </select>
+                        <input
+                          type="number"
+                          min="1"
+                          value={stageEditData.days}
+                          onChange={e => setStageEditData({ ...stageEditData, days: e.target.value })}
+                          style={{ ...inputStyle, padding: "5px 8px", fontSize: 12, width: 70 }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => saveEditMasterStage(idx)}
+                          style={{ padding: "5px 10px", borderRadius: 6, background: "#10B981", color: "#fff", border: "none", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+                        >
+                          Save
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>
+                          {stage.name}
+                        </div>
+                        <div style={{ fontSize: 11.5, color: "#6B7280", marginTop: 2, display: "flex", gap: 12 }}>
+                          <span>Department: <b style={{ color: "#4F46E5" }}>{stage.dept}</b></span>
+                          <span>Duration: <b style={{ color: "#374151" }}>{stage.days || 3} Days</b></span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Actions */}
+                  {!isEditing && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                      <button
+                        type="button"
+                        disabled={idx === 0}
+                        onClick={() => moveMasterStage(idx, -1)}
+                        style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid #D1D5DB", background: idx === 0 ? "#F3F4F6" : "#FFF", color: idx === 0 ? "#9CA3AF" : "#374151", cursor: idx === 0 ? "not-allowed" : "pointer", fontSize: 11, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 2 }}
+                      >
+                        <ArrowUp size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={idx === masterStages.length - 1}
+                        onClick={() => moveMasterStage(idx, 1)}
+                        style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid #D1D5DB", background: idx === masterStages.length - 1 ? "#F3F4F6" : "#FFF", color: idx === masterStages.length - 1 ? "#9CA3AF" : "#374151", cursor: idx === masterStages.length - 1 ? "not-allowed" : "pointer", fontSize: 11, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 2 }}
+                      >
+                        <ArrowDown size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => startEditMasterStage(idx)}
+                        style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid #CBD5E1", background: "#FFFFFF", color: "#475569", cursor: "pointer", fontSize: 11, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 3 }}
+                      >
+                        <Edit2 size={12} /> Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteMasterStage(idx)}
+                        style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid #FECACA", background: "#FEF2F2", color: "#DC2626", cursor: "pointer", fontSize: 11, fontWeight: 600, display: "inline-flex", alignItems: "center" }}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            }))}
+          </div>
+
+          <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end" }}>
+            <button
+              onClick={saveAllMasterStages}
+              style={{ ...primaryButtonStyle, marginTop: 0, background: "#4F46E5", padding: "10px 18px", fontSize: 13 }}
+            >
+              ✓ Save Master T&A Pipeline
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* TAB 4: Manufacturing Units Setup */}
+    {tab === "units" && (
+      <div>
+        {/* Add / Edit Unit Form */}
+        <div style={panelStyle}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#1B2130", marginBottom: 12 }}>
+            {unitEditingId ? "Edit Manufacturing Unit" : "Add Manufacturing UNIT"}
+          </div>
+          <form onSubmit={handleSaveUnit}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 12 }}>
+              <div>
+                <label style={labelStyle}>
+                  Unit Name *
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Unit 1 - Main Factory"
+                    value={unitForm.name}
+                    onChange={e => setUnitForm({ ...unitForm, name: e.target.value })}
+                    style={inputStyle}
+                  />
+                </label>
+              </div>
+              <div>
+                <label style={labelStyle}>
+                  Unit Code / ID *
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. UNT-01"
+                    value={unitForm.code}
+                    onChange={e => setUnitForm({ ...unitForm, code: e.target.value })}
+                    style={inputStyle}
+                  />
+                </label>
+              </div>
+              <div>
+                <label style={labelStyle}>
+                  Location / City
+                  <input
+                    type="text"
+                    placeholder="e.g. Tirupur Main Road"
+                    value={unitForm.location}
+                    onChange={e => setUnitForm({ ...unitForm, location: e.target.value })}
+                    style={inputStyle}
+                  />
+                </label>
+              </div>
+              <div>
+                <label style={labelStyle}>
+                  Sewing Lines / Capacity
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="e.g. 12"
+                    value={unitForm.lines}
+                    onChange={e => setUnitForm({ ...unitForm, lines: e.target.value })}
+                    style={inputStyle}
+                  />
+                </label>
+              </div>
+              <div>
+                <label style={labelStyle}>
+                  Contact Person
+                  <input
+                    type="text"
+                    placeholder="e.g. S. Murugan"
+                    value={unitForm.contactPerson}
+                    onChange={e => setUnitForm({ ...unitForm, contactPerson: e.target.value })}
+                    style={inputStyle}
+                  />
+                </label>
+              </div>
+              <div>
+                <label style={labelStyle}>
+                  Mobile Number
+                  <input
+                    type="text"
+                    placeholder="e.g. +91 98421 11001"
+                    value={unitForm.mobile}
+                    onChange={e => setUnitForm({ ...unitForm, mobile: e.target.value })}
+                    style={inputStyle}
+                  />
+                </label>
+              </div>
+              <div>
+                <label style={labelStyle}>
+                  Status
+                  <select
+                    value={unitForm.status}
+                    onChange={e => setUnitForm({ ...unitForm, status: e.target.value })}
+                    style={{ ...inputStyle, background: "#fff" }}
+                  >
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 8 }}>
+              <button type="submit" style={{ ...primaryButtonStyle, marginTop: 0, background: "#151B2E" }}>
+                {unitEditingId ? "Update Unit" : "+ Add Unit"}
+              </button>
+              {unitEditingId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUnitEditingId(null);
+                    setUnitForm({ name: "", code: "", location: "", lines: 4, contactPerson: "", mobile: "", status: "Active" });
+                  }}
+                  style={{ ...secondaryButtonStyle, marginTop: 0 }}
+                >
+                  Cancel Edit
+                </button>
+              )}
+            </div>
+          </form>
+        </div>
+
+        {/* Units Table */}
+        <div style={panelStyle}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#1B2130", marginBottom: 14 }}>
+            Registered Manufacturing Units ({unitList.length})
+          </div>
+
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: "#F8FAFC", borderBottom: "2px solid #E2E8F0", textAlign: "left" }}>
+                  <th style={{ padding: "10px 12px", color: "#475569" }}>Code</th>
+                  <th style={{ padding: "10px 12px", color: "#475569" }}>Unit Name</th>
+                  <th style={{ padding: "10px 12px", color: "#475569" }}>Location</th>
+                  <th style={{ padding: "10px 12px", color: "#475569" }}>Lines</th>
+                  <th style={{ padding: "10px 12px", color: "#475569" }}>Contact</th>
+                  <th style={{ padding: "10px 12px", color: "#475569" }}>Status</th>
+                  <th style={{ padding: "10px 12px", color: "#475569", textAlign: "right" }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {unitList.map(u => (
+                  <tr key={u.id} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                    <td style={{ padding: "10px 12px", fontWeight: 700, color: "#4F46E5" }}>{u.code}</td>
+                    <td style={{ padding: "10px 12px", fontWeight: 600, color: "#1E293B" }}>{u.name}</td>
+                    <td style={{ padding: "10px 12px", color: "#64748B" }}>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        <MapPin size={13} color="#94A3B8" /> {u.location || "—"}
+                      </span>
+                    </td>
+                    <td style={{ padding: "10px 12px", fontWeight: 600, color: "#334155" }}>{u.lines || 1} Lines</td>
+                    <td style={{ padding: "10px 12px", color: "#475569" }}>
+                      {u.contactPerson ? `${u.contactPerson} (${u.mobile || ""})` : "—"}
+                    </td>
+                    <td style={{ padding: "10px 12px" }}>
+                      <span style={{
+                        padding: "3px 8px", borderRadius: 12, fontSize: 11, fontWeight: 700,
+                        background: u.status === "Active" ? "#DCFCE7" : "#F1F5F9",
+                        color: u.status === "Active" ? "#15803D" : "#64748B"
+                      }}>
+                        {u.status || "Active"}
+                      </span>
+                    </td>
+                    <td style={{ padding: "10px 12px", textAlign: "right" }}>
+                      <div style={{ display: "inline-flex", gap: 6 }}>
+                        <button
+                          type="button"
+                          onClick={() => startEditUnit(u)}
+                          style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid #CBD5E1", background: "#FFFFFF", color: "#334155", fontSize: 11, fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 3 }}
+                        >
+                          <Edit2 size={12} /> Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteUnit(u.id)}
+                          style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid #FECACA", background: "#FEF2F2", color: "#DC2626", fontSize: 11, fontWeight: 600, cursor: "pointer" }}
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     )}
 
     {tab === "display" && (

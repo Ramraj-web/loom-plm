@@ -441,6 +441,37 @@ export default function LoomPLM() {
     setGlobalAlignedStagesState(stages);
   }, []);
 
+  const [units, setUnits] = useState(() => {
+    try {
+      const cached = localStorage.getItem("loom_units_cache");
+      if (cached) return JSON.parse(cached);
+    } catch (e) {}
+    return [
+      { id: "unit-1", name: "Unit 1 - Main Apparel Factory", code: "UNT-01", location: "Tirupur Main Road", lines: 12, contactPerson: "S. Murugan", mobile: "+91 98421 11001", status: "Active" },
+      { id: "unit-2", name: "Unit 2 - Knits & Outerwear", code: "UNT-02", location: "Avinashi SEZ Park", lines: 8, contactPerson: "K. Ramesh", mobile: "+91 98421 22002", status: "Active" },
+      { id: "unit-3", name: "Unit 3 - Printing & VAP Facility", code: "UNT-03", location: "Angeripalayam", lines: 4, contactPerson: "P. Anand", mobile: "+91 98421 33003", status: "Active" }
+    ];
+  });
+
+  const handleUnitsChange = useCallback((nextUnits) => {
+    setUnits(nextUnits);
+    try {
+      localStorage.setItem("loom_units_cache", JSON.stringify(nextUnits));
+      if (window.storage?.set) window.storage.set("global_units", JSON.stringify(nextUnits), true);
+    } catch (e) {}
+    try {
+      resourcesApi.list("units").then(existing => {
+        const nextIds = new Set((nextUnits || []).map(u => u.id));
+        (existing || []).filter(u => !nextIds.has(u.id)).forEach(u => resourcesApi.remove("units", u.id).catch(() => {}));
+        (nextUnits || []).forEach(u => {
+          const ex = (existing || []).find(item => item.id === u.id);
+          if (ex) resourcesApi.update("units", u.id, u).catch(() => {});
+          else resourcesApi.create("units", u).catch(() => {});
+        });
+      }).catch(() => {});
+    } catch (e) {}
+  }, []);
+
   const [financials, setFinancials] = useState(() => {
     try {
       const cached = localStorage.getItem("loom_financials_cache");
@@ -1037,6 +1068,7 @@ export default function LoomPLM() {
         financialsRes,
         staffRes,
         buyersRes,
+        unitsRes,
       ] = await Promise.allSettled([
         loadAccessState(),
         resourcesApi.list("orders", "?all=true"),
@@ -1049,7 +1081,12 @@ export default function LoomPLM() {
         resourcesApi.list("financials"),
         resourcesApi.list("staff"),
         resourcesApi.list("buyers"),
+        resourcesApi.list("units"),
       ]);
+
+      if (unitsRes.status === "fulfilled" && Array.isArray(unitsRes.value) && unitsRes.value.length > 0) {
+        setUnits(unitsRes.value.filter(u => u.isDeleted !== true));
+      }
 
       if (buyersRes.status === "fulfilled" && Array.isArray(buyersRes.value)) {
         setBuyers(buyersRes.value.filter(b => b && b.name && b.isDeleted !== true));
@@ -3267,13 +3304,7 @@ export default function LoomPLM() {
         });
       } catch (e) { }
 
-      // Persist as the global company-wide T&A pipeline so any user / device gets this workflow
-      if (Array.isArray(updatedStages) && updatedStages.length > 0) {
-        setGlobalAlignedStages(updatedStages);
-        if (window.storage && window.storage.set) {
-          window.storage.set("global_last_aligned_stages", JSON.stringify(updatedStages), true);
-        }
-      }
+      // Stage changes only apply to this particular order and do not overwrite master settings
 
       // Broadcast stage update to all other connected users in real time
       try {
@@ -4560,7 +4591,19 @@ export default function LoomPLM() {
     );
   } else if (view === "settings") {
     content = (
-      <UserAccessPage users={users} teams={teams} buyers={buyers} onChangeUsers={handleUsersChange} onChangeTeams={handleTeamsChange} rotation={rotation} onChangeRotation={handleRotationChange} />
+      <UserAccessPage
+        users={users}
+        teams={teams}
+        buyers={buyers}
+        onChangeUsers={handleUsersChange}
+        onChangeTeams={handleTeamsChange}
+        rotation={rotation}
+        onChangeRotation={handleRotationChange}
+        globalAlignedStages={globalAlignedStages}
+        onSaveGlobalMasterStages={setGlobalAlignedStages}
+        units={units}
+        onChangeUnits={handleUnitsChange}
+      />
     );
   } else if (isExecutive) {
     content = (

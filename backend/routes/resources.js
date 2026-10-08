@@ -109,6 +109,7 @@ const SOFT_DELETE_RESOURCES = [
   "supplierWork",
   "user_sessions",
   "audit_logs",
+  "units",
 ];
 
 export function normalizeOrderStages(record) {
