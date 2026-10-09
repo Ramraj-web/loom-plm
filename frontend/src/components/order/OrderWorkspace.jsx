@@ -65,8 +65,8 @@ export function DisputeStageModal({
   const suggestions = allUsersList.filter(u => {
     if (!query) return true;
     return u.username.toLowerCase().includes(query) ||
-           u.name.toLowerCase().includes(query) ||
-           (u.dept && u.dept.toLowerCase().includes(query));
+      u.name.toLowerCase().includes(query) ||
+      (u.dept && u.dept.toLowerCase().includes(query));
   }).slice(0, 8);
 
   const handleSubmit = (e) => {
@@ -298,18 +298,30 @@ export function isColourwayStage(stageName) {
 }
 
 // 2. Bind actual calendar dates instead of Day 1, Day 2
-export function formatStagePlannedDate(planned, orderStartDate) {
-  if (!planned || typeof planned !== "string") return planned || "";
-  const trimmed = planned.trim();
-  if (!trimmed.toLowerCase().startsWith("day")) {
-    return trimmed; // Already a real calendar date (e.g. "23 Apr")
+export function formatStagePlannedDate(planned, orderStartDate, stageObj = null) {
+  let startDayOffset = 0;
+  let endDayOffset = null;
+
+  if (stageObj && typeof stageObj.startDay === "number" && typeof stageObj.endDay === "number") {
+    startDayOffset = Math.max(0, stageObj.startDay);
+    endDayOffset = Math.max(startDayOffset, stageObj.endDay);
+  } else if (typeof planned === "string") {
+    const trimmed = planned.trim();
+    const match = trimmed.match(/(?:day\s*)?(\d+)(?:\s*-\s*(\d+))?/i);
+    if (match) {
+      if (match[2] !== undefined) {
+        startDayOffset = Math.max(0, parseInt(match[1], 10));
+        endDayOffset = Math.max(startDayOffset, parseInt(match[2], 10));
+      } else {
+        startDayOffset = 0;
+        endDayOffset = Math.max(1, parseInt(match[1], 10));
+      }
+    } else {
+      return trimmed;
+    }
+  } else {
+    return "";
   }
-
-  const match = trimmed.match(/day\s*(\d+)(?:\s*-\s*(\d+))?/i);
-  if (!match) return trimmed;
-
-  const startDayOffset = Math.max(0, parseInt(match[1], 10) - 1);
-  const endDayOffset = match[2] ? Math.max(0, parseInt(match[2], 10) - 1) : null;
 
   let baseDate = new Date();
   if (orderStartDate) {
@@ -370,31 +382,31 @@ export function computeOrderStageSchedules(stages = [], orderStartDate) {
 
   for (let i = 0; i < stages.length; i++) {
     const stage = stages[i];
-    const plannedStr = stage.planned || "";
     let startOffset = 0;
-    let endOffset = null;
+    let endOffset = 0;
 
-    if (typeof plannedStr === "string") {
-      const trimmed = plannedStr.trim();
-      const match = trimmed.match(/day\s*(\d+)(?:\s*-\s*(\d+))?/i);
+    if (typeof stage.startDay === "number" && typeof stage.endDay === "number") {
+      startOffset = Math.max(0, stage.startDay);
+      endOffset = Math.max(startOffset, stage.endDay);
+    } else {
+      const plannedStr = String(stage.planned || stage.days || "").trim();
+      const match = plannedStr.match(/(?:day\s*)?(\d+)(?:\s*-\s*(\d+))?/i);
       if (match) {
-        startOffset = Math.max(0, parseInt(match[1], 10) - 1);
-        if (match[2]) {
-          endOffset = Math.max(0, parseInt(match[2], 10) - 1);
+        if (match[2] !== undefined) {
+          startOffset = Math.max(0, parseInt(match[1], 10));
+          endOffset = Math.max(startOffset, parseInt(match[2], 10));
+        } else {
+          startOffset = 0;
+          endOffset = Math.max(1, parseInt(match[1], 10));
         }
-      } else {
-        const tryParsed = new Date(trimmed);
-        if (!isNaN(tryParsed.getTime())) {
-          const diffFromAnchor = Math.round((tryParsed.getTime() - new Date(anchorYear, anchorMonth, anchorDay).getTime()) / (24 * 60 * 60 * 1000));
-          startOffset = Math.max(0, diffFromAnchor);
-        }
+      } else if (typeof stage.days === "number") {
+        startOffset = 0;
+        endOffset = Math.max(1, stage.days);
       }
     }
 
     const origStartDate = addDays(anchorYear, anchorMonth, anchorDay, startOffset);
-    const origEndDate = endOffset !== null
-      ? addDays(anchorYear, anchorMonth, anchorDay, endOffset)
-      : origStartDate;
+    const origEndDate = addDays(anchorYear, anchorMonth, anchorDay, endOffset);
 
     const isDone = stage.status === "done";
     let doneDelayDays = 0;
@@ -428,18 +440,10 @@ export function computeOrderStageSchedules(stages = [], orderStartDate) {
       let revisedDateStr = null;
       if (cumulativeDelayDays > 0) {
         const revStart = addDays(anchorYear, anchorMonth, anchorDay, startOffset + cumulativeDelayDays);
+        const revEnd = addDays(anchorYear, anchorMonth, anchorDay, endOffset + cumulativeDelayDays);
         const revStartStr = `${revStart.getDate()} ${monthNames[revStart.getMonth()]}`;
-
-        if (endOffset !== null) {
-          const revEnd = addDays(anchorYear, anchorMonth, anchorDay, endOffset + cumulativeDelayDays);
-          if (revStart.getMonth() === revEnd.getMonth()) {
-            revisedDateStr = `${revStart.getDate()}-${revEnd.getDate()} ${monthNames[revStart.getMonth()]}`;
-          } else {
-            revisedDateStr = `${revStartStr} - ${revEnd.getDate()} ${monthNames[revEnd.getMonth()]}`;
-          }
-        } else {
-          revisedDateStr = revStartStr;
-        }
+        const revEndStr = `${revEnd.getDate()} ${monthNames[revEnd.getMonth()]}`;
+        revisedDateStr = revStartStr === revEndStr ? revStartStr : `${revStartStr} - ${revEndStr}`;
       }
 
       schedules.push({
@@ -1134,32 +1138,32 @@ function StageNode({ stage: rawStage, idx, onCycle, onUndo, canUndo = false, onR
   const currentColourways = (Array.isArray(stage.colourways) && stage.colourways.length > 0)
     ? stage.colourways
     : (orderColourways.length > 0 ? orderColourways.map(c => ({
-        color: c.color,
-        qty: c.qty,
-        status: stage.status === "done" ? "done" : stage.status === "in_progress" ? "in_progress" : "pending",
-        reason: stage.reason || "",
-        completedQty: stage.status === "done" ? c.qty : 0
-      })) : []);
+      color: c.color,
+      qty: c.qty,
+      status: stage.status === "done" ? "done" : stage.status === "in_progress" ? "in_progress" : "pending",
+      reason: stage.reason || "",
+      completedQty: stage.status === "done" ? c.qty : 0
+    })) : []);
   const doneColourwaysCount = currentColourways.filter(c => c.status === "done").length;
   const totalColourwaysCount = currentColourways.length;
 
   const icon =
     stage.status === "done" ? <CheckCircle2 size={17} color="#1F9E8D" /> :
-    locked ? <Lock size={14} color="#B0B2BA" /> :
-    stage.status === "in_progress" ? <Clock size={17} color="#E2A83B" /> :
-    <Circle size={17} color="#C7CAD1" />;
+      locked ? <Lock size={14} color="#B0B2BA" /> :
+        stage.status === "in_progress" ? <Clock size={17} color="#E2A83B" /> :
+          <Circle size={17} color="#C7CAD1" />;
 
   const tooltipTitle = locked
     ? `Locked until ${lockedBy} is approved`
     : !canEdit
-    ? `Only ${stage.dept} department can complete this stage (You are in: ${roleDept})`
-    : hasColourways
-    ? "Click to open colorway breakdown & delay tracking"
-    : stage.status === "done"
-    ? (canUndo ? "Stage completed — Click to undo back to In Progress (Admin/MD)" : "Stage completed (Stays completed; use 'Report False' to dispute)")
-    : stage.status === "in_progress"
-    ? "Click to mark as Done"
-    : "Click to start (Pending → In Progress)";
+      ? `Only ${stage.dept} department can complete this stage (You are in: ${roleDept})`
+      : hasColourways
+        ? "Click to open colorway breakdown & delay tracking"
+        : stage.status === "done"
+          ? (canUndo ? "Stage completed — Click to undo back to In Progress (Admin/MD)" : "Stage completed (Stays completed; use 'Report False' to dispute)")
+          : stage.status === "in_progress"
+            ? "Click to mark as Done"
+            : "Click to start (Pending → In Progress)";
 
   const handleStageClick = () => {
     if (!isAllowedToEdit) return;
@@ -2155,10 +2159,10 @@ function CostingTab({ order, role = {}, onSetTemplate, onUpdateRow, onAddRow, on
               {isApproved
                 ? `✓ Approved by ${costingApproval.approvedBy || "Managing Director (MD)"} (${costingApproval.approvedDate || "Approved"}) · Pass`
                 : isSubmitted
-                ? `⏳ Submitted for DGM / MD approval (${costingApproval.submittedDate || "Pending sign-off"}). Awaiting MD authorization.`
-                : isRejected
-                ? `✕ Costing rejected by MD (${costingApproval.reason || "Revisions needed"}). Please revise sheet and resubmit.`
-                : "Requires sign-off from DGM / Managing Director"}
+                  ? `⏳ Submitted for DGM / MD approval (${costingApproval.submittedDate || "Pending sign-off"}). Awaiting MD authorization.`
+                  : isRejected
+                    ? `✕ Costing rejected by MD (${costingApproval.reason || "Revisions needed"}). Please revise sheet and resubmit.`
+                    : "Requires sign-off from DGM / Managing Director"}
             </div>
           </div>
 
@@ -2323,7 +2327,7 @@ function OrderHighlightsCard({ order, role }) {
       } else {
         localStorage.setItem(`highlights:${order.id}`, JSON.stringify(next));
       }
-    } catch (e) {}
+    } catch (e) { }
   }
 
   function addHighlight() {
@@ -2622,7 +2626,7 @@ function DocumentsPanel({
       } else {
         localStorage.setItem(`customTypes:${order.id}`, JSON.stringify(next));
       }
-    } catch (e) {}
+    } catch (e) { }
   }
 
   async function sendMessage() {
@@ -2639,7 +2643,7 @@ function DocumentsPanel({
       } else {
         localStorage.setItem(`chat:${order.id}`, JSON.stringify(next));
       }
-    } catch (e) {}
+    } catch (e) { }
 
     // Dispatch direct user notifications for each @mentioned user!
     if (onPushNotification) {
@@ -2703,9 +2707,9 @@ function DocumentsPanel({
 
   const mentionSuggestions = mentionQuery !== null
     ? allUsersList.filter(u => {
-        const q = mentionQuery.toLowerCase();
-        return u.username.toLowerCase().includes(q) || u.name.toLowerCase().includes(q);
-      }).slice(0, 6)
+      const q = mentionQuery.toLowerCase();
+      return u.username.toLowerCase().includes(q) || u.name.toLowerCase().includes(q);
+    }).slice(0, 6)
     : [];
 
   const visibleMessages = messages.filter(m => !m.stage || includeStages[m.stage]);
@@ -2780,189 +2784,189 @@ function DocumentsPanel({
               canUploadHere={canUploadHere}
             />
           ) : (
-          <>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-            <div style={{ width: 26, height: 26, borderRadius: 7, background: "#F0EFFB", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <ActiveIcon size={13} color={ACCENT} />
-            </div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#1B2130" }}>{activeTab}</div>
-          </div>
-          <div style={{ fontSize: 11.5, color: "#8A8D98", marginBottom: 16, marginLeft: 34 }}>
-            {activeTab === "Files" ? "Source documents for this order — uploading PO Sheet automatically extracts FOB & PO Values" : "Upload proof once this T&A action is complete"}
-            {!canUploadHere && allowedDepts.length > 0 && (
-              <span style={{ color: "#B0812E", fontWeight: 600 }}> · Attaching here is owned by {allowedDepts.join(" / ")}</span>
-            )}
-          </div>
-          {scanStatus && (
-            <div style={{
-              display: "flex", alignItems: "center", gap: 10,
-              background: scanStatus.loading ? "#EFF6FF" : "#F0FDF4",
-              border: `1px solid ${scanStatus.loading ? "#BFDBFE" : "#BBF7D0"}`,
-              borderRadius: 8, padding: "10px 14px", marginBottom: 14,
-              fontSize: 12.5, color: scanStatus.loading ? "#1D4ED8" : "#15803D", fontWeight: 600
-            }}>
-              {scanStatus.loading ? (
-                <span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid #3B82F6", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-              ) : (
-                <CheckCircle2 size={16} />
+            <>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                <div style={{ width: 26, height: 26, borderRadius: 7, background: "#F0EFFB", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <ActiveIcon size={13} color={ACCENT} />
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#1B2130" }}>{activeTab}</div>
+              </div>
+              <div style={{ fontSize: 11.5, color: "#8A8D98", marginBottom: 16, marginLeft: 34 }}>
+                {activeTab === "Files" ? "Source documents for this order — uploading PO Sheet automatically extracts FOB & PO Values" : "Upload proof once this T&A action is complete"}
+                {!canUploadHere && allowedDepts.length > 0 && (
+                  <span style={{ color: "#B0812E", fontWeight: 600 }}> · Attaching here is owned by {allowedDepts.join(" / ")}</span>
+                )}
+              </div>
+              {scanStatus && (
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 10,
+                  background: scanStatus.loading ? "#EFF6FF" : "#F0FDF4",
+                  border: `1px solid ${scanStatus.loading ? "#BFDBFE" : "#BBF7D0"}`,
+                  borderRadius: 8, padding: "10px 14px", marginBottom: 14,
+                  fontSize: 12.5, color: scanStatus.loading ? "#1D4ED8" : "#15803D", fontWeight: 600
+                }}>
+                  {scanStatus.loading ? (
+                    <span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid #3B82F6", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+                  ) : (
+                    <CheckCircle2 size={16} />
+                  )}
+                  <span>{scanStatus.text}</span>
+                </div>
               )}
-              <span>{scanStatus.text}</span>
-            </div>
-          )}
-          {activeTab === "Final OCR" && (
-            <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#F7F7F9", border: "1px solid #ECEDF1", borderRadius: 10, padding: "12px 14px", marginBottom: 14 }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 12.5, fontWeight: 600, color: "#1B2130" }}>Shipped quantity</div>
-                <div style={{ fontSize: 11, color: "#8A8D98", marginTop: 2 }}>Actual qty dispatched — this is what feeds the Buyer Qty Difference Per Season report, in place of an estimate.</div>
-              </div>
-              <input
-                type="number"
-                value={order.shippedQty || 0}
-                disabled={!canUploadHere}
-                onChange={e => onUpdateShippedQty(order.primaryId || order.id, Number(e.target.value))}
-                style={{ width: 110, fontSize: 13, fontWeight: 600, padding: "7px 10px", borderRadius: 8, border: "1px solid #E7E8ED", textAlign: "right" }}
-              />
-              <span style={{ fontSize: 11.5, color: "#8A8D98" }}>/ {(Number(order.qty) || 0).toLocaleString()} pcs ordered</span>
-            </div>
-          )}
-          {docTypes.map((docType, i) => {
-            const entry = docs[docType];
-            const inputId = `upload-${order.id}-${activeTab}-${i}`;
-            const isImage = entry && (entry.type?.startsWith("image/") || entry.dataUrl?.startsWith("data:image/"));
-            const isPdf = entry && (entry.type === "application/pdf" || entry.name?.toLowerCase().endsWith(".pdf") || entry.dataUrl?.startsWith("data:application/pdf"));
-
-            const meta = DOC_ITEM_METADATA[docType];
-
-            return (
-              <div key={docType} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", marginBottom: 8, borderRadius: 10, background: entry ? "#F7FBF9" : "#FAFAFB", border: `1px solid ${entry ? "#DCEFE6" : "#EFEFF2"}` }}>
-                <div style={{ flex: 1, minWidth: 0, marginRight: 12 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: "#1B2130" }}>{docType}</span>
-                    {meta && (
-                      <span
-                        style={{
-                          fontSize: 10.5,
-                          fontWeight: 600,
-                          color: meta.color || "#4338CA",
-                          background: meta.bg || "#EEF2FF",
-                          border: `1px solid ${meta.border || "#C7D2FE"}`,
-                          padding: "1px 8px",
-                          borderRadius: 999,
-                          display: "inline-block"
-                        }}
-                      >
-                        {meta.dept}
-                      </span>
-                    )}
+              {activeTab === "Final OCR" && (
+                <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#F7F7F9", border: "1px solid #ECEDF1", borderRadius: 10, padding: "12px 14px", marginBottom: 14 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 600, color: "#1B2130" }}>Shipped quantity</div>
+                    <div style={{ fontSize: 11, color: "#8A8D98", marginTop: 2 }}>Actual qty dispatched — this is what feeds the Buyer Qty Difference Per Season report, in place of an estimate.</div>
                   </div>
-                  {entry ? (
-                    <div style={{ fontSize: 11, color: "#1F9E8D", marginTop: 4, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                      <CheckCircle2 size={12} style={{ flexShrink: 0 }} />
-                      <span
-                        onClick={() => setPreviewDoc({ ...entry, docType })}
-                        style={{ fontWeight: 600, color: "#047857", cursor: "pointer", textDecoration: "underline", display: "inline-flex", alignItems: "center", gap: 4 }}
-                        title="Click to view file"
-                      >
-                        {isImage && (
-                          <img src={entry.dataUrl} alt={entry.name} style={{ width: 18, height: 18, objectFit: "cover", borderRadius: 3, border: "1px solid #A7F3D0" }} />
+                  <input
+                    type="number"
+                    value={order.shippedQty || 0}
+                    disabled={!canUploadHere}
+                    onChange={e => onUpdateShippedQty(order.primaryId || order.id, Number(e.target.value))}
+                    style={{ width: 110, fontSize: 13, fontWeight: 600, padding: "7px 10px", borderRadius: 8, border: "1px solid #E7E8ED", textAlign: "right" }}
+                  />
+                  <span style={{ fontSize: 11.5, color: "#8A8D98" }}>/ {(Number(order.qty) || 0).toLocaleString()} pcs ordered</span>
+                </div>
+              )}
+              {docTypes.map((docType, i) => {
+                const entry = docs[docType];
+                const inputId = `upload-${order.id}-${activeTab}-${i}`;
+                const isImage = entry && (entry.type?.startsWith("image/") || entry.dataUrl?.startsWith("data:image/"));
+                const isPdf = entry && (entry.type === "application/pdf" || entry.name?.toLowerCase().endsWith(".pdf") || entry.dataUrl?.startsWith("data:application/pdf"));
+
+                const meta = DOC_ITEM_METADATA[docType];
+
+                return (
+                  <div key={docType} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", marginBottom: 8, borderRadius: 10, background: entry ? "#F7FBF9" : "#FAFAFB", border: `1px solid ${entry ? "#DCEFE6" : "#EFEFF2"}` }}>
+                    <div style={{ flex: 1, minWidth: 0, marginRight: 12 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: "#1B2130" }}>{docType}</span>
+                        {meta && (
+                          <span
+                            style={{
+                              fontSize: 10.5,
+                              fontWeight: 600,
+                              color: meta.color || "#4338CA",
+                              background: meta.bg || "#EEF2FF",
+                              border: `1px solid ${meta.border || "#C7D2FE"}`,
+                              padding: "1px 8px",
+                              borderRadius: 999,
+                              display: "inline-block"
+                            }}
+                          >
+                            {meta.dept}
+                          </span>
                         )}
-                        {entry.name}
-                      </span>
-                      <span style={{ color: "#64748B" }}>· {entry.by} · {entry.uploadedAt}</span>
+                      </div>
+                      {entry ? (
+                        <div style={{ fontSize: 11, color: "#1F9E8D", marginTop: 4, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                          <CheckCircle2 size={12} style={{ flexShrink: 0 }} />
+                          <span
+                            onClick={() => setPreviewDoc({ ...entry, docType })}
+                            style={{ fontWeight: 600, color: "#047857", cursor: "pointer", textDecoration: "underline", display: "inline-flex", alignItems: "center", gap: 4 }}
+                            title="Click to view file"
+                          >
+                            {isImage && (
+                              <img src={entry.dataUrl} alt={entry.name} style={{ width: 18, height: 18, objectFit: "cover", borderRadius: 3, border: "1px solid #A7F3D0" }} />
+                            )}
+                            {entry.name}
+                          </span>
+                          <span style={{ color: "#64748B" }}>· {entry.by} · {entry.uploadedAt}</span>
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: 11, color: "#B0B2BA", marginTop: 3 }}>Not uploaded yet</div>
+                      )}
                     </div>
-                  ) : (
-                    <div style={{ fontSize: 11, color: "#B0B2BA", marginTop: 3 }}>Not uploaded yet</div>
-                  )}
-                </div>
 
-                {/* 3 Action Options: View, Upload/Replace, Delete */}
-                <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                  {/* 1. View Button (Enabled when file is uploaded) */}
-                  {entry && (
-                    <button
-                      onClick={() => setPreviewDoc({ ...entry, docType })}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 4,
-                        fontSize: 11.5, fontWeight: 600, color: "#2563EB",
-                        border: "1px solid #BFDBFE", background: "#EFF6FF",
-                        borderRadius: 8, padding: "5px 10px", cursor: "pointer"
-                      }}
-                      title="View file or preview document"
-                    >
-                      <Eye size={12} /> View
-                    </button>
-                  )}
+                    {/* 3 Action Options: View, Upload/Replace, Delete */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                      {/* 1. View Button (Enabled when file is uploaded) */}
+                      {entry && (
+                        <button
+                          onClick={() => setPreviewDoc({ ...entry, docType })}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 4,
+                            fontSize: 11.5, fontWeight: 600, color: "#2563EB",
+                            border: "1px solid #BFDBFE", background: "#EFF6FF",
+                            borderRadius: 8, padding: "5px 10px", cursor: "pointer"
+                          }}
+                          title="View file or preview document"
+                        >
+                          <Eye size={12} /> View
+                        </button>
+                      )}
 
-                  {/* 2. Upload / Replace Button */}
-                  {canUploadHere ? (
-                    <>
-                      <input
-                        type="file"
-                        id={inputId}
-                        style={{ display: "none" }}
-                        onChange={e => { const f = e.target.files[0]; if (f) upload(docType, f); e.target.value = ""; }}
-                      />
-                      <label
-                        htmlFor={inputId}
-                        style={{
-                          display: "flex", alignItems: "center", gap: 4,
-                          fontSize: 11.5, fontWeight: 600,
-                          color: entry ? "#0D9488" : ACCENT,
-                          border: `1px solid ${entry ? "#99F6E4" : "#D9D6F5"}`,
-                          background: "#fff", borderRadius: 8, padding: "5px 10px", cursor: "pointer"
-                        }}
-                        title={entry ? "Replace existing file" : "Upload new file"}
-                      >
-                        <Upload size={12} /> {entry ? "Replace" : "Upload"}
-                      </label>
-                    </>
-                  ) : (
-                    !entry && <span style={{ fontSize: 11, color: "#B0B2BA", fontWeight: 600, padding: "5px 10px" }}>View only</span>
-                  )}
+                      {/* 2. Upload / Replace Button */}
+                      {canUploadHere ? (
+                        <>
+                          <input
+                            type="file"
+                            id={inputId}
+                            style={{ display: "none" }}
+                            onChange={e => { const f = e.target.files[0]; if (f) upload(docType, f); e.target.value = ""; }}
+                          />
+                          <label
+                            htmlFor={inputId}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 4,
+                              fontSize: 11.5, fontWeight: 600,
+                              color: entry ? "#0D9488" : ACCENT,
+                              border: `1px solid ${entry ? "#99F6E4" : "#D9D6F5"}`,
+                              background: "#fff", borderRadius: 8, padding: "5px 10px", cursor: "pointer"
+                            }}
+                            title={entry ? "Replace existing file" : "Upload new file"}
+                          >
+                            <Upload size={12} /> {entry ? "Replace" : "Upload"}
+                          </label>
+                        </>
+                      ) : (
+                        !entry && <span style={{ fontSize: 11, color: "#B0B2BA", fontWeight: 600, padding: "5px 10px" }}>View only</span>
+                      )}
 
-                  {/* 3. Delete Button */}
-                  {entry && canUploadHere && (
-                    <button
-                      onClick={() => deleteDoc(docType)}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 4,
-                        fontSize: 11.5, fontWeight: 600, color: "#DC2626",
-                        border: "1px solid #FECACA", background: "#FEF2F2",
-                        borderRadius: 8, padding: "5px 9px", cursor: "pointer"
-                      }}
-                      title="Delete uploaded file"
-                    >
-                      <Trash2 size={12} /> Delete
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-          {CUSTOMIZABLE_TABS.has(activeTab) && canUploadHere && (
-            addingCustom ? (
-              <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-                <input
-                  autoFocus
-                  value={customLabel}
-                  onChange={e => setCustomLabel(e.target.value)}
-                  onKeyDown={e => { if (e.key === "Enter") addCustomType(); }}
-                  placeholder="e.g. Other Trim — Elastic Tape"
-                  style={{ flex: 1, fontSize: 12.5, padding: "8px 10px", borderRadius: 8, border: "1px solid #E7E8ED" }}
-                />
-                <button onClick={addCustomType} style={{ fontSize: 12, fontWeight: 600, color: "#fff", background: ACCENT, border: "none", borderRadius: 8, padding: "0 14px", cursor: "pointer" }}>Add</button>
-                <button onClick={() => { setAddingCustom(false); setCustomLabel(""); }} style={{ fontSize: 12, color: "#8A8D98", background: "none", border: "none", cursor: "pointer" }}>Cancel</button>
-              </div>
-            ) : (
-              <div
-                onClick={() => setAddingCustom(true)}
-                style={{ display: "flex", alignItems: "center", gap: 6, padding: "12px 14px", borderRadius: 10, border: "1px dashed #D9D6F5", color: ACCENT, fontSize: 12.5, fontWeight: 600, cursor: "pointer", marginTop: 4 }}
-              >
-                + Add other {activeTab === "Sampling" ? "sample type" : activeTab === "Costing" ? "line item" : "material / trim / file"}
-              </div>
-            )
-          )}
-          </>
+                      {/* 3. Delete Button */}
+                      {entry && canUploadHere && (
+                        <button
+                          onClick={() => deleteDoc(docType)}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 4,
+                            fontSize: 11.5, fontWeight: 600, color: "#DC2626",
+                            border: "1px solid #FECACA", background: "#FEF2F2",
+                            borderRadius: 8, padding: "5px 9px", cursor: "pointer"
+                          }}
+                          title="Delete uploaded file"
+                        >
+                          <Trash2 size={12} /> Delete
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              {CUSTOMIZABLE_TABS.has(activeTab) && canUploadHere && (
+                addingCustom ? (
+                  <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                    <input
+                      autoFocus
+                      value={customLabel}
+                      onChange={e => setCustomLabel(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter") addCustomType(); }}
+                      placeholder="e.g. Other Trim — Elastic Tape"
+                      style={{ flex: 1, fontSize: 12.5, padding: "8px 10px", borderRadius: 8, border: "1px solid #E7E8ED" }}
+                    />
+                    <button onClick={addCustomType} style={{ fontSize: 12, fontWeight: 600, color: "#fff", background: ACCENT, border: "none", borderRadius: 8, padding: "0 14px", cursor: "pointer" }}>Add</button>
+                    <button onClick={() => { setAddingCustom(false); setCustomLabel(""); }} style={{ fontSize: 12, color: "#8A8D98", background: "none", border: "none", cursor: "pointer" }}>Cancel</button>
+                  </div>
+                ) : (
+                  <div
+                    onClick={() => setAddingCustom(true)}
+                    style={{ display: "flex", alignItems: "center", gap: 6, padding: "12px 14px", borderRadius: 10, border: "1px dashed #D9D6F5", color: ACCENT, fontSize: 12.5, fontWeight: 600, cursor: "pointer", marginTop: 4 }}
+                  >
+                    + Add other {activeTab === "Sampling" ? "sample type" : activeTab === "Costing" ? "line item" : "material / trim / file"}
+                  </div>
+                )
+              )}
+            </>
           )}
         </div>
       </Card>
@@ -3298,15 +3302,15 @@ export function OrderWorkspace({
       // If stage has colourways, revert any done colourways back to in_progress or adjust logs
       const revertedColourways = Array.isArray(s.colourways)
         ? s.colourways.map(c => {
-            if (c.status === "done") {
-              return {
-                ...c,
-                status: "in_progress",
-                completedQty: Math.max(0, (c.qty || 0) - 1)
-              };
-            }
-            return c;
-          })
+          if (c.status === "done") {
+            return {
+              ...c,
+              status: "in_progress",
+              completedQty: Math.max(0, (c.qty || 0) - 1)
+            };
+          }
+          return c;
+        })
         : s.colourways;
 
       return {
@@ -3385,7 +3389,7 @@ export function OrderWorkspace({
           <div style={{ fontSize: 14.5, fontWeight: 700, color: "#1B2130" }}>T&A stage tracker</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 11, color: "#8A8D98" }}>Template:</span>
+          {/* <span style={{ fontSize: 11, color: "#8A8D98" }}>Template:</span>
           <select
             value={order.template || "90"}
             onChange={e => onSetTemplate(order.id, e.target.value)}
@@ -3393,7 +3397,7 @@ export function OrderWorkspace({
           >
             <option value="90">90-day (standard)</option>
             <option value="120">120-day (dye / print, longer lead time)</option>
-          </select>
+          </select> */}
           {canAlignStages && (
             <button
               type="button"
@@ -3443,14 +3447,14 @@ export function OrderWorkspace({
       <div style={{ display: "flex", gap: 2, overflowX: "auto", paddingBottom: 8 }}>
         {(orderStages || []).map((s, i) => {
           const gate = gatingApproval(orderStages, i);
-          
+
           // Strict Multi-Department Ownership:
           // Admin, Executive, fullAccess can edit any stage.
           // Department users can edit/complete stages belonging to ANY of their assigned departments!
           const userDeptList = Array.isArray(role?.departments) && role.departments.length > 0
             ? role.departments.map(d => d.toLowerCase())
             : [(role?.dept || "").toLowerCase()];
-          
+
           const canEditThisStage = Boolean(
             role?.fullAccess ||
             role?.dept === "Executive" ||

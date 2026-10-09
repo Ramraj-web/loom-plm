@@ -5597,20 +5597,29 @@ export function OrderStageAlignmentModal({
 
   const [customStageName, setCustomStageName] = useState("");
   const [customStageDept, setCustomStageDept] = useState("Merchandising");
-  const [customStageDay, setCustomStageDay] = useState("Day 10");
+  const [customStageStartDay, setCustomStageStartDay] = useState(0);
+  const [customStageEndDay, setCustomStageEndDay] = useState(2);
+  const [customStageIsParallel, setCustomStageIsParallel] = useState(true);
   // -1 = append at end, 0 = insert at beginning, N = insert after stage index N-1
   const [customStagePosition, setCustomStagePosition] = useState(-1);
 
   const addCustomStage = (e) => {
     e.preventDefault();
     if (!customStageName.trim()) return;
+    const start = Math.max(0, Number(customStageStartDay) || 0);
+    const end = Math.max(start, Number(customStageEndDay) || start);
+    const daysNum = Math.max(1, end - start);
     const newStage = {
       name: customStageName.trim(),
       dept: customStageDept,
       status: "pending",
       assignee: firstNamedAssignee(customStageDept),
       reason: null,
-      planned: customStageDay.trim() || "Day 1",
+      startDay: start,
+      endDay: end,
+      days: daysNum,
+      planned: `Day ${start}-${end}`,
+      isParallel: customStageIsParallel !== false,
       completedAt: null,
       completedOn: null,
       updatedAt: null,
@@ -5632,7 +5641,9 @@ export function OrderStageAlignmentModal({
     }
     setStages(nextStages);
     setCustomStageName("");
-    setCustomStageDay("Day 10");
+    setCustomStageStartDay(0);
+    setCustomStageEndDay(2);
+    setCustomStageIsParallel(true);
     setCustomStagePosition(-1);
   };
 
@@ -5819,22 +5830,28 @@ export function OrderStageAlignmentModal({
                     {idx + 1}
                   </div>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "#111827", display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#111827", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                       <span>{stage.name}</span>
                       {stage.isCustom && (
                         <span style={{ fontSize: 10, background: "#EDE9FE", color: "#534AB7", padding: "1px 6px", borderRadius: 4, fontWeight: 700, border: "1px solid #C4B8F5" }}>
                           CUSTOM
                         </span>
                       )}
-                      {stage.name.toLowerCase().includes("approval") && (
-                        <span style={{ fontSize: 10, background: "#FEF3C7", color: "#92400E", padding: "1px 6px", borderRadius: 4, fontWeight: 700 }}>
-                          Gating Approval
-                        </span>
-                      )}
+                      <span style={{
+                        fontSize: 10,
+                        fontWeight: 600,
+                        padding: "1px 6px",
+                        borderRadius: 12,
+                        background: stage.isParallel !== false ? "#ECFDF5" : "#EFF6FF",
+                        color: stage.isParallel !== false ? "#047857" : "#1D4ED8",
+                        border: `1px solid ${stage.isParallel !== false ? "#A7F3D0" : "#BFDBFE"}`
+                      }}>
+                        {stage.isParallel !== false ? "⚡ Parallel (Always Open)" : "🔒 Sequential"}
+                      </span>
                     </div>
                     <div style={{ fontSize: 11.5, color: "#6B7280", marginTop: 2, display: "flex", gap: 10 }}>
                       <span>Department: <b style={{ color: "#374151" }}>{stage.dept}</b></span>
-                      <span>Target: <b style={{ color: "#374151" }}>{stage.planned || `Day ${idx + 1}`}</b></span>
+                      <span>Target Range: <b style={{ color: "#374151" }}>{typeof stage.startDay === "number" ? `${stage.startDay}-${stage.endDay} Days` : (stage.planned || `Day ${idx + 1}`)}</b></span>
                     </div>
                   </div>
                 </div>
@@ -5912,8 +5929,8 @@ export function OrderStageAlignmentModal({
             <div style={{ fontSize: 12, fontWeight: 700, color: "#534AB7", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
               <span style={{ fontSize: 15 }}>＋</span> Insert Custom Stage to this Pipeline
             </div>
-            {/* Row 1: Stage Name, Department, Target Day */}
-            <div style={{ display: "grid", gridTemplateColumns: "1.8fr 1fr 1fr", gap: 8, marginBottom: 8 }}>
+            {/* Row 1: Stage Name, Department, Start Day, End Day, Execution Mode */}
+            <div style={{ display: "grid", gridTemplateColumns: "1.8fr 1.2fr 0.8fr 0.8fr 1.4fr", gap: 8, marginBottom: 8 }}>
               <input
                 type="text"
                 placeholder="Stage Name (e.g. Special Foil Print)"
@@ -5932,12 +5949,29 @@ export function OrderStageAlignmentModal({
                 ))}
               </select>
               <input
-                type="text"
-                placeholder="Target Day (e.g. Day 22)"
-                value={customStageDay}
-                onChange={e => setCustomStageDay(e.target.value)}
+                type="number"
+                min="0"
+                placeholder="Start Day (0)"
+                value={customStageStartDay}
+                onChange={e => setCustomStageStartDay(e.target.value)}
                 style={{ padding: "7px 10px", borderRadius: 6, border: "1px solid #C4B8F5", fontSize: 12, background: "#fff" }}
               />
+              <input
+                type="number"
+                min="0"
+                placeholder="End Day (2)"
+                value={customStageEndDay}
+                onChange={e => setCustomStageEndDay(e.target.value)}
+                style={{ padding: "7px 10px", borderRadius: 6, border: "1px solid #C4B8F5", fontSize: 12, background: "#fff" }}
+              />
+              <select
+                value={customStageIsParallel ? "parallel" : "sequential"}
+                onChange={e => setCustomStageIsParallel(e.target.value === "parallel")}
+                style={{ padding: "7px 10px", borderRadius: 6, border: "1px solid #C4B8F5", fontSize: 12, background: "#fff" }}
+              >
+                <option value="parallel">⚡ Parallel (Always Opened)</option>
+                <option value="sequential">🔒 Sequential (Opens when prev completes)</option>
+              </select>
             </div>
             {/* Row 2: Position selector + Add button */}
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>

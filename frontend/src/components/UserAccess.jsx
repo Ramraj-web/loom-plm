@@ -146,22 +146,29 @@ export function UserAccessPage({
 
   const [newStageName, setNewStageName] = useState("");
   const [newStageDept, setNewStageDept] = useState("Merchandising");
-  const [newStageDays, setNewStageDays] = useState(3);
+  const [newStageStartDay, setNewStageStartDay] = useState(0);
+  const [newStageEndDay, setNewStageEndDay] = useState(2);
+  const [newStageIsParallel, setNewStageIsParallel] = useState(true);
   const [newStagePosition, setNewStagePosition] = useState(-1);
   const [stageEditingIdx, setStageEditingIdx] = useState(null);
-  const [stageEditData, setStageEditData] = useState({ name: "", dept: "Merchandising", days: 3 });
+  const [stageEditData, setStageEditData] = useState({ name: "", dept: "Merchandising", startDay: 0, endDay: 2, isParallel: true });
   const [stageSuccessMsg, setStageSuccessMsg] = useState("");
 
   const handleAddMasterStage = (e) => {
     e.preventDefault();
     if (!newStageName.trim()) return;
-    const daysNum = Math.max(1, Number(newStageDays) || 1);
+    const start = Math.max(0, Number(newStageStartDay) || 0);
+    const end = Math.max(start, Number(newStageEndDay) || start);
+    const daysNum = Math.max(1, end - start);
     const newStage = {
       id: `mstg-${Date.now()}`,
       name: newStageName.trim(),
       dept: newStageDept,
+      startDay: start,
+      endDay: end,
       days: daysNum,
-      planned: `${daysNum} Days`
+      planned: `Day ${start}-${end}`,
+      isParallel: newStageIsParallel !== false
     };
     const pos = Number(newStagePosition);
     let nextList;
@@ -175,7 +182,9 @@ export function UserAccessPage({
     }
     setMasterStages(nextList);
     setNewStageName("");
-    setNewStageDays(3);
+    setNewStageStartDay(0);
+    setNewStageEndDay(2);
+    setNewStageIsParallel(true);
     setNewStagePosition(-1);
   };
 
@@ -196,19 +205,32 @@ export function UserAccessPage({
   const startEditMasterStage = (idx) => {
     const stg = masterStages[idx];
     setStageEditingIdx(idx);
-    setStageEditData({ name: stg.name, dept: stg.dept || "Merchandising", days: stg.days || 3 });
+    const sDay = typeof stg.startDay === "number" ? stg.startDay : 0;
+    const eDay = typeof stg.endDay === "number" ? stg.endDay : (sDay + (stg.days || 2));
+    setStageEditData({
+      name: stg.name,
+      dept: stg.dept || "Merchandising",
+      startDay: sDay,
+      endDay: eDay,
+      isParallel: stg.isParallel !== false
+    });
   };
 
   const saveEditMasterStage = (idx) => {
     if (!stageEditData.name.trim()) return;
-    const daysNum = Math.max(1, Number(stageEditData.days) || 1);
+    const start = Math.max(0, Number(stageEditData.startDay) || 0);
+    const end = Math.max(start, Number(stageEditData.endDay) || start);
+    const daysNum = Math.max(1, end - start);
     const updated = [...masterStages];
     updated[idx] = {
       ...updated[idx],
       name: stageEditData.name.trim(),
       dept: stageEditData.dept,
+      startDay: start,
+      endDay: end,
       days: daysNum,
-      planned: `${daysNum} Days`
+      planned: `Day ${start}-${end}`,
+      isParallel: stageEditData.isParallel !== false
     };
     setMasterStages(updated);
     setStageEditingIdx(null);
@@ -858,7 +880,7 @@ export function UserAccessPage({
             ＋ Add Manual Entry T&A Stage
           </div>
           <form onSubmit={handleAddMasterStage}>
-            <div style={{ display: "grid", gridTemplateColumns: "1.8fr 1.2fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1.2fr 0.8fr 0.8fr 1.4fr 1fr", gap: 10, marginBottom: 12 }}>
               <div>
                 <label style={labelStyle}>
                   Stage Name *
@@ -888,16 +910,43 @@ export function UserAccessPage({
               </div>
               <div>
                 <label style={labelStyle}>
-                  Duration (Days) *
+                  Start Day *
                   <input
                     type="number"
-                    min="1"
-                    max="180"
+                    min="0"
+                    max="300"
                     required
-                    value={newStageDays}
-                    onChange={e => setNewStageDays(e.target.value)}
+                    value={newStageStartDay}
+                    onChange={e => setNewStageStartDay(e.target.value)}
                     style={inputStyle}
                   />
+                </label>
+              </div>
+              <div>
+                <label style={labelStyle}>
+                  End Day *
+                  <input
+                    type="number"
+                    min="0"
+                    max="300"
+                    required
+                    value={newStageEndDay}
+                    onChange={e => setNewStageEndDay(e.target.value)}
+                    style={inputStyle}
+                  />
+                </label>
+              </div>
+              <div>
+                <label style={labelStyle}>
+                  Execution Mode
+                  <select
+                    value={newStageIsParallel ? "parallel" : "sequential"}
+                    onChange={e => setNewStageIsParallel(e.target.value === "parallel")}
+                    style={{ ...inputStyle, background: "#fff" }}
+                  >
+                    <option value="parallel">⚡ Parallel (Always Opened)</option>
+                    <option value="sequential">🔒 Sequential (Opens when prev completes)</option>
+                  </select>
                 </label>
               </div>
               <div>
@@ -942,12 +991,16 @@ export function UserAccessPage({
               <div style={{ padding: "36px 20px", textAlign: "center", background: "#F8FAFC", border: "1.5px dashed #CBD5E1", borderRadius: 10, color: "#64748B" }}>
                 <div style={{ fontSize: 15, fontWeight: 700, color: "#334155", marginBottom: 6 }}>No T&A Stages Added Yet</div>
                 <div style={{ fontSize: 12.5, maxWidth: 460, margin: "0 auto" }}>
-                  Use the manual entry form above to enter each stage name, select the department, and specify how many days in that stage.
+                  Use the manual entry form above to enter each stage name, select the department, specify start/end day offsets (e.g. 0-2 days), and set parallel or sequential execution mode.
                 </div>
               </div>
             ) : (
               masterStages.map((stage, idx) => {
               const isEditing = stageEditingIdx === idx;
+              const sDay = typeof stage.startDay === "number" ? stage.startDay : 0;
+              const eDay = typeof stage.endDay === "number" ? stage.endDay : (sDay + (stage.days || 2));
+              const isParallel = stage.isParallel !== false;
+
               return (
                 <div
                   key={stage.id || `${stage.name}-${idx}`}
@@ -983,29 +1036,46 @@ export function UserAccessPage({
                     </div>
 
                     {isEditing ? (
-                      <div style={{ display: "flex", gap: 8, flex: 1, alignItems: "center" }}>
+                      <div style={{ display: "flex", gap: 8, flex: 1, alignItems: "center", flexWrap: "wrap" }}>
                         <input
                           type="text"
                           value={stageEditData.name}
                           onChange={e => setStageEditData({ ...stageEditData, name: e.target.value })}
-                          style={{ ...inputStyle, padding: "5px 8px", fontSize: 12, flex: 2 }}
+                          style={{ ...inputStyle, padding: "5px 8px", fontSize: 12, flex: 2, minWidth: 140 }}
                         />
                         <select
                           value={stageEditData.dept}
                           onChange={e => setStageEditData({ ...stageEditData, dept: e.target.value })}
-                          style={{ ...inputStyle, padding: "5px 8px", fontSize: 12, flex: 1.5 }}
+                          style={{ ...inputStyle, padding: "5px 8px", fontSize: 12, flex: 1.5, minWidth: 120 }}
                         >
                           {availableDepartments.map(d => (
                             <option key={d} value={d}>{d}</option>
                           ))}
                         </select>
+                        <span style={{ fontSize: 11, color: "#6B7280" }}>Start Day:</span>
                         <input
                           type="number"
-                          min="1"
-                          value={stageEditData.days}
-                          onChange={e => setStageEditData({ ...stageEditData, days: e.target.value })}
-                          style={{ ...inputStyle, padding: "5px 8px", fontSize: 12, width: 70 }}
+                          min="0"
+                          value={stageEditData.startDay}
+                          onChange={e => setStageEditData({ ...stageEditData, startDay: e.target.value })}
+                          style={{ ...inputStyle, padding: "5px 8px", fontSize: 12, width: 60 }}
                         />
+                        <span style={{ fontSize: 11, color: "#6B7280" }}>End Day:</span>
+                        <input
+                          type="number"
+                          min="0"
+                          value={stageEditData.endDay}
+                          onChange={e => setStageEditData({ ...stageEditData, endDay: e.target.value })}
+                          style={{ ...inputStyle, padding: "5px 8px", fontSize: 12, width: 60 }}
+                        />
+                        <select
+                          value={stageEditData.isParallel ? "parallel" : "sequential"}
+                          onChange={e => setStageEditData({ ...stageEditData, isParallel: e.target.value === "parallel" })}
+                          style={{ ...inputStyle, padding: "5px 8px", fontSize: 12, width: 150 }}
+                        >
+                          <option value="parallel">⚡ Parallel (Always Opened)</option>
+                          <option value="sequential">🔒 Sequential (Opens when prev completes)</option>
+                        </select>
                         <button
                           type="button"
                           onClick={() => saveEditMasterStage(idx)}
@@ -1016,12 +1086,23 @@ export function UserAccessPage({
                       </div>
                     ) : (
                       <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>
-                          {stage.name}
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "#111827", display: "flex", alignItems: "center", gap: 8 }}>
+                          <span>{stage.name}</span>
+                          <span style={{
+                            fontSize: 10.5,
+                            fontWeight: 600,
+                            padding: "1px 7px",
+                            borderRadius: 12,
+                            background: isParallel ? "#ECFDF5" : "#EFF6FF",
+                            color: isParallel ? "#047857" : "#1D4ED8",
+                            border: `1px solid ${isParallel ? "#A7F3D0" : "#BFDBFE"}`
+                          }}>
+                            {isParallel ? "⚡ Parallel (Always Opened)" : "🔒 Sequential (Opens when prev completes)"}
+                          </span>
                         </div>
-                        <div style={{ fontSize: 11.5, color: "#6B7280", marginTop: 2, display: "flex", gap: 12 }}>
+                        <div style={{ fontSize: 11.5, color: "#6B7280", marginTop: 3, display: "flex", gap: 14 }}>
                           <span>Department: <b style={{ color: "#4F46E5" }}>{stage.dept}</b></span>
-                          <span>Duration: <b style={{ color: "#374151" }}>{stage.days || 3} Days</b></span>
+                          <span>Days Offset: <b style={{ color: "#111827" }}>{sDay}-{eDay} Days</b></span>
                         </div>
                       </div>
                     )}

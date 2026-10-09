@@ -313,12 +313,32 @@ export function DarkCardHeader({ title, sub, action }) {
 }
 
 export function gatingApproval(stages, idx) {
-  if (!stages) return null;
+  if (!Array.isArray(stages) || idx <= 0) return null;
+  const currentStage = stages[idx];
+  if (!currentStage) return null;
+
+  // 1. Parallel stages (isParallel: true / default parallel) are ALWAYS OPEN from Day 1
+  if (currentStage.isParallel === true || currentStage.alwaysEnabled === true || currentStage.parallel === true) {
+    return null;
+  }
+
+  // 2. Sequential stages (isParallel: false) open ONLY when the previous stage completes
+  if (currentStage.isParallel === false || currentStage.parallel === false || currentStage.sequential === true) {
+    const prevStage = stages[idx - 1];
+    if (prevStage && prevStage.status !== "done") {
+      if (Array.isArray(prevStage.colourways) && prevStage.colourways.length > 0) {
+        const anyDone = prevStage.colourways.some(c => c.status === "done" || (Number(c.completedQty) || 0) > 0);
+        if (!anyDone) return prevStage;
+      } else {
+        return prevStage;
+      }
+    }
+  }
+
+  // 3. Check for previous gating approval steps
   for (let j = idx - 1; j >= 0; j--) {
     const s = stages[j];
     if (s && s.name && s.name.toLowerCase().includes("approval")) {
-      // If stage has colourways, check if at least one color is completed/received.
-      // Partial color completion does NOT stop production and allows subsequent stages to proceed!
       if (Array.isArray(s.colourways) && s.colourways.length > 0) {
         const anyDone = s.colourways.some(c => c.status === "done" || (Number(c.completedQty) || 0) > 0);
         if (!anyDone && s.status !== "done") {
