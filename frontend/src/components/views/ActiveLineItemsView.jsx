@@ -137,7 +137,7 @@ export default function ActiveLineItemsView({
   // Helper: Calculate stage status for table cell
   const getStageCellInfo = (order, stageName) => {
     if (!Array.isArray(order.stages)) return { type: "unassigned", text: "—", delayDays: 0 };
-    
+
     const stageIdx = order.stages.findIndex(s => s.name === stageName);
     if (stageIdx === -1) return { type: "unassigned", text: "—", delayDays: 0 };
 
@@ -145,7 +145,7 @@ export default function ActiveLineItemsView({
     const isDone = stage.status === "done";
     const isInProgress = stage.status === "in_progress";
     const hasReason = Boolean(stage.reason && stage.reason !== "No delay flagged");
-    
+
     // Calculate delay days if available
     let delayDays = 0;
     if (stage.delayDays) {
@@ -179,10 +179,10 @@ export default function ActiveLineItemsView({
     const stages = Array.isArray(order.stages) ? order.stages : [];
     const totalCount = stages.length || 27;
     const doneCount = stages.filter(s => s.status === "done").length;
-    
+
     const delayedStage = stages.find(s => s.reason || s.status === "delayed" || s.disputed);
     const delayDays = delayedStage?.delayDays || (delayedStage?.reason ? 17 : 0);
-    
+
     let summaryText = `${doneCount}/${totalCount} stages completed. `;
     if (delayedStage) {
       summaryText += `${delayedStage.name} delayed by ${delayDays || 17} day(s). Projected ex-factory is 4 day(s) after ship date.`;
@@ -644,97 +644,98 @@ export default function ActiveLineItemsView({
                             </div>
                           </td>
 
-                        {/* Stage Cells */}
-                        {masterStageColumns.map(col => {
-                          const cell = getStageCellInfo(item, col.name);
+                          {/* Stage Cells */}
+                          {masterStageColumns.map(col => {
+                            const cell = getStageCellInfo(item, col.name);
 
-                          return (
-                            <td key={col.name} style={{ padding: "8px 10px", textAlign: "center", borderLeft: `1px solid ${isDarkMode ? "#1E293B" : "#F1F5F9"}`, borderBottom: `1px solid ${isDarkMode ? "#1E293B" : "#F1F5F9"}` }}>
-                              {cell.type === "unassigned" ? (
-                                <div style={{
-                                  padding: "6px",
-                                  borderRadius: 6,
-                                  background: "repeating-linear-gradient(45deg, #F8FAFC, #F8FAFC 4px, #E2E8F0 4px, #E2E8F0 8px)",
-                                  color: "#94A3B8",
-                                  fontSize: 11
-                                }}>
-                                  —
-                                </div>
-                              ) : cell.type === "completed" ? (
-                                <div style={{
-                                  padding: "6px 8px",
-                                  borderRadius: 6,
-                                  background: "#E0F2FE",
-                                  color: "#0369A1",
-                                  fontWeight: 600,
-                                  fontSize: 11.5,
-                                  border: "1px solid #BAE6FD"
-                                }}>
-                                  {cell.text}
-                                </div>
-                              ) : cell.type === "delayed" ? (
-                                <div style={{
-                                  padding: "5px 8px",
-                                  borderRadius: 6,
-                                  background: "#FEF2F2",
-                                  color: "#DC2626",
-                                  fontWeight: 700,
-                                  fontSize: 11.5,
-                                  border: "2px solid #EF4444",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  gap: 4
-                                }}>
-                                  <span>{cell.text}</span>
-                                  <span style={{ background: "#DC2626", color: "#FFF", borderRadius: 4, padding: "1px 4px", fontSize: 10 }}>
-                                    +{cell.delayDays}d
-                                  </span>
-                                </div>
-                              ) : cell.type === "current" ? (
-                                <div style={{
-                                  padding: "6px 8px",
-                                  borderRadius: 6,
-                                  background: "#FFFFFF",
-                                  color: "#1E40AF",
-                                  fontWeight: 600,
-                                  fontSize: 11.5,
-                                  border: "2px solid #2563EB"
-                                }}>
-                                  {cell.text}
-                                </div>
-                              ) : cell.type === "partial" ? (
-                                <div style={{
-                                  padding: "6px 8px",
-                                  borderRadius: 6,
-                                  background: "#F3E8FF",
-                                  color: "#6B21A8",
-                                  fontWeight: 600,
-                                  fontSize: 11.5,
-                                  border: "1px solid #E9D5FF"
-                                }}>
-                                  {cell.text}
-                                </div>
-                              ) : (
-                                <div style={{
-                                  padding: "6px 8px",
-                                  borderRadius: 6,
-                                  background: isDarkMode ? "#1E293B" : "#F8FAFC",
-                                  color: isDarkMode ? "#94A3B8" : "#64748B",
-                                  fontSize: 11.5
-                                }}>
-                                  {cell.text}
-                                </div>
-                              )}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    );
-                  })}
-                </React.Fragment>
-              );
-            })
+                            return (
+                              <td key={col.name} style={{ padding: "8px 10px", textAlign: "center", borderLeft: `1px solid ${isDarkMode ? "#1E293B" : "#F1F5F9"}`, borderBottom: `1px solid ${isDarkMode ? "#1E293B" : "#F1F5F9"}` }}>
+                                {cell.type === "unassigned" ? (
+                                  <div style={{
+                                    padding: "6px",
+                                    borderRadius: 6,
+                                    background: "repeating-linear-gradient(45deg, #F8FAFC, #F8FAFC 4px, #E2E8F0 4px, #E2E8F0 8px)",
+                                    color: "#94A3B8",
+                                    fontSize: 11
+                                  }}>
+                                    —
+                                  </div>
+                                ) : cell.type === "completed" ? (
+                                  <div style={{
+                                    padding: "6px 8px",
+                                    borderRadius: 6,
+                                    background: "#E0F2FE",
+                                    color: "#0369A1",
+                                    fontWeight: 600,
+                                    fontSize: 11.5,
+                                    border: "1px solid #BAE6FD"
+                                  }}>
+                                    {cell.text}
+                                  </div>
+                                ) : cell.type === "delayed" ? (
+                                  <div style={{
+                                    padding: "5px 8px",
+                                    borderRadius: 6,
+                                    background: "#FEF2F2",
+                                    color: "#DC2626",
+                                    fontWeight: 700,
+                                    fontSize: 11.5,
+                                    border: "2px solid #EF4444",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    gap: 4
+                                  }}>
+                                    <span>{cell.text}</span>
+                                    <span style={{ background: "#DC2626", color: "#FFF", borderRadius: 4, padding: "1px 4px", fontSize: 10 }}>
+                                      +{cell.delayDays}d
+                                    </span>
+                                  </div>
+                                ) : cell.type === "current" ? (
+                                  <div style={{
+                                    padding: "6px 8px",
+                                    borderRadius: 6,
+                                    background: "#FFFFFF",
+                                    color: "#1E40AF",
+                                    fontWeight: 600,
+                                    fontSize: 11.5,
+                                    border: "2px solid #2563EB"
+                                  }}>
+                                    {cell.text}
+                                  </div>
+                                ) : cell.type === "partial" ? (
+                                  <div style={{
+                                    padding: "6px 8px",
+                                    borderRadius: 6,
+                                    background: "#F3E8FF",
+                                    color: "#6B21A8",
+                                    fontWeight: 600,
+                                    fontSize: 11.5,
+                                    border: "1px solid #E9D5FF"
+                                  }}>
+                                    {cell.text}
+                                  </div>
+                                ) : (
+                                  <div style={{
+                                    padding: "6px 8px",
+                                    borderRadius: 6,
+                                    background: isDarkMode ? "#1E293B" : "#F8FAFC",
+                                    color: isDarkMode ? "#94A3B8" : "#64748B",
+                                    fontSize: 11.5
+                                  }}>
+                                    {cell.text}
+                                  </div>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
+                  </React.Fragment>
+                );
+              })
+
             )}
           </tbody>
         </table>
@@ -1010,7 +1011,7 @@ export default function ActiveLineItemsView({
             <h3 style={{ margin: "0 0 10px", fontSize: 16, fontWeight: 700, color: isDarkMode ? "#F8FAFC" : "#0F172A" }}>
               Add Days / Update Delay ({delayModalStage.stage?.name})
             </h3>
-            
+
             <div style={{ marginBottom: 14 }}>
               <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: isDarkMode ? "#CBD5E1" : "#475569", marginBottom: 4 }}>
                 Extra Delay Days (+Xd)
