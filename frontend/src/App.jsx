@@ -5,7 +5,7 @@ import {
   ChevronDown, Search, Bell, Moon, Sun, ClipboardList,
   Calendar, TriangleAlert, ArrowDownRight, Award,
   Users, ShieldCheck, ClipboardCheck, Lightbulb, UserCheck, TrendingUp, Landmark, Factory, RefreshCw,
-  PanelLeftClose, PanelLeftOpen, Activity, Volume2, VolumeX
+  PanelLeftClose, PanelLeftOpen, Activity, Volume2, VolumeX, Layers
 } from "lucide-react";
 import { resourcesApi } from "./api.js";
 import { getDeviceInfo, getLocationInfo, sanitizeLocationString } from "./utils/deviceLocation.js";
@@ -40,6 +40,7 @@ import { MobileApprovalsScreen } from "./components/views/MobileApprovalsScreen.
 import { MobileNotificationsScreen } from "./components/views/MobileNotificationsScreen.jsx";
 import { MobileMoreScreen } from "./components/views/MobileMoreScreen.jsx";
 import { MobileOrderDetailScreen } from "./components/views/MobileOrderDetailScreen.jsx";
+import ActiveLineItemsView from "./components/views/ActiveLineItemsView.jsx";
 
 // Departments whose order visibility is limited to the buyers they are mapped to (dept -> buyer field)
 const BUYER_SCOPED_DEPTS = {
@@ -119,6 +120,8 @@ const VALID_MODULE_VIEWS = new Set([
   "settings",
   "executiveOverview",
   "employeePerformance",
+  "activeTNAs",
+  "activeLineItems",
   "more"
 ]);
 
@@ -3879,6 +3882,7 @@ export default function LoomPLM() {
       section: "Executive Suite",
       items: [
         { key: "executiveOverview", label: "MD Executive Dashboard", icon: TrendingUp },
+        { key: "activeTNAs", label: "Active TNAs", icon: Layers },
         { key: "departments", label: "Departments", icon: Users },
         { key: "orders", label: "Orders", icon: Package },
         { key: "approvals", label: "Approvals", icon: ClipboardCheck },
@@ -3912,6 +3916,7 @@ export default function LoomPLM() {
         ...(canSeeAll
           ? [{ key: "departments", label: "Departments", icon: Users }]
           : [{ key: "myDepartment", label: "My department", icon: Users }]),
+        { key: "activeTNAs", label: "Active TNAs", icon: Layers },
         // ...(canSeeAll || ["Cutting", "Production"].includes(role.dept) ? [{ key: "production", label: "Production", icon: Factory }] : []),
         // ...(canSeeAll || role.dept === "Quality" ? [{ key: "quality", label: "Quality", icon: ShieldCheck }] : []),
         ...(canSeeAll || role.dept === "Compliance & Certification" ? [{ key: "compliance", label: "Certificates", icon: ShieldCheck }] : []),
@@ -4703,6 +4708,23 @@ export default function LoomPLM() {
         lastRefreshedAt={lastRefreshedAt}
         onOpenDept={openDept}
         isSidebarCollapsed={isSidebarCollapsed}
+      />
+    );
+  } else if (view === "activeTNAs" || view === "activeLineItems") {
+    content = (
+      <ActiveLineItemsView
+        orders={visibleOrders}
+        users={users}
+        teams={teams}
+        buyers={buyers}
+        units={units}
+        role={role}
+        onUpdateStages={updateStages}
+        onOpenOrder={openOrder}
+        onNavigate={navigate}
+        isDarkMode={isDarkMode}
+        globalAlignedStages={globalAlignedStages}
+        onSaveGlobalStages={setGlobalAlignedStages}
       />
     );
   } else if (view === "settings") {
