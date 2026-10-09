@@ -874,6 +874,26 @@ body:not(.dark-theme) div[title*="Click to open"]:hover {
   transform: translateX(2px) !important;
 }
 
+/* ==========================================================================
+   Mobile Scoped Styles (max-width: 768px)
+   DESKTOP STYLES (> 768px) ARE 100% UNTOUCHED
+   ========================================================================== */
+@media (max-width: 768px) {
+  .app-sidebar {
+    display: none !important;
+  }
+  .app-header {
+    display: none !important;
+  }
+  .mobile-home-viewport {
+    padding: 0 !important;
+  }
+  .chatbot-launcher-container {
+    bottom: 74px !important;
+    right: 16px !important;
+  }
+}
+
 
 
 

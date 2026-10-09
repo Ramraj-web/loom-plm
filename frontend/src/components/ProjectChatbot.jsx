@@ -228,7 +228,7 @@ export function ProjectChatbot({ orders = [], onOpenOrder, userId }) {
   };
 
   return (
-    <div style={{ position: "fixed", right: 20, bottom: 20, zIndex: 1000, fontFamily: "inherit" }}>
+    <div className="chatbot-launcher-container" style={{ position: "fixed", right: 20, bottom: 20, zIndex: 1000, fontFamily: "inherit" }}>
       {open && (
         <div style={{ width: "min(390px, calc(100vw - 32px))", height: 500, marginBottom: 12, display: "flex", flexDirection: "column", overflow: "hidden", background: "var(--bg-card, #fff)", border: "1px solid var(--border-color, #ECEDF1)", borderRadius: 14, boxShadow: "0 16px 40px rgba(15, 23, 42, 0.2)" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: "#151B2E", color: "#fff" }}>

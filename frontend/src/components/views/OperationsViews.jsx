@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   CheckCircle2, Upload, Plus, Trash2, Check, RotateCcw, Archive, X,
   ShieldCheck, Award, FileText, AlertTriangle, Clock, Eye, Edit,
@@ -181,6 +181,24 @@ export function OrdersPage({
       return null;
     }
   });
+
+  useEffect(() => {
+    const handleFilterChange = (e) => {
+      if (e?.detail) {
+        setMasterFilter(e.detail);
+      } else {
+        try {
+          const saved = localStorage.getItem("loom_orders_drilldown_filter");
+          setMasterFilter(saved ? JSON.parse(saved) : null);
+        } catch (err) {
+          setMasterFilter(null);
+        }
+      }
+    };
+    window.addEventListener("loom_orders_drilldown_filter_change", handleFilterChange);
+    return () => window.removeEventListener("loom_orders_drilldown_filter_change", handleFilterChange);
+  }, []);
+
   const visibleActiveOrders = useMemo(() => {
     if (!masterFilter?.type || !masterFilter?.value) return activeOrders;
     return activeOrders.filter(order => order?.[masterFilter.type] === masterFilter.value);
@@ -517,7 +535,7 @@ export function OrdersPage({
       </Card>
 
       {/* 2. Completed Orders Section */}
-      <Card style={{ marginBottom: 24 }}>
+      <Card id="completed-orders-section" style={{ marginBottom: 24 }}>
         <div style={{ padding: "0 0 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
             <span style={{ fontSize: 14, fontWeight: 700, color: "#1B2130" }}>Completed Orders</span>
@@ -1106,7 +1124,7 @@ export function OrdersPage({
             // Properly save stages through the state updater so React re-renders
             // and the backend persists the changes
             if (onUpdateStages) {
-              onUpdateStages(orderId, updatedStages);
+              onUpdateStages(orderId, updatedStages, alignModalOrder?.status);
             }
             setAlignModalOrder(null);
           }}
@@ -1176,6 +1194,41 @@ export function MyTasksPage({
   }, [safeTasks, role, safeOrders]);
 
   const [deptFilter, setDeptFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState(() => {
+    try {
+      return localStorage.getItem("loom_tasks_filter") || "all";
+    } catch (e) {
+      return "all";
+    }
+  });
+
+  useEffect(() => {
+    const handleFilterChange = (e) => {
+      setStatusFilter(e?.detail || localStorage.getItem("loom_tasks_filter") || "all");
+    };
+    window.addEventListener("loom_tasks_filter_change", handleFilterChange);
+    return () => window.removeEventListener("loom_tasks_filter_change", handleFilterChange);
+  }, []);
+
+  const clearStatusFilter = () => {
+    try {
+      localStorage.removeItem("loom_tasks_filter");
+    } catch (e) {}
+    setStatusFilter("all");
+  };
+
+  const isRowOverdue = (r) => {
+    const stage = r?.stage || {};
+    return Boolean(stage.reason || stage.status === "Delayed" || stage.status === "delayed");
+  };
+
+  const isCustomTaskOverdue = (t) => {
+    if (t?.status === "done") return false;
+    if (t?.priority === "high") return true;
+    if (!t?.dueDate) return false;
+    const parsed = new Date(t.dueDate);
+    return !isNaN(parsed) && parsed < new Date();
+  };
 
   const availableDepts = useMemo(() => {
     const deptMap = {};
@@ -1191,14 +1244,26 @@ export function MyTasksPage({
   }, [tnaRows, roleCustomTasks]);
 
   const filteredTnaRows = useMemo(() => {
-    if (deptFilter === "all") return tnaRows;
-    return tnaRows.filter(r => (r.dept || "").toLowerCase() === deptFilter.toLowerCase());
-  }, [tnaRows, deptFilter]);
+    let rows = tnaRows;
+    if (statusFilter === "open") {
+      rows = rows.filter(r => r.stage.status !== "done");
+    } else if (statusFilter === "overdue") {
+      rows = rows.filter(r => isRowOverdue(r));
+    }
+    if (deptFilter === "all") return rows;
+    return rows.filter(r => (r.dept || "").toLowerCase() === deptFilter.toLowerCase());
+  }, [tnaRows, deptFilter, statusFilter]);
 
   const filteredCustomTasks = useMemo(() => {
-    if (deptFilter === "all") return roleCustomTasks;
-    return roleCustomTasks.filter(t => (t.dept || "").toLowerCase() === deptFilter.toLowerCase() || t.dept === "All");
-  }, [roleCustomTasks, deptFilter]);
+    let tasks = roleCustomTasks;
+    if (statusFilter === "open") {
+      tasks = tasks.filter(t => t.status !== "done");
+    } else if (statusFilter === "overdue") {
+      tasks = tasks.filter(t => isCustomTaskOverdue(t));
+    }
+    if (deptFilter === "all") return tasks;
+    return tasks.filter(t => (t.dept || "").toLowerCase() === deptFilter.toLowerCase() || t.dept === "All");
+  }, [roleCustomTasks, deptFilter, statusFilter]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -1274,7 +1339,7 @@ export function MyTasksPage({
       </div>
 
       {/* Task Filters Tabs */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
         {[
           { key: "all", label: `All Tasks (${totalVisibleTasks})` },
           { key: "custom", label: `Custom & Assigned Tasks (${filteredCustomTasks.length})` },
@@ -1298,6 +1363,41 @@ export function MyTasksPage({
             {tab.label}
           </button>
         ))}
+
+        {statusFilter !== "all" && (
+          <div style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            background: statusFilter === "overdue" ? "#FEE2E2" : "#EFF6FF",
+            border: `1px solid ${statusFilter === "overdue" ? "#FCA5A5" : "#BFDBFE"}`,
+            color: statusFilter === "overdue" ? "#991B1B" : "#1E40AF",
+            padding: "4px 10px",
+            borderRadius: 20,
+            fontSize: 12,
+            fontWeight: 700,
+            marginLeft: "auto"
+          }}>
+            <span>Filtered by: {statusFilter === "overdue" ? "⚠️ Overdue Tasks" : "📋 Open Tasks"}</span>
+            <button
+              type="button"
+              onClick={clearStatusFilter}
+              style={{
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                padding: "0 2px",
+                color: "inherit",
+                fontSize: 12,
+                fontWeight: 800,
+                lineHeight: 1
+              }}
+              title="Clear status filter"
+            >
+              ✕
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Department Filter Bar */}

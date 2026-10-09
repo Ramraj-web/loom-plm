@@ -33,6 +33,13 @@ import { MyChecklistPage } from "./components/views/MyChecklistPage.jsx";
 import { ProjectChatbot } from "./components/ProjectChatbot.jsx";
 import CuttingDelayAlertModal from "./components/CuttingDelayAlertModal.jsx";
 import { DEFAULT_TEAMS, DEFAULT_USERS, LoginPage, UserAccessPage } from "./components/UserAccess.jsx";
+import { MobileHomeDashboard } from "./components/views/MobileHomeDashboard.jsx";
+import { MobileTasksScreen } from "./components/views/MobileTasksScreen.jsx";
+import { MobileOrdersScreen } from "./components/views/MobileOrdersScreen.jsx";
+import { MobileApprovalsScreen } from "./components/views/MobileApprovalsScreen.jsx";
+import { MobileNotificationsScreen } from "./components/views/MobileNotificationsScreen.jsx";
+import { MobileMoreScreen } from "./components/views/MobileMoreScreen.jsx";
+import { MobileOrderDetailScreen } from "./components/views/MobileOrderDetailScreen.jsx";
 
 // Departments whose order visibility is limited to the buyers they are mapped to (dept -> buyer field)
 const BUYER_SCOPED_DEPTS = {
@@ -111,7 +118,8 @@ const VALID_MODULE_VIEWS = new Set([
   "capas",
   "settings",
   "executiveOverview",
-  "employeePerformance"
+  "employeePerformance",
+  "more"
 ]);
 
 function parseRouteFromHash(rawHash) {
@@ -415,6 +423,15 @@ export default function LoomPLM() {
   const [previousView, setPreviousView] = useState("dashboard");
   const [selectedId, setSelectedId] = useState(() => initialRoute?.selectedId || null);
   const [selectedDept, setSelectedDept] = useState(() => initialRoute?.selectedDept || null);
+  const [isMobileScreen, setIsMobileScreen] = useState(() => typeof window !== "undefined" && window.innerWidth <= 768);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobileScreen(window.innerWidth <= 768);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
   const [role, setRole] = useState(ROLE_OPTIONS[0]);
   const [attendance, setAttendance] = useState(seedAttendance);
   const [leaveRequests, setLeaveRequests] = useState(INITIAL_LEAVE_REQUESTS);
@@ -3137,7 +3154,7 @@ export default function LoomPLM() {
     }));
   };
 
-  const updateStages = (id, stages) => {
+  const updateStages = (id, stages, explicitStatus = null) => {
     setOrders(prev => prev.map(o => {
       const match = String(id).match(/^ord_(.+)_[a-z0-9]{4,8}$/);
       const baseId = match ? match[1] : null;
@@ -3146,7 +3163,11 @@ export default function LoomPLM() {
       const doneCount = stages.filter(s => s.status === "done").length;
       const allDone = stages.length > 0 && doneCount === stages.length;
       const hasFlag = stages.some(s => s.reason);
-      const status = allDone ? "On Track" : hasFlag ? "Delayed" : "At Risk";
+      const status = allDone
+        ? "On Track"
+        : hasFlag
+          ? "Delayed"
+          : (explicitStatus || o.status || "On Track");
 
       const isCompleted = allDone;
       const completedAt = isCompleted ? (o.completedAt || new Date().toISOString()) : null;
@@ -4257,7 +4278,17 @@ export default function LoomPLM() {
 
   let content;
   if (view === "order" && selectedOrder) {
-    content = (
+    content = isMobileScreen ? (
+      <MobileOrderDetailScreen
+        order={selectedOrder}
+        onBack={() => navigate(previousView === "order" ? "orders" : previousView || "orders")}
+        onUpdateStages={updateStages}
+        role={role}
+        certifications={certifications}
+        compliances={compliances}
+        onNavigate={navigate}
+      />
+    ) : (
       <OrderWorkspace
         order={selectedOrder}
         onBack={() => navigate(previousView === "order" ? "orders" : previousView || "orders")}
@@ -4411,7 +4442,15 @@ export default function LoomPLM() {
       );
     }
   } else if (view === "orders" && canAccess("orders")) {
-    content = (
+    content = isMobileScreen ? (
+      <MobileOrdersScreen
+        orders={visibleOrders}
+        buyers={buyers}
+        onOpenOrder={openOrder}
+        onNavigate={navigate}
+        isDarkMode={isDarkMode}
+      />
+    ) : (
       <OrdersPage
         orders={visibleOrders}
         isAdmin={isAdmin}
@@ -4434,7 +4473,21 @@ export default function LoomPLM() {
       />
     );
   } else if (view === "tasks") {
-    content = (
+    content = isMobileScreen ? (
+      <MobileTasksScreen
+        orders={visibleOrders}
+        customTasks={customTasks}
+        role={role}
+        activeUser={activeUser}
+        onAddTask={addTask}
+        onUpdateTask={updateTask}
+        onDeleteTask={deleteTask}
+        onUpdateStages={updateStages}
+        onOpenOrder={openOrder}
+        onNavigate={navigate}
+        isDarkMode={isDarkMode}
+      />
+    ) : (
       <MyTasksPage
         orders={visibleOrders}
         role={role}
@@ -4460,7 +4513,16 @@ export default function LoomPLM() {
   } else if (view === "calendar" && canSeeAll) {
     content = <CalendarPage orders={visibleOrders} onOpenOrder={openOrder} />;
   } else if (view === "approvals" && canAccess("approvals")) {
-    content = (
+    content = isMobileScreen ? (
+      <MobileApprovalsScreen
+        orders={visibleOrders}
+        role={role}
+        onOpenOrder={openOrder}
+        onApproveCosting={approveOrderCosting}
+        onRejectCosting={rejectOrderCosting}
+        onNavigate={navigate}
+      />
+    ) : (
       <ApprovalsPage
         orders={visibleOrders}
         onOpenOrder={openOrder}
@@ -4525,7 +4587,15 @@ export default function LoomPLM() {
       />
     );
   } else if (view === "notifications" && canSeeAll) {
-    content = (
+    content = isMobileScreen ? (
+      <MobileNotificationsScreen
+        notifications={notifications}
+        onMarkAsRead={markNotificationAsRead}
+        onMarkAllAsRead={markAllNotificationsAsRead}
+        onOpenOrder={openOrder}
+        onNavigate={navigate}
+      />
+    ) : (
       <NotificationsPage
         notifications={notifications}
         onMarkAsRead={markNotificationAsRead}
@@ -4649,6 +4719,32 @@ export default function LoomPLM() {
         onSaveGlobalMasterStages={setGlobalAlignedStages}
         units={units}
         onChangeUnits={handleUnitsChange}
+      />
+    );
+  } else if (isMobileScreen && view === "more") {
+    content = (
+      <MobileMoreScreen
+        activeUser={activeUser}
+        role={role}
+        orgStructure={orgStructure}
+        buyers={buyers}
+        onNavigate={navigate}
+        onOpenDept={openDept}
+        onLogout={handleLogout}
+        isDarkMode={isDarkMode}
+      />
+    );
+  } else if (isMobileScreen) {
+    content = (
+      <MobileHomeDashboard
+        orders={visibleOrders}
+        customTasks={customTasks}
+        notifications={notifications}
+        role={role}
+        activeUser={activeUser}
+        onOpenOrder={openOrder}
+        onNavigate={navigate}
+        isDarkMode={isDarkMode}
       />
     );
   } else if (isExecutive) {
@@ -5389,7 +5485,15 @@ export default function LoomPLM() {
         </div>
 
         {/* Scrollable Viewport */}
-        <div style={{ padding: "24px 28px", overflowY: "auto", flex: 1, minHeight: 0 }}>
+        <div
+          className={`app-viewport-content ${isMobileScreen ? "mobile-home-viewport" : ""}`}
+          style={{
+            padding: isMobileScreen ? "0px" : "24px 28px",
+            overflowY: "auto",
+            flex: 1,
+            minHeight: 0
+          }}
+        >
           {content}
         </div>
       </div>

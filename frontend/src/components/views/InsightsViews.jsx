@@ -4314,33 +4314,115 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
 
       {/* Row 1: Top 6 KPI Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, marginBottom: 16 }}>
-        {kpis.map(k => (
-          <Card key={k.label} style={{ padding: "14px 16px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-              <div style={{ width: 26, height: 26, borderRadius: 8, background: k.color + "1A", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <k.icon size={13} color={k.color} />
+        {kpis.map(k => {
+          const isClickable = k.label === "Total Orders";
+          return (
+            <Card
+              key={k.label}
+              onClick={() => {
+                if (isClickable && onNavigate) {
+                  onNavigate("orders");
+                }
+              }}
+              style={{
+                padding: "14px 16px",
+                cursor: isClickable ? "pointer" : "default",
+                transition: "all 0.18s ease",
+              }}
+              onMouseEnter={e => {
+                if (isClickable) {
+                  e.currentTarget.style.transform = "translateY(-2px)";
+                  e.currentTarget.style.boxShadow = "0 6px 14px rgba(55, 138, 221, 0.15)";
+                  e.currentTarget.style.borderColor = k.color;
+                }
+              }}
+              onMouseLeave={e => {
+                if (isClickable) {
+                  e.currentTarget.style.transform = "none";
+                  e.currentTarget.style.boxShadow = "";
+                  e.currentTarget.style.borderColor = "";
+                }
+              }}
+              title={isClickable ? "Click to view Orders details" : undefined}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ width: 26, height: 26, borderRadius: 8, background: k.color + "1A", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <k.icon size={13} color={k.color} />
+                  </div>
+                  <div style={{ fontSize: 10, color: "#64748B", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.3 }}>{k.label}</div>
+                </div>
+                {isClickable && (
+                  <span style={{ fontSize: 10.5, fontWeight: 600, color: k.color, background: k.color + "14", padding: "1px 6px", borderRadius: 4 }}>
+                    View →
+                  </span>
+                )}
               </div>
-              <div style={{ fontSize: 10, color: "#64748B", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.3 }}>{k.label}</div>
-            </div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: "#0F172A" }}>{k.value}</div>
-            {k.sub && <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>{k.sub}</div>}
-          </Card>
-        ))}
+              <div style={{ fontSize: 20, fontWeight: 800, color: "#0F172A" }}>{k.value}</div>
+              {k.sub && <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>{k.sub}</div>}
+            </Card>
+          );
+        })}
      
       </div>
-         <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12,marginBottom:10 }}>
+         <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, marginBottom: 10 }}>
           {[
             ["Open Tasks", openTasksRows.length, "#378ADD"],
             ["Overdue Tasks", overdueRows.length, "#EF4444"],
             ["Pending Approvals", pendingApprovals.length, "#F59E0B"],
             // ["Open POs", openPOStages.length, "#378ADD"],
             // ["Late POs", latePOStages.length, "#EF4444"],
-          ].map(([label, val, color]) => (
-            <Card key={label} style={{ padding: "12px 14px" }}>
-              <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600, textTransform: "uppercase", marginBottom: 6 }}>{label}</div>
-              <div style={{ fontSize: 18, fontWeight: 800, color }}>{val}</div>
-            </Card>
-          ))}
+          ].map(([label, val, color]) => {
+            const handleClick = () => {
+              if (!onNavigate) return;
+              if (label === "Open Tasks") {
+                try {
+                  localStorage.setItem("loom_tasks_filter", "open");
+                  window.dispatchEvent(new CustomEvent("loom_tasks_filter_change", { detail: "open" }));
+                } catch (e) {}
+                onNavigate("tasks");
+              } else if (label === "Overdue Tasks") {
+                try {
+                  localStorage.setItem("loom_tasks_filter", "overdue");
+                  window.dispatchEvent(new CustomEvent("loom_tasks_filter_change", { detail: "overdue" }));
+                } catch (e) {}
+                onNavigate("tasks");
+              } else if (label === "Pending Approvals") {
+                onNavigate("approvals");
+              }
+            };
+
+            return (
+              <Card
+                key={label}
+                onClick={handleClick}
+                style={{
+                  padding: "12px 14px",
+                  cursor: "pointer",
+                  transition: "all 0.18s ease"
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.transform = "translateY(-2px)";
+                  e.currentTarget.style.boxShadow = `0 6px 14px ${color}26`;
+                  e.currentTarget.style.borderColor = color;
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.transform = "none";
+                  e.currentTarget.style.boxShadow = "";
+                  e.currentTarget.style.borderColor = "";
+                }}
+                title={`Click to view ${label} details`}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                  <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600, textTransform: "uppercase" }}>{label}</div>
+                  <span style={{ fontSize: 10, fontWeight: 700, color, background: color + "14", padding: "1px 6px", borderRadius: 4 }}>
+                    View →
+                  </span>
+                </div>
+                <div style={{ fontSize: 18, fontWeight: 800, color }}>{val}</div>
+              </Card>
+            );
+          })}
         </div>
 
       {/* Row 2: Order Health Distribution, Shipment Performance Trend, Top Delay Reasons */}

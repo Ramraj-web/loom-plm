@@ -26,9 +26,9 @@ export function statusPill(status) {
   );
 }
 
-export function Card({ children, style, className = "" }) {
+export function Card({ children, style, className = "", ...props }) {
   return (
-    <div className={`loom-card ${className}`} style={{ background: "#fff", border: "1px solid #ECEDF1", borderRadius: 12, padding: "18px 20px", ...style }}>
+    <div className={`loom-card ${className}`} style={{ background: "#fff", border: "1px solid #ECEDF1", borderRadius: 12, padding: "18px 20px", ...style }} {...props}>
       {children}
     </div>
   );

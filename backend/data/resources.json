@@ -263,6 +263,1582 @@
           "approvedAt": null
         }
       },
+      "primaryId": "MKMKMK",
+      "id": "MKMKMK",
+      "style": "mkmk",
+      "buyer": "buyer 2",
+      "buyerId": "buyer-1791478615418-g6tb0",
+      "country": "Spain",
+      "season": "AW26",
+      "qty": 99,
+      "orderDate": "2026-10-09",
+      "shipDate": "2027-01-07",
+      "ship": "7 Jan 2027",
+      "color": "",
+      "colors": [],
+      "colorBreakdown": [],
+      "risk": "low",
+      "status": "On Track",
+      "completed": false,
+      "isDeleted": false,
+      "completedAt": null,
+      "deletedAt": null,
+      "createdAt": "2026-10-09T10:55:19.456Z",
+      "stages": [
+        {
+          "id": "mstg-1791465134741",
+          "name": "order1",
+          "dept": "Program",
+          "days": 30,
+          "planned": "30 Days",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null,
+          "isCustom": false
+        },
+        {
+          "id": "mstg-1791465149093",
+          "name": "1111",
+          "dept": "Planning",
+          "days": 40,
+          "planned": "40 Days",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null,
+          "isCustom": false
+        },
+        {
+          "id": "mstg-1791465160381",
+          "name": "2222",
+          "dept": "Testing",
+          "days": 3,
+          "planned": "3 Days",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null,
+          "isCustom": false
+        },
+        {
+          "id": "mstg-1791480034608",
+          "name": "art work",
+          "dept": "Artwork",
+          "days": 4,
+          "planned": "4 Days",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null,
+          "isCustom": false
+        },
+        {
+          "id": "mstg-1791480047359",
+          "name": "artwork approval",
+          "dept": "Artwork",
+          "days": 5,
+          "planned": "5 Days",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null,
+          "isCustom": false
+        },
+        {
+          "id": "mstg-1791480065029",
+          "name": "trims",
+          "dept": "Purchase – Trims",
+          "days": 6,
+          "planned": "6 Days",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null,
+          "isCustom": false
+        },
+        {
+          "id": "mstg-1791480083325",
+          "name": "trimes plan",
+          "dept": "Purchase – Trims",
+          "days": 7,
+          "planned": "7 Days",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null,
+          "isCustom": false
+        }
+      ],
+      "orderId": "MKMKMK",
+      "resource": "orders"
+    },
+    {
+      "template": "90",
+      "costingTemplate": "fabric",
+      "costingRows": [
+        {
+          "label": "Fabric",
+          "section": "Fabric",
+          "isHeader": true
+        },
+        {
+          "label": "Fabric 1",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Fabric 2",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Dyeing",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Finishing — peach/sueded/acid wash/bio wash",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Compacting",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Trims & Accessories",
+          "section": "Trims & Accessories",
+          "isHeader": true
+        },
+        {
+          "label": "Sewing Thread",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Zip / Buttons / Elastic",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Main Label",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Care Label",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Disclaimer Tag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Hang Tag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Oversize Tag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Tissue",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Fusing Sticker / Label",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Polybag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Carton",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "VAP",
+          "section": "VAP",
+          "isHeader": true
+        },
+        {
+          "label": "Print / Embroidery / Hot Fix Stone",
+          "section": "VAP",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "CMT",
+          "section": "CMT",
+          "isHeader": true
+        },
+        {
+          "label": "Cutting",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Power Table",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Singer",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Checking",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Ironing",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Packing",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Quality Inspection",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Overheads",
+          "section": "Overheads",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Rejection",
+          "section": "Rejection",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Commercial Costs",
+          "section": "Commercial Costs",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Profit",
+          "section": "Profit",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        }
+      ],
+      "vapCount": 1,
+      "shippedQty": 0,
+      "plannedCost": 0,
+      "actualCost": 0,
+      "preProd": {
+        "techPack": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "poSheet": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "programSheet": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "cmtPlanning": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "accPlanning": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "grading": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        }
+      },
+      "primaryId": "RERE",
+      "id": "RERE",
+      "style": "ere",
+      "buyer": "buyer 1",
+      "buyerId": "buyer-1791478590423-24hsq",
+      "country": "Spain",
+      "season": "AW26",
+      "qty": 333,
+      "orderDate": "2026-10-09",
+      "shipDate": "2027-01-07",
+      "ship": "7 Jan 2027",
+      "color": "",
+      "colors": [],
+      "colorBreakdown": [],
+      "risk": "low",
+      "status": "At Risk",
+      "completed": false,
+      "isDeleted": false,
+      "completedAt": null,
+      "deletedAt": null,
+      "createdAt": "2026-10-09T10:45:21.894Z",
+      "stages": [
+        {
+          "id": "mstg-1791465134741",
+          "name": "order1",
+          "dept": "Program",
+          "days": 30,
+          "planned": "30 Days",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null,
+          "isCustom": false
+        },
+        {
+          "id": "mstg-1791465149093",
+          "name": "1111",
+          "dept": "Planning",
+          "days": 40,
+          "planned": "40 Days",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null,
+          "isCustom": false
+        },
+        {
+          "id": "mstg-1791465160381",
+          "name": "2222",
+          "dept": "Testing",
+          "days": 3,
+          "planned": "3 Days",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null,
+          "isCustom": false
+        },
+        {
+          "id": "mstg-1791480034608",
+          "name": "art work",
+          "dept": "Artwork",
+          "days": 4,
+          "planned": "4 Days",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null,
+          "isCustom": false
+        },
+        {
+          "id": "mstg-1791480047359",
+          "name": "artwork approval",
+          "dept": "Artwork",
+          "days": 5,
+          "planned": "5 Days",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null,
+          "isCustom": false
+        },
+        {
+          "id": "mstg-1791480065029",
+          "name": "trims",
+          "dept": "Purchase – Trims",
+          "days": 6,
+          "planned": "6 Days",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null,
+          "isCustom": false
+        },
+        {
+          "id": "mstg-1791480083325",
+          "name": "trimes plan",
+          "dept": "Purchase – Trims",
+          "days": 7,
+          "planned": "7 Days",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null,
+          "isCustom": false
+        }
+      ],
+      "orderId": "RERE",
+      "resource": "orders"
+    },
+    {
+      "template": "90",
+      "costingTemplate": "fabric",
+      "costingRows": [
+        {
+          "label": "Fabric",
+          "section": "Fabric",
+          "isHeader": true
+        },
+        {
+          "label": "Fabric 1",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Fabric 2",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Dyeing",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Finishing — peach/sueded/acid wash/bio wash",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Compacting",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Trims & Accessories",
+          "section": "Trims & Accessories",
+          "isHeader": true
+        },
+        {
+          "label": "Sewing Thread",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Zip / Buttons / Elastic",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Main Label",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Care Label",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Disclaimer Tag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Hang Tag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Oversize Tag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Tissue",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Fusing Sticker / Label",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Polybag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Carton",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "VAP",
+          "section": "VAP",
+          "isHeader": true
+        },
+        {
+          "label": "Print / Embroidery / Hot Fix Stone",
+          "section": "VAP",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "CMT",
+          "section": "CMT",
+          "isHeader": true
+        },
+        {
+          "label": "Cutting",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Power Table",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Singer",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Checking",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Ironing",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Packing",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Quality Inspection",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Overheads",
+          "section": "Overheads",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Rejection",
+          "section": "Rejection",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Commercial Costs",
+          "section": "Commercial Costs",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Profit",
+          "section": "Profit",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        }
+      ],
+      "vapCount": 1,
+      "shippedQty": 0,
+      "plannedCost": 0,
+      "actualCost": 0,
+      "preProd": {
+        "techPack": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "poSheet": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "programSheet": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "cmtPlanning": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "accPlanning": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "grading": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        }
+      },
+      "primaryId": "FGFF",
+      "id": "FGFF",
+      "style": "gff",
+      "buyer": "buyer 2",
+      "buyerId": "buyer-1791478615418-g6tb0",
+      "country": "Spain",
+      "season": "AW26",
+      "qty": 44,
+      "orderDate": "2026-10-09",
+      "shipDate": "2027-01-07",
+      "ship": "7 Jan 2027",
+      "color": "",
+      "colors": [],
+      "colorBreakdown": [],
+      "risk": "low",
+      "status": "At Risk",
+      "completed": false,
+      "isDeleted": false,
+      "completedAt": null,
+      "deletedAt": null,
+      "createdAt": "2026-10-09T10:42:55.823Z",
+      "stages": [
+        {
+          "id": "mstg-1791465134741",
+          "name": "order1",
+          "dept": "Program",
+          "days": 30,
+          "planned": "30 Days",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null,
+          "isCustom": false
+        },
+        {
+          "id": "mstg-1791465149093",
+          "name": "1111",
+          "dept": "Planning",
+          "days": 40,
+          "planned": "40 Days",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null,
+          "isCustom": false
+        },
+        {
+          "id": "mstg-1791465160381",
+          "name": "2222",
+          "dept": "Testing",
+          "days": 3,
+          "planned": "3 Days",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null,
+          "isCustom": false
+        },
+        {
+          "id": "mstg-1791480034608",
+          "name": "art work",
+          "dept": "Artwork",
+          "days": 4,
+          "planned": "4 Days",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null,
+          "isCustom": false
+        },
+        {
+          "id": "mstg-1791480047359",
+          "name": "artwork approval",
+          "dept": "Artwork",
+          "days": 5,
+          "planned": "5 Days",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null,
+          "isCustom": false
+        },
+        {
+          "id": "mstg-1791480065029",
+          "name": "trims",
+          "dept": "Purchase – Trims",
+          "days": 6,
+          "planned": "6 Days",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null,
+          "isCustom": false
+        },
+        {
+          "id": "mstg-1791480083325",
+          "name": "trimes plan",
+          "dept": "Purchase – Trims",
+          "days": 7,
+          "planned": "7 Days",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null,
+          "isCustom": false
+        }
+      ],
+      "orderId": "FGFF",
+      "resource": "orders"
+    },
+    {
+      "template": "90",
+      "costingTemplate": "fabric",
+      "costingRows": [
+        {
+          "label": "Fabric",
+          "section": "Fabric",
+          "isHeader": true
+        },
+        {
+          "label": "Fabric 1",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Fabric 2",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Dyeing",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Finishing — peach/sueded/acid wash/bio wash",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Compacting",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Trims & Accessories",
+          "section": "Trims & Accessories",
+          "isHeader": true
+        },
+        {
+          "label": "Sewing Thread",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Zip / Buttons / Elastic",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Main Label",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Care Label",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Disclaimer Tag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Hang Tag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Oversize Tag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Tissue",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Fusing Sticker / Label",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Polybag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Carton",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "VAP",
+          "section": "VAP",
+          "isHeader": true
+        },
+        {
+          "label": "Print / Embroidery / Hot Fix Stone",
+          "section": "VAP",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "CMT",
+          "section": "CMT",
+          "isHeader": true
+        },
+        {
+          "label": "Cutting",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Power Table",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Singer",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Checking",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Ironing",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Packing",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Quality Inspection",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Overheads",
+          "section": "Overheads",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Rejection",
+          "section": "Rejection",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Commercial Costs",
+          "section": "Commercial Costs",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Profit",
+          "section": "Profit",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        }
+      ],
+      "vapCount": 1,
+      "shippedQty": 0,
+      "plannedCost": 0,
+      "actualCost": 0,
+      "preProd": {
+        "techPack": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "poSheet": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "programSheet": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "cmtPlanning": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "accPlanning": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "grading": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        }
+      },
+      "primaryId": "ADSADS",
+      "id": "ADSADS",
+      "style": "adsa",
+      "buyer": "buyer 2",
+      "buyerId": "buyer-1791478615418-g6tb0",
+      "country": "Spain",
+      "season": "AW26",
+      "qty": 11,
+      "orderDate": "2026-10-09",
+      "shipDate": "2027-01-07",
+      "ship": "7 Jan 2027",
+      "color": "",
+      "colors": [],
+      "colorBreakdown": [],
+      "risk": "medium",
+      "status": "At Risk",
+      "completed": false,
+      "isDeleted": false,
+      "completedAt": null,
+      "deletedAt": null,
+      "createdAt": "2026-10-09T10:41:44.448Z",
+      "stages": [
+        {
+          "id": "mstg-1791465134741",
+          "name": "order1",
+          "dept": "Program",
+          "days": 30,
+          "planned": "30 Days",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null,
+          "isCustom": false
+        },
+        {
+          "id": "mstg-1791465149093",
+          "name": "1111",
+          "dept": "Planning",
+          "days": 40,
+          "planned": "40 Days",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null,
+          "isCustom": false
+        },
+        {
+          "id": "mstg-1791465160381",
+          "name": "2222",
+          "dept": "Testing",
+          "days": 3,
+          "planned": "3 Days",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null,
+          "isCustom": false
+        },
+        {
+          "id": "mstg-1791480034608",
+          "name": "art work",
+          "dept": "Artwork",
+          "days": 4,
+          "planned": "4 Days",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null,
+          "isCustom": false
+        },
+        {
+          "id": "mstg-1791480047359",
+          "name": "artwork approval",
+          "dept": "Artwork",
+          "days": 5,
+          "planned": "5 Days",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null,
+          "isCustom": false
+        },
+        {
+          "id": "mstg-1791480065029",
+          "name": "trims",
+          "dept": "Purchase – Trims",
+          "days": 6,
+          "planned": "6 Days",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null,
+          "isCustom": false
+        },
+        {
+          "id": "mstg-1791480083325",
+          "name": "trimes plan",
+          "dept": "Purchase – Trims",
+          "days": 7,
+          "planned": "7 Days",
+          "status": "pending",
+          "assignee": "Unassigned",
+          "reason": null,
+          "completedAt": null,
+          "completedOn": null,
+          "updatedAt": null,
+          "flaggedAt": null,
+          "isCustom": false
+        }
+      ],
+      "orderId": "ADSADS",
+      "resource": "orders"
+    },
+    {
+      "template": "90",
+      "costingTemplate": "fabric",
+      "costingRows": [
+        {
+          "label": "Fabric",
+          "section": "Fabric",
+          "isHeader": true
+        },
+        {
+          "label": "Fabric 1",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Fabric 2",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Dyeing",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Finishing — peach/sueded/acid wash/bio wash",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Compacting",
+          "section": "Fabric",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Trims & Accessories",
+          "section": "Trims & Accessories",
+          "isHeader": true
+        },
+        {
+          "label": "Sewing Thread",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Zip / Buttons / Elastic",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Main Label",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Care Label",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Disclaimer Tag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Hang Tag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Oversize Tag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Tissue",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Fusing Sticker / Label",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Polybag",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Carton",
+          "section": "Trims & Accessories",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "VAP",
+          "section": "VAP",
+          "isHeader": true
+        },
+        {
+          "label": "Print / Embroidery / Hot Fix Stone",
+          "section": "VAP",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "CMT",
+          "section": "CMT",
+          "isHeader": true
+        },
+        {
+          "label": "Cutting",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Power Table",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Singer",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Checking",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Ironing",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Packing",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Quality Inspection",
+          "section": "CMT",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Overheads",
+          "section": "Overheads",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Rejection",
+          "section": "Rejection",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Commercial Costs",
+          "section": "Commercial Costs",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        },
+        {
+          "label": "Profit",
+          "section": "Profit",
+          "isHeader": false,
+          "price": 0,
+          "qty": 1
+        }
+      ],
+      "vapCount": 1,
+      "shippedQty": 0,
+      "plannedCost": 0,
+      "actualCost": 0,
+      "preProd": {
+        "techPack": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "poSheet": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "programSheet": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "cmtPlanning": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "accPlanning": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        },
+        "grading": {
+          "values": {},
+          "status": "draft",
+          "approvedBy": null,
+          "approvedAt": null
+        }
+      },
       "primaryId": "BUYER TEST 2",
       "id": "BUYER TEST 2",
       "style": "buyer test 2",
@@ -278,10 +1854,10 @@
       "colors": [],
       "colorBreakdown": [],
       "risk": "low",
-      "status": "At Risk",
-      "completed": false,
+      "status": "On Track",
+      "completed": true,
       "isDeleted": false,
-      "completedAt": null,
+      "completedAt": "2026-10-09T10:23:05.552Z",
       "deletedAt": null,
       "createdAt": "2026-10-09T05:59:14.109Z",
       "stages": [
@@ -291,11 +1867,15 @@
           "dept": "Program",
           "days": 30,
           "planned": "30 Days",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "done",
+          "assignee": "Assigned",
           "reason": null,
           "completedOn": null,
-          "isCustom": false
+          "isCustom": false,
+          "completedAt": "2026-10-09T10:23:04.725Z",
+          "completedBy": "Admin",
+          "updatedAt": "2026-10-09T10:23:04.502Z",
+          "updatedBy": "Admin"
         },
         {
           "id": "mstg-1791465149093",
@@ -303,11 +1883,14 @@
           "dept": "Planning",
           "days": 40,
           "planned": "40 Days",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "done",
+          "assignee": "Assigned",
           "reason": null,
           "completedOn": null,
-          "isCustom": false
+          "isCustom": false,
+          "completedAt": "2026-10-09T10:23:05.532Z",
+          "completedBy": "Admin",
+          "updatedAt": "2026-10-09T10:23:04.725Z"
         },
         {
           "id": "mstg-1791465160381",
@@ -315,11 +1898,15 @@
           "dept": "Testing",
           "days": 3,
           "planned": "3 Days",
-          "status": "pending",
-          "assignee": "Unassigned",
+          "status": "done",
+          "assignee": "Assigned",
           "reason": null,
           "completedOn": null,
-          "isCustom": false
+          "isCustom": false,
+          "completedAt": "2026-10-09T10:23:02.445Z",
+          "completedBy": "Admin",
+          "updatedAt": "2026-10-09T10:23:01.992Z",
+          "updatedBy": "Admin"
         },
         {
           "id": "mstg-1791480034608",
@@ -3039,6 +4626,437 @@
   ],
   "compliances": [],
   "notifications": [
+    {
+      "id": "notif-1791543319461-k8p2y",
+      "eventKey": "order-first-stage-MKMKMK-order1-Program",
+      "type": "task",
+      "title": "Initial Task Ready: order1",
+      "message": "New Order #MKMKMK (mkmk) initiated. Stage \"order1\" is pending action for Program.",
+      "relatedModule": "orders",
+      "relatedId": "MKMKMK",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-10-09T10:55:19.461Z",
+      "isDeleted": false,
+      "targetDept": "Program",
+      "primaryId": "pri_notifications_1791543319686_u9ymy"
+    },
+    {
+      "id": "notif-1791543319461-v658e",
+      "eventKey": "order-created-MKMKMK-user-1791478417654-t1ejz",
+      "type": "task",
+      "title": "New Order for buyer 2",
+      "message": "Order #MKMKMK (mkmk) created for buyer 2. You are assigned as artwork designer.",
+      "relatedModule": "orders",
+      "relatedId": "MKMKMK",
+      "priority": "medium",
+      "isRead": false,
+      "createdAt": "2026-10-09T10:55:19.461Z",
+      "isDeleted": false,
+      "targetUserIds": [
+        "user-1791478417654-t1ejz"
+      ],
+      "primaryId": "pri_notifications_1791543319588_0tlp2"
+    },
+    {
+      "id": "notif-1791543319461-lvqr4",
+      "eventKey": "order-created-MKMKMK-user-1791478537224-zriev",
+      "type": "task",
+      "title": "New Order for buyer 2",
+      "message": "Order #MKMKMK (mkmk) created for buyer 2. You are assigned as trims in-charge.",
+      "relatedModule": "orders",
+      "relatedId": "MKMKMK",
+      "priority": "medium",
+      "isRead": false,
+      "createdAt": "2026-10-09T10:55:19.461Z",
+      "isDeleted": false,
+      "targetUserIds": [
+        "user-1791478537224-zriev"
+      ],
+      "primaryId": "pri_notifications_1791543319549_e7jiw"
+    },
+    {
+      "id": "notif-1791543319460-nrh8b",
+      "eventKey": "order-created-MKMKMK-user-1789361833837-pmssb",
+      "type": "task",
+      "title": "New Order for buyer 2",
+      "message": "Order #MKMKMK (mkmk) created for buyer 2. You are assigned as fabric manager.",
+      "relatedModule": "orders",
+      "relatedId": "MKMKMK",
+      "priority": "medium",
+      "isRead": false,
+      "createdAt": "2026-10-09T10:55:19.460Z",
+      "isDeleted": false,
+      "targetUserIds": [
+        "user-1789361833837-pmssb"
+      ],
+      "primaryId": "pri_notifications_1791543319511_l4ogf"
+    },
+    {
+      "id": "notif-1791543319460-dus84",
+      "eventKey": "order-created-MKMKMK-user-1789361729812-a9suc",
+      "type": "task",
+      "title": "New Order for buyer 2",
+      "message": "Order #MKMKMK (mkmk) created for buyer 2. You are assigned as merchandiser.",
+      "relatedModule": "orders",
+      "relatedId": "MKMKMK",
+      "priority": "medium",
+      "isRead": false,
+      "createdAt": "2026-10-09T10:55:19.460Z",
+      "isDeleted": false,
+      "targetUserIds": [
+        "user-1789361729812-a9suc"
+      ],
+      "primaryId": "pri_notifications_1791543319498_6cwla"
+    },
+    {
+      "id": "notif-1791542723124-s0i2o",
+      "eventKey": "order-status-RERE-At Risk",
+      "type": "order",
+      "title": "Order Status Updated",
+      "message": "RERE status changed to At Risk.",
+      "relatedModule": "orders",
+      "relatedId": "RERE",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-10-09T10:45:23.124Z",
+      "isDeleted": false,
+      "primaryId": "pri_notifications_1791542723185_7g5fz"
+    },
+    {
+      "id": "notif-1791542721900-5p17p",
+      "eventKey": "order-first-stage-RERE-order1-Program",
+      "type": "task",
+      "title": "Initial Task Ready: order1",
+      "message": "New Order #RERE (ere) initiated. Stage \"order1\" is pending action for Program.",
+      "relatedModule": "orders",
+      "relatedId": "RERE",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-10-09T10:45:21.900Z",
+      "isDeleted": false,
+      "targetDept": "Program",
+      "primaryId": "pri_notifications_1791542721961_f1wy6"
+    },
+    {
+      "id": "notif-1791542721899-ewc16",
+      "eventKey": "order-created-RERE-user-1791478287462-itelb",
+      "type": "task",
+      "title": "New Order for buyer 1",
+      "message": "Order #RERE (ere) created for buyer 1. You are assigned as artwork designer.",
+      "relatedModule": "orders",
+      "relatedId": "RERE",
+      "priority": "medium",
+      "isRead": false,
+      "createdAt": "2026-10-09T10:45:21.899Z",
+      "isDeleted": false,
+      "targetUserIds": [
+        "user-1791478287462-itelb"
+      ],
+      "primaryId": "pri_notifications_1791542721949_b71ca"
+    },
+    {
+      "id": "notif-1791542721897-s3jhk",
+      "eventKey": "order-created-RERE-user-1789361833837-pmssb",
+      "type": "task",
+      "title": "New Order for buyer 1",
+      "message": "Order #RERE (ere) created for buyer 1. You are assigned as fabric manager.",
+      "relatedModule": "orders",
+      "relatedId": "RERE",
+      "priority": "medium",
+      "isRead": false,
+      "createdAt": "2026-10-09T10:45:21.897Z",
+      "isDeleted": false,
+      "targetUserIds": [
+        "user-1789361833837-pmssb"
+      ],
+      "primaryId": "pri_notifications_1791542721940_2weqc"
+    },
+    {
+      "id": "notif-1791542721899-cn7el",
+      "eventKey": "order-created-RERE-user-1789361861072-ealkf",
+      "type": "task",
+      "title": "New Order for buyer 1",
+      "message": "Order #RERE (ere) created for buyer 1. You are assigned as trims in-charge.",
+      "relatedModule": "orders",
+      "relatedId": "RERE",
+      "priority": "medium",
+      "isRead": false,
+      "createdAt": "2026-10-09T10:45:21.899Z",
+      "isDeleted": false,
+      "targetUserIds": [
+        "user-1789361861072-ealkf"
+      ],
+      "primaryId": "pri_notifications_1791542721932_ildrl"
+    },
+    {
+      "id": "notif-1791542721896-t7gam",
+      "eventKey": "order-created-RERE-user-1789361729812-a9suc",
+      "type": "task",
+      "title": "New Order for buyer 1",
+      "message": "Order #RERE (ere) created for buyer 1. You are assigned as merchandiser.",
+      "relatedModule": "orders",
+      "relatedId": "RERE",
+      "priority": "medium",
+      "isRead": false,
+      "createdAt": "2026-10-09T10:45:21.896Z",
+      "isDeleted": false,
+      "targetUserIds": [
+        "user-1789361729812-a9suc"
+      ],
+      "primaryId": "pri_notifications_1791542721925_75ry8"
+    },
+    {
+      "id": "notif-1791542575828-brz2a",
+      "eventKey": "order-first-stage-FGFF-order1-Program",
+      "type": "task",
+      "title": "Initial Task Ready: order1",
+      "message": "New Order #FGFF (gff) initiated. Stage \"order1\" is pending action for Program.",
+      "relatedModule": "orders",
+      "relatedId": "FGFF",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-10-09T10:42:55.828Z",
+      "isDeleted": false,
+      "targetDept": "Program",
+      "primaryId": "pri_notifications_1791542575903_2pmeu"
+    },
+    {
+      "id": "notif-1791542575828-edfyg",
+      "eventKey": "order-created-FGFF-user-1791478417654-t1ejz",
+      "type": "task",
+      "title": "New Order for buyer 2",
+      "message": "Order #FGFF (gff) created for buyer 2. You are assigned as artwork designer.",
+      "relatedModule": "orders",
+      "relatedId": "FGFF",
+      "priority": "medium",
+      "isRead": false,
+      "createdAt": "2026-10-09T10:42:55.828Z",
+      "isDeleted": false,
+      "targetUserIds": [
+        "user-1791478417654-t1ejz"
+      ],
+      "primaryId": "pri_notifications_1791542575882_3ov15"
+    },
+    {
+      "id": "notif-1791542575827-gt4xq",
+      "eventKey": "order-created-FGFF-user-1791478537224-zriev",
+      "type": "task",
+      "title": "New Order for buyer 2",
+      "message": "Order #FGFF (gff) created for buyer 2. You are assigned as trims in-charge.",
+      "relatedModule": "orders",
+      "relatedId": "FGFF",
+      "priority": "medium",
+      "isRead": false,
+      "createdAt": "2026-10-09T10:42:55.827Z",
+      "isDeleted": false,
+      "targetUserIds": [
+        "user-1791478537224-zriev"
+      ],
+      "primaryId": "pri_notifications_1791542575875_qdu4r"
+    },
+    {
+      "id": "notif-1791542575826-xf8x8",
+      "eventKey": "order-created-FGFF-user-1789361833837-pmssb",
+      "type": "task",
+      "title": "New Order for buyer 2",
+      "message": "Order #FGFF (gff) created for buyer 2. You are assigned as fabric manager.",
+      "relatedModule": "orders",
+      "relatedId": "FGFF",
+      "priority": "medium",
+      "isRead": false,
+      "createdAt": "2026-10-09T10:42:55.826Z",
+      "isDeleted": false,
+      "targetUserIds": [
+        "user-1789361833837-pmssb"
+      ],
+      "primaryId": "pri_notifications_1791542575869_3u5zg"
+    },
+    {
+      "id": "notif-1791542575825-zgnel",
+      "eventKey": "order-created-FGFF-user-1789361729812-a9suc",
+      "type": "task",
+      "title": "New Order for buyer 2",
+      "message": "Order #FGFF (gff) created for buyer 2. You are assigned as merchandiser.",
+      "relatedModule": "orders",
+      "relatedId": "FGFF",
+      "priority": "medium",
+      "isRead": false,
+      "createdAt": "2026-10-09T10:42:55.825Z",
+      "isDeleted": false,
+      "targetUserIds": [
+        "user-1789361729812-a9suc"
+      ],
+      "primaryId": "pri_notifications_1791542575859_hdd0d"
+    },
+    {
+      "id": "notif-1791542506181-5gj0n",
+      "eventKey": "order-status-ADSADS-At Risk",
+      "type": "order",
+      "title": "Order Status Updated",
+      "message": "ADSADS status changed to At Risk.",
+      "relatedModule": "orders",
+      "relatedId": "ADSADS",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-10-09T10:41:46.181Z",
+      "isDeleted": false,
+      "primaryId": "pri_notifications_1791542506231_3pxr9"
+    },
+    {
+      "id": "notif-1791542504452-ysdaa",
+      "eventKey": "order-first-stage-ADSADS-order1-Program",
+      "type": "task",
+      "title": "Initial Task Ready: order1",
+      "message": "New Order #ADSADS (adsa) initiated. Stage \"order1\" is pending action for Program.",
+      "relatedModule": "orders",
+      "relatedId": "ADSADS",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-10-09T10:41:44.452Z",
+      "isDeleted": false,
+      "targetDept": "Program",
+      "primaryId": "pri_notifications_1791542504549_01gap"
+    },
+    {
+      "id": "notif-1791542504451-pcovf",
+      "eventKey": "order-created-ADSADS-user-1791478417654-t1ejz",
+      "type": "task",
+      "title": "New Order for buyer 2",
+      "message": "Order #ADSADS (adsa) created for buyer 2. You are assigned as artwork designer.",
+      "relatedModule": "orders",
+      "relatedId": "ADSADS",
+      "priority": "medium",
+      "isRead": false,
+      "createdAt": "2026-10-09T10:41:44.451Z",
+      "isDeleted": false,
+      "targetUserIds": [
+        "user-1791478417654-t1ejz"
+      ],
+      "primaryId": "pri_notifications_1791542504542_heu0k"
+    },
+    {
+      "id": "notif-1791542504451-v17nc",
+      "eventKey": "order-created-ADSADS-user-1791478537224-zriev",
+      "type": "task",
+      "title": "New Order for buyer 2",
+      "message": "Order #ADSADS (adsa) created for buyer 2. You are assigned as trims in-charge.",
+      "relatedModule": "orders",
+      "relatedId": "ADSADS",
+      "priority": "medium",
+      "isRead": false,
+      "createdAt": "2026-10-09T10:41:44.451Z",
+      "isDeleted": false,
+      "targetUserIds": [
+        "user-1791478537224-zriev"
+      ],
+      "primaryId": "pri_notifications_1791542504534_nidti"
+    },
+    {
+      "id": "notif-1791542504451-b442v",
+      "eventKey": "order-created-ADSADS-user-1789361833837-pmssb",
+      "type": "task",
+      "title": "New Order for buyer 2",
+      "message": "Order #ADSADS (adsa) created for buyer 2. You are assigned as fabric manager.",
+      "relatedModule": "orders",
+      "relatedId": "ADSADS",
+      "priority": "medium",
+      "isRead": false,
+      "createdAt": "2026-10-09T10:41:44.451Z",
+      "isDeleted": false,
+      "targetUserIds": [
+        "user-1789361833837-pmssb"
+      ],
+      "primaryId": "pri_notifications_1791542504525_9odmh"
+    },
+    {
+      "id": "notif-1791542504450-q67er",
+      "eventKey": "order-created-ADSADS-user-1789361729812-a9suc",
+      "type": "task",
+      "title": "New Order for buyer 2",
+      "message": "Order #ADSADS (adsa) created for buyer 2. You are assigned as merchandiser.",
+      "relatedModule": "orders",
+      "relatedId": "ADSADS",
+      "priority": "medium",
+      "isRead": false,
+      "createdAt": "2026-10-09T10:41:44.450Z",
+      "isDeleted": false,
+      "targetUserIds": [
+        "user-1789361729812-a9suc"
+      ],
+      "primaryId": "pri_notifications_1791542504519_gl24a"
+    },
+    {
+      "id": "notif-1791541385553-87707",
+      "eventKey": "order-completed-BUYER TEST 2",
+      "type": "order",
+      "title": "Order Completed",
+      "message": "Order BUYER TEST 2 has been completed.",
+      "relatedModule": "orders",
+      "relatedId": "BUYER TEST 2",
+      "priority": "low",
+      "isRead": false,
+      "createdAt": "2026-10-09T10:23:05.553Z",
+      "isDeleted": false,
+      "primaryId": "pri_notifications_1791541385807_0n5dz"
+    },
+    {
+      "id": "notif-1791541385552-09fqh",
+      "eventKey": "order-status-BUYER TEST 2-On Track",
+      "type": "order",
+      "title": "Order Status Updated",
+      "message": "BUYER TEST 2 status changed to On Track.",
+      "relatedModule": "orders",
+      "relatedId": "BUYER TEST 2",
+      "priority": "medium",
+      "isRead": false,
+      "createdAt": "2026-10-09T10:23:05.552Z",
+      "isDeleted": false,
+      "primaryId": "pri_notifications_1791541385629_n5n6l"
+    },
+    {
+      "id": "notif-1791541385534-zc02n",
+      "eventKey": "order-completed-BUYER TEST 2",
+      "type": "order",
+      "title": "Order Completed",
+      "message": "Order BUYER TEST 2 has been completed.",
+      "relatedModule": "orders",
+      "relatedId": "BUYER TEST 2",
+      "priority": "low",
+      "isRead": false,
+      "createdAt": "2026-10-09T10:23:05.534Z",
+      "isDeleted": false,
+      "primaryId": "pri_notifications_1791541385559_dt1gs"
+    },
+    {
+      "id": "notif-1791541385533-igab3",
+      "eventKey": "order-status-BUYER TEST 2-On Track",
+      "type": "order",
+      "title": "Order Status Updated",
+      "message": "BUYER TEST 2 status changed to On Track.",
+      "relatedModule": "orders",
+      "relatedId": "BUYER TEST 2",
+      "priority": "medium",
+      "isRead": false,
+      "createdAt": "2026-10-09T10:23:05.534Z",
+      "isDeleted": false,
+      "primaryId": "pri_notifications_1791541385550_xhzbo"
+    },
+    {
+      "id": "notif-1791541384725-3rsmh",
+      "eventKey": "dept-task-assigned-BUYER TEST 2-1111-Planning",
+      "type": "task",
+      "title": "New Task: 1111",
+      "message": "Order BUYER TEST 2 has moved to your department (Planning). Stage \"1111\" is now assigned to you!",
+      "relatedModule": "tasks",
+      "relatedId": "BUYER TEST 2",
+      "priority": "high",
+      "isRead": false,
+      "createdAt": "2026-10-09T10:23:04.725Z",
+      "isDeleted": false,
+      "targetDept": "Planning",
+      "primaryId": "pri_notifications_1791541384774_v5vf9"
+    },
     {
       "id": "notif-1791525956340-4yck7",
       "eventKey": "dept-task-assigned-BUYER 2-trims-Purchase – Trims",

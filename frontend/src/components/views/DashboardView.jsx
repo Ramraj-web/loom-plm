@@ -1237,64 +1237,141 @@ export function Dashboard({
 
       {/* Top 6 KPI Cards - Clean, modern, elevated styling with subtle accents */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 14, marginBottom: 20 }}>
-        {cards.map(c => (
-          <Card
-            key={c.label}
-            className="kpi-overview-card"
-            data-kpi={c.label.toLowerCase().replace(/\s+/g, '-')}
-            style={{
-              padding: "16px 18px",
-              background: "#FFFFFF",
-              border: "1px solid #E8EBF0",
-              borderTop: `3.5px solid ${c.color}`,
-              borderRadius: 12,
-              boxShadow: "0 2px 5px rgba(15, 23, 42, 0.04)",
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "space-between",
-              position: "relative",
-              overflow: "hidden"
-            }}
-          >
-            <div>
-              <div className="kpi-icon-box" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                <div
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 9,
-                    background: `linear-gradient(135deg, ${c.color}15 0%, ${c.color}25 100%)`,
-                    border: `1px solid ${c.color}35`,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center"
-                  }}
-                >
-                  <c.Icon size={17} color={c.color} />
-                </div>
-              </div>
-              <div className="kpi-title" style={{ fontSize: 13, fontWeight: 700, color: "#1B2130", letterSpacing: "-0.2px" }}>{c.label}</div>
-              <div className="kpi-val" style={{ fontSize: 24, fontWeight: 800, marginTop: 6, color: c.color, letterSpacing: "-0.5px" }}>{c.value}</div>
-            </div>
-            <div
-              className="kpi-delta"
+        {cards.map(c => {
+          const isClickable = [
+            "Active orders",
+            "On track",
+            "At risk",
+            "Delayed",
+            "Completed orders"
+          ].includes(c.label);
+
+          const handleCardClick = () => {
+            if (!isClickable || !onNavigate) return;
+
+            if (c.label === "Active orders") {
+              try {
+                localStorage.removeItem("loom_orders_drilldown_filter");
+                window.dispatchEvent(new CustomEvent("loom_orders_drilldown_filter_change", { detail: null }));
+              } catch (e) {}
+              onNavigate("orders");
+            } else if (c.label === "On track") {
+              const filterObj = { type: "status", value: "On Track" };
+              try {
+                localStorage.setItem("loom_orders_drilldown_filter", JSON.stringify(filterObj));
+                window.dispatchEvent(new CustomEvent("loom_orders_drilldown_filter_change", { detail: filterObj }));
+              } catch (e) {}
+              onNavigate("orders");
+            } else if (c.label === "At risk") {
+              const filterObj = { type: "status", value: "At Risk" };
+              try {
+                localStorage.setItem("loom_orders_drilldown_filter", JSON.stringify(filterObj));
+                window.dispatchEvent(new CustomEvent("loom_orders_drilldown_filter_change", { detail: filterObj }));
+              } catch (e) {}
+              onNavigate("orders");
+            } else if (c.label === "Delayed") {
+              const filterObj = { type: "status", value: "Delayed" };
+              try {
+                localStorage.setItem("loom_orders_drilldown_filter", JSON.stringify(filterObj));
+                window.dispatchEvent(new CustomEvent("loom_orders_drilldown_filter_change", { detail: filterObj }));
+              } catch (e) {}
+              onNavigate("orders");
+            } else if (c.label === "Completed orders") {
+              try {
+                localStorage.removeItem("loom_orders_drilldown_filter");
+                window.dispatchEvent(new CustomEvent("loom_orders_drilldown_filter_change", { detail: null }));
+              } catch (e) {}
+              onNavigate("orders");
+              setTimeout(() => {
+                const el = document.getElementById("completed-orders-section");
+                if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+              }, 200);
+            }
+          };
+
+          return (
+            <Card
+              key={c.label}
+              className="kpi-overview-card"
+              data-kpi={c.label.toLowerCase().replace(/\s+/g, '-')}
+              onClick={handleCardClick}
               style={{
-                fontSize: 10.5,
-                color: c.delta.startsWith("-") ? "#D64545" : "#475569",
-                marginTop: 10,
-                fontWeight: 600,
-                background: "#F8FAFC",
-                padding: "3px 9px",
-                borderRadius: 6,
-                border: "1px solid #E2E8F0",
-                display: "inline-block",
-                width: "fit-content"
+                padding: "16px 18px",
+                background: "#FFFFFF",
+                border: "1px solid #E8EBF0",
+                borderTop: `3.5px solid ${c.color}`,
+                borderRadius: 12,
+                boxShadow: "0 2px 5px rgba(15, 23, 42, 0.04)",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "space-between",
+                position: "relative",
+                overflow: "hidden",
+                cursor: isClickable ? "pointer" : "default",
+                transition: "all 0.18s ease"
               }}
+              onMouseEnter={e => {
+                if (isClickable) {
+                  e.currentTarget.style.transform = "translateY(-3px)";
+                  e.currentTarget.style.boxShadow = `0 8px 18px ${c.color}26`;
+                  e.currentTarget.style.borderColor = c.color;
+                }
+              }}
+              onMouseLeave={e => {
+                if (isClickable) {
+                  e.currentTarget.style.transform = "none";
+                  e.currentTarget.style.boxShadow = "0 2px 5px rgba(15, 23, 42, 0.04)";
+                  e.currentTarget.style.borderColor = "#E8EBF0";
+                  e.currentTarget.style.borderTopColor = c.color;
+                }
+              }}
+              title={isClickable ? `Click to view ${c.label} in Orders` : undefined}
             >
-              {c.delta}
-            </div>
-          </Card>
-        ))}
+              <div>
+                <div className="kpi-icon-box" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                  <div
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 9,
+                      background: `linear-gradient(135deg, ${c.color}15 0%, ${c.color}25 100%)`,
+                      border: `1px solid ${c.color}35`,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center"
+                    }}
+                  >
+                    <c.Icon size={17} color={c.color} />
+                  </div>
+                  {isClickable && (
+                    <span style={{ fontSize: 10, fontWeight: 700, color: c.color, background: `${c.color}14`, padding: "2px 7px", borderRadius: 4 }}>
+                      View →
+                    </span>
+                  )}
+                </div>
+                <div className="kpi-title" style={{ fontSize: 13, fontWeight: 700, color: "#1B2130", letterSpacing: "-0.2px" }}>{c.label}</div>
+                <div className="kpi-val" style={{ fontSize: 24, fontWeight: 800, marginTop: 6, color: c.color, letterSpacing: "-0.5px" }}>{c.value}</div>
+              </div>
+              <div
+                className="kpi-delta"
+                style={{
+                  fontSize: 10.5,
+                  color: c.delta.startsWith("-") ? "#D64545" : "#475569",
+                  marginTop: 10,
+                  fontWeight: 600,
+                  background: "#F8FAFC",
+                  padding: "3px 9px",
+                  borderRadius: 6,
+                  border: "1px solid #E2E8F0",
+                  display: "inline-block",
+                  width: "fit-content"
+                }}
+              >
+                {c.delta}
+              </div>
+            </Card>
+          );
+        })}
       </div>
 
       {/* Middle Row: Orders by department, Shipment performance, Risk analysis */}
