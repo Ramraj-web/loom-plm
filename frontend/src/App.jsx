@@ -739,6 +739,21 @@ export default function LoomPLM() {
     });
   };
 
+  const uniqueTeamsById = teamsList => {
+    const seenIds = new Set();
+    const seenNames = new Set();
+    return (teamsList || []).filter(team => {
+      if (!team) return false;
+      const idKey = team.id ? String(team.id) : null;
+      const nameKey = team.name ? String(team.name).trim().toLowerCase() : null;
+      if (idKey && seenIds.has(idKey)) return false;
+      if (nameKey && seenNames.has(nameKey)) return false;
+      if (idKey) seenIds.add(idKey);
+      if (nameKey) seenNames.add(nameKey);
+      return true;
+    });
+  };
+
   const syncUsersToBackend = useCallback(async (nextUsers) => {
     try {
       const existing = await resourcesApi.list("users");
@@ -764,14 +779,20 @@ export default function LoomPLM() {
   const syncTeamsToBackend = useCallback(async (nextTeams) => {
     try {
       const existing = await resourcesApi.list("teams");
-      const nextIds = new Set((nextTeams || []).map(team => team.id));
+      const cleanNextTeams = uniqueTeamsById(nextTeams);
+      const nextIds = new Set(cleanNextTeams.map(team => team.id));
 
       await Promise.all(
         (existing || []).filter(team => !nextIds.has(team.id)).map(team => resourcesApi.remove("teams", team.id))
       );
 
       await Promise.all(
-        (nextTeams || []).map(team => resourcesApi.create("teams", team))
+        cleanNextTeams.map(team => {
+          const existingTeam = (existing || []).find(item => item.id === team.id || (item.name && team.name && item.name.toLowerCase() === team.name.toLowerCase()));
+          return existingTeam
+            ? resourcesApi.update("teams", existingTeam.id || team.id, team)
+            : resourcesApi.create("teams", team);
+        })
       );
     } catch (e) {
       console.warn("Failed to sync teams to backend:", e.message);
@@ -808,9 +829,10 @@ export default function LoomPLM() {
       }
 
       if (Array.isArray(teamRes) && teamRes.length) {
-        const existingNames = new Set(teamRes.map(team => team.name.toLowerCase()));
+        const loadedTeams = uniqueTeamsById(teamRes);
+        const existingNames = new Set(loadedTeams.map(team => team.name.toLowerCase()));
         const missingDefaults = DEFAULT_TEAMS.filter(team => !existingNames.has(team.name.toLowerCase()));
-        setTeams([...teamRes, ...missingDefaults]);
+        setTeams(uniqueTeamsById([...loadedTeams, ...missingDefaults]));
       }
 
       if (Array.isArray(rotationRes) && rotationRes.length) {
@@ -2116,8 +2138,9 @@ export default function LoomPLM() {
   }, [syncUsersToBackend]);
 
   const handleTeamsChange = useCallback((nextTeams) => {
-    setTeams(nextTeams);
-    syncTeamsToBackend(nextTeams);
+    const cleanTeams = uniqueTeamsById(nextTeams);
+    setTeams(cleanTeams);
+    syncTeamsToBackend(cleanTeams);
   }, [syncTeamsToBackend]);
 
   const handleRotationChange = useCallback((nextRotation) => {

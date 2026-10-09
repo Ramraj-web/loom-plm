@@ -81,13 +81,45 @@ function writeDB(db) {
 
 function validResource(name) { return Object.prototype.hasOwnProperty.call(RESOURCE_SEEDS, name); }
 function makeId(resource, record) { return record.id || `${resource}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`; }
-function uniqueById(records) {
-  const seen = new Set();
-  return records.filter(record => {
-    if (!record.id || seen.has(record.id)) return false;
-    seen.add(record.id);
-    return true;
-  });
+function uniqueById(records, collection, resource, db) {
+  if (!Array.isArray(records)) return records;
+  const seenIds = new Set();
+  const seenNames = new Set();
+  const duplicateIdsToDelete = [];
+  const cleanRecords = [];
+
+  for (const record of records) {
+    if (!record) continue;
+    const idKey = record.id ? String(record.id) : (record.primaryId ? String(record.primaryId) : null);
+    const nameKey = record.name ? String(record.name).trim().toLowerCase() : null;
+
+    let isDuplicate = false;
+    if (idKey && seenIds.has(idKey)) {
+      isDuplicate = true;
+    } else if (resource === "teams" && nameKey && seenNames.has(nameKey)) {
+      isDuplicate = true;
+    }
+
+    if (isDuplicate) {
+      if (idKey) duplicateIdsToDelete.push(idKey);
+    } else {
+      if (idKey) seenIds.add(idKey);
+      if (nameKey) seenNames.add(nameKey);
+      cleanRecords.push(record);
+    }
+  }
+
+  if (duplicateIdsToDelete.length > 0) {
+    if (collection) {
+      collection.deleteMany({ resource, id: { $in: duplicateIdsToDelete } }).catch(() => {});
+    } else if (db && Array.isArray(db[resource])) {
+      const keepIds = new Set(cleanRecords.map(r => r.id).filter(Boolean));
+      db[resource] = db[resource].filter(r => keepIds.has(r.id));
+      writeDB(db);
+    }
+  }
+
+  return cleanRecords;
 }
 
 const SOFT_DELETE_RESOURCES = [
@@ -244,14 +276,14 @@ router.get("/:resource", async (req, res, next) => {
       if (resource === "orders") {
         return res.json(deduplicateOrders(records, collection));
       }
-      return res.json(resource === "users" ? uniqueById(records) : records);
+      return res.json(uniqueById(records, collection, resource));
     }
     const db = readDB();
     const records = (db[resource] || []).filter(record => !isSoftDelete || showAll || (isTrash ? record.isDeleted === true : record.isDeleted !== true));
     if (resource === "orders") {
       return res.json(deduplicateOrders(records, null, db));
     }
-    res.json(resource === "users" ? uniqueById(records) : records);
+    res.json(uniqueById(records, null, resource, db));
   } catch (error) { next(error); }
 });
 
@@ -320,11 +352,30 @@ router.post("/:resource", async (req, res, next) => {
     const collection = getResourceCollection();
     if (collection) {
       delete record._id;
-      await collection.insertOne({ resource, ...record });
+      const queryOr = [];
+      if (record.id) queryOr.push({ id: record.id });
+      if (record.primaryId) queryOr.push({ primaryId: record.primaryId });
+      if (resource === "teams" && record.name) queryOr.push({ name: record.name });
+
+      const existingDoc = queryOr.length > 0 ? await collection.findOne({ resource, $or: queryOr }) : null;
+      if (existingDoc) {
+        await collection.updateOne({ resource, _id: existingDoc._id }, { $set: record });
+      } else {
+        await collection.insertOne({ resource, ...record });
+      }
     } else {
       const db = readDB();
       if (!db[resource]) db[resource] = [];
-      db[resource] = [record, ...(db[resource] || [])];
+      const existingIdx = db[resource].findIndex(item => (
+        (record.id && item.id === record.id) ||
+        (record.primaryId && item.primaryId === record.primaryId) ||
+        (resource === "teams" && item.name && record.name && item.name.toLowerCase() === record.name.toLowerCase())
+      ));
+      if (existingIdx !== -1) {
+        db[resource][existingIdx] = record;
+      } else {
+        db[resource] = [record, ...(db[resource] || [])];
+      }
       writeDB(db);
     }
     res.status(201).json(record);
