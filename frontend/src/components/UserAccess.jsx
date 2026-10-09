@@ -300,7 +300,21 @@ export function UserAccessPage({
 
   const teamMap = useMemo(() => Object.fromEntries(teams.map(team => [team.id, team])), [teams]);
 
-  // Map each user ID to the list of buyers they are assigned to (either merchandiser or fabric manager)
+  // Combine standard departments with all active teams/departments so newly added teams appear dynamically
+  const availableDepartments = useMemo(() => {
+    const list = [...ALL_DEPARTMENTS];
+    (teams || []).forEach(t => {
+      const name = (t.name || "").trim();
+      if (name && !["Administrators", "Executive (MD)"].includes(name)) {
+        if (!list.some(existing => existing.toLowerCase() === name.toLowerCase())) {
+          list.push(name);
+        }
+      }
+    });
+    return list;
+  }, [teams]);
+
+  // Map each user ID to the list of buyers they are assigned to (merchandiser, fabric, trims, or artwork)
   const userBuyerMap = useMemo(() => {
     const map = {};
     (buyers || []).forEach(b => {
@@ -315,6 +329,18 @@ export function UserAccessPage({
         if (!map[uId]) map[uId] = [];
         if (!map[uId].some(item => item.buyerName === bName)) {
           map[uId].push({ buyerName: bName, role: "fabric" });
+        }
+      });
+      (b.trimsManagerIds || []).forEach(uId => {
+        if (!map[uId]) map[uId] = [];
+        if (!map[uId].some(item => item.buyerName === bName)) {
+          map[uId].push({ buyerName: bName, role: "trims" });
+        }
+      });
+      (b.artworkManagerIds || []).forEach(uId => {
+        if (!map[uId]) map[uId] = [];
+        if (!map[uId].some(item => item.buyerName === bName)) {
+          map[uId].push({ buyerName: bName, role: "artwork" });
         }
       });
     });
@@ -854,7 +880,7 @@ export function UserAccessPage({
                     onChange={e => setNewStageDept(e.target.value)}
                     style={{ ...inputStyle, background: "#fff" }}
                   >
-                    {ALL_DEPARTMENTS.map(dept => (
+                    {availableDepartments.map(dept => (
                       <option key={dept} value={dept}>{dept}</option>
                     ))}
                   </select>
@@ -969,7 +995,7 @@ export function UserAccessPage({
                           onChange={e => setStageEditData({ ...stageEditData, dept: e.target.value })}
                           style={{ ...inputStyle, padding: "5px 8px", fontSize: 12, flex: 1.5 }}
                         >
-                          {ALL_DEPARTMENTS.map(d => (
+                          {availableDepartments.map(d => (
                             <option key={d} value={d}>{d}</option>
                           ))}
                         </select>

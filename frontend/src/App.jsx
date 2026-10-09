@@ -38,6 +38,8 @@ import { DEFAULT_TEAMS, DEFAULT_USERS, LoginPage, UserAccessPage } from "./compo
 const BUYER_SCOPED_DEPTS = {
   "Merchandising": "merchandiserIds",
   "Purchase – Fabric": "fabricManagerIds",
+  "Purchase – Trims": "trimsManagerIds",
+  "Artwork": "artworkManagerIds",
 };
 
 function roleForUser(user, teams, activeDeptOverride = null) {
@@ -706,18 +708,18 @@ export default function LoomPLM() {
     return buyers.find(b => (order.buyerId && b.id === order.buyerId) || String(b.name || "").trim().toLowerCase() === buyerName) || null;
   }, [buyers]);
 
-  // Merchandisers and fabric managers ONLY see orders of buyers they are explicitly mapped to.
-  // If a merch/fabric user is not mapped to any buyer, or not mapped to this order's buyer, they will NOT see the order.
+  // Users in Merchandising, Purchase – Fabric, Purchase – Trims, and Artwork ONLY see orders of buyers they are explicitly mapped to.
+  // If a user in these departments is not mapped to any buyer, or not mapped to this order's buyer, they will NOT see the order.
   // Other departments (Planning, Quality, Cutting, Production, Admin, MD, etc.) are completely unaffected and see all orders.
   const canSeeOrder = useCallback(order => {
     if (isOrderSuperUser || !activeUser) return true;
     const userDepts = Array.isArray(role?.departments) && role.departments.length > 0 ? role.departments : [role?.dept];
     const scopedFields = userDepts.map(dept => BUYER_SCOPED_DEPTS[dept]).filter(Boolean);
 
-    // If user does not belong to Merchandising or Purchase – Fabric, they can see ALL orders as usual.
+    // If user does not belong to any buyer-scoped department, they can see ALL orders as usual.
     if (scopedFields.length === 0) return true;
 
-    // For Merchandising and Purchase – Fabric:
+    // For Merchandising, Purchase – Fabric, Purchase – Trims, and Artwork:
     // They must be explicitly assigned to this order's buyer.
     const buyer = findBuyerForOrder(order);
     if (!buyer) return false;
@@ -2558,6 +2560,8 @@ export default function LoomPLM() {
       name: newBuyer.name.trim(),
       merchandiserIds: newBuyer.merchandiserIds || [],
       fabricManagerIds: newBuyer.fabricManagerIds || [],
+      trimsManagerIds: newBuyer.trimsManagerIds || [],
+      artworkManagerIds: newBuyer.artworkManagerIds || [],
       createdAt: new Date().toISOString()
     };
     setBuyers(prev => [...prev, buyerObj]);
@@ -2568,7 +2572,13 @@ export default function LoomPLM() {
       eventType: "BUYER",
       action: `Added buyer ${buyerObj.name}`,
       targetId: buyerObj.id,
-      metadata: { buyerId: buyerObj.id, merchandiserIds: buyerObj.merchandiserIds, fabricManagerIds: buyerObj.fabricManagerIds }
+      metadata: {
+        buyerId: buyerObj.id,
+        merchandiserIds: buyerObj.merchandiserIds,
+        fabricManagerIds: buyerObj.fabricManagerIds,
+        trimsManagerIds: buyerObj.trimsManagerIds,
+        artworkManagerIds: buyerObj.artworkManagerIds
+      }
     });
   };
 
@@ -2577,6 +2587,8 @@ export default function LoomPLM() {
       name: changes.name.trim(),
       merchandiserIds: changes.merchandiserIds || [],
       fabricManagerIds: changes.fabricManagerIds || [],
+      trimsManagerIds: changes.trimsManagerIds || [],
+      artworkManagerIds: changes.artworkManagerIds || [],
       updatedAt: new Date().toISOString()
     };
     setBuyers(prev => prev.map(b => b.id === buyerId ? { ...b, ...patch } : b));
@@ -2676,20 +2688,31 @@ export default function LoomPLM() {
       });
     } catch (e) { }
 
-    // Order-created notification goes only to the merchandisers and fabric managers mapped to this buyer
+    // Order-created notification goes only to the users mapped to this buyer in supported depts
     const matchedBuyer = findBuyerForOrder(fullOrder);
     const buyerRecipients = matchedBuyer
-      ? Array.from(new Set([...(matchedBuyer.merchandiserIds || []), ...(matchedBuyer.fabricManagerIds || [])]))
+      ? Array.from(new Set([
+          ...(matchedBuyer.merchandiserIds || []),
+          ...(matchedBuyer.fabricManagerIds || []),
+          ...(matchedBuyer.trimsManagerIds || []),
+          ...(matchedBuyer.artworkManagerIds || [])
+        ]))
       : [];
 
     if (buyerRecipients.length > 0) {
       buyerRecipients.forEach(userId => {
-        const isFabric = (matchedBuyer.fabricManagerIds || []).includes(userId) && !(matchedBuyer.merchandiserIds || []).includes(userId);
+        const roles = [];
+        if ((matchedBuyer.merchandiserIds || []).includes(userId)) roles.push("merchandiser");
+        if ((matchedBuyer.fabricManagerIds || []).includes(userId)) roles.push("fabric manager");
+        if ((matchedBuyer.trimsManagerIds || []).includes(userId)) roles.push("trims in-charge");
+        if ((matchedBuyer.artworkManagerIds || []).includes(userId)) roles.push("artwork designer");
+        const roleStr = roles.length > 0 ? roles.join(" / ") : "in-charge";
+
         pushNotification({
           eventKey: `order-created-${fullOrder.primaryId || fullOrder.id}-${userId}`,
           type: "task",
           title: `New Order for ${fullOrder.buyer}`,
-          message: `Order #${fullOrder.id} (${fullOrder.style || "Order"}) created for ${fullOrder.buyer}. You are the assigned ${isFabric ? "fabric manager" : "merchandiser"}.`,
+          message: `Order #${fullOrder.id} (${fullOrder.style || "Order"}) created for ${fullOrder.buyer}. You are assigned as ${roleStr}.`,
           relatedModule: "orders",
           relatedId: fullOrder.id,
           targetUserIds: [userId],

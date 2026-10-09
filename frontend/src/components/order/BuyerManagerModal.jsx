@@ -3,6 +3,8 @@ import { Check, ChevronDown, Edit, Plus, Trash2, X } from "lucide-react";
 
 export const MERCHANDISING_DEPT = "Merchandising";
 export const FABRIC_DEPT = "Purchase – Fabric";
+export const TRIMS_DEPT = "Purchase – Trims";
+export const ARTWORK_DEPT = "Artwork";
 
 // Active users belonging to the team (department) with the given name
 export function usersInDept(users = [], teams = [], deptName) {
@@ -24,7 +26,7 @@ export function userNames(ids = [], users = []) {
   });
 }
 
-const EMPTY_FORM = { id: null, name: "", merchandiserIds: [], fabricManagerIds: [] };
+const EMPTY_FORM = { id: null, name: "", merchandiserIds: [], fabricManagerIds: [], trimsManagerIds: [], artworkManagerIds: [] };
 
 const labelStyle = { display: "block", fontSize: 11.5, fontWeight: 600, color: "#475569", marginBottom: 6 };
 const inputStyle = { width: "100%", boxSizing: "border-box", padding: "8px 12px", borderRadius: 7, border: "1px solid #CBD5E1", fontSize: 13, outline: "none", background: "#FFFFFF" };
@@ -98,6 +100,8 @@ export function BuyerManagerModal({ buyers = [], users = [], teams = [], onAdd, 
 
   const merchandisers = useMemo(() => usersInDept(users, teams, MERCHANDISING_DEPT), [users, teams]);
   const fabricManagers = useMemo(() => usersInDept(users, teams, FABRIC_DEPT), [users, teams]);
+  const trimsManagers = useMemo(() => usersInDept(users, teams, TRIMS_DEPT), [users, teams]);
+  const artworkManagers = useMemo(() => usersInDept(users, teams, ARTWORK_DEPT), [users, teams]);
 
   const resetForm = () => { setForm(EMPTY_FORM); setError(""); };
 
@@ -110,7 +114,13 @@ export function BuyerManagerModal({ buyers = [], users = [], teams = [], onAdd, 
       setError(`Buyer "${name}" already exists.`);
       return;
     }
-    const payload = { name, merchandiserIds: form.merchandiserIds, fabricManagerIds: form.fabricManagerIds };
+    const payload = {
+      name,
+      merchandiserIds: form.merchandiserIds,
+      fabricManagerIds: form.fabricManagerIds,
+      trimsManagerIds: form.trimsManagerIds,
+      artworkManagerIds: form.artworkManagerIds
+    };
     if (isEditing) onUpdate?.(form.id, payload);
     else onAdd?.(payload);
     resetForm();
@@ -129,13 +139,13 @@ export function BuyerManagerModal({ buyers = [], users = [], teams = [], onAdd, 
     >
       <div
         onClick={e => e.stopPropagation()}
-        style={{ background: "#FFFFFF", borderRadius: 14, width: "100%", maxWidth: 760, maxHeight: "90vh", overflowY: "auto", padding: 24, boxShadow: "0 20px 30px -10px rgba(0,0,0,0.2)" }}
+        style={{ background: "#FFFFFF", borderRadius: 14, width: "100%", maxWidth: 860, maxHeight: "90vh", overflowY: "auto", padding: 24, boxShadow: "0 20px 30px -10px rgba(0,0,0,0.2)" }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
           <div>
             <h3 style={{ fontSize: 18, fontWeight: 700, color: "#151B2E", margin: 0 }}>Buyers</h3>
             <p style={{ fontSize: 12.5, color: "#8A8D98", margin: "4px 0 0" }}>
-              Orders of a buyer are shown only to its assigned merchandisers and fabric managers.
+              Orders and tasks of a buyer are shown only to its assigned users from Merchandising, Purchase – Fabric, Purchase – Trims, and Artwork.
             </p>
           </div>
           <button type="button" onClick={onClose} style={{ background: "none", border: "none", color: "#8A8D98", cursor: "pointer", padding: 4 }}>
@@ -175,6 +185,20 @@ export function BuyerManagerModal({ buyers = [], users = [], teams = [], onAdd, 
               onChange={ids => setForm(prev => ({ ...prev, fabricManagerIds: ids }))}
               emptyText={`No users in the ${FABRIC_DEPT} department.`}
             />
+            <MultiSelect
+              label="Purchase – Trims"
+              options={trimsManagers}
+              selectedIds={form.trimsManagerIds}
+              onChange={ids => setForm(prev => ({ ...prev, trimsManagerIds: ids }))}
+              emptyText={`No users in the ${TRIMS_DEPT} department.`}
+            />
+            <MultiSelect
+              label="Artwork"
+              options={artworkManagers}
+              selectedIds={form.artworkManagerIds}
+              onChange={ids => setForm(prev => ({ ...prev, artworkManagerIds: ids }))}
+              emptyText={`No users in the ${ARTWORK_DEPT} department.`}
+            />
           </div>
 
           {error && <div style={{ color: "#DC2626", fontSize: 12, marginBottom: 10 }}>{error}</div>}
@@ -200,19 +224,21 @@ export function BuyerManagerModal({ buyers = [], users = [], teams = [], onAdd, 
                 <th style={thStyle}>Buyer</th>
                 <th style={thStyle}>Merchandisers</th>
                 <th style={thStyle}>Fabric Managers</th>
+                <th style={thStyle}>Purchase – Trims</th>
+                <th style={thStyle}>Artwork</th>
                 <th style={{ ...thStyle, textAlign: "right" }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {buyers.length === 0 && (
                 <tr>
-                  <td colSpan={4} style={{ padding: "18px 14px", textAlign: "center", color: "#94A3B8" }}>No buyers added yet.</td>
+                  <td colSpan={6} style={{ padding: "18px 14px", textAlign: "center", color: "#94A3B8" }}>No buyers added yet.</td>
                 </tr>
               )}
               {buyers.map(buyer => (
                 <tr key={buyer.id} style={{ borderBottom: "1px solid #F1F5F9", background: form.id === buyer.id ? "#F0F9FF" : "#FFFFFF" }}>
                   <td style={{ padding: "10px 14px", fontWeight: 600, color: "#0F172A" }}>{buyer.name}</td>
-                  {[buyer.merchandiserIds, buyer.fabricManagerIds].map((ids, i) => (
+                  {[buyer.merchandiserIds, buyer.fabricManagerIds, buyer.trimsManagerIds, buyer.artworkManagerIds].map((ids, i) => (
                     <td key={i} style={{ padding: "10px 14px" }}>
                       {Array.isArray(ids) && ids.length > 0 ? (
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
@@ -228,7 +254,14 @@ export function BuyerManagerModal({ buyers = [], users = [], teams = [], onAdd, 
                       type="button"
                       title="Edit buyer"
                       onClick={() => {
-                        setForm({ id: buyer.id, name: buyer.name, merchandiserIds: [...(buyer.merchandiserIds || [])], fabricManagerIds: [...(buyer.fabricManagerIds || [])] });
+                        setForm({
+                          id: buyer.id,
+                          name: buyer.name,
+                          merchandiserIds: [...(buyer.merchandiserIds || [])],
+                          fabricManagerIds: [...(buyer.fabricManagerIds || [])],
+                          trimsManagerIds: [...(buyer.trimsManagerIds || [])],
+                          artworkManagerIds: [...(buyer.artworkManagerIds || [])]
+                        });
                         setError("");
                       }}
                       style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 5, color: "#2563EB", cursor: "pointer", padding: "4px 8px", marginRight: 6, display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, fontWeight: 600 }}

@@ -124,15 +124,21 @@ export function computeEmployeeKPIMetrics(employee, orders = [], tasks = [], com
       (b.name && String(b.name).toLowerCase() === String(order.buyer || "").trim().toLowerCase())
     ) : null;
 
-    // Check if employee is the assigned merchandiser or fabric manager for this buyer/order
+    // Check if employee is the assigned merchandiser, fabric manager, trims in-charge, or artwork designer for this buyer/order
     const isMappedToOrder = Boolean(
       employeeId &&
       ((Array.isArray(order?.merchandiserIds) && order.merchandiserIds.includes(employeeId)) ||
        (Array.isArray(order?.fabricManagerIds) && order.fabricManagerIds.includes(employeeId)) ||
+       (Array.isArray(order?.trimsManagerIds) && order.trimsManagerIds.includes(employeeId)) ||
+       (Array.isArray(order?.artworkManagerIds) && order.artworkManagerIds.includes(employeeId)) ||
        (buyerObj && Array.isArray(buyerObj.merchandiserIds) && buyerObj.merchandiserIds.includes(employeeId)) ||
        (buyerObj && Array.isArray(buyerObj.fabricManagerIds) && buyerObj.fabricManagerIds.includes(employeeId)) ||
+       (buyerObj && Array.isArray(buyerObj.trimsManagerIds) && buyerObj.trimsManagerIds.includes(employeeId)) ||
+       (buyerObj && Array.isArray(buyerObj.artworkManagerIds) && buyerObj.artworkManagerIds.includes(employeeId)) ||
        matchesEmployee(order?.merchandiser) ||
-       matchesEmployee(order?.fabricManager))
+       matchesEmployee(order?.fabricManager) ||
+       matchesEmployee(order?.trimsManager) ||
+       matchesEmployee(order?.artworkManager))
     );
 
     (Array.isArray(order?.stages) ? order.stages : []).forEach(stage => {

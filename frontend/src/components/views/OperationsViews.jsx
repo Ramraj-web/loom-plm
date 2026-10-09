@@ -876,9 +876,11 @@ export function OrdersPage({
                     if (!selected) return null;
                     const merch = userNames(selected.merchandiserIds || [], users);
                     const fabric = userNames(selected.fabricManagerIds || [], users);
+                    const trims = userNames(selected.trimsManagerIds || [], users);
+                    const artwork = userNames(selected.artworkManagerIds || [], users);
                     return (
                       <div style={{ fontSize: 11, color: "#6B7280", marginTop: 4 }}>
-                        Merchandiser: {merch.join(", ") || "—"} · Fabric: {fabric.join(", ") || "—"}
+                        Merchandiser: {merch.join(", ") || "—"} · Fabric: {fabric.join(", ") || "—"} · Trims: {trims.join(", ") || "—"} · Artwork: {artwork.join(", ") || "—"}
                       </div>
                     );
                   })()}
