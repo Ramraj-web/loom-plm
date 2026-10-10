@@ -7,7 +7,7 @@ import {
   Users, ShieldCheck, ClipboardCheck, Lightbulb, UserCheck, TrendingUp, Landmark, Factory, RefreshCw,
   PanelLeftClose, PanelLeftOpen, Activity, Volume2, VolumeX, Layers
 } from "lucide-react";
-import { resourcesApi } from "./api.js";
+import { resourcesApi, clearApiCache } from "./api.js";
 import { getDeviceInfo, getLocationInfo, sanitizeLocationString } from "./utils/deviceLocation.js";
 import { playNotificationSound, isSoundEnabled, setSoundEnabled } from "./utils/soundAlert.js";
 import {
@@ -689,6 +689,7 @@ export default function LoomPLM() {
   const initialViewLoadRef = useRef(false);
   const lastViewFetchRef = useRef({});
   const isSyncingNotifsRef = useRef(false);
+  const programmaticHashTargetRef = useRef(null);
   const hasEnsuredTodayLoginRef = useRef(false);
   const [activeUser, setActiveUser] = useState(() => {
     try {
@@ -1655,6 +1656,15 @@ export default function LoomPLM() {
     if (!activeUser) return;
 
     const handleHashChange = () => {
+      const currentHash = window.location.hash;
+      // If navigation was triggered programmatically by navigate(), openOrder(), or openDept(),
+      // state and fetch were already triggered; consume marker and skip duplicate fetch.
+      if (programmaticHashTargetRef.current && programmaticHashTargetRef.current === currentHash) {
+        programmaticHashTargetRef.current = null;
+        return;
+      }
+      programmaticHashTargetRef.current = null;
+
       const parsed = parseRouteFromHash(window.location.hash);
       if (parsed && parsed.view) {
         setView(prevView => {
@@ -1998,6 +2008,9 @@ export default function LoomPLM() {
   }, [activeUser, role]);
 
   const handleLogin = (user) => {
+    // Purge any existing cached responses so new user never sees prior user's cached data
+    clearApiCache();
+    lastViewFetchRef.current = {};
     const nextRole = roleForUser(user, teams);
     setActiveUser(user);
     setRole(nextRole);
@@ -2224,6 +2237,8 @@ export default function LoomPLM() {
       try { sessionStorage.removeItem("loom_active_session_id"); } catch (e) {}
       setCurrentSessionId(null);
     }
+    clearApiCache();
+    lastViewFetchRef.current = {};
     setActiveUser(null);
     try { localStorage.removeItem("loom_active_user"); } catch (e) { }
     if (window.location.hash && window.location.hash !== "#/login") {
@@ -3762,7 +3777,10 @@ export default function LoomPLM() {
     setSelectedDept(null);
     const targetHash = getRouteHash(key);
     if (window.location.hash !== targetHash) {
+      programmaticHashTargetRef.current = targetHash;
       window.location.hash = targetHash;
+    } else {
+      programmaticHashTargetRef.current = null;
     }
     if (activeUser) {
       loadViewData(key);
@@ -3781,7 +3799,10 @@ export default function LoomPLM() {
     setView("order");
     const targetHash = getRouteHash("order", target);
     if (window.location.hash !== targetHash) {
+      programmaticHashTargetRef.current = targetHash;
       window.location.hash = targetHash;
+    } else {
+      programmaticHashTargetRef.current = null;
     }
   };
 
@@ -3791,7 +3812,10 @@ export default function LoomPLM() {
     setView("departmentDetail");
     const targetHash = getRouteHash("departmentDetail", null, name);
     if (window.location.hash !== targetHash) {
+      programmaticHashTargetRef.current = targetHash;
       window.location.hash = targetHash;
+    } else {
+      programmaticHashTargetRef.current = null;
     }
   };
 
@@ -4325,6 +4349,7 @@ export default function LoomPLM() {
         onUpdateCertificates={updateOrderCertificates}
         allOrders={visibleOrders}
         people={users}
+        teams={teams}
         onReportComplaint={handleReportComplaint}
         onPushNotification={pushNotification}
       />

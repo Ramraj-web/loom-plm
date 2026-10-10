@@ -77,8 +77,10 @@ ReactDOM.createRoot(document.getElementById("root")).render(
   </React.StrictMode>
 );
 
-// Register Service Worker safely for PWA installability
-if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+// Register Service Worker safely for PWA installability (bypass in native Capacitor mode)
+const isNativePlatform = typeof window !== "undefined" && Boolean(window.Capacitor?.isNativePlatform?.());
+
+if (!isNativePlatform && typeof window !== "undefined" && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker
       .register("/sw.js")

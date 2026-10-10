@@ -6,3 +6,10 @@ dist/
 backend/data/storage.json
 .DS_Store
 *.traineddata
+*.jks
+*.keystore
+frontend/android/.gradle/
+frontend/android/build/
+frontend/android/app/build/
+frontend/android/.idea/
+frontend/android/*.iml

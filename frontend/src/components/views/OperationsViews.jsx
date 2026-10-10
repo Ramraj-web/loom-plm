@@ -1120,6 +1120,7 @@ export function OrdersPage({
           order={alignModalOrder}
           isOpen={Boolean(alignModalOrder)}
           onClose={() => setAlignModalOrder(null)}
+          teams={teams}
           onSaveStages={(orderId, updatedStages, tmpl) => {
             // Properly save stages through the state updater so React re-renders
             // and the backend persists the changes
@@ -5619,9 +5620,23 @@ export function OrderStageAlignmentModal({
   order,
   isOpen,
   onClose,
-  onSaveStages
+  onSaveStages,
+  teams = []
 }) {
   if (!isOpen || !order) return null;
+
+  const availableDepartments = useMemo(() => {
+    const list = Object.keys(ORG_STRUCTURE);
+    (teams || []).forEach(t => {
+      const name = (t.name || "").trim();
+      if (name && !["Administrators", "Executive (MD)"].includes(name)) {
+        if (!list.some(existing => existing.toLowerCase() === name.toLowerCase())) {
+          list.push(name);
+        }
+      }
+    });
+    return list;
+  }, [teams]);
 
   const currentTemplate = order.template || "90";
   const [selectedTemplate, setSelectedTemplate] = useState(currentTemplate);
@@ -5648,6 +5663,18 @@ export function OrderStageAlignmentModal({
     nextStages[index] = nextStages[targetIndex];
     nextStages[targetIndex] = temp;
     setStages(nextStages);
+  };
+
+  const updateStageDept = (index, newDept) => {
+    setStages(prev => {
+      const next = [...prev];
+      next[index] = {
+        ...next[index],
+        dept: newDept,
+        assignee: firstNamedAssignee(newDept) || next[index].assignee
+      };
+      return next;
+    });
   };
 
   const removeStage = (index) => {
@@ -5949,8 +5976,29 @@ export function OrderStageAlignmentModal({
                         {stage.isParallel !== false ? "⚡ Parallel (Always Open)" : "🔒 Sequential"}
                       </span>
                     </div>
-                    <div style={{ fontSize: 11.5, color: "#6B7280", marginTop: 2, display: "flex", gap: 10 }}>
-                      <span>Department: <b style={{ color: "#374151" }}>{stage.dept}</b></span>
+                    <div style={{ fontSize: 11.5, color: "#6B7280", marginTop: 2, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        Department:
+                        <select
+                          value={stage.dept || "Merchandising"}
+                          onChange={e => updateStageDept(idx, e.target.value)}
+                          onClick={e => e.stopPropagation()}
+                          style={{
+                            padding: "2px 6px",
+                            borderRadius: 4,
+                            border: "1px solid #D1D5DB",
+                            fontSize: 11.5,
+                            fontWeight: 600,
+                            color: "#374151",
+                            background: "#F9FAFB",
+                            cursor: "pointer"
+                          }}
+                        >
+                          {availableDepartments.map(dept => (
+                            <option key={dept} value={dept}>{dept}</option>
+                          ))}
+                        </select>
+                      </span>
                       <span>Target Range: <b style={{ color: "#374151" }}>{typeof stage.startDay === "number" ? `${stage.startDay}-${stage.endDay} Days` : (stage.planned || `Day ${idx + 1}`)}</b></span>
                     </div>
                   </div>
@@ -6044,7 +6092,7 @@ export function OrderStageAlignmentModal({
                 onChange={e => setCustomStageDept(e.target.value)}
                 style={{ padding: "7px 10px", borderRadius: 6, border: "1px solid #C4B8F5", fontSize: 12, background: "#fff" }}
               >
-                {Object.keys(ORG_STRUCTURE).map(dept => (
+                {availableDepartments.map(dept => (
                   <option key={dept} value={dept}>{dept}</option>
                 ))}
               </select>

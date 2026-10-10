@@ -3151,6 +3151,7 @@ export function OrderWorkspace({
   onApproveQuotation, onRejectQuotation, onSubmitCosting, onApproveCosting, onRejectCosting,
   certifications = [], compliances = [],
   suppliers = [], onAssignSupplier, onAssignWork, onAddProductionLog, onDeleteProductionLog, onUpdateInspectionData, onUpdateCertificates, allOrders = [], people = [],
+  teams = [],
   onReportComplaint,
   onPushNotification
 }) {
@@ -3653,6 +3654,7 @@ export function OrderWorkspace({
           order={order}
           isOpen={showAlignModal}
           onClose={() => setShowAlignModal(false)}
+          teams={teams}
           onSaveStages={(orderId, updatedStages, tmpl) => {
             if (onSetTemplate && tmpl !== order.template) {
               onSetTemplate(orderId, tmpl);
