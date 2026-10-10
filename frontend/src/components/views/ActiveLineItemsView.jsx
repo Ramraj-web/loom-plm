@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import {
-  Search, Download, Filter, Layers, ChevronRight, X, Sparkles,
+  Search, Download, Filter, Layers, ChevronRight, ChevronDown, X, Sparkles,
   Calendar, CheckCircle2, Clock, AlertTriangle, ArrowRight, AlignLeft,
   User, Building2, Tag, RefreshCw, Check, Plus, SlidersHorizontal, Eye
 } from "lucide-react";
@@ -33,10 +33,86 @@ export default function ActiveLineItemsView({
   const [viewInCharge, setViewInCharge] = useState(false);
   const [selectedOrderForDrawer, setSelectedOrderForDrawer] = useState(null);
 
+  // Collapsible groups state
+  const [collapsedGroups, setCollapsedGroups] = useState({});
+
+  const toggleGroupCollapse = (groupTitle) => {
+    setCollapsedGroups(prev => ({
+      ...prev,
+      [groupTitle]: !prev[groupTitle]
+    }));
+  };
+
   // Stage delay edit modal state
   const [delayModalStage, setDelayModalStage] = useState(null); // { order, stageIdx, stage }
   const [extraDaysInput, setExtraDaysInput] = useState("7");
   const [delayReasonInput, setDelayReasonInput] = useState("Production delay");
+
+  // Helper: Get merchandiser name for an order using order fields, users list & buyers mapping
+  const getMerchandiserName = (order) => {
+    if (!order) return "Unassigned";
+
+    // 1. Explicit merchandiser string if it's already a full name
+    if (order.merchandiser && typeof order.merchandiser === "string" && isNaN(order.merchandiser) && order.merchandiser.trim() !== "") {
+      return order.merchandiser;
+    }
+
+    // 2. Check merchandiserIds array on order
+    if (Array.isArray(order.merchandiserIds) && order.merchandiserIds.length > 0) {
+      const names = order.merchandiserIds
+        .map(id => {
+          const u = (users || []).find(usr => String(usr.id) === String(id) || String(usr._id) === String(id));
+          return u ? (u.name || u.username) : null;
+        })
+        .filter(Boolean);
+      if (names.length > 0) return names.join(", ");
+    }
+
+    // 3. Single merchandiserId on order
+    if (order.merchandiserId) {
+      const u = (users || []).find(usr => String(usr.id) === String(order.merchandiserId) || String(usr._id) === String(order.merchandiserId));
+      if (u) return u.name || u.username;
+    }
+
+    // 4. Fallback to buyer's mapped merchandiserIds
+    const buyerObj = (buyers || []).find(b =>
+      (order.buyerId && b.id === order.buyerId) ||
+      (b.name && String(b.name).trim().toLowerCase() === String(order.buyer || "").trim().toLowerCase())
+    );
+    if (buyerObj && Array.isArray(buyerObj.merchandiserIds) && buyerObj.merchandiserIds.length > 0) {
+      const names = buyerObj.merchandiserIds
+        .map(id => {
+          const u = (users || []).find(usr => String(usr.id) === String(id) || String(usr._id) === String(id));
+          return u ? (u.name || u.username) : null;
+        })
+        .filter(Boolean);
+      if (names.length > 0) return names.join(", ");
+    }
+
+    // 5. Fallback to numeric merchandiser user lookup
+    if (order.merchandiser) {
+      const u = (users || []).find(usr => String(usr.id) === String(order.merchandiser) || String(usr._id) === String(order.merchandiser));
+      if (u) return u.name || u.username;
+      return String(order.merchandiser);
+    }
+
+    if (order.assignee) return order.assignee;
+    return "Unassigned Merchandiser";
+  };
+
+  // Helper: Get Buyer display name
+  const getBuyerName = (order) => {
+    if (!order) return "Unassigned";
+    if (order.buyer && typeof order.buyer === "string" && isNaN(order.buyer) && order.buyer.trim() !== "") {
+      return order.buyer;
+    }
+    const buyerObj = (buyers || []).find(b =>
+      (order.buyerId && b.id === order.buyerId) ||
+      (b.id && String(b.id) === String(order.buyer))
+    );
+    if (buyerObj && buyerObj.name) return buyerObj.name;
+    return order.buyer || "Unassigned Buyer";
+  };
 
   // Active non-deleted orders
   const activeOrders = useMemo(() => {
@@ -66,21 +142,21 @@ export default function ActiveLineItemsView({
         const q = searchQuery.toLowerCase();
         const styleMatch = (o.style || "").toLowerCase().includes(q);
         const poMatch = (o.id || o.po || "").toLowerCase().includes(q);
-        const buyerMatch = (o.buyer || "").toLowerCase().includes(q);
+        const buyerMatch = getBuyerName(o).toLowerCase().includes(q);
         const colorMatch = (o.colorName || o.colorCode || "").toLowerCase().includes(q);
-        const merchMatch = (o.merchandiser || "").toLowerCase().includes(q);
+        const merchMatch = getMerchandiserName(o).toLowerCase().includes(q);
         if (!styleMatch && !poMatch && !buyerMatch && !colorMatch && !merchMatch) return false;
       }
       return true;
     });
-  }, [activeOrders, selectedRoute, searchQuery]);
+  }, [activeOrders, selectedRoute, searchQuery, users, buyers]);
 
-  // Extract master stage names across filtered orders for table column headers
+  // Extract master stage names across filtered orders for table column headers (ALL STAGES)
   const masterStageColumns = useMemo(() => {
     const stageMap = new Map();
     filteredOrders.forEach(o => {
       if (Array.isArray(o.stages)) {
-        o.stages.forEach((s, idx) => {
+        o.stages.forEach(s => {
           if (s && s.name && !stageMap.has(s.name)) {
             stageMap.set(s.name, s.dept || "General");
           }
@@ -90,6 +166,13 @@ export default function ActiveLineItemsView({
 
     if (stageMap.size === 0) {
       return [
+        { name: "Order Confirmation & Enquiry", dept: "Program" },
+        { name: "Yarn/Fabric Booking", dept: "Purchase – Fabric" },
+        { name: "Work order", dept: "Program" },
+        { name: "Costing", dept: "Costing" },
+        { name: "CAD release", dept: "CAD" },
+        { name: "Program Passing", dept: "Program" },
+        { name: "Lab Dip Approval", dept: "Dyeing" },
         { name: "Yarn Dyeing", dept: "Knitting" },
         { name: "Dyed Yarn", dept: "Knitting" },
         { name: "Winding", dept: "Knitting" },
@@ -102,7 +185,7 @@ export default function ActiveLineItemsView({
       ];
     }
 
-    return Array.from(stageMap.entries()).slice(0, 10).map(([name, dept]) => ({ name, dept }));
+    return Array.from(stageMap.entries()).map(([name, dept]) => ({ name, dept }));
   }, [filteredOrders]);
 
   // Group filtered orders dynamically
@@ -113,16 +196,15 @@ export default function ActiveLineItemsView({
       let groupKey = "Unassigned";
 
       if (groupBy === "merchandiser") {
-        groupKey = o.merchandiser || o.assignee || "Unassigned";
+        groupKey = getMerchandiserName(o);
       } else if (groupBy === "department") {
-        // Find main active department from first in_progress stage
         const activeStage = (o.stages || []).find(s => s.status === "in_progress") || (o.stages || [])[0];
         groupKey = activeStage?.dept || "General Operations";
       } else if (groupBy === "buyer") {
-        groupKey = o.buyer || "Unassigned Buyer";
+        groupKey = getBuyerName(o);
       } else if (groupBy === "user") {
         const activeStage = (o.stages || []).find(s => s.status === "in_progress");
-        groupKey = activeStage?.assignee || o.merchandiser || "Unassigned User";
+        groupKey = activeStage?.assignee || getMerchandiserName(o);
       }
 
       if (!groups[groupKey]) {
@@ -132,7 +214,7 @@ export default function ActiveLineItemsView({
     });
 
     return groups;
-  }, [filteredOrders, groupBy]);
+  }, [filteredOrders, groupBy, users, buyers]);
 
   // Helper: Calculate stage status for table cell
   const getStageCellInfo = (order, stageName) => {
@@ -354,6 +436,33 @@ export default function ActiveLineItemsView({
             {filteredOrders.length} rows
           </span>
 
+          {/* Expand/Collapse All Button */}
+          <button
+            type="button"
+            onClick={() => {
+              const groupKeys = Object.keys(groupedOrders);
+              const hasExpanded = groupKeys.some(k => !collapsedGroups[k]);
+              const newState = {};
+              groupKeys.forEach(k => { newState[k] = hasExpanded; });
+              setCollapsedGroups(newState);
+            }}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+              padding: "5px 10px",
+              borderRadius: 6,
+              border: `1px solid ${isDarkMode ? "#334155" : "#D1D5DB"}`,
+              background: isDarkMode ? "#1E293B" : "#F8FAFC",
+              color: isDarkMode ? "#F8FAFC" : "#334155",
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: "pointer"
+            }}
+          >
+            {Object.keys(groupedOrders).some(k => !collapsedGroups[k]) ? "Collapse All" : "Expand All"}
+          </button>
+
           {/* Search Box */}
           <div style={{ position: "relative", width: 240 }}>
             <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: isDarkMode ? "#94A3B8" : "#9498A8" }} />
@@ -463,8 +572,16 @@ export default function ActiveLineItemsView({
         </div>
       </div>
 
-      {/* 3. Grouped TNA Matrix Table */}
-      <div style={{ background: isDarkMode ? "#0F172A" : "#FFFFFF", borderRadius: 10, border: `1px solid ${isDarkMode ? "#1E293B" : "#E2E8F0"}`, overflowX: "auto" }}>
+      {/* 3. Grouped TNA Matrix Table (Inline Scroll & Sticky Header/Columns) */}
+      <div style={{
+        background: isDarkMode ? "#0F172A" : "#FFFFFF",
+        borderRadius: 10,
+        border: `1px solid ${isDarkMode ? "#1E293B" : "#E2E8F0"}`,
+        overflowX: "auto",
+        maxHeight: "calc(100vh - 220px)",
+        overflowY: "auto",
+        position: "relative"
+      }}>
         <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, textAlign: "left", fontSize: 13 }}>
           {/* Table Header */}
           <thead>
@@ -472,53 +589,59 @@ export default function ActiveLineItemsView({
               <th style={{
                 position: "sticky",
                 left: 0,
-                zIndex: 12,
+                top: 0,
+                zIndex: 25,
                 width: 44,
                 minWidth: 44,
                 padding: "10px 12px",
                 textAlign: "center",
                 background: isDarkMode ? "#1E293B" : "#F8FAFC",
-                borderBottom: `1px solid ${isDarkMode ? "#334155" : "#E2E8F0"}`
+                borderBottom: `2px solid ${isDarkMode ? "#334155" : "#CBD5E1"}`
               }}>
                 <input type="checkbox" style={{ accentColor: "#2563EB" }} />
               </th>
               <th style={{
                 position: "sticky",
                 left: 44,
-                zIndex: 12,
+                top: 0,
+                zIndex: 25,
                 minWidth: 140,
                 padding: "10px 12px",
                 fontWeight: 700,
                 color: isDarkMode ? "#94A3B8" : "#475569",
                 background: isDarkMode ? "#1E293B" : "#F8FAFC",
-                borderBottom: `1px solid ${isDarkMode ? "#334155" : "#E2E8F0"}`
+                borderBottom: `2px solid ${isDarkMode ? "#334155" : "#CBD5E1"}`
               }}>
                 Order ID / PO
               </th>
               <th style={{
                 position: "sticky",
                 left: 184,
-                zIndex: 12,
-                minWidth: 210,
+                top: 0,
+                zIndex: 25,
+                minWidth: 230,
                 padding: "10px 12px",
                 fontWeight: 700,
                 color: isDarkMode ? "#94A3B8" : "#475569",
                 background: isDarkMode ? "#1E293B" : "#F8FAFC",
-                borderBottom: `1px solid ${isDarkMode ? "#334155" : "#E2E8F0"}`,
+                borderBottom: `2px solid ${isDarkMode ? "#334155" : "#CBD5E1"}`,
                 borderRight: `2px solid ${isDarkMode ? "#334155" : "#CBD5E1"}`,
                 boxShadow: "3px 0 6px rgba(0,0,0,0.06)"
               }}>
-                Style
+                Style & In-Charge Details
               </th>
               {masterStageColumns.map(col => (
                 <th key={col.name} style={{
+                  position: "sticky",
+                  top: 0,
+                  zIndex: 15,
                   padding: "10px 12px",
-                  minWidth: 120,
+                  minWidth: 125,
                   textAlign: "center",
                   fontWeight: 700,
                   color: isDarkMode ? "#94A3B8" : "#475569",
                   background: isDarkMode ? "#1E293B" : "#F8FAFC",
-                  borderBottom: `1px solid ${isDarkMode ? "#334155" : "#E2E8F0"}`,
+                  borderBottom: `2px solid ${isDarkMode ? "#334155" : "#CBD5E1"}`,
                   borderLeft: `1px solid ${isDarkMode ? "#334155" : "#F1F5F9"}`
                 }}>
                   <div>{col.name}</div>
@@ -539,40 +662,49 @@ export default function ActiveLineItemsView({
             ) : (
               Object.entries(groupedOrders).map(([groupTitle, groupItems]) => {
                 const totalGroupQty = groupItems.reduce((acc, curr) => acc + (Number(curr.qty) || 0), 0);
+                const isCollapsed = Boolean(collapsedGroups[groupTitle]);
 
                 return (
                   <React.Fragment key={groupTitle}>
-                    {/* Group Header Row */}
-                    <tr style={{ background: isDarkMode ? "#182238" : "#F1F5F9" }}>
+                    {/* Collapsible Group Header Row */}
+                    <tr
+                      onClick={() => toggleGroupCollapse(groupTitle)}
+                      style={{ background: isDarkMode ? "#182238" : "#F1F5F9", cursor: "pointer", userSelect: "none" }}
+                    >
                       <td
                         colSpan={3 + masterStageColumns.length}
                         style={{
                           position: "sticky",
                           left: 0,
-                          zIndex: 10,
-                          padding: "8px 12px",
+                          zIndex: 12,
+                          padding: "10px 14px",
                           fontWeight: 700,
                           color: isDarkMode ? "#F8FAFC" : "#0F172A",
                           background: isDarkMode ? "#182238" : "#F1F5F9",
-                          borderTop: `1px solid ${isDarkMode ? "#334155" : "#E2E8F0"}`,
-                          borderBottom: `1px solid ${isDarkMode ? "#334155" : "#E2E8F0"}`
+                          borderTop: `1px solid ${isDarkMode ? "#334155" : "#CBD5E1"}`,
+                          borderBottom: `1px solid ${isDarkMode ? "#334155" : "#CBD5E1"}`
                         }}
                       >
                         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                          <span>∨ {groupTitle}</span>
-                          <span style={{ fontSize: 12, fontWeight: 500, background: isDarkMode ? "#334155" : "#CBD5E1", padding: "1px 8px", borderRadius: 12, color: isDarkMode ? "#F8FAFC" : "#334155" }}>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13.5, color: isDarkMode ? "#38BDF8" : "#2563EB" }}>
+                            {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+                            {groupTitle}
+                          </span>
+                          <span style={{ fontSize: 12, fontWeight: 600, background: isDarkMode ? "#334155" : "#CBD5E1", padding: "2px 10px", borderRadius: 12, color: isDarkMode ? "#F8FAFC" : "#334155" }}>
                             {groupItems.length} items
                           </span>
                           <span style={{ fontSize: 12, fontWeight: 500, color: isDarkMode ? "#94A3B8" : "#64748B" }}>
-                            Σ Prod Qty {totalGroupQty.toLocaleString()}
+                            Σ Prod Qty {totalGroupQty.toLocaleString()} pcs
                           </span>
                         </div>
                       </td>
                     </tr>
 
-                    {/* Group Items */}
-                    {groupItems.map(item => {
+                    {/* Group Items (hidden when collapsed) */}
+                    {!isCollapsed && groupItems.map(item => {
                       const rowBg = isDarkMode ? "#0F172A" : "#FFFFFF";
+                      const merchName = getMerchandiserName(item);
+                      const buyerName = getBuyerName(item);
 
                       return (
                         <tr
@@ -618,29 +750,32 @@ export default function ActiveLineItemsView({
                             </div>
                           </td>
 
-                          {/* Style info (Sticky Left) */}
+                          {/* Style info & Merch / Buyer tags (Sticky Left) */}
                           <td style={{
                             position: "sticky",
                             left: 184,
                             zIndex: 6,
-                            padding: "12px",
+                            padding: "10px 12px",
                             background: rowBg,
                             borderBottom: `1px solid ${isDarkMode ? "#1E293B" : "#F1F5F9"}`,
                             borderRight: `2px solid ${isDarkMode ? "#334155" : "#CBD5E1"}`,
                             boxShadow: "3px 0 6px rgba(0,0,0,0.06)"
                           }}>
-                            <div style={{ display: "flex", flexDirection: "column" }}>
-                              <span style={{ fontWeight: 700, color: isDarkMode ? "#F8FAFC" : "#0F172A" }}>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                              <span style={{ fontWeight: 700, color: isDarkMode ? "#F8FAFC" : "#0F172A", fontSize: 12.5 }}>
                                 {item.style}
                               </span>
-                              <span style={{ fontSize: 11.5, color: isDarkMode ? "#94A3B8" : "#64748B" }}>
+                              <span style={{ fontSize: 11, color: isDarkMode ? "#94A3B8" : "#64748B" }}>
                                 {item.styleName || "MONOCHROM E-KNIT"}
                               </span>
-                              {viewInCharge && (
-                                <span style={{ fontSize: 10.5, color: "#2563EB", marginTop: 2, fontWeight: 600 }}>
-                                  In-Charge: {item.merchandiser || item.assignee || "Unassigned"}
+                              <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 2, flexWrap: "wrap" }}>
+                                <span style={{ fontSize: 10, fontWeight: 600, color: "#2563EB", background: isDarkMode ? "#1E3A8A" : "#EFF6FF", padding: "1px 6px", borderRadius: 4, border: "1px solid #BFDBFE" }}>
+                                  👤 {merchName}
                                 </span>
-                              )}
+                                <span style={{ fontSize: 10, fontWeight: 600, color: "#059669", background: isDarkMode ? "#064E3B" : "#ECFDF5", padding: "1px 6px", borderRadius: 4, border: "1px solid #A7F3D0" }}>
+                                  🏢 {buyerName}
+                                </span>
+                              </div>
                             </div>
                           </td>
 
@@ -770,7 +905,7 @@ export default function ActiveLineItemsView({
                   {selectedOrderForDrawer.style}
                 </h2>
                 <div style={{ fontSize: 12, color: isDarkMode ? "#94A3B8" : "#64748B", marginTop: 2 }}>
-                  Order #{selectedOrderForDrawer.id} · {selectedOrderForDrawer.buyer}
+                  Order #{selectedOrderForDrawer.id} · {getBuyerName(selectedOrderForDrawer)}
                 </div>
               </div>
 
@@ -853,7 +988,7 @@ export default function ActiveLineItemsView({
                   </div>
                   <div>
                     <span style={{ color: isDarkMode ? "#94A3B8" : "#64748B", display: "block", fontSize: 11 }}>Buyer</span>
-                    <strong style={{ color: isDarkMode ? "#F8FAFC" : "#1E293B" }}>{selectedOrderForDrawer.buyer}</strong>
+                    <strong style={{ color: isDarkMode ? "#F8FAFC" : "#1E293B" }}>{getBuyerName(selectedOrderForDrawer)}</strong>
                   </div>
                   <div>
                     <span style={{ color: isDarkMode ? "#94A3B8" : "#64748B", display: "block", fontSize: 11 }}>Yarn Route</span>
@@ -869,7 +1004,7 @@ export default function ActiveLineItemsView({
                   </div>
                   <div>
                     <span style={{ color: isDarkMode ? "#94A3B8" : "#64748B", display: "block", fontSize: 11 }}>Merchandiser</span>
-                    <strong style={{ color: isDarkMode ? "#F8FAFC" : "#1E293B" }}>{selectedOrderForDrawer.merchandiser || "Ramesh K"}</strong>
+                    <strong style={{ color: isDarkMode ? "#F8FAFC" : "#1E293B" }}>{getMerchandiserName(selectedOrderForDrawer)}</strong>
                   </div>
                   <div>
                     <span style={{ color: isDarkMode ? "#94A3B8" : "#64748B", display: "block", fontSize: 11 }}>Delivery Date</span>
