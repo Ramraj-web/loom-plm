@@ -1,13 +1,13 @@
 import React from "react";
-import { Home, Package, CheckSquare, ClipboardCheck, Bell, MoreHorizontal } from "lucide-react";
+import { Home, Package, CheckSquare, MoreHorizontal } from "lucide-react";
 
 /**
  * MobileBottomNav
- * 6-tab unified bottom navigation bar for mobile devices (max-width: 768px).
+ * 4-tab unified bottom navigation bar for mobile devices (max-width: 768px).
  * Color Palette: Clean white/subtle background, soft medium-light blue (#2563EB / #3B82F6) for active tab.
  */
 export function MobileBottomNav({
-  activeTab = "home", // "home" | "orders" | "tasks" | "approvals" | "notifications" | "more"
+  activeTab = "home", // "home" | "orders" | "tasks" | "more"
   onNavigate,
   unreadCount = 0,
   pendingApprovalsCount = 0,
@@ -32,20 +32,6 @@ export function MobileBottomNav({
       label: "Tasks",
       icon: CheckSquare,
       badge: pendingTasksCount > 0 ? pendingTasksCount : null
-    },
-    {
-      id: "approvals",
-      key: "approvals",
-      label: "Approvals",
-      icon: ClipboardCheck,
-      badge: pendingApprovalsCount > 0 ? pendingApprovalsCount : null
-    },
-    {
-      id: "notifications",
-      key: "notifications",
-      label: "Updates",
-      icon: Bell,
-      badge: unreadCount > 0 ? unreadCount : null
     },
     {
       id: "more",

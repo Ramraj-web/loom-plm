@@ -214,6 +214,58 @@ export function applyReadStatusAndDedupe(notifs = []) {
   return Array.from(map.values()).sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 }
 
+// Fast structural equality check to avoid triggering unnecessary re-renders when backend data has not changed
+export function areOrdersStructurallyEqual(a, b) {
+  if (a === b) return true;
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const o1 = a[i];
+    const o2 = b[i];
+    if (!o1 || !o2) return false;
+    if (
+      o1.id !== o2.id ||
+      o1.primaryId !== o2.primaryId ||
+      o1.status !== o2.status ||
+      o1.completed !== o2.completed ||
+      o1.isDeleted !== o2.isDeleted ||
+      o1.deletedAt !== o2.deletedAt ||
+      o1.completedAt !== o2.completedAt ||
+      o1.style !== o2.style ||
+      o1.buyer !== o2.buyer ||
+      o1.qty !== o2.qty ||
+      o1.season !== o2.season ||
+      o1.costingTemplate !== o2.costingTemplate ||
+      o1.template !== o2.template ||
+      o1.costingApproval?.status !== o2.costingApproval?.status ||
+      o1.costingApproval?.grandTotal !== o2.costingApproval?.grandTotal
+    ) {
+      return false;
+    }
+    const s1 = o1.stages || [];
+    const s2 = o2.stages || [];
+    if (s1.length !== s2.length) return false;
+    for (let j = 0; j < s1.length; j++) {
+      const st1 = s1[j];
+      const st2 = s2[j];
+      if (!st1 || !st2) return false;
+      if (
+        st1.name !== st2.name ||
+        st1.status !== st2.status ||
+        st1.planned !== st2.planned ||
+        st1.actual !== st2.actual ||
+        st1.reason !== st2.reason ||
+        st1.dept !== st2.dept ||
+        st1.assignee !== st2.assignee ||
+        st1.completedAt !== st2.completedAt ||
+        st1.updatedAt !== st2.updatedAt
+      ) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 // Deduplicate and normalize orders, merging any phantom duplicates (ord_<baseId>_<hash>) into their real parent orders
 export const normalizeAndDeduplicateOrders = (rawOrders, prev = []) => {
   if (!Array.isArray(rawOrders)) return [];
@@ -404,7 +456,7 @@ export const normalizeAndDeduplicateOrders = (rawOrders, prev = []) => {
 };
 
 export default function LoomPLM() {
-  const [orders, setOrders] = useState(() => {
+  const [orders, setOrdersState] = useState(() => {
     try {
       const cached = localStorage.getItem("loom_orders_cache");
       if (cached) {
@@ -414,6 +466,21 @@ export default function LoomPLM() {
     } catch (e) {}
     return [];
   });
+
+  const lastOrdersFetchTimeRef = useRef(0);
+  const invalidateOrdersCache = useCallback(() => {
+    lastOrdersFetchTimeRef.current = 0;
+    try { clearApiCache("orders"); } catch (e) {}
+  }, []);
+
+  // Safe wrapper around setOrdersState ensuring any local state mutation invalidates fetch cache
+  const setOrders = useCallback((updater, skipCacheInvalidation = false) => {
+    if (!skipCacheInvalidation) {
+      lastOrdersFetchTimeRef.current = 0;
+      try { clearApiCache("orders"); } catch (e) {}
+    }
+    setOrdersState(updater);
+  }, []);
 
   const initialRoute = useMemo(() => {
     if (typeof window !== "undefined" && window.location.hash) {
@@ -688,6 +755,7 @@ export default function LoomPLM() {
   const [accessLoaded, setAccessLoaded] = useState(false);
   const initialViewLoadRef = useRef(false);
   const lastViewFetchRef = useRef({});
+
   const isSyncingNotifsRef = useRef(false);
   const programmaticHashTargetRef = useRef(null);
   const hasEnsuredTodayLoginRef = useRef(false);
@@ -1138,7 +1206,11 @@ export default function LoomPLM() {
       }
 
       if (ordersRes.status === "fulfilled" && Array.isArray(ordersRes.value)) {
-        setOrders(prev => normalizeAndDeduplicateOrders(ordersRes.value, prev));
+        lastOrdersFetchTimeRef.current = Date.now();
+        setOrders(prev => {
+          const next = normalizeAndDeduplicateOrders(ordersRes.value, prev);
+          return areOrdersStructurallyEqual(prev, next) ? prev : next;
+        }, true);
       }
 
       if (debitRes.status === "fulfilled" && Array.isArray(debitRes.value) && debitRes.value.length > 0) {
@@ -1402,6 +1474,8 @@ export default function LoomPLM() {
             const parsed = typeof event.value === "string" ? JSON.parse(event.value) : event.value;
             if (Array.isArray(parsed) && parsed.length > 0) setGlobalAlignedStages(parsed);
           } catch (e) {}
+        } else if (event.key === "orders") {
+          invalidateOrdersCache();
         }
       }
 
@@ -1417,6 +1491,7 @@ export default function LoomPLM() {
 
       // 3. Handle live order stage updates
       if (event.type === "ORDER_STAGE_UPDATE" && event.orderId) {
+        invalidateOrdersCache();
         setOrders(prev => prev.map(o => {
           if (o.id === event.orderId || o.primaryId === event.orderId) {
             return {
@@ -1539,12 +1614,19 @@ export default function LoomPLM() {
 
     try {
       if (["dashboard", "orders", "order", "tasks", "approvals", "departments", "calendar", "reports", "compliance", "supplierPerformance", "finance", "myDepartment", "executiveOverview"].includes(targetView)) {
+        const shouldFetchOrders = (now - lastOrdersFetchTimeRef.current >= 30000) || orders.length === 0;
+
         const [backendOrders, backendBuyers] = await Promise.allSettled([
-          resourcesApi.list("orders", "?all=true"),
+          shouldFetchOrders ? resourcesApi.list("orders", "?all=true") : Promise.resolve(null),
           targetView === "orders" ? resourcesApi.list("buyers") : Promise.resolve([])
         ]);
-        if (backendOrders.status === "fulfilled" && Array.isArray(backendOrders.value)) {
-          setOrders(prev => normalizeAndDeduplicateOrders(backendOrders.value, prev));
+
+        if (shouldFetchOrders && backendOrders.status === "fulfilled" && Array.isArray(backendOrders.value)) {
+          lastOrdersFetchTimeRef.current = now;
+          setOrders(prev => {
+            const next = normalizeAndDeduplicateOrders(backendOrders.value, prev);
+            return areOrdersStructurallyEqual(prev, next) ? prev : next;
+          }, true);
         }
         if (targetView === "orders" && backendBuyers.status === "fulfilled" && Array.isArray(backendBuyers.value)) {
           setBuyers(backendBuyers.value.filter(b => b && b.name && b.isDeleted !== true));
@@ -2011,6 +2093,7 @@ export default function LoomPLM() {
     // Purge any existing cached responses so new user never sees prior user's cached data
     clearApiCache();
     lastViewFetchRef.current = {};
+    invalidateOrdersCache();
     const nextRole = roleForUser(user, teams);
     setActiveUser(user);
     setRole(nextRole);
@@ -2239,6 +2322,7 @@ export default function LoomPLM() {
     }
     clearApiCache();
     lastViewFetchRef.current = {};
+    invalidateOrdersCache();
     setActiveUser(null);
     try { localStorage.removeItem("loom_active_user"); } catch (e) { }
     if (window.location.hash && window.location.hash !== "#/login") {
@@ -2740,6 +2824,7 @@ export default function LoomPLM() {
       deletedAt: null,
     };
     setOrders(prev => [fullOrder, ...prev]);
+    invalidateOrdersCache();
     try {
       resourcesApi.create("orders", fullOrder).catch(err => {
         console.warn("Error creating order:", err.message);
@@ -4381,7 +4466,9 @@ export default function LoomPLM() {
           </div>
           <ExecutiveOverviewPage
             orders={visibleOrders}
+            buyers={buyers}
             attendance={attendance}
+            userSessions={userSessions}
             financials={financials}
             roster={roster}
             customTasks={customTasks}
@@ -4429,7 +4516,9 @@ export default function LoomPLM() {
       content = (
         <ExecutiveOverviewPage
           orders={visibleOrders}
+          buyers={buyers}
           attendance={attendance}
+          userSessions={userSessions}
           financials={financials}
           roster={roster}
           customTasks={customTasks}
@@ -4697,8 +4786,10 @@ export default function LoomPLM() {
     content = (
       <EmployeePerformancePanel
         orders={visibleOrders}
+        buyers={buyers}
         roster={roster}
         attendance={attendance}
+        userSessions={userSessions}
         customTasks={customTasks}
         leaveRequests={leaveRequests}
         users={users}
@@ -4714,7 +4805,9 @@ export default function LoomPLM() {
     content = (
       <ExecutiveOverviewPage
         orders={visibleOrders}
+        buyers={buyers}
         attendance={attendance}
+        userSessions={userSessions}
         financials={financials}
         roster={roster}
         customTasks={customTasks}
@@ -4798,7 +4891,9 @@ export default function LoomPLM() {
     content = (
       <ExecutiveOverviewPage
         orders={visibleOrders}
+        buyers={buyers}
         attendance={attendance}
+        userSessions={userSessions}
         financials={financials}
         roster={roster}
         customTasks={customTasks}

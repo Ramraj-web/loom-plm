@@ -9,9 +9,20 @@
 //   GET    /api/storage?prefix=xxx&shared=true|false
 
 export const API_BASE_URL = (() => {
-  if (typeof window !== "undefined") {
-    return window.location.origin;
+  // In development (Vite server running on localhost:5173)
+  if (import.meta.env.DEV) {
+    return "http://localhost:5000"; // Local backend
   }
+  // Inside Capacitor native Android/iOS WebView, window.location.origin is "https://localhost" or "capacitor://localhost"
+  // Route storage calls to the remote production backend
+  if (typeof window !== "undefined" && (window.Capacitor?.isNativePlatform?.() || window.location.hostname === "localhost" || window.location.protocol === "capacitor:")) {
+    return "https://loom-plm.vercel.app";
+  }
+  // In web production (Vercel) - use same domain
+  if (typeof window !== "undefined" && window.location.origin) {
+    return window.location.origin; // e.g., https://loom-plm.vercel.app
+  }
+  // Fallback
   return "https://loom-plm.vercel.app";
 })();
 const BASE = `${API_BASE_URL}/api/storage`;

@@ -3140,23 +3140,42 @@ export function CapasPage({ orders, capas, onAdd, onCycleStatus }) {
   );
 }
 
-export function EmployeePerformancePanel({ orders = [], roster = [], attendance = {}, customTasks = [], leaveRequests = [], users = [], teams = [], complaints = [], onResolveComplaint, isAdmin = false, onNavigate, onBack }) {
+const BUYER_SCOPED_DEPTS = {
+  "Merchandising": "merchandiserIds",
+  "Purchase – Fabric": "fabricManagerIds",
+  "Purchase – Trims": "trimsManagerIds",
+  "Artwork": "artworkManagerIds",
+};
+
+export function EmployeePerformancePanel({ orders = [], buyers = [], roster = [], attendance = {}, userSessions = [], customTasks = [], leaveRequests = [], users = [], teams = [], complaints = [], onResolveComplaint, isAdmin = false, onNavigate, onBack }) {
   const employeeRows = useMemo(() => {
     const activeOrders = orders.filter(order => order.isDeleted !== true);
     const allStages = activeOrders.flatMap(order => (order.stages || []).map(stage => ({ ...stage, orderId: order.id })));
     const cleanName = value => String(value || "").replace(/^@/, "").split("(")[0].trim().toLowerCase();
     const isDone = value => ["done", "completed", "complete", "closed"].includes(String(value || "").toLowerCase());
+    const todayStr = new Date().toISOString().slice(0, 10);
 
     const teamMap = new Map((teams || []).map(t => [t.id, t.name]));
 
     const candidateEmployees = (users && users.length > 0)
-      ? users.filter(u => u.active !== false && !u.isMD).map(u => ({
-        name: u.name,
-        username: u.username,
-        dept: teamMap.get(u.teamId) || u.dept || "Merchandising",
-        isUser: true,
-      }))
+      ? users.filter(u => u.active !== false && !u.isMD).map(u => {
+        const teamName = teamMap.get(u.teamId);
+        return {
+          id: u.id,
+          name: u.name,
+          username: u.username,
+          dept: teamName || u.dept || "Merchandising",
+          teamIds: Array.isArray(u.teamIds) ? u.teamIds : (u.teamId ? [u.teamId] : []),
+          isUser: true,
+        };
+      })
       : (roster || []).filter(person => person.name && person.name !== "—");
+
+    const findBuyerForOrder = order => {
+      if (!order) return null;
+      const buyerName = String(order.buyer || "").trim().toLowerCase();
+      return (buyers || []).find(b => (order.buyerId && b.id === order.buyerId) || String(b.name || "").trim().toLowerCase() === buyerName) || null;
+    };
 
     return candidateEmployees
       .map(person => {
@@ -3190,10 +3209,62 @@ export function EmployeePerformancePanel({ orders = [], roster = [], attendance 
         const workItems = assignedStages.length + assignedTasks.length;
         const completedItems = completedStages + completedTasks;
         const delayedItems = assignedStages.filter(stage => stage.reason || stage.status === "Delayed").length;
-        const employeeOrders = new Set(assignedStages.map(stage => stage.orderId));
+
+        // Resolve user departments (including multi-team / teamIds if user record exists)
+        const userDepts = person.teamIds && person.teamIds.length > 0
+          ? person.teamIds.map(tId => teamMap.get(tId)).filter(Boolean)
+          : [person.dept];
+        const scopedFields = Array.from(new Set(userDepts.map(d => BUYER_SCOPED_DEPTS[d]).filter(Boolean)));
+
+        let employeeOrderSet;
+        if (scopedFields.length > 0 && person.id) {
+          // User belongs to a buyer-scoped department (Merchandising, Purchase – Fabric, Purchase – Trims, Artwork)
+          // Exactly matches the buyer-scoping logic: only count orders whose assigned buyer includes this user's ID
+          const buyerMatchedOrderIds = activeOrders.filter(order => {
+            const b = findBuyerForOrder(order);
+            if (!b) return false;
+            return scopedFields.some(field => {
+              const ids = Array.isArray(b[field]) ? b[field] : [];
+              return ids.includes(person.id);
+            });
+          }).map(o => o.id);
+
+          // Also include any order where the person is directly assigned as stage assignee or completedBy
+          const directlyAssignedOrderIds = allStages.filter(stage => {
+            const assignee = cleanName(stage.assignee);
+            const completedBy = cleanName(stage.completedBy || stage.updatedBy);
+            return (name && (assignee === name || assignee.includes(name))) ||
+              (username && (assignee === username || assignee.includes(username))) ||
+              (name && (completedBy === name || completedBy.includes(name))) ||
+              (username && (completedBy === username || completedBy.includes(username)));
+          }).map(stage => stage.orderId);
+
+          employeeOrderSet = new Set([...buyerMatchedOrderIds, ...directlyAssignedOrderIds]);
+        } else {
+          // For non-buyer-scoped departments, use the stages assigned to this user / department
+          employeeOrderSet = new Set(assignedStages.map(stage => stage.orderId));
+        }
+
+        // User's total tasks: custom tasks assigned to user + T&A stage tasks on orders/stages assigned to this user
+        // Note: For buyer-scoped users, stages are counted from their accessible buyer orders
+        const userTnaStages = (scopedFields.length > 0 && person.id)
+          ? allStages.filter(stage => {
+            if (!employeeOrderSet.has(stage.orderId)) return false;
+            const assignee = cleanName(stage.assignee);
+            const stageDept = cleanName(stage.dept);
+            const directMatch = (name && (assignee === name || assignee.includes(name))) ||
+              (username && (assignee === username || assignee.includes(username)));
+            if (directMatch) return true;
+            return userDept && stageDept && stageDept === userDept;
+          })
+          : assignedStages;
+
+        const totalTasksCount = assignedTasks.length + userTnaStages.length;
+        const totalOpenTasksCount = assignedTasks.filter(task => !isDone(task.status)).length + userTnaStages.filter(stage => !isDone(stage.status)).length;
+
         const employeeLeave = leaveRequests.filter(leave => cleanName(leave.name) === name || cleanName(leave.username) === username);
         const approvedLeave = employeeLeave.filter(leave => String(leave.status || "").toLowerCase() === "approved").length;
-        const openTasks = assignedTasks.filter(task => !isDone(task.status)).length + assignedStages.filter(stage => !isDone(stage.status)).length;
+        const openTasks = totalOpenTasksCount;
 
         // Stage completion complaints / false reporting against this user (-10 pts each)
         const userComplaints = (complaints || []).filter(c => {
@@ -3217,23 +3288,44 @@ export function EmployeePerformancePanel({ orders = [], roster = [], attendance 
 
         const score = workItems > 0 ? Math.max(0, Math.round((completedItems / workItems) * 100 - delayedItems * 5 - complaintsCount * 10)) : 0;
 
+        // Attendance determination:
+        // 1. Approved leave
+        const isOnLeave = approvedLeave > 0 || (attendance[person.name] === "leave") || (person.username && attendance[person.username] === "leave");
+
+        // 2. Logged in today check: Must have an active or completed login session today
+        const hasSessionToday = (userSessions || []).some(s => {
+          const matchDate = s.date === todayStr || (s.loginTime && s.loginTime.startsWith(todayStr));
+          if (!matchDate) return false;
+          const sName = cleanName(s.name);
+          const sUser = cleanName(s.username);
+          return (person.id && s.userId === person.id) ||
+            (username && sUser && (sUser === username || sUser.includes(username))) ||
+            (name && sName && (sName === name || sName.includes(name)));
+        });
+
+        const attendanceStatus = isOnLeave
+          ? "leave"
+          : hasSessionToday
+            ? "present"
+            : "absent";
+
         return {
           ...person,
-          orderCount: employeeOrders.size,
+          orderCount: employeeOrderSet.size,
           completed: completedItems,
           delayed: delayedItems,
-          taskCount: assignedTasks.length,
+          taskCount: totalTasksCount,
           openTasks,
           leaveCount: approvedLeave,
           complaintsCount,
           mistakesCount,
           mistakeFreeRate,
-          attendance: attendance[person.name] || "present",
+          attendance: attendanceStatus,
           score,
         };
       })
       .sort((a, b) => b.score - a.score || b.completed - a.completed || b.orderCount - a.orderCount);
-  }, [orders, roster, attendance, customTasks, leaveRequests, users, teams, complaints]);
+  }, [orders, buyers, roster, attendance, userSessions, customTasks, leaveRequests, users, teams, complaints]);
 
   const totals = employeeRows.reduce((summary, row) => ({
     orders: summary.orders + row.orderCount,
@@ -3270,7 +3362,7 @@ export function EmployeePerformancePanel({ orders = [], roster = [], attendance 
       <Card style={{ marginBottom: 16 }}>
         <CardHeader
           title="EMPLOYEE PERFORMANCE & WORK BREAKDOWN"
-          sub="Order maintenance, daily tasks, attendance, false-stage complaints (-10 pts), and leave tracking"
+          sub="Order maintenance, tasks, attendance, false-stage complaints (-10 pts), and leave tracking"
           action="Open tasks"
           onAction={() => onNavigate && onNavigate("tasks")}
         />
@@ -3278,7 +3370,7 @@ export function EmployeePerformancePanel({ orders = [], roster = [], attendance 
           {[
             ["Employees tracked", employeeRows.length, "#378ADD"],
             ["Orders maintained", totals.orders, "#1F9E8D"],
-            ["Daily tasks", totals.tasks, "#7F77DD"],
+            ["Tasks", totals.tasks, "#7F77DD"],
             ["Open work items", totals.open, "#D64545"],
             ["Stage disputes / complaints", totals.complaints, "#DC2626"],
           ].map(([label, value, color]) => (
@@ -3289,24 +3381,30 @@ export function EmployeePerformancePanel({ orders = [], roster = [], attendance 
           ))}
         </div>
         <div style={{ overflowX: "auto" }}>
-          <div style={{ minWidth: 920, display: "grid", gridTemplateColumns: "1.5fr 0.9fr 0.6fr 0.6fr 0.8fr 0.6fr 0.6fr 0.8fr 0.8fr 0.7fr", fontSize: 10.5, color: "#64748B", fontWeight: 700, padding: "0 0 7px", borderBottom: "1px solid #F1F5F9" }}>
-            <div>EMPLOYEE</div><div>DEPARTMENT</div><div>ORDERS</div><div>DONE</div><div>DAILY TASKS</div><div>DELAYED</div><div>LEAVE</div><div>COMPLAINTS</div><div>MISTAKE-FREE</div><div>PERFORMANCE</div>
+          <div style={{ minWidth: 920, display: "grid", gridTemplateColumns: "1.5fr 0.9fr 0.6fr 0.6fr 0.8fr 0.6fr 0.8fr 0.8fr 0.7fr", fontSize: 10.5, color: "#64748B", fontWeight: 700, padding: "0 0 7px", borderBottom: "1px solid #F1F5F9" }}>
+            <div>EMPLOYEE</div><div>DEPARTMENT</div><div>ORDERS</div><div>DONE</div><div>TASKS</div><div>DELAYED</div><div>COMPLAINTS</div><div>MISTAKE-FREE</div><div>PERFORMANCE</div>
           </div>
           <div style={{ minWidth: 920, maxHeight: 300, overflowY: "auto" }}>
             {employeeRows.length === 0 ? (
               <div style={{ padding: "24px 0", color: "#94A3B8", fontSize: 12 }}>No employee records available.</div>
             ) : employeeRows.map(employee => (
-              <div key={employee.name} style={{ display: "grid", gridTemplateColumns: "1.5fr 0.9fr 0.6fr 0.6fr 0.8fr 0.6fr 0.6fr 0.8fr 0.8fr 0.7fr", alignItems: "center", fontSize: 11.5, padding: "9px 0", borderBottom: "1px solid #F8FAFC" }}>
+              <div key={employee.name} style={{ display: "grid", gridTemplateColumns: "1.5fr 0.9fr 0.6fr 0.6fr 0.8fr 0.6fr 0.8fr 0.8fr 0.7fr", alignItems: "center", fontSize: 11.5, padding: "9px 0", borderBottom: "1px solid #F8FAFC" }}>
                 <div>
                   <div style={{ fontWeight: 700, color: "#1E293B" }}>{employee.name}</div>
-                  <div style={{ fontSize: 10, color: employee.attendance === "present" ? "#059669" : "#DC2626", marginTop: 2 }}>{employee.attendance === "present" ? "Present" : employee.attendance}</div>
+                  <div style={{
+                    fontSize: 10,
+                    fontWeight: 600,
+                    color: employee.attendance === "present" ? "#059669" : employee.attendance === "leave" ? "#D97706" : "#DC2626",
+                    marginTop: 2
+                  }}>
+                    {employee.attendance === "present" ? "Present" : employee.attendance === "leave" ? "On Leave" : "Absent"}
+                  </div>
                 </div>
                 <div style={{ color: "#64748B" }}>{employee.dept || "—"}</div>
                 <div style={{ color: "#1E293B", fontWeight: 600 }}>{employee.orderCount}</div>
                 <div style={{ color: "#059669", fontWeight: 700 }}>{employee.completed}</div>
                 <div style={{ color: "#1E293B" }}>{employee.taskCount} <span style={{ color: "#94A3B8" }}>({employee.openTasks} open)</span></div>
                 <div style={{ color: employee.delayed > 0 ? "#DC2626" : "#059669", fontWeight: 700 }}>{employee.delayed}</div>
-                <div style={{ color: "#7C3AED", fontWeight: 600 }}>{employee.leaveCount}</div>
                 <div>
                   {employee.complaintsCount > 0 ? (
                     <span style={{ display: "inline-block", padding: "2px 7px", borderRadius: 999, background: "#FEE2E2", color: "#B91C1C", fontWeight: 700, fontSize: 11 }}>
@@ -3913,7 +4011,7 @@ function ExecutiveOrderDrilldownDrawer({
   );
 }
 
-export function ExecutiveOverviewPage({ orders, attendance, financials, roster, customTasks = [], leaveRequests = [], users = [], teams = [], complaints = [], onResolveComplaint, isAdmin = false, onOpenOrder, onNavigate, onApproveCosting, onRejectCosting, onRefresh, isRefreshing = false, lastRefreshedAt = null, onOpenDept, isSidebarCollapsed = false }) {
+export function ExecutiveOverviewPage({ orders, buyers = [], attendance, userSessions = [], financials, roster, customTasks = [], leaveRequests = [], users = [], teams = [], complaints = [], onResolveComplaint, isAdmin = false, onOpenOrder, onNavigate, onApproveCosting, onRejectCosting, onRefresh, isRefreshing = false, lastRefreshedAt = null, onOpenDept, isSidebarCollapsed = false }) {
   // Only consider active, non-deleted orders for MD Executive Dashboard metrics
   const activeOrders = useMemo(() => (orders || []).filter(o => o.isDeleted !== true && o.completed !== true), [orders]);
   const allStages = useMemo(() => activeOrders.flatMap(o => (o.stages || []).map(s => ({ ...s, orderId: o.id, style: o.style, buyer: o.buyer }))), [activeOrders]);
@@ -4098,13 +4196,24 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
     const teamMap = new Map((teams || []).map(t => [t.id, t.name]));
 
     const candidateEmployees = (users && users.length > 0)
-      ? users.filter(u => u.active !== false && !u.isMD).map(u => ({
-        name: u.name,
-        username: u.username,
-        dept: teamMap.get(u.teamId) || u.dept || "Merchandising",
-        isUser: true,
-      }))
+      ? users.filter(u => u.active !== false && !u.isMD).map(u => {
+        const teamName = teamMap.get(u.teamId);
+        return {
+          id: u.id,
+          name: u.name,
+          username: u.username,
+          dept: teamName || u.dept || "Merchandising",
+          teamIds: Array.isArray(u.teamIds) ? u.teamIds : (u.teamId ? [u.teamId] : []),
+          isUser: true,
+        };
+      })
       : (roster || []).filter(person => person.name && person.name !== "—");
+
+    const findBuyerForOrder = order => {
+      if (!order) return null;
+      const buyerName = String(order.buyer || "").trim().toLowerCase();
+      return (buyers || []).find(b => (order.buyerId && b.id === order.buyerId) || String(b.name || "").trim().toLowerCase() === buyerName) || null;
+    };
 
     return candidateEmployees
       .map(person => {
@@ -4139,7 +4248,40 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
         const completedItems = completedStages.length + completedTasks.length;
         const delayedStages = assignedStages.filter(stage => stage.reason || stage.status === "Delayed");
         const onTimeStages = completedStages.filter(stage => !stage.reason);
-        const employeeOrders = Array.from(new Set(assignedStages.map(stage => stage.orderId)));
+
+        // Resolve user departments (including multi-team / teamIds if user record exists)
+        const userDepts = person.teamIds && person.teamIds.length > 0
+          ? person.teamIds.map(tId => teamMap.get(tId)).filter(Boolean)
+          : [person.dept];
+        const scopedFields = Array.from(new Set(userDepts.map(d => BUYER_SCOPED_DEPTS[d]).filter(Boolean)));
+
+        let employeeOrderIds;
+        if (scopedFields.length > 0 && person.id) {
+          // User belongs to a buyer-scoped department (Merchandising, Purchase – Fabric, Purchase – Trims, Artwork)
+          // Exactly matches the buyer-scoping logic: only count orders whose assigned buyer includes this user's ID
+          const buyerMatchedOrderIds = activeOrders.filter(order => {
+            const b = findBuyerForOrder(order);
+            if (!b) return false;
+            return scopedFields.some(field => {
+              const ids = Array.isArray(b[field]) ? b[field] : [];
+              return ids.includes(person.id);
+            });
+          }).map(o => o.id);
+
+          // Also include any order where the person is directly assigned as stage assignee or completedBy
+          const directlyAssignedOrderIds = activeStages.filter(stage => {
+            const assignee = cleanName(stage.assignee);
+            const completedBy = cleanName(stage.completedBy || stage.updatedBy);
+            return (name && (assignee === name || assignee.includes(name))) ||
+              (username && (assignee === username || assignee.includes(username))) ||
+              (name && (completedBy === name || completedBy.includes(name))) ||
+              (username && (completedBy === username || completedBy.includes(username)));
+          }).map(stage => stage.orderId);
+
+          employeeOrderIds = Array.from(new Set([...buyerMatchedOrderIds, ...directlyAssignedOrderIds]));
+        } else {
+          employeeOrderIds = Array.from(new Set(assignedStages.map(stage => stage.orderId)));
+        }
 
         // Stage disputes / complaints against this user (-10 pts each)
         const userComplaints = (complaints || []).filter(c => {
@@ -4164,10 +4306,29 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
           ? Math.max(0, Math.round(((workItems - mistakesCount) / workItems) * 100))
           : (mistakesCount > 0 ? 0 : 100);
 
+        // Attendance determination:
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const isOnLeave = (leaveRequests || []).some(l =>
+          String(l.status || "").toLowerCase() === "approved" &&
+          (cleanName(l.name) === name || cleanName(l.username) === username)
+        ) || (attendance && (attendance[person.name] === "leave" || (person.username && attendance[person.username] === "leave")));
+
+        const hasSessionToday = (userSessions || []).some(s => {
+          const matchDate = s.date === todayStr || (s.loginTime && s.loginTime.startsWith(todayStr));
+          if (!matchDate) return false;
+          const sName = cleanName(s.name);
+          const sUser = cleanName(s.username);
+          return (person.id && s.userId === person.id) ||
+            (username && sUser && (sUser === username || sUser.includes(username))) ||
+            (name && sName && (sName === name || sName.includes(name)));
+        });
+
+        const attendanceStatus = isOnLeave ? "leave" : hasSessionToday ? "present" : "absent";
+
         return {
           ...person,
-          orderCount: employeeOrders.length,
-          orderIds: employeeOrders,
+          orderCount: employeeOrderIds.length,
+          orderIds: employeeOrderIds,
           completed: completedItems,
           totalWork: workItems,
           delayed: delayedStages.length,
@@ -4178,13 +4339,13 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
           mistakesCount,
           mistakeFreeRate,
           complaintsCount,
-          attendance: attendance[person.name] || "present",
+          attendance: attendanceStatus,
           score,
         };
       })
       .sort((a, b) => b.score - a.score || b.completed - a.completed || b.orderCount - a.orderCount)
       .slice(0, 5);
-  }, [orders, roster, attendance, customTasks, users, teams, complaints]);
+  }, [orders, buyers, roster, attendance, userSessions, customTasks, leaveRequests, users, teams, complaints]);
 
   const openTasksRows = allStages.filter(s => s.status !== "done");
   const overdueRows = allStages.filter(s => s.status === "in_progress" && s.reason);
@@ -4776,7 +4937,7 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
               {topPerformers.map((emp, idx) => {
                 const rankColors = ["#F59E0B", "#94A3B8", "#B45309", "#3B82F6", "#6366F1"];
                 const rankColor = rankColors[idx] || "#64748B";
-                const isPresent = (attendance[emp.name] || "present") === "present";
+                const isPresent = emp.attendance === "present";
 
                 return (
                   <div
