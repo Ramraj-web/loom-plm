@@ -11,6 +11,11 @@ export const RESOURCE_SEEDS = {
   users: [],
   teams: [],
   buyers: [],
+  units: [
+    { id: "unit-1", name: "Unit 1 - Main Apparel Factory", code: "UNT-01", location: "Tirupur Main Road", lines: 12, contactPerson: "S. Murugan", mobile: "+91 98421 11001", status: "Active" },
+    { id: "unit-2", name: "Unit 2 - Knits & Outerwear", code: "UNT-02", location: "Avinashi SEZ Park", lines: 8, contactPerson: "K. Ramesh", mobile: "+91 98421 22002", status: "Active" },
+    { id: "unit-3", name: "Unit 3 - Printing & VAP Facility", code: "UNT-03", location: "Angeripalayam", lines: 4, contactPerson: "P. Anand", mobile: "+91 98421 33003", status: "Active" }
+  ],
   dashboard_rotation: [],
   staff: [
     { id: "staff-arasinth-raja", name: "Arasinth Raja", title: "Manager", dept: "Merchandising", status: "present" },
@@ -496,6 +501,7 @@ const SOFT_DELETE_RESOURCES = [
   "notifications",
   "suppliers",
   "supplierWork",
+  "units",
 ];
 
 const NOTIFICATION_EXPIRY_DAYS = 15;

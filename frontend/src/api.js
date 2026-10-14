@@ -49,6 +49,7 @@ async function request(path, options = {}) {
   const method = (options.method || "GET").toUpperCase();
   const url = `${API_BASE_URL}${path}`;
   const requestEpoch = currentAuthEpoch;
+  const timeoutMs = options.timeout || (method === "GET" ? 5000 : 15000);
 
   // 1. Check in-memory cache for GET requests (URL includes complete query parameters)
   if (method === "GET" && !options.skipCache) {
@@ -64,10 +65,14 @@ async function request(path, options = {}) {
   }
 
   const executeRequest = async () => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
     try {
       const response = await fetch(url, {
         cache: "no-store",
         headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+        signal: controller.signal,
         ...options,
       });
 
@@ -105,7 +110,13 @@ async function request(path, options = {}) {
       }
 
       return payload;
+    } catch (err) {
+      if (err.name === "AbortError") {
+        console.warn(`Request timeout after ${timeoutMs}ms on ${method} ${path}`);
+      }
+      throw err;
     } finally {
+      clearTimeout(timer);
       if (method === "GET") {
         pendingRequests.delete(url);
       }
@@ -137,8 +148,8 @@ export const storageApi = {
 
 // ===== RESOURCES API =====
 export const resourcesApi = {
-  list: (resource, query = "") =>
-    request(`/api/resources/${encodeURIComponent(resource)}${query}`),
+  list: (resource, query = "", options = {}) =>
+    request(`/api/resources/${encodeURIComponent(resource)}${query}`, options),
   get: (resource, id) =>
     request(`/api/resources/${encodeURIComponent(resource)}/${encodeURIComponent(id)}`),
   create: (resource, data) =>

@@ -1203,7 +1203,8 @@ export default function LoomPLM() {
       ]);
 
       // 2. Fetch large datasets (orders and notifications) concurrently and apply as each arrives
-      const ordersPromise = resourcesApi.list("orders", "?all=true").then(val => {
+      // Enforce 5s max budget to prevent indefinite pending requests
+      const ordersPromise = resourcesApi.list("orders", "?all=true", { timeout: 5000 }).then(val => {
         if (Array.isArray(val)) {
           lastOrdersFetchTimeRef.current = Date.now();
           setOrders(prev => {
@@ -1215,7 +1216,7 @@ export default function LoomPLM() {
         console.warn("Orders fetch error in refreshAllData:", err?.message);
       });
 
-      const notifsPromise = resourcesApi.list("notifications", "?all=true").then(val => {
+      const notifsPromise = resourcesApi.list("notifications", "?all=true", { timeout: 5000 }).then(val => {
         if (Array.isArray(val) && val.length > 0) {
           setNotifications(prev => applyReadStatusAndDedupe([...val, ...prev]));
         }
@@ -1563,7 +1564,7 @@ export default function LoomPLM() {
       isSyncingNotifsRef.current = true;
 
       try {
-        const dbNotifs = await resourcesApi.list("notifications", "?all=true");
+        const dbNotifs = await resourcesApi.list("notifications", "?all=true", { timeout: 5000 });
         if (!Array.isArray(dbNotifs) || cancelled) return;
 
         setNotifications(prev => applyReadStatusAndDedupe([...dbNotifs, ...prev]));
@@ -1601,7 +1602,7 @@ export default function LoomPLM() {
         const shouldFetchOrders = (now - lastOrdersFetchTimeRef.current >= 30000) || orders.length === 0;
 
         const [backendOrders, backendBuyers] = await Promise.allSettled([
-          shouldFetchOrders ? resourcesApi.list("orders", "?all=true") : Promise.resolve(null),
+          shouldFetchOrders ? resourcesApi.list("orders", "?all=true", { timeout: 5000 }) : Promise.resolve(null),
           targetView === "orders" ? resourcesApi.list("buyers") : Promise.resolve([])
         ]);
 
@@ -1625,7 +1626,7 @@ export default function LoomPLM() {
       }
 
       if (targetView === "notifications") {
-        const dbNotifs = await resourcesApi.list("notifications", "?all=true");
+        const dbNotifs = await resourcesApi.list("notifications", "?all=true", { timeout: 5000 });
         if (Array.isArray(dbNotifs)) {
           setNotifications(prev => applyReadStatusAndDedupe([...dbNotifs, ...prev]));
         }
