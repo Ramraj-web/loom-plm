@@ -4460,6 +4460,7 @@ export default function LoomPLM() {
             leaveRequests={leaveRequests}
             users={users}
             teams={teams}
+            orgStructure={orgStructure}
             complaints={stageComplaints}
             onResolveComplaint={handleResolveComplaint}
             onOpenOrder={openOrder}
@@ -4510,6 +4511,7 @@ export default function LoomPLM() {
           leaveRequests={leaveRequests}
           users={users}
           teams={teams}
+          orgStructure={orgStructure}
           complaints={stageComplaints}
           onResolveComplaint={handleResolveComplaint}
           onOpenOrder={openOrder}
@@ -4799,6 +4801,7 @@ export default function LoomPLM() {
         leaveRequests={leaveRequests}
         users={users}
         teams={teams}
+        orgStructure={orgStructure}
         complaints={stageComplaints}
         onResolveComplaint={handleResolveComplaint}
         isAdmin={isAdmin}
@@ -4885,6 +4888,7 @@ export default function LoomPLM() {
         leaveRequests={leaveRequests}
         users={users}
         teams={teams}
+        orgStructure={orgStructure}
         complaints={stageComplaints}
         onResolveComplaint={handleResolveComplaint}
         isAdmin={isAdmin}

@@ -4003,7 +4003,7 @@ function ExecutiveOrderDrilldownDrawer({
   );
 }
 
-export function ExecutiveOverviewPage({ orders, buyers = [], attendance, userSessions = [], financials, roster, customTasks = [], leaveRequests = [], users = [], teams = [], complaints = [], onResolveComplaint, isAdmin = false, onOpenOrder, onNavigate, onApproveCosting, onRejectCosting, onRefresh, isRefreshing = false, lastRefreshedAt = null, onOpenDept, isSidebarCollapsed = false }) {
+export function ExecutiveOverviewPage({ orders, buyers = [], attendance, userSessions = [], financials, roster, customTasks = [], leaveRequests = [], users = [], teams = [], orgStructure = {}, complaints = [], onResolveComplaint, isAdmin = false, onOpenOrder, onNavigate, onApproveCosting, onRejectCosting, onRefresh, isRefreshing = false, lastRefreshedAt = null, onOpenDept, isSidebarCollapsed = false }) {
   // Only consider active, non-deleted orders for MD Executive Dashboard metrics
   const activeOrders = useMemo(() => (orders || []).filter(o => o.isDeleted !== true && o.completed !== true), [orders]);
   const allStages = useMemo(() => activeOrders.flatMap(o => (o.stages || []).map(s => ({ ...s, orderId: o.id, style: o.style, buyer: o.buyer }))), [activeOrders]);
@@ -4136,16 +4136,69 @@ export function ExecutiveOverviewPage({ orders, buyers = [], attendance, userSes
   const presentCount = roster.filter(s => (attendance[s.name] || "present") === "present").length;
   const capacityUtilization = Math.round((presentCount / (roster.length || 1)) * 100);
 
-  // 4. Department Performance
-  const depts = ["Merchandising", "Program", "Planning", "Purchase – Fabric", "Purchase – Trims", "Quality", "Cutting", "Production", "Logistics & Documentation"];
-  const deptStats = depts.map(d => {
-    const dStages = allStages.filter(s => s.dept === d);
-    const total = dStages.length;
-    const completed = dStages.filter(s => s.status === "done").length;
-    const delayed = dStages.filter(s => s.reason).length;
-    const rate = total > 0 ? Math.round((completed / total) * 100) : 0;
-    return { name: d, total, completed, delayed, rate };
-  });
+  // 4. Department Performance (Dynamic across all departments added in settings or orgStructure, completely live)
+  const availableDepts = useMemo(() => {
+    const set = new Set();
+    const normalize = str => (str || "").trim();
+
+    // 1. From orgStructure (Settings / Departments setup)
+    Object.keys(orgStructure || {}).forEach(k => {
+      const trimmed = normalize(k);
+      if (trimmed && !["Administrators", "Executive (MD)"].includes(trimmed)) set.add(trimmed);
+    });
+
+    // 2. From teams list (Settings / Teams setup)
+    (teams || []).forEach(t => {
+      const trimmed = normalize(t.name);
+      if (trimmed && !["Administrators", "Executive (MD)"].includes(trimmed)) set.add(trimmed);
+    });
+
+    // 3. From default departments in ORG_STRUCTURE fallback
+    Object.keys(ORG_STRUCTURE || {}).forEach(k => {
+      const trimmed = normalize(k);
+      if (trimmed && !["Administrators", "Executive (MD)"].includes(trimmed)) set.add(trimmed);
+    });
+
+    // 4. Any department present in stages or custom tasks
+    allStages.forEach(s => {
+      const trimmed = normalize(s.dept);
+      if (trimmed && !["Administrators", "Executive (MD)"].includes(trimmed)) set.add(trimmed);
+    });
+    (customTasks || []).forEach(t => {
+      const trimmed = normalize(t.dept || t.department);
+      if (trimmed && !["Administrators", "Executive (MD)"].includes(trimmed)) set.add(trimmed);
+    });
+
+    return Array.from(set);
+  }, [orgStructure, teams, allStages, customTasks]);
+
+  const deptStats = useMemo(() => {
+    return availableDepts.map(d => {
+      const dLower = d.toLowerCase();
+      const dStages = allStages.filter(s => (s.dept || "").trim().toLowerCase() === dLower);
+      const dTasks = (customTasks || []).filter(t => t.isDeleted !== true && ((t.dept || t.department || "").trim().toLowerCase() === dLower));
+
+      const totalStages = dStages.length;
+      const completedStages = dStages.filter(s => s.status === "done" || s.status === "completed").length;
+      const delayedStages = dStages.filter(s => Boolean(s.reason && s.reason.trim() !== "" && s.reason !== "No delay flagged")).length;
+
+      const totalTasks = dTasks.length;
+      const completedTasks = dTasks.filter(t => t.status === "completed" || t.status === "done").length;
+      const delayedTasks = dTasks.filter(t => t.status === "delayed" || (t.dueDate && new Date(t.dueDate) < new Date() && t.status !== "completed")).length;
+
+      // Combined volume (stages + departmental tasks if no stages belong to department)
+      const total = totalStages + (totalStages === 0 ? totalTasks : 0);
+      const completed = completedStages + (totalStages === 0 ? completedTasks : 0);
+      const delayed = delayedStages + (totalStages === 0 ? delayedTasks : 0);
+      const rate = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+      return { name: d, total, completed, delayed, rate };
+    }).sort((a, b) => {
+      // Sort by active workload (descending) so active departments appear first, followed by alphabetical
+      if (b.total !== a.total) return b.total - a.total;
+      return a.name.localeCompare(b.name);
+    });
+  }, [availableDepts, allStages, customTasks]);
 
   // 5. Demographics & Risk
   const buyerCounts = {};
@@ -4794,14 +4847,14 @@ export function ExecutiveOverviewPage({ orders, buyers = [], attendance, userSes
 
         {/* Department Performance (substituting Critical Alerts box per user request) */}
         <Card style={{ overflow: "hidden" }}>
-          <CardHeader title="DEPARTMENT PERFORMANCE" sub="Stage completion & delay tracking per division" />
+          <CardHeader title={`DEPARTMENT PERFORMANCE (${deptStats.length})`} sub="Stage completion & delay tracking per division" />
           <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.8fr) minmax(0, 0.9fr) minmax(0, 1.2fr) minmax(0, 0.8fr)", gap: 4, fontSize: 10.5, color: "#64748B", fontWeight: 700, paddingBottom: 6, borderBottom: "1px solid #F1F5F9" }}>
             <div>DEPARTMENT</div>
             <div style={{ textAlign: "center" }}>STAGES</div>
             <div>ON-TIME RATE</div>
             <div style={{ textAlign: "right" }}>DELAYS</div>
           </div>
-          <div style={{ maxHeight: 200, overflowY: "auto", overflowX: "hidden" }}>
+          <div style={{ maxHeight: 260, overflowY: "auto", overflowX: "hidden" }}>
             {deptStats.map(d => (
               <div
                 key={d.name}
