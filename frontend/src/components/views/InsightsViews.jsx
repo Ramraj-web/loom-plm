@@ -3198,70 +3198,61 @@ export function EmployeePerformancePanel({ orders = [], buyers = [], roster = []
           : [person.dept];
         const scopedFields = Array.from(new Set(userDepts.map(d => BUYER_SCOPED_DEPTS[d]).filter(Boolean)));
 
-        let employeeOrderSet;
+        // Determine accessible/visible orders exactly like canSeeOrder in App.jsx
+        let visibleOrdersForUser;
         if (scopedFields.length > 0 && person.id) {
-          // User belongs to a buyer-scoped department (Merchandising, Purchase – Fabric, Purchase – Trims, Artwork)
-          // Exactly matches the buyer-scoping logic: only count orders whose assigned buyer includes this user's ID
-          const buyerMatchedOrderIds = activeOrders.filter(order => {
+          // Buyer-scoped departments (Merchandising, Purchase – Fabric, Purchase – Trims, Artwork):
+          // User only sees orders whose buyer is explicitly mapped to their user ID
+          visibleOrdersForUser = activeOrders.filter(order => {
             const b = findBuyerForOrder(order);
             if (!b) return false;
             return scopedFields.some(field => {
               const ids = Array.isArray(b[field]) ? b[field] : [];
               return ids.includes(person.id);
             });
-          }).map(o => o.id);
-
-          // Also include any order where the person is directly assigned as stage assignee or completedBy
-          const directlyAssignedOrderIds = allStages.filter(stage => {
-            const assignee = cleanName(stage.assignee);
-            const completedBy = cleanName(stage.completedBy || stage.updatedBy);
-            return (name && (assignee === name || assignee.includes(name))) ||
-              (username && (assignee === username || assignee.includes(username))) ||
-              (name && (completedBy === name || completedBy.includes(name))) ||
-              (username && (completedBy === username || completedBy.includes(username)));
-          }).map(stage => stage.orderId);
-
-          employeeOrderSet = new Set([...buyerMatchedOrderIds, ...directlyAssignedOrderIds]);
-        } else {
-          // For non-buyer-scoped departments, match all stages in their department
-          const deptStages = allStages.filter(stage => {
-            const assignee = cleanName(stage.assignee);
-            const completedBy = cleanName(stage.completedBy || stage.updatedBy);
-            const stageDept = cleanName(stage.dept);
-            const directMatch = (name && (assignee === name || assignee.includes(name))) ||
-              (username && (assignee === username || assignee.includes(username))) ||
-              (name && (completedBy === name || completedBy.includes(name))) ||
-              (username && (completedBy === username || completedBy.includes(username)));
-            if (directMatch) return true;
-            return userDept && stageDept && stageDept === userDept;
           });
-          employeeOrderSet = new Set(deptStages.map(stage => stage.orderId));
+        } else {
+          // Non-buyer-scoped departments (Planning, Cutting, Production, Quality, etc.):
+          // Order is visible if it touches the user's department (or all active orders if no dept stages)
+          visibleOrdersForUser = activeOrders.filter(order => {
+            if (!Array.isArray(order.stages)) return false;
+            return order.stages.some(s => s && userDepts.some(ud => cleanName(ud) === cleanName(s.dept)));
+          });
+          // Fallback if none matched: all active orders
+          if (visibleOrdersForUser.length === 0) {
+            visibleOrdersForUser = activeOrders;
+          }
         }
 
-        // Assigned stages: stages directly matching the person, OR belonging to the person's department within their accessible orders
-        const assignedStages = allStages.filter(stage => {
-          const assignee = cleanName(stage.assignee);
-          const completedBy = cleanName(stage.completedBy || stage.updatedBy);
-          const stageDept = cleanName(stage.dept);
-          const directMatch = (name && (assignee === name || assignee.includes(name))) ||
-            (username && (assignee === username || assignee.includes(username))) ||
-            (name && (completedBy === name || completedBy.includes(name))) ||
-            (username && (completedBy === username || completedBy.includes(username)));
-          if (directMatch) return true;
-          return userDept && stageDept && stageDept === userDept && employeeOrderSet.has(stage.orderId);
+        const employeeOrderSet = new Set(visibleOrdersForUser.map(o => o.id));
+
+        // Department tasks on the user's visible orders (matches collectTasks(visibleOrders, role.dept) on user's dashboard)
+        const deptTnaRows = [];
+        visibleOrdersForUser.forEach(o => {
+          if (!Array.isArray(o.stages)) return;
+          o.stages.forEach(s => {
+            if (!s || typeof s !== "object") return;
+            const stageDept = cleanName(s.dept);
+            if (userDepts.some(ud => cleanName(ud) === stageDept) || stageDept === userDept) {
+              deptTnaRows.push({ ...s, orderId: o.id });
+            }
+          });
         });
 
-        const completedStages = assignedStages.filter(stage => isDone(stage.status)).length;
-        const completedTasks = assignedTasks.filter(task => isDone(task.status)).length;
-        const workItems = assignedStages.length + assignedTasks.length;
-        const completedItems = completedStages + completedTasks;
-        const delayedItems = assignedStages.filter(stage => stage.reason || stage.status === "Delayed").length;
+        // Open tasks strictly matching openRows on user dashboard: rows.filter(r => r.stage.status !== "done")
+        const openDeptTnaRows = deptTnaRows.filter(s => !isDone(s.status));
+        const completedDeptTnaRows = deptTnaRows.filter(s => isDone(s.status));
+        const delayedDeptTnaRows = deptTnaRows.filter(s => s.reason || s.status === "Delayed");
 
-        // User's total tasks: custom tasks assigned to user + T&A stage tasks on orders/stages assigned to this user
-        const userTnaStages = assignedStages;
+        // Custom tasks assigned to user (or unassigned in their department)
+        const openCustomTasks = assignedTasks.filter(task => !isDone(task.status));
+        const completedCustomTasks = assignedTasks.filter(task => isDone(task.status));
 
-        const totalTasksCount = assignedTasks.length + userTnaStages.length;
-        const totalOpenTasksCount = assignedTasks.filter(task => !isDone(task.status)).length + userTnaStages.filter(stage => !isDone(stage.status)).length;
+        const totalTasksCount = deptTnaRows.length + assignedTasks.length;
+        const totalOpenTasksCount = openDeptTnaRows.length + openCustomTasks.length;
+        const totalCompletedCount = completedDeptTnaRows.length + completedCustomTasks.length;
+        const delayedItems = delayedDeptTnaRows.length;
+        const workItems = totalTasksCount;
 
         const employeeLeave = leaveRequests.filter(leave => cleanName(leave.name) === name || cleanName(leave.username) === username);
         const approvedLeave = employeeLeave.filter(leave => String(leave.status || "").toLowerCase() === "approved").length;
@@ -3280,14 +3271,14 @@ export function EmployeePerformancePanel({ orders = [], buyers = [], roster = []
 
         // Unique mistake incidents: delayed stages + dispute complaints against this user (a mistake is always recorded)
         const mistakeKeys = new Set();
-        assignedStages.filter(s => s.reason || s.status === "Delayed").forEach((s, i) => mistakeKeys.add(`delay_${s.orderId || "ord"}_${s.name || i}`));
+        delayedDeptTnaRows.forEach((s, i) => mistakeKeys.add(`delay_${s.orderId || "ord"}_${s.name || i}`));
         userComplaints.forEach((c, i) => mistakeKeys.add(`complaint_${c.id || (c.orderId + "_" + (c.stageName || i))}`));
         const mistakesCount = mistakeKeys.size;
         const mistakeFreeRate = workItems > 0
           ? Math.max(0, Math.round(((workItems - mistakesCount) / workItems) * 100))
           : (mistakesCount > 0 ? 0 : 100);
 
-        const score = workItems > 0 ? Math.max(0, Math.round((completedItems / workItems) * 100 - delayedItems * 5 - complaintsCount * 10)) : 0;
+        const score = workItems > 0 ? Math.max(0, Math.round((totalCompletedCount / workItems) * 100 - delayedItems * 5 - complaintsCount * 10)) : 0;
 
         // Attendance determination:
         // 1. Approved leave
@@ -3313,7 +3304,7 @@ export function EmployeePerformancePanel({ orders = [], buyers = [], roster = []
         return {
           ...person,
           orderCount: employeeOrderSet.size,
-          completed: completedItems,
+          completed: totalCompletedCount,
           delayed: delayedItems,
           taskCount: totalTasksCount,
           openTasks,
@@ -4237,64 +4228,52 @@ export function ExecutiveOverviewPage({ orders, buyers = [], attendance, userSes
           : [person.dept];
         const scopedFields = Array.from(new Set(userDepts.map(d => BUYER_SCOPED_DEPTS[d]).filter(Boolean)));
 
-        let employeeOrderIds;
+        // Determine accessible/visible orders exactly like canSeeOrder in App.jsx
+        let visibleOrdersForUser;
         if (scopedFields.length > 0 && person.id) {
-          // User belongs to a buyer-scoped department (Merchandising, Purchase – Fabric, Purchase – Trims, Artwork)
-          // Exactly matches the buyer-scoping logic: only count orders whose assigned buyer includes this user's ID
-          const buyerMatchedOrderIds = activeOrders.filter(order => {
+          // Buyer-scoped departments (Merchandising, Purchase – Fabric, Purchase – Trims, Artwork):
+          // User only sees orders whose buyer is explicitly mapped to their user ID
+          visibleOrdersForUser = activeOrders.filter(order => {
             const b = findBuyerForOrder(order);
             if (!b) return false;
             return scopedFields.some(field => {
               const ids = Array.isArray(b[field]) ? b[field] : [];
               return ids.includes(person.id);
             });
-          }).map(o => o.id);
-
-          // Also include any order where the person is directly assigned as stage assignee or completedBy
-          const directlyAssignedOrderIds = activeStages.filter(stage => {
-            const assignee = cleanName(stage.assignee);
-            const completedBy = cleanName(stage.completedBy || stage.updatedBy);
-            return (name && (assignee === name || assignee.includes(name))) ||
-              (username && (assignee === username || assignee.includes(username))) ||
-              (name && (completedBy === name || completedBy.includes(name))) ||
-              (username && (completedBy === username || completedBy.includes(username)));
-          }).map(stage => stage.orderId);
-
-          employeeOrderIds = Array.from(new Set([...buyerMatchedOrderIds, ...directlyAssignedOrderIds]));
-        } else {
-          const deptStages = activeStages.filter(stage => {
-            const assignee = cleanName(stage.assignee);
-            const completedBy = cleanName(stage.completedBy || stage.updatedBy);
-            const stageDept = cleanName(stage.dept);
-            const directMatch = (name && (assignee === name || assignee.includes(name))) ||
-              (username && (assignee === username || assignee.includes(username))) ||
-              (name && (completedBy === name || completedBy.includes(name))) ||
-              (username && (completedBy === username || completedBy.includes(username)));
-            if (directMatch) return true;
-            return userDept && stageDept && stageDept === userDept;
           });
-          employeeOrderIds = Array.from(new Set(deptStages.map(stage => stage.orderId)));
+        } else {
+          // Non-buyer-scoped departments (Planning, Cutting, Production, Quality, etc.):
+          // Order is visible if it touches the user's department (or all active orders if no dept stages)
+          visibleOrdersForUser = activeOrders.filter(order => {
+            if (!Array.isArray(order.stages)) return false;
+            return order.stages.some(s => s && userDepts.some(ud => cleanName(ud) === cleanName(s.dept)));
+          });
+          // Fallback if none matched: all active orders
+          if (visibleOrdersForUser.length === 0) {
+            visibleOrdersForUser = activeOrders;
+          }
         }
 
-        const employeeOrderSet = new Set(employeeOrderIds);
+        const employeeOrderIds = visibleOrdersForUser.map(o => o.id);
 
-        const assignedStages = activeStages.filter(stage => {
-          const assignee = cleanName(stage.assignee);
-          const completedBy = cleanName(stage.completedBy || stage.updatedBy);
-          const stageDept = cleanName(stage.dept);
-          const directMatch = (name && (assignee === name || assignee.includes(name))) ||
-            (username && (assignee === username || assignee.includes(username))) ||
-            (name && (completedBy === name || completedBy.includes(name))) ||
-            (username && (completedBy === username || completedBy.includes(username)));
-          if (directMatch) return true;
-          return userDept && stageDept && stageDept === userDept && employeeOrderSet.has(stage.orderId);
+        // Department tasks on the user's visible orders (matches collectTasks(visibleOrders, role.dept) on user's dashboard)
+        const deptTnaRows = [];
+        visibleOrdersForUser.forEach(o => {
+          if (!Array.isArray(o.stages)) return;
+          o.stages.forEach(s => {
+            if (!s || typeof s !== "object") return;
+            const stageDept = cleanName(s.dept);
+            if (userDepts.some(ud => cleanName(ud) === stageDept) || stageDept === userDept) {
+              deptTnaRows.push({ ...s, orderId: o.id, style: o.style, buyer: o.buyer });
+            }
+          });
         });
 
-        const completedStages = assignedStages.filter(stage => isDone(stage.status));
+        const completedStages = deptTnaRows.filter(stage => isDone(stage.status));
         const completedTasks = assignedTasks.filter(task => isDone(task.status));
-        const workItems = assignedStages.length + assignedTasks.length;
+        const workItems = deptTnaRows.length + assignedTasks.length;
         const completedItems = completedStages.length + completedTasks.length;
-        const delayedStages = assignedStages.filter(stage => stage.reason || stage.status === "Delayed");
+        const delayedStages = deptTnaRows.filter(stage => stage.reason || stage.status === "Delayed");
         const onTimeStages = completedStages.filter(stage => !stage.reason);
 
         // Stage disputes / complaints against this user (-10 pts each)

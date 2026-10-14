@@ -470,6 +470,7 @@ async function getMongoCollections() {
     if (!global._indexesInitialized) {
       global._indexesInitialized = true;
       resources.createIndex({ resource: 1, id: 1 }).catch(() => {});
+      resources.createIndex({ resource: 1, isDeleted: 1 }).catch(() => {});
     }
     
     return { resources, storage };
@@ -601,7 +602,7 @@ export default async function handler(req, res) {
       // GET /api/resources/:resource or /api/resources/:resource/:id
       if (req.method === "GET") {
         if (resource === "notifications") {
-          await cleanExpiredNotifications(mongoCols?.resources, memoryDB);
+          cleanExpiredNotifications(mongoCols?.resources, memoryDB).catch(() => {});
         }
 
         if (mongoCols?.resources) {
