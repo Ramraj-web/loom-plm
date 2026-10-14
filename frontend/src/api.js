@@ -49,7 +49,7 @@ async function request(path, options = {}) {
   const method = (options.method || "GET").toUpperCase();
   const url = `${API_BASE_URL}${path}`;
   const requestEpoch = currentAuthEpoch;
-  const timeoutMs = options.timeout || (method === "GET" ? 12000 : 15000);
+  const timeoutMs = options.timeout || (method === "GET" ? 60000 : 30000);
 
   // 1. Check in-memory cache for GET requests (URL includes complete query parameters)
   if (method === "GET" && !options.skipCache) {
