@@ -11,7 +11,7 @@ import {
 import {
   SHIPMENT_PERFORMANCE, computeMonthlyShipmentPerformance, ROLE_OPTIONS, SEASON_OPTIONS, CAPA_STATUS_STYLE,
   NOTIFICATION_PRIORITY_STYLE, formatTimeAgo, SUPPLIER_TYPES, WORK_PURPOSES,
-  calculateSupplierMetrics, INITIAL_SUPPLIER_WORK, INITIAL_SUPPLIERS
+  calculateSupplierMetrics, INITIAL_SUPPLIER_WORK, INITIAL_SUPPLIERS, ORG_STRUCTURE
 } from "../../constants/loomData.js";
 import {
   Card, CardHeader, PageHeader, DarkCard, DarkCardHeader, MiniDonut, BackLink, statusPill
