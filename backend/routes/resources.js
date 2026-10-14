@@ -144,6 +144,46 @@ const SOFT_DELETE_RESOURCES = [
   "units",
 ];
 
+const NOTIFICATION_EXPIRY_DAYS = 15;
+const NOTIFICATION_EXPIRY_MS = NOTIFICATION_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
+let lastNotificationCleanupAt = 0;
+
+export async function cleanExpiredNotifications(collection, db) {
+  const now = Date.now();
+  if (now - lastNotificationCleanupAt < 60000) return;
+  lastNotificationCleanupAt = now;
+
+  const cutoffDate = new Date(now - NOTIFICATION_EXPIRY_MS);
+  const cutoffIso = cutoffDate.toISOString();
+
+  if (collection) {
+    try {
+      await collection.deleteMany({
+        resource: "notifications",
+        createdAt: {
+          $type: "string",
+          $lte: cutoffIso
+        }
+      });
+    } catch (err) {
+      console.warn("Mongo notifications expiry cleanup warning:", err.message);
+    }
+  }
+
+  if (db && Array.isArray(db.notifications)) {
+    const beforeCount = db.notifications.length;
+    db.notifications = db.notifications.filter(n => {
+      if (!n || !n.createdAt || typeof n.createdAt !== "string") return true;
+      const t = new Date(n.createdAt).getTime();
+      if (isNaN(t)) return true;
+      return now - t < NOTIFICATION_EXPIRY_MS;
+    });
+    if (db.notifications.length !== beforeCount) {
+      writeDB(db);
+    }
+  }
+}
+
 export function normalizeOrderStages(record) {
   if (!record || !Array.isArray(record.stages)) return record;
   const is120 = record.template === "120";
@@ -265,6 +305,9 @@ router.get("/:resource", async (req, res, next) => {
   if (!validResource(resource)) return res.status(404).json({ error: "Unknown resource" });
   try {
     const collection = getResourceCollection();
+    if (resource === "notifications") {
+      await cleanExpiredNotifications(collection, collection ? null : readDB());
+    }
     const isSoftDelete = SOFT_DELETE_RESOURCES.includes(resource);
     const showAll = req.query.all === "true";
     const isTrash = req.query.trash === "true";

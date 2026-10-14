@@ -3183,18 +3183,6 @@ export function EmployeePerformancePanel({ orders = [], buyers = [], roster = []
         const username = cleanName(person.username);
         const userDept = cleanName(person.dept);
 
-        const assignedStages = allStages.filter(stage => {
-          const assignee = cleanName(stage.assignee);
-          const completedBy = cleanName(stage.completedBy || stage.updatedBy);
-          const stageDept = cleanName(stage.dept);
-          const directMatch = (name && (assignee === name || assignee.includes(name))) ||
-            (username && (assignee === username || assignee.includes(username))) ||
-            (name && (completedBy === name || completedBy.includes(name))) ||
-            (username && (completedBy === username || completedBy.includes(username)));
-          if (directMatch) return true;
-          return userDept && stageDept && stageDept === userDept;
-        });
-
         const assignedTasks = (customTasks || []).filter(task => {
           const assignee = cleanName(task.assignee);
           const taskDept = cleanName(task.dept);
@@ -3203,12 +3191,6 @@ export function EmployeePerformancePanel({ orders = [], buyers = [], roster = []
           if (directMatch) return true;
           return userDept && taskDept && taskDept === userDept;
         });
-
-        const completedStages = assignedStages.filter(stage => isDone(stage.status)).length;
-        const completedTasks = assignedTasks.filter(task => isDone(task.status)).length;
-        const workItems = assignedStages.length + assignedTasks.length;
-        const completedItems = completedStages + completedTasks;
-        const delayedItems = assignedStages.filter(stage => stage.reason || stage.status === "Delayed").length;
 
         // Resolve user departments (including multi-team / teamIds if user record exists)
         const userDepts = person.teamIds && person.teamIds.length > 0
@@ -3241,23 +3223,42 @@ export function EmployeePerformancePanel({ orders = [], buyers = [], roster = []
 
           employeeOrderSet = new Set([...buyerMatchedOrderIds, ...directlyAssignedOrderIds]);
         } else {
-          // For non-buyer-scoped departments, use the stages assigned to this user / department
-          employeeOrderSet = new Set(assignedStages.map(stage => stage.orderId));
-        }
-
-        // User's total tasks: custom tasks assigned to user + T&A stage tasks on orders/stages assigned to this user
-        // Note: For buyer-scoped users, stages are counted from their accessible buyer orders
-        const userTnaStages = (scopedFields.length > 0 && person.id)
-          ? allStages.filter(stage => {
-            if (!employeeOrderSet.has(stage.orderId)) return false;
+          // For non-buyer-scoped departments, match all stages in their department
+          const deptStages = allStages.filter(stage => {
             const assignee = cleanName(stage.assignee);
+            const completedBy = cleanName(stage.completedBy || stage.updatedBy);
             const stageDept = cleanName(stage.dept);
             const directMatch = (name && (assignee === name || assignee.includes(name))) ||
-              (username && (assignee === username || assignee.includes(username)));
+              (username && (assignee === username || assignee.includes(username))) ||
+              (name && (completedBy === name || completedBy.includes(name))) ||
+              (username && (completedBy === username || completedBy.includes(username)));
             if (directMatch) return true;
             return userDept && stageDept && stageDept === userDept;
-          })
-          : assignedStages;
+          });
+          employeeOrderSet = new Set(deptStages.map(stage => stage.orderId));
+        }
+
+        // Assigned stages: stages directly matching the person, OR belonging to the person's department within their accessible orders
+        const assignedStages = allStages.filter(stage => {
+          const assignee = cleanName(stage.assignee);
+          const completedBy = cleanName(stage.completedBy || stage.updatedBy);
+          const stageDept = cleanName(stage.dept);
+          const directMatch = (name && (assignee === name || assignee.includes(name))) ||
+            (username && (assignee === username || assignee.includes(username))) ||
+            (name && (completedBy === name || completedBy.includes(name))) ||
+            (username && (completedBy === username || completedBy.includes(username)));
+          if (directMatch) return true;
+          return userDept && stageDept && stageDept === userDept && employeeOrderSet.has(stage.orderId);
+        });
+
+        const completedStages = assignedStages.filter(stage => isDone(stage.status)).length;
+        const completedTasks = assignedTasks.filter(task => isDone(task.status)).length;
+        const workItems = assignedStages.length + assignedTasks.length;
+        const completedItems = completedStages + completedTasks;
+        const delayedItems = assignedStages.filter(stage => stage.reason || stage.status === "Delayed").length;
+
+        // User's total tasks: custom tasks assigned to user + T&A stage tasks on orders/stages assigned to this user
+        const userTnaStages = assignedStages;
 
         const totalTasksCount = assignedTasks.length + userTnaStages.length;
         const totalOpenTasksCount = assignedTasks.filter(task => !isDone(task.status)).length + userTnaStages.filter(stage => !isDone(stage.status)).length;
@@ -4221,18 +4222,6 @@ export function ExecutiveOverviewPage({ orders, buyers = [], attendance, userSes
         const username = cleanName(person.username);
         const userDept = cleanName(person.dept);
 
-        const assignedStages = activeStages.filter(stage => {
-          const assignee = cleanName(stage.assignee);
-          const completedBy = cleanName(stage.completedBy || stage.updatedBy);
-          const stageDept = cleanName(stage.dept);
-          const directMatch = (name && (assignee === name || assignee.includes(name))) ||
-            (username && (assignee === username || assignee.includes(username))) ||
-            (name && (completedBy === name || completedBy.includes(name))) ||
-            (username && (completedBy === username || completedBy.includes(username)));
-          if (directMatch) return true;
-          return userDept && stageDept && stageDept === userDept;
-        });
-
         const assignedTasks = (customTasks || []).filter(task => {
           const assignee = cleanName(task.assignee);
           const taskDept = cleanName(task.dept);
@@ -4241,13 +4230,6 @@ export function ExecutiveOverviewPage({ orders, buyers = [], attendance, userSes
           if (directMatch) return true;
           return userDept && taskDept && taskDept === userDept;
         });
-
-        const completedStages = assignedStages.filter(stage => isDone(stage.status));
-        const completedTasks = assignedTasks.filter(task => isDone(task.status));
-        const workItems = assignedStages.length + assignedTasks.length;
-        const completedItems = completedStages.length + completedTasks.length;
-        const delayedStages = assignedStages.filter(stage => stage.reason || stage.status === "Delayed");
-        const onTimeStages = completedStages.filter(stage => !stage.reason);
 
         // Resolve user departments (including multi-team / teamIds if user record exists)
         const userDepts = person.teamIds && person.teamIds.length > 0
@@ -4280,8 +4262,40 @@ export function ExecutiveOverviewPage({ orders, buyers = [], attendance, userSes
 
           employeeOrderIds = Array.from(new Set([...buyerMatchedOrderIds, ...directlyAssignedOrderIds]));
         } else {
-          employeeOrderIds = Array.from(new Set(assignedStages.map(stage => stage.orderId)));
+          const deptStages = activeStages.filter(stage => {
+            const assignee = cleanName(stage.assignee);
+            const completedBy = cleanName(stage.completedBy || stage.updatedBy);
+            const stageDept = cleanName(stage.dept);
+            const directMatch = (name && (assignee === name || assignee.includes(name))) ||
+              (username && (assignee === username || assignee.includes(username))) ||
+              (name && (completedBy === name || completedBy.includes(name))) ||
+              (username && (completedBy === username || completedBy.includes(username)));
+            if (directMatch) return true;
+            return userDept && stageDept && stageDept === userDept;
+          });
+          employeeOrderIds = Array.from(new Set(deptStages.map(stage => stage.orderId)));
         }
+
+        const employeeOrderSet = new Set(employeeOrderIds);
+
+        const assignedStages = activeStages.filter(stage => {
+          const assignee = cleanName(stage.assignee);
+          const completedBy = cleanName(stage.completedBy || stage.updatedBy);
+          const stageDept = cleanName(stage.dept);
+          const directMatch = (name && (assignee === name || assignee.includes(name))) ||
+            (username && (assignee === username || assignee.includes(username))) ||
+            (name && (completedBy === name || completedBy.includes(name))) ||
+            (username && (completedBy === username || completedBy.includes(username)));
+          if (directMatch) return true;
+          return userDept && stageDept && stageDept === userDept && employeeOrderSet.has(stage.orderId);
+        });
+
+        const completedStages = assignedStages.filter(stage => isDone(stage.status));
+        const completedTasks = assignedTasks.filter(task => isDone(task.status));
+        const workItems = assignedStages.length + assignedTasks.length;
+        const completedItems = completedStages.length + completedTasks.length;
+        const delayedStages = assignedStages.filter(stage => stage.reason || stage.status === "Delayed");
+        const onTimeStages = completedStages.filter(stage => !stage.reason);
 
         // Stage disputes / complaints against this user (-10 pts each)
         const userComplaints = (complaints || []).filter(c => {

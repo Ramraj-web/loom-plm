@@ -1168,79 +1168,63 @@ export default function LoomPLM() {
   const refreshAllData = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      // 1. Concurrently fetch access state, orders, debit notes, capas, tasks, certs, compliances, notifs, financials, and staff
-      const [
-        accessRes,
-        ordersRes,
-        debitRes,
-        capasRes,
-        tasksRes,
-        certsRes,
-        compliancesRes,
-        notifsRes,
-        financialsRes,
-        staffRes,
-        buyersRes,
-        unitsRes,
-      ] = await Promise.allSettled([
+      // 1. Fetch fast resources immediately and update state as they resolve (decoupled from slow orders/notifs)
+      const fastPromises = Promise.allSettled([
         loadAccessState(),
-        resourcesApi.list("orders", "?all=true"),
-        resourcesApi.list("debitNotes"),
-        resourcesApi.list("capas"),
-        resourcesApi.list("tasks"),
-        resourcesApi.list("certifications", "?all=true"),
-        resourcesApi.list("compliances", "?all=true"),
-        resourcesApi.list("notifications", "?all=true"),
-        resourcesApi.list("financials"),
-        resourcesApi.list("staff"),
-        resourcesApi.list("buyers"),
-        resourcesApi.list("units"),
+        resourcesApi.list("units").then(res => {
+          if (Array.isArray(res) && res.length > 0) setUnits(res.filter(u => u.isDeleted !== true));
+        }).catch(() => {}),
+        resourcesApi.list("buyers").then(res => {
+          if (Array.isArray(res)) setBuyers(res.filter(b => b && b.name && b.isDeleted !== true));
+        }).catch(() => {}),
+        resourcesApi.list("debitNotes").then(res => {
+          if (Array.isArray(res) && res.length > 0) setDebitNotes(res.filter(d => d.isDeleted !== true));
+        }).catch(() => {}),
+        resourcesApi.list("capas").then(res => {
+          if (Array.isArray(res) && res.length > 0) setCapas(res.filter(c => c.isDeleted !== true));
+        }).catch(() => {}),
+        resourcesApi.list("tasks").then(res => {
+          if (Array.isArray(res) && res.length > 0) setCustomTasks(res.filter(t => t.isDeleted !== true));
+        }).catch(() => {}),
+        resourcesApi.list("certifications", "?all=true").then(res => {
+          if (Array.isArray(res) && res.length > 0) setCertifications(res);
+        }).catch(() => {}),
+        resourcesApi.list("compliances", "?all=true").then(res => {
+          if (Array.isArray(res) && res.length > 0) {
+            setCompliances(res.filter(c => c.id !== "comp-2" && !c.name?.toLowerCase().includes("buyer chemical restriction")));
+          }
+        }).catch(() => {}),
+        resourcesApi.list("financials").then(res => {
+          if (Array.isArray(res) && res.length > 0 && res[0]) {
+            setFinancials(prev => ({ ...prev, ...res[0] }));
+          }
+        }).catch(() => {}),
+        resourcesApi.list("staff").catch(() => {}),
       ]);
 
-      if (unitsRes.status === "fulfilled" && Array.isArray(unitsRes.value) && unitsRes.value.length > 0) {
-        setUnits(unitsRes.value.filter(u => u.isDeleted !== true));
-      }
+      // 2. Fetch large datasets (orders and notifications) concurrently and apply as each arrives
+      const ordersPromise = resourcesApi.list("orders", "?all=true").then(val => {
+        if (Array.isArray(val)) {
+          lastOrdersFetchTimeRef.current = Date.now();
+          setOrders(prev => {
+            const next = normalizeAndDeduplicateOrders(val, prev);
+            return areOrdersStructurallyEqual(prev, next) ? prev : next;
+          }, true);
+        }
+      }).catch(err => {
+        console.warn("Orders fetch error in refreshAllData:", err?.message);
+      });
 
-      if (buyersRes.status === "fulfilled" && Array.isArray(buyersRes.value)) {
-        setBuyers(buyersRes.value.filter(b => b && b.name && b.isDeleted !== true));
-      }
+      const notifsPromise = resourcesApi.list("notifications", "?all=true").then(val => {
+        if (Array.isArray(val) && val.length > 0) {
+          setNotifications(prev => applyReadStatusAndDedupe([...val, ...prev]));
+        }
+      }).catch(err => {
+        console.warn("Notifications fetch error in refreshAllData:", err?.message);
+      });
 
-      if (ordersRes.status === "fulfilled" && Array.isArray(ordersRes.value)) {
-        lastOrdersFetchTimeRef.current = Date.now();
-        setOrders(prev => {
-          const next = normalizeAndDeduplicateOrders(ordersRes.value, prev);
-          return areOrdersStructurallyEqual(prev, next) ? prev : next;
-        }, true);
-      }
-
-      if (debitRes.status === "fulfilled" && Array.isArray(debitRes.value) && debitRes.value.length > 0) {
-        setDebitNotes(debitRes.value.filter(d => d.isDeleted !== true));
-      }
-
-      if (capasRes.status === "fulfilled" && Array.isArray(capasRes.value) && capasRes.value.length > 0) {
-        setCapas(capasRes.value.filter(c => c.isDeleted !== true));
-      }
-
-      if (tasksRes.status === "fulfilled" && Array.isArray(tasksRes.value) && tasksRes.value.length > 0) {
-        setCustomTasks(tasksRes.value.filter(t => t.isDeleted !== true));
-      }
-
-      if (certsRes.status === "fulfilled" && Array.isArray(certsRes.value) && certsRes.value.length > 0) {
-        setCertifications(certsRes.value);
-      }
-
-      if (compliancesRes.status === "fulfilled" && Array.isArray(compliancesRes.value) && compliancesRes.value.length > 0) {
-        setCompliances(compliancesRes.value.filter(c => c.id !== "comp-2" && !c.name?.toLowerCase().includes("buyer chemical restriction")));
-      }
-
-      if (notifsRes.status === "fulfilled" && Array.isArray(notifsRes.value) && notifsRes.value.length > 0) {
-        setNotifications(prev => applyReadStatusAndDedupe([...notifsRes.value, ...prev]));
-      }
-
-      if (financialsRes.status === "fulfilled" && Array.isArray(financialsRes.value) && financialsRes.value.length > 0) {
-        const fin = financialsRes.value[0];
-        if (fin) setFinancials(prev => ({ ...prev, ...fin }));
-      }
+      // Wait for all resource requests before finalizing refresh state
+      await Promise.allSettled([fastPromises, ordersPromise, notifsPromise]);
 
       // 2. Concurrently load all storage items if available
       if (window.storage && window.storage.get) {
@@ -1593,7 +1577,7 @@ export default function LoomPLM() {
     };
 
     syncNotifications();
-    const pollInterval = setInterval(syncNotifications, 25000);
+    const pollInterval = setInterval(syncNotifications, 60000);
 
     return () => {
       cancelled = true;

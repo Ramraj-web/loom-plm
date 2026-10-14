@@ -498,6 +498,43 @@ const SOFT_DELETE_RESOURCES = [
   "supplierWork",
 ];
 
+const NOTIFICATION_EXPIRY_DAYS = 15;
+const NOTIFICATION_EXPIRY_MS = NOTIFICATION_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
+let lastNotificationCleanupAt = 0;
+
+async function cleanExpiredNotifications(collection, memory) {
+  const now = Date.now();
+  // Throttle database cleanup calls to once every 60 seconds
+  if (now - lastNotificationCleanupAt < 60000) return;
+  lastNotificationCleanupAt = now;
+
+  const cutoffDate = new Date(now - NOTIFICATION_EXPIRY_MS);
+  const cutoffIso = cutoffDate.toISOString();
+
+  if (collection) {
+    try {
+      await collection.deleteMany({
+        resource: "notifications",
+        createdAt: {
+          $type: "string",
+          $lte: cutoffIso
+        }
+      });
+    } catch (err) {
+      console.warn("Mongo notifications expiry cleanup warning:", err.message);
+    }
+  }
+
+  if (memory && Array.isArray(memory.notifications)) {
+    memory.notifications = memory.notifications.filter(n => {
+      if (!n || !n.createdAt || typeof n.createdAt !== "string") return true;
+      const t = new Date(n.createdAt).getTime();
+      if (isNaN(t)) return true;
+      return now - t < NOTIFICATION_EXPIRY_MS;
+    });
+  }
+}
+
 function validResource(name) {
   return Object.prototype.hasOwnProperty.call(RESOURCE_SEEDS, name);
 }
@@ -557,6 +594,10 @@ export default async function handler(req, res) {
 
       // GET /api/resources/:resource or /api/resources/:resource/:id
       if (req.method === "GET") {
+        if (resource === "notifications") {
+          await cleanExpiredNotifications(mongoCols?.resources, memoryDB);
+        }
+
         if (mongoCols?.resources) {
           try {
             if (id) {
