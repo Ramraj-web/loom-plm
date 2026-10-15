@@ -6,7 +6,7 @@ let resourceCollection = null;
 export async function connectMongo() {
   if (!process.env.MONGODB_URI) return null;
 
-  const client = new MongoClient(process.env.MONGODB_URI);
+  const client = new MongoClient(process.env.MONGODB_URI, { compressors: ["zlib"] });
   await client.connect();
   const database = client.db(process.env.MONGODB_DB_NAME || "loom_plm");
   storageCollection = database.collection("storage");

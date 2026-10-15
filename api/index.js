@@ -452,6 +452,7 @@ async function getMongoCollections() {
     if (!cachedClient) {
       cachedClient = new MongoClient(uri, {
         maxPoolSize: 10,
+        compressors: ["zlib"],
         serverSelectionTimeoutMS: 5000,
         socketTimeoutMS: 45000,
       });
@@ -490,7 +491,7 @@ async function getMongoCollections() {
 // Global in-memory cache for hot serverless GET responses (e.g. orders and notifications)
 const serverResourceCache = global._serverResourceCache || new Map();
 global._serverResourceCache = serverResourceCache;
-const CACHE_TTL_MS = 25000;
+const CACHE_TTL_MS = 60000;
 
 function getCachedResource(key) {
   const item = serverResourceCache.get(key);
@@ -651,6 +652,7 @@ export default async function handler(req, res) {
         if (!id) {
           const cached = getCachedResource(cacheKey);
           if (cached) {
+            res.setHeader("Cache-Control", "public, s-maxage=30, stale-while-revalidate=120");
             return res.status(200).json(cached);
           }
         }
@@ -683,6 +685,7 @@ export default async function handler(req, res) {
                 .limit(limit)
                 .toArray();
               setCachedResource(cacheKey, items);
+              res.setHeader("Cache-Control", "public, s-maxage=30, stale-while-revalidate=120");
               return res.status(200).json(items);
             }
 
@@ -773,9 +776,11 @@ export default async function handler(req, res) {
               });
 
               setCachedResource(cacheKey, ordersList);
+              res.setHeader("Cache-Control", "public, s-maxage=30, stale-while-revalidate=120");
               return res.status(200).json(ordersList);
             }
             setCachedResource(cacheKey, items);
+            res.setHeader("Cache-Control", "public, s-maxage=30, stale-while-revalidate=120");
             return res.status(200).json(items);
           } catch (e) {
             console.error("Mongo resource GET error:", e.message);

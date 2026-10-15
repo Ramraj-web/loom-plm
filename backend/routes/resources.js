@@ -10,7 +10,7 @@ const DATA_FILE = path.join(__dirname, "..", "data", "resources.json");
 const router = Router();
 
 const resourceCache = new Map();
-const CACHE_TTL_MS = 25000;
+const CACHE_TTL_MS = 60000;
 
 function getCachedResource(key) {
   const item = resourceCache.get(key);
