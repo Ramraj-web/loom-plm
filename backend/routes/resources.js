@@ -9,6 +9,33 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_FILE = path.join(__dirname, "..", "data", "resources.json");
 const router = Router();
 
+const resourceCache = new Map();
+const CACHE_TTL_MS = 25000;
+
+function getCachedResource(key) {
+  const item = resourceCache.get(key);
+  if (item && (Date.now() - item.timestamp < CACHE_TTL_MS)) {
+    return item.data;
+  }
+  return null;
+}
+
+function setCachedResource(key, data) {
+  resourceCache.set(key, { timestamp: Date.now(), data });
+}
+
+export function invalidateResourceCache(resource) {
+  if (!resource) {
+    resourceCache.clear();
+    return;
+  }
+  for (const k of resourceCache.keys()) {
+    if (k.startsWith(`${resource}:`) || k === resource) {
+      resourceCache.delete(k);
+    }
+  }
+}
+
 export async function seedResources(collection) {
   for (const [resource, records] of Object.entries(RESOURCE_SEEDS)) {
     const count = await collection.countDocuments({ resource });
@@ -158,12 +185,22 @@ export async function cleanExpiredNotifications(collection, db) {
 
   if (collection) {
     try {
+      // 1. Delete notifications older than 15 days
       await collection.deleteMany({
         resource: "notifications",
         createdAt: {
           $type: "string",
           $lte: cutoffIso
         }
+      });
+      // 2. Delete corrupted dummy notifications without title
+      await collection.deleteMany({
+        resource: "notifications",
+        $or: [
+          { title: { $exists: false } },
+          { title: null },
+          { title: "" }
+        ]
       });
     } catch (err) {
       console.warn("Mongo notifications expiry cleanup warning:", err.message);
@@ -173,7 +210,8 @@ export async function cleanExpiredNotifications(collection, db) {
   if (db && Array.isArray(db.notifications)) {
     const beforeCount = db.notifications.length;
     db.notifications = db.notifications.filter(n => {
-      if (!n || !n.createdAt || typeof n.createdAt !== "string") return true;
+      if (!n || !n.title) return false;
+      if (!n.createdAt || typeof n.createdAt !== "string") return true;
       const t = new Date(n.createdAt).getTime();
       if (isNaN(t)) return true;
       return now - t < NOTIFICATION_EXPIRY_MS;
@@ -297,36 +335,110 @@ function deduplicateOrders(ordersList, collection, db) {
     }
   }
 
-  return mergedList;
+  // Prune bloated internal logs and empty template costingRows for list transmission
+  return mergedList.map(order => {
+    const leanOrder = { ...order };
+
+    // Strip colourways audit logs that are only needed in audit popups
+    if (Array.isArray(leanOrder.stages)) {
+      leanOrder.stages = leanOrder.stages.map(stage => {
+        if (Array.isArray(stage.colourways) && stage.colourways.length > 0) {
+          return {
+            ...stage,
+            colourways: stage.colourways.map(cw => {
+              if (cw && cw.logs) {
+                const { logs, ...cwRest } = cw;
+                return cwRest;
+              }
+              return cw;
+            })
+          };
+        }
+        return stage;
+      });
+    }
+
+    // If costing is unapproved and all rows are empty template rows (price === 0),
+    // strip them because frontend rebuilds them via buildCostingRows(tmpl).
+    // Keep costingRows if costing is approved or has custom prices/items!
+    if (Array.isArray(leanOrder.costingRows)) {
+      const hasCustomCosting = leanOrder.costingApproval?.status === "approved" ||
+        leanOrder.costingRows.some(r => (Number(r.price) > 0 || Number(r.actualPrice) > 0 || r.custom));
+      if (!hasCustomCosting) {
+        delete leanOrder.costingRows;
+      }
+    }
+
+    return leanOrder;
+  });
 }
 
 router.get("/:resource", async (req, res, next) => {
   const { resource } = req.params;
   if (!validResource(resource)) return res.status(404).json({ error: "Unknown resource" });
+
+  const showAll = req.query.all === "true";
+  const isTrash = req.query.trash === "true";
+  const limitParam = req.query.limit || "default";
+  const cacheKey = `${resource}:${showAll}:${isTrash}:${limitParam}`;
+  const cached = getCachedResource(cacheKey);
+  if (cached) return res.json(cached);
+
   try {
     const collection = getResourceCollection();
     if (resource === "notifications") {
-      await cleanExpiredNotifications(collection, collection ? null : readDB());
+      cleanExpiredNotifications(collection, collection ? null : readDB()).catch(() => {});
+      const limit = Math.min(Math.max(parseInt(req.query.limit || "200", 10), 1), 500);
+      const isSoftDelete = SOFT_DELETE_RESOURCES.includes(resource);
+      const notifFilter = {
+        ...(isSoftDelete && !showAll ? { resource, isDeleted: isTrash ? true : { $ne: true } } : { resource }),
+        title: { $exists: true, $nin: [null, ""] }
+      };
+      if (collection) {
+        const records = await collection
+          .find(notifFilter)
+          .project({ _id: 0 })
+          .sort({ createdAt: -1 })
+          .limit(limit)
+          .toArray();
+        const result = uniqueById(records, collection, resource);
+        setCachedResource(cacheKey, result);
+        return res.json(result);
+      }
+      const db = readDB();
+      const records = (db.notifications || [])
+        .filter(record => record && record.title && (!isSoftDelete || showAll || (isTrash ? record.isDeleted === true : record.isDeleted !== true)))
+        .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+        .slice(0, limit);
+      const result = uniqueById(records, null, resource, db);
+      setCachedResource(cacheKey, result);
+      return res.json(result);
     }
     const isSoftDelete = SOFT_DELETE_RESOURCES.includes(resource);
-    const showAll = req.query.all === "true";
-    const isTrash = req.query.trash === "true";
     const filter = isSoftDelete && !showAll
       ? { resource, isDeleted: isTrash ? true : { $ne: true } }
       : { resource };
     if (collection) {
       const records = await collection.find(filter).project({ _id: 0 }).toArray();
       if (resource === "orders") {
-        return res.json(deduplicateOrders(records, collection));
+        const result = deduplicateOrders(records, collection);
+        setCachedResource(cacheKey, result);
+        return res.json(result);
       }
-      return res.json(uniqueById(records, collection, resource));
+      const result = uniqueById(records, collection, resource);
+      setCachedResource(cacheKey, result);
+      return res.json(result);
     }
     const db = readDB();
     const records = (db[resource] || []).filter(record => !isSoftDelete || showAll || (isTrash ? record.isDeleted === true : record.isDeleted !== true));
     if (resource === "orders") {
-      return res.json(deduplicateOrders(records, null, db));
+      const result = deduplicateOrders(records, null, db);
+      setCachedResource(cacheKey, result);
+      return res.json(result);
     }
-    res.json(uniqueById(records, null, resource, db));
+    const result = uniqueById(records, null, resource, db);
+    setCachedResource(cacheKey, result);
+    res.json(result);
   } catch (error) { next(error); }
 });
 
@@ -388,6 +500,7 @@ router.post("/notifications/mark-all-read", async (req, res, next) => {
 router.post("/:resource", async (req, res, next) => {
   const { resource } = req.params;
   if (!validResource(resource)) return res.status(404).json({ error: "Unknown resource" });
+  invalidateResourceCache(resource);
   const recordId = makeId(resource, req.body);
   const primaryId = req.body.primaryId || `pri_${resource}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   const record = { ...req.body, primaryId, id: recordId, ...(SOFT_DELETE_RESOURCES.includes(resource) ? { isDeleted: false } : {}) };
@@ -399,6 +512,7 @@ router.post("/:resource", async (req, res, next) => {
       if (record.id) queryOr.push({ id: record.id });
       if (record.primaryId) queryOr.push({ primaryId: record.primaryId });
       if (resource === "teams" && record.name) queryOr.push({ name: record.name });
+      if (resource === "notifications" && record.eventKey) queryOr.push({ eventKey: record.eventKey });
 
       const existingDoc = queryOr.length > 0 ? await collection.findOne({ resource, $or: queryOr }) : null;
       if (existingDoc) {
@@ -429,6 +543,7 @@ router.put("/:resource/:id(*)", async (req, res, next) => {
   const { resource } = req.params;
   const id = extractId(req.params.id);
   if (!validResource(resource)) return res.status(404).json({ error: "Unknown resource" });
+  invalidateResourceCache(resource);
   try {
     const collection = getResourceCollection();
     const candidateIds = new Set();
@@ -482,7 +597,7 @@ router.put("/:resource/:id(*)", async (req, res, next) => {
       delete record._id;
       if (existing?._id) {
         await collection.replaceOne({ resource, _id: existing._id }, { resource, ...record });
-      } else {
+      } else if (resource !== "notifications") {
         await collection.insertOne({ resource, ...record });
       }
       return res.json(record);
@@ -520,6 +635,7 @@ router.patch("/:resource/:id(*)", async (req, res, next) => {
   const { resource } = req.params;
   const id = extractId(req.params.id);
   if (!validResource(resource)) return res.status(404).json({ error: "Unknown resource" });
+  invalidateResourceCache(resource);
   try {
     const collection = getResourceCollection();
     const candidateIds = new Set();
@@ -591,6 +707,7 @@ router.delete("/:resource/:id(*)", async (req, res, next) => {
   const { resource } = req.params;
   const id = extractId(req.params.id);
   if (!validResource(resource)) return res.status(404).json({ error: "Unknown resource" });
+  invalidateResourceCache(resource);
   const isPermanent = req.query.permanent === "true" || req.query.force === "true";
 
   try {

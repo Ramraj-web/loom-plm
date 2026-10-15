@@ -471,6 +471,8 @@ async function getMongoCollections() {
       global._indexesInitialized = true;
       resources.createIndex({ resource: 1, id: 1 }).catch(() => {});
       resources.createIndex({ resource: 1, isDeleted: 1 }).catch(() => {});
+      resources.createIndex({ resource: 1, createdAt: -1 }).catch(() => {});
+      resources.createIndex({ resource: 1, eventKey: 1 }).catch(() => {});
     }
     
     return { resources, storage };
@@ -482,6 +484,35 @@ async function getMongoCollections() {
     global._mongoClient = null;
     global._mongoDb = null;
     return null;
+  }
+}
+
+// Global in-memory cache for hot serverless GET responses (e.g. orders and notifications)
+const serverResourceCache = global._serverResourceCache || new Map();
+global._serverResourceCache = serverResourceCache;
+const CACHE_TTL_MS = 25000;
+
+function getCachedResource(key) {
+  const item = serverResourceCache.get(key);
+  if (item && (Date.now() - item.timestamp < CACHE_TTL_MS)) {
+    return item.data;
+  }
+  return null;
+}
+
+function setCachedResource(key, data) {
+  serverResourceCache.set(key, { timestamp: Date.now(), data });
+}
+
+function invalidateResourceCache(resource) {
+  if (!resource) {
+    serverResourceCache.clear();
+    return;
+  }
+  for (const k of serverResourceCache.keys()) {
+    if (k.startsWith(`${resource}:`) || k === resource) {
+      serverResourceCache.delete(k);
+    }
   }
 }
 
@@ -520,12 +551,22 @@ async function cleanExpiredNotifications(collection, memory) {
 
   if (collection) {
     try {
+      // 1. Delete notifications older than 15 days
       await collection.deleteMany({
         resource: "notifications",
         createdAt: {
           $type: "string",
           $lte: cutoffIso
         }
+      });
+      // 2. Delete corrupted dummy notifications without title
+      await collection.deleteMany({
+        resource: "notifications",
+        $or: [
+          { title: { $exists: false } },
+          { title: null },
+          { title: "" }
+        ]
       });
     } catch (err) {
       console.warn("Mongo notifications expiry cleanup warning:", err.message);
@@ -534,7 +575,8 @@ async function cleanExpiredNotifications(collection, memory) {
 
   if (memory && Array.isArray(memory.notifications)) {
     memory.notifications = memory.notifications.filter(n => {
-      if (!n || !n.createdAt || typeof n.createdAt !== "string") return true;
+      if (!n || !n.title) return false;
+      if (!n.createdAt || typeof n.createdAt !== "string") return true;
       const t = new Date(n.createdAt).getTime();
       if (isNaN(t)) return true;
       return now - t < NOTIFICATION_EXPIRY_MS;
@@ -605,6 +647,14 @@ export default async function handler(req, res) {
           cleanExpiredNotifications(mongoCols?.resources, memoryDB).catch(() => {});
         }
 
+        const cacheKey = `${resource}:${showAll}:${isTrash}:${url.searchParams.get("limit") || "default"}`;
+        if (!id) {
+          const cached = getCachedResource(cacheKey);
+          if (cached) {
+            return res.status(200).json(cached);
+          }
+        }
+
         if (mongoCols?.resources) {
           try {
             if (id) {
@@ -618,6 +668,24 @@ export default async function handler(req, res) {
               }
               return res.status(200).json(record);
             }
+
+            // High-Performance Notifications handler: filter out corrupted empty titles, sort desc, limit 200
+            if (resource === "notifications") {
+              const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") || "200", 10), 1), 500);
+              const notifFilter = {
+                ...(isSoftDelete && !showAll ? { resource, isDeleted: isTrash ? true : { $ne: true } } : { resource }),
+                title: { $exists: true, $nin: [null, ""] }
+              };
+              const items = await mongoCols.resources
+                .find(notifFilter)
+                .project({ _id: 0 })
+                .sort({ createdAt: -1 })
+                .limit(limit)
+                .toArray();
+              setCachedResource(cacheKey, items);
+              return res.status(200).json(items);
+            }
+
             const filter = isSoftDelete && !showAll
               ? { resource, isDeleted: isTrash ? true : { $ne: true } }
               : { resource };
@@ -631,9 +699,14 @@ export default async function handler(req, res) {
               };
 
               const map = new Map();
+              const phantomIdsToDelete = [];
+
               items.forEach(o => {
                 const rawId = String(o.id || o.orderId || o.primaryId || "");
-                if (rawId.startsWith("ord_ord_") || /_C0\d_[a-z0-9]+/i.test(rawId)) return;
+                if (rawId.startsWith("ord_ord_") || /_C0\d_[a-z0-9]+/i.test(rawId)) {
+                  phantomIdsToDelete.push(rawId);
+                  return;
+                }
                 const baseKey = cleanBaseId(rawId).toUpperCase();
                 if (!baseKey) return;
                 if (!map.has(baseKey)) {
@@ -650,10 +723,59 @@ export default async function handler(req, res) {
                   }
                   if (o.status && o.status !== "On Track") existing.status = o.status;
                   if (o.completed) existing.completed = true;
+                  phantomIdsToDelete.push(rawId);
                 }
               });
-              return res.status(200).json(Array.from(map.values()));
+
+              // Clean up phantom duplicate order records in MongoDB
+              if (phantomIdsToDelete.length > 0) {
+                mongoCols.resources.deleteMany({
+                  resource: "orders",
+                  id: { $in: phantomIdsToDelete }
+                }).catch(() => {});
+              }
+
+              // Prune bloated internal colourway edit logs and empty template costingRows for list transmission
+              const ordersList = Array.from(map.values()).map(order => {
+                const leanOrder = { ...order };
+
+                // Strip colourways audit logs that are only needed in audit popups
+                if (Array.isArray(leanOrder.stages)) {
+                  leanOrder.stages = leanOrder.stages.map(stage => {
+                    if (Array.isArray(stage.colourways) && stage.colourways.length > 0) {
+                      return {
+                        ...stage,
+                        colourways: stage.colourways.map(cw => {
+                          if (cw && cw.logs) {
+                            const { logs, ...cwRest } = cw;
+                            return cwRest;
+                          }
+                          return cw;
+                        })
+                      };
+                    }
+                    return stage;
+                  });
+                }
+
+                // If costing is unapproved and all rows are empty template rows (price === 0),
+                // strip them because frontend rebuilds them via buildCostingRows(tmpl).
+                // Keep costingRows if costing is approved or has custom prices/items!
+                if (Array.isArray(leanOrder.costingRows)) {
+                  const hasCustomCosting = leanOrder.costingApproval?.status === "approved" ||
+                    leanOrder.costingRows.some(r => (Number(r.price) > 0 || Number(r.actualPrice) > 0 || r.custom));
+                  if (!hasCustomCosting) {
+                    delete leanOrder.costingRows;
+                  }
+                }
+
+                return leanOrder;
+              });
+
+              setCachedResource(cacheKey, ordersList);
+              return res.status(200).json(ordersList);
             }
+            setCachedResource(cacheKey, items);
             return res.status(200).json(items);
           } catch (e) {
             console.error("Mongo resource GET error:", e.message);
@@ -674,16 +796,35 @@ export default async function handler(req, res) {
           }
           return res.status(200).json(item);
         }
-        const items = memoryDB[resource].filter(r => {
+        let items = memoryDB[resource].filter(r => {
           if (!isSoftDelete || showAll) return true;
           return isTrash ? r.isDeleted === true : r.isDeleted !== true;
         });
+        if (resource === "notifications") {
+          items = items.filter(r => r && r.title).sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)).slice(0, 200);
+        }
+        setCachedResource(cacheKey, items);
         return res.status(200).json(items);
       }
 
       // POST /api/resources/:resource
       if (req.method === "POST") {
+        invalidateResourceCache(resource);
         const body = parsedBody;
+
+        // Prevent duplicate notification creation by eventKey
+        if (resource === "notifications" && body.eventKey && mongoCols?.resources) {
+          try {
+            const existingNotif = await mongoCols.resources.findOne({
+              resource: "notifications",
+              eventKey: body.eventKey
+            });
+            if (existingNotif) {
+              return res.status(200).json(existingNotif);
+            }
+          } catch (e) {}
+        }
+
         const recordId = makeId(resource, body);
         const record = {
           ...body,
@@ -713,6 +854,7 @@ export default async function handler(req, res) {
 
       // PUT or PATCH /api/resources/:resource/:id
       if (req.method === "PUT" || req.method === "PATCH") {
+        invalidateResourceCache(resource);
         if (!id) return res.status(400).json({ error: "Record ID required" });
         const body = parsedBody;
 
@@ -758,7 +900,7 @@ export default async function handler(req, res) {
             delete updated._id;
             if (existing) {
               await mongoCols.resources.updateOne({ resource, _id: existing._id }, { $set: updated });
-            } else {
+            } else if (resource !== "notifications") {
               await mongoCols.resources.insertOne({ resource, id: realId, ...updated });
             }
             return res.status(200).json(updated);
@@ -791,6 +933,7 @@ export default async function handler(req, res) {
 
       // DELETE /api/resources/:resource/:id
       if (req.method === "DELETE") {
+        invalidateResourceCache(resource);
         if (!id) return res.status(400).json({ error: "Record ID required" });
         const isPermanent = url.searchParams.get("permanent") === "true" || url.searchParams.get("force") === "true";
 

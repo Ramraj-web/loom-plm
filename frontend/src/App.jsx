@@ -3874,6 +3874,19 @@ export default function LoomPLM() {
     } else {
       programmaticHashTargetRef.current = null;
     }
+
+    // Seamlessly fetch full single order details (including any custom costing rows, colourways) in background
+    if (target) {
+      resourcesApi.get("orders", target).then(fullOrder => {
+        if (fullOrder && (fullOrder.id || fullOrder.primaryId)) {
+          setOrders(prev => prev.map(o =>
+            (o.id === fullOrder.id || (fullOrder.primaryId && o.primaryId === fullOrder.primaryId))
+              ? { ...o, ...fullOrder }
+              : o
+          ));
+        }
+      }).catch(() => {});
+    }
   };
 
   const openDept = (name) => {
