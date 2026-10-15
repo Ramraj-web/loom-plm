@@ -1,3 +1,4 @@
+import { broadcast } from "../wsHandler.js";
 import { Router } from "express";
 import fs from "fs";
 import path from "path";
@@ -132,7 +133,74 @@ router.get("/:key(*)", async (req, res, next) => {
 router.post("/:key(*)", async (req, res, next) => {
   const shared = !!req.body.shared;
   const key = extractKey(req.params.key);
-  const value = req.body.value;
+  let value = req.body.value;
+
+  // Intelligently merge user_sessions and audit_logs so concurrent tabs (e.g. incognito vs normal)
+  // never wipe out other active users or history
+  if (key === "user_sessions") {
+    try {
+      const incoming = typeof value === "string" ? JSON.parse(value) : value;
+      if (Array.isArray(incoming)) {
+        let existing = [];
+        if (storageCollection) {
+          const rec = await storageCollection.findOne({ key, shared });
+          if (rec && rec.value) {
+            try { existing = typeof rec.value === "string" ? JSON.parse(rec.value) : rec.value; } catch (e) {}
+          }
+        } else {
+          const db = readDB();
+          const bucket = shared ? "shared" : "personal";
+          if (db[bucket] && db[bucket][key]) {
+            try { existing = typeof db[bucket][key] === "string" ? JSON.parse(db[bucket][key]) : db[bucket][key]; } catch (e) {}
+          }
+        }
+
+        if (Array.isArray(existing) && existing.length > 0) {
+          const sessionMap = new Map();
+          existing.forEach(s => { if (s && s.id) sessionMap.set(s.id, s); });
+          incoming.forEach(s => {
+            if (s && s.id) {
+              const prev = sessionMap.get(s.id) || {};
+              sessionMap.set(s.id, { ...prev, ...s });
+            }
+          });
+          const merged = Array.from(sessionMap.values()).sort((a, b) => new Date(b.loginTime || 0) - new Date(a.loginTime || 0));
+          value = JSON.stringify(merged.slice(0, 500));
+        }
+      }
+    } catch (e) {
+      console.warn("Error merging user_sessions on backend:", e.message);
+    }
+  } else if (key === "audit_logs") {
+    try {
+      const incoming = typeof value === "string" ? JSON.parse(value) : value;
+      if (Array.isArray(incoming)) {
+        let existing = [];
+        if (storageCollection) {
+          const rec = await storageCollection.findOne({ key, shared });
+          if (rec && rec.value) {
+            try { existing = typeof rec.value === "string" ? JSON.parse(rec.value) : rec.value; } catch (e) {}
+          }
+        } else {
+          const db = readDB();
+          const bucket = shared ? "shared" : "personal";
+          if (db[bucket] && db[bucket][key]) {
+            try { existing = typeof db[bucket][key] === "string" ? JSON.parse(db[bucket][key]) : db[bucket][key]; } catch (e) {}
+          }
+        }
+
+        if (Array.isArray(existing) && existing.length > 0) {
+          const logMap = new Map();
+          incoming.forEach(l => { if (l && l.id) logMap.set(l.id, l); });
+          existing.forEach(l => { if (l && l.id && !logMap.has(l.id)) logMap.set(l.id, l); });
+          const merged = Array.from(logMap.values()).sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+          value = JSON.stringify(merged.slice(0, 500));
+        }
+      }
+    } catch (e) {
+      console.warn("Error merging audit_logs on backend:", e.message);
+    }
+  }
 
   if (storageCollection) {
     try {
@@ -141,6 +209,9 @@ router.post("/:key(*)", async (req, res, next) => {
         { $set: { key, value, shared } },
         { upsert: true }
       );
+      try {
+        broadcast({ type: "STORAGE_CHANGE", key, value, shared, timestamp: new Date().toISOString() });
+      } catch (err) {}
       return res.status(200).json({ key, value, shared });
     } catch (error) {
       return next(error);
@@ -152,6 +223,9 @@ router.post("/:key(*)", async (req, res, next) => {
   if (!db[bucket]) db[bucket] = {};
   db[bucket][key] = value;
   writeDB(db);
+  try {
+    broadcast({ type: "STORAGE_CHANGE", key, value, shared: !!shared, timestamp: new Date().toISOString() });
+  } catch (err) {}
   return res.status(200).json({ key, value, shared: !!shared });
 });
 

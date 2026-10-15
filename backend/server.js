@@ -1,3 +1,5 @@
+import { initWebSocket } from "./wsHandler.js";
+import http from "http";
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -6,7 +8,7 @@ import { connectMongo } from "./db/mongodb.js";
 import { setStorageCollection } from "./routes/storage.js";
 import geminiRoutes from "./routes/gemini.js";
 import resourceRoutes from "./routes/resources.js";
-import { seedResources } from "./routes/resources.js";
+import { seedResources, cleanExpiredNotifications } from "./routes/resources.js";
 
 dotenv.config();
 console.log("Database Mode:", process.env.MONGODB_URI ? "MongoDB Atlas" : "Local JSON Storage");
@@ -54,8 +56,25 @@ async function startServer() {
   } else {
     console.log("MONGODB_URI not set; using local JSON storage");
   }
-  app.listen(PORT, () => {
-    console.log(`Loom PLM backend listening on port ${PORT}`);
+  const server = http.createServer(app);
+  initWebSocket(server);
+
+  // Continuously and automatically clean expired notifications (15-day policy) every hour
+  setInterval(() => {
+    try {
+      const col = collection ? (import("./db/mongodb.js").then(m => m.getResourceCollection())) : null;
+      if (col && typeof col.then === "function") {
+        col.then(resCol => {
+          if (resCol) cleanExpiredNotifications(resCol, null).catch(() => {});
+        }).catch(() => {});
+      }
+    } catch (e) {
+      console.warn("Background notification cleanup error:", e.message);
+    }
+  }, 60 * 60 * 1000);
+
+  server.listen(PORT, () => {
+    console.log(`Loom PLM backend with WebSockets listening on port ${PORT}`);
   });
 }
 

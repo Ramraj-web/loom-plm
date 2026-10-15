@@ -189,6 +189,15 @@ function makeId(resource, record) {
   return record.id || `${resource}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function uniqueById(records) {
+  const seen = new Set();
+  return records.filter(record => {
+    if (!record.id || seen.has(record.id)) return false;
+    seen.add(record.id);
+    return true;
+  });
+}
+
 const SOFT_DELETE_RESOURCES = [
   "orders", "tasks", "approvals", "departments", "production", "staff",
   "leaveRequests", "financials", "certifications", "compliances", "debitNotes",
@@ -206,7 +215,7 @@ app.get("/api/resources/:resource", (req, res, next) => {
     const records = (db[resource] || []).filter(
       record => !isSoftDelete || showAll || (isTrash ? record.isDeleted === true : record.isDeleted !== true)
     );
-    res.json(records);
+    res.json(resource === "users" ? uniqueById(records) : records);
   } catch (error) {
     next(error);
   }
@@ -217,8 +226,13 @@ app.get("/api/resources/:resource/:id", (req, res, next) => {
   if (!validResource(resource)) return res.status(404).json({ error: "Unknown resource" });
   try {
     const db = readResourcesDB();
-    const record = (db[resource] || []).find(item => String(item.id) === id);
+    const record = (db[resource] || []).find(item =>
+      String(item.id) === id || String(item.primaryId) === id || String(item._id) === id || String(item.orderId) === id
+    );
     if (!record) return res.status(404).json({ error: "Record not found" });
+    if (SOFT_DELETE_RESOURCES.includes(resource) && req.query.all !== "true" && req.query.trash !== "true" && record.isDeleted === true) {
+      return res.status(404).json({ error: "Record not found" });
+    }
     res.json(record);
   } catch (error) {
     next(error);
@@ -237,7 +251,9 @@ app.post("/api/resources/:resource", (req, res, next) => {
   try {
     const db = readResourcesDB();
     if (!db[resource]) db[resource] = [];
-    const existingIdx = db[resource].findIndex(item => String(item.id) === String(recordId));
+    const existingIdx = db[resource].findIndex(item =>
+      String(item.id) === String(recordId) || (record.primaryId && String(item.primaryId) === String(record.primaryId))
+    );
     if (existingIdx >= 0) {
       db[resource][existingIdx] = record;
     } else {
@@ -256,14 +272,34 @@ app.put("/api/resources/:resource/:id", (req, res, next) => {
   try {
     const db = readResourcesDB();
     if (!db[resource]) db[resource] = [];
-    const index = db[resource].findIndex(item => String(item.id) === id);
+
+    const cleanCandidate = (cid) => {
+      let str = String(cid || "").trim();
+      while (str.startsWith("ord_")) str = str.replace(/^ord_/, "");
+      str = str.replace(/_[a-z0-9]{4,12}$/i, "");
+      return str.trim();
+    };
+
+    const candidateIds = new Set([id, req.body?.id, req.body?.primaryId, req.body?.orderId].filter(Boolean).map(String));
+    if (resource === "orders") {
+      Array.from(candidateIds).forEach(cid => {
+        const base = cleanCandidate(cid);
+        if (base) candidateIds.add(base);
+      });
+    }
+
+    const index = db[resource].findIndex(item =>
+      candidateIds.has(String(item.id)) || candidateIds.has(String(item.primaryId)) || candidateIds.has(String(item._id)) || candidateIds.has(String(item.orderId))
+    );
     if (index < 0) {
-      const record = { ...req.body, id, resource };
+      const realId = (resource === "orders" && cleanCandidate(req.body?.id || id)) || req.body.id || id;
+      const record = { ...req.body, id: realId, primaryId: realId, resource };
       db[resource].push(record);
       writeResourcesDB(db);
       return res.json(record);
     }
-    const record = { ...db[resource][index], ...req.body, id };
+    const realId = db[resource][index].id || id;
+    const record = { ...db[resource][index], ...req.body, id: realId, primaryId: db[resource][index].primaryId || realId };
     db[resource][index] = record;
     writeResourcesDB(db);
     res.json(record);
@@ -278,14 +314,34 @@ app.patch("/api/resources/:resource/:id", (req, res, next) => {
   try {
     const db = readResourcesDB();
     if (!db[resource]) db[resource] = [];
-    const index = db[resource].findIndex(item => String(item.id) === id);
+
+    const cleanCandidate = (cid) => {
+      let str = String(cid || "").trim();
+      while (str.startsWith("ord_")) str = str.replace(/^ord_/, "");
+      str = str.replace(/_[a-z0-9]{4,12}$/i, "");
+      return str.trim();
+    };
+
+    const candidateIds = new Set([id, req.body?.id, req.body?.primaryId, req.body?.orderId].filter(Boolean).map(String));
+    if (resource === "orders") {
+      Array.from(candidateIds).forEach(cid => {
+        const base = cleanCandidate(cid);
+        if (base) candidateIds.add(base);
+      });
+    }
+
+    const index = db[resource].findIndex(item =>
+      candidateIds.has(String(item.id)) || candidateIds.has(String(item.primaryId)) || candidateIds.has(String(item._id)) || candidateIds.has(String(item.orderId))
+    );
     if (index < 0) {
-      const record = { ...req.body, id, resource };
+      const realId = (resource === "orders" && cleanCandidate(req.body?.id || id)) || req.body.id || id;
+      const record = { ...req.body, id: realId, primaryId: realId, resource };
       db[resource].push(record);
       writeResourcesDB(db);
       return res.json(record);
     }
-    const record = { ...db[resource][index], ...req.body, id };
+    const realId = db[resource][index].id || id;
+    const record = { ...db[resource][index], ...req.body, id: realId, primaryId: db[resource][index].primaryId || realId };
     db[resource][index] = record;
     writeResourcesDB(db);
     res.json(record);
@@ -297,20 +353,69 @@ app.patch("/api/resources/:resource/:id", (req, res, next) => {
 app.delete("/api/resources/:resource/:id", (req, res, next) => {
   const { resource, id } = req.params;
   if (!validResource(resource)) return res.status(404).json({ error: "Unknown resource" });
+  const isPermanent = req.query.permanent === "true" || req.query.force === "true";
   try {
     const db = readResourcesDB();
-    if (SOFT_DELETE_RESOURCES.includes(resource)) {
-      const record = db[resource]?.find(item => String(item.id) === id);
-      if (!record) return res.status(404).json({ error: "Record not found" });
-      record.isDeleted = true;
-      record.deletedAt = new Date().toISOString();
+    const index = (db[resource] || []).findIndex(item =>
+      String(item.id) === id || String(item.primaryId) === id || String(item._id) === id || String(item.orderId) === id
+    );
+    if (index < 0) return res.status(404).json({ error: "Record not found" });
+
+    const target = db[resource][index];
+    const targetIdentifiers = Array.from(new Set([target.id, target.primaryId, target._id, target.orderId, id].filter(Boolean).map(String)));
+
+    if (SOFT_DELETE_RESOURCES.includes(resource) && !isPermanent) {
+      if (resource === "orders") {
+        db[resource] = db[resource].map(r => {
+          if (targetIdentifiers.includes(String(r.id)) || targetIdentifiers.includes(String(r.primaryId)) || targetIdentifiers.includes(String(r.orderId))) {
+            return { ...r, isDeleted: true, deletedAt: new Date().toISOString() };
+          }
+          return r;
+        });
+      } else {
+        target.isDeleted = true;
+        target.deletedAt = new Date().toISOString();
+      }
+
+      if (resource === "orders" && Array.isArray(db["tasks"])) {
+        db["tasks"] = db["tasks"].map(t => {
+          if (targetIdentifiers.includes(String(t.orderId)) || targetIdentifiers.includes(String(t.order))) {
+            return { ...t, isDeleted: true, deletedAt: new Date().toISOString() };
+          }
+          return t;
+        });
+      }
+
       writeResourcesDB(db);
       return res.json({ id, deleted: true, isDeleted: true });
     }
-    const before = db[resource]?.length || 0;
-    db[resource] = (db[resource] || []).filter(item => String(item.id) !== id);
+
+    if (resource === "orders") {
+      db[resource] = db[resource].filter(r =>
+        !targetIdentifiers.includes(String(r.id)) &&
+        !targetIdentifiers.includes(String(r.primaryId)) &&
+        !targetIdentifiers.includes(String(r.orderId))
+      );
+    } else {
+      db[resource].splice(index, 1);
+    }
+    
+    // Cascade delete for orders
+    if (resource === "orders") {
+      ["tasks", "notifications", "supplierWork", "certifications", "compliances", "debitNotes", "capas"].forEach(relRes => {
+        if (Array.isArray(db[relRes])) {
+          db[relRes] = db[relRes].filter(r =>
+            !targetIdentifiers.includes(String(r.orderId)) &&
+            !targetIdentifiers.includes(String(r.order)) &&
+            !targetIdentifiers.includes(String(r.po)) &&
+            !targetIdentifiers.includes(String(r.relatedId))
+          );
+        }
+      });
+    }
+
     writeResourcesDB(db);
-    res.json({ id, deleted: db[resource].length < before });
+    res.json({ id, deleted: true, permanent: true });
   } catch (error) {
     next(error);
   }

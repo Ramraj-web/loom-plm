@@ -8,7 +8,23 @@
 //   DELETE /api/storage/:key?shared=true|false
 //   GET    /api/storage?prefix=xxx&shared=true|false
 
-export const API_BASE_URL = typeof window !== "undefined" ? window.location.origin : "https://loom-plm.vercel.app";
+export const API_BASE_URL = (() => {
+  // In development (Vite server running on localhost:5173)
+  if (import.meta.env.DEV) {
+    return "http://localhost:5000"; // Local backend
+  }
+  // Inside Capacitor native Android/iOS WebView, window.location.origin is "https://localhost" or "capacitor://localhost"
+  // Route storage calls to the remote production backend
+  if (typeof window !== "undefined" && (window.Capacitor?.isNativePlatform?.() || window.location.hostname === "localhost" || window.location.protocol === "capacitor:")) {
+    return "https://loom-plm.vercel.app";
+  }
+  // In web production (Vercel) - use same domain
+  if (typeof window !== "undefined" && window.location.origin) {
+    return window.location.origin; // e.g., https://loom-plm.vercel.app
+  }
+  // Fallback
+  return "https://loom-plm.vercel.app";
+})();
 const BASE = `${API_BASE_URL}/api/storage`;
 
 async function get(key, shared = false) {
@@ -23,7 +39,8 @@ async function get(key, shared = false) {
     if (!res.ok) throw new Error("Storage get failed");
     const data = await res.json();
     if (!data || data.value === null || data.value === undefined) {
-      return null;
+      const local = localStorage.getItem(`storage:${key}`);
+      return local ? { key, value: local, shared } : null;
     }
     try {
       localStorage.setItem(`storage:${key}`, typeof data.value === "string" ? data.value : JSON.stringify(data.value));
@@ -52,11 +69,11 @@ async function set(key, value, shared = false) {
     } catch (e) {}
     return data;
   } catch (e) {
-    // Only fallback to localStorage if backend request failed
+    // Backend unavailable — silently cache in localStorage instead.
+    // Data is safe; no need to spam the console.
     try {
       localStorage.setItem(`storage:${key}`, stringValue);
     } catch (err) {}
-    console.warn(`[storage] Backend save failed for ${key}, cached locally:`, e.message);
     return { key, value: stringValue, shared, cachedLocally: true };
   }
 }

@@ -26,9 +26,9 @@ export function statusPill(status) {
   );
 }
 
-export function Card({ children, style, className = "" }) {
+export function Card({ children, style, className = "", ...props }) {
   return (
-    <div className={`loom-card ${className}`} style={{ background: "#fff", border: "1px solid #ECEDF1", borderRadius: 12, padding: "18px 20px", ...style }}>
+    <div className={`loom-card ${className}`} style={{ background: "#fff", border: "1px solid #ECEDF1", borderRadius: 12, padding: "18px 20px", ...style }} {...props}>
       {children}
     </div>
   );
@@ -73,17 +73,36 @@ export function BackLink({ onClick, label }) {
 
 export function renderWithMentions(text) {
   if (!text) return "";
-  const parts = text.split(/(@\w+)/g);
+  const parts = text.split(/(@[a-zA-Z0-9_.-]+)/g);
   return parts.map((part, i) =>
-    part.startsWith("@") ? <span key={i} style={{ color: "#378ADD", fontWeight: 600 }}>{part}</span> : part
+    part.startsWith("@") ? (
+      <span
+        key={i}
+        style={{
+          color: "#2563EB",
+          background: "#EFF6FF",
+          padding: "1px 5px",
+          borderRadius: 4,
+          fontWeight: 600,
+          border: "1px solid #BFDBFE",
+          display: "inline-block",
+          margin: "0 1px"
+        }}
+      >
+        {part}
+      </span>
+    ) : part
   );
 }
 
 export function collectTasks(orders, deptFilter) {
   const rows = [];
-  orders.forEach(o => {
-    if (!o.stages) return;
+  (orders || []).forEach(o => {
+    if (!o || o.isDeleted === true || o.isDeleted === "true" || !!o.deletedAt) return;
+    if (!Array.isArray(o.stages)) return;
     o.stages.forEach((s, idx) => {
+      // Guard: skip null/undefined stage entries (can occur with corrupted backend data)
+      if (!s || typeof s !== "object") return;
       if (!deptFilter || s.dept === deptFilter) {
         rows.push({ order: o, stage: s, stageIdx: idx, dept: s.dept });
       }
@@ -101,24 +120,34 @@ export function TaskTable({ rows, onOpenOrder, emptyText }) {
       <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1.3fr 0.9fr 0.9fr 1fr", fontSize: 11, color: "#8A8D98", padding: "0 4px 8px", borderBottom: "1px solid #F0F0F2" }}>
         <div>Order / Style</div><div>Task / stage</div><div>Due</div><div>Status</div><div>Flag</div>
       </div>
-      {rows.map(({ order, stage, stageIdx }) => (
-        <div
-          key={order.id + stageIdx}
-          onClick={() => onOpenOrder(order.id)}
-          style={{ display: "grid", gridTemplateColumns: "1.1fr 1.3fr 0.9fr 0.9fr 1fr", alignItems: "center", fontSize: 12.5, padding: "10px 4px", borderBottom: "1px solid #F5F5F7", cursor: "pointer" }}
-          onMouseEnter={e => e.currentTarget.style.background = "#FAFAFB"}
-          onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-        >
-          <div>
-            <div style={{ fontFamily: "monospace", fontSize: 11, color: "#8A8D98" }}>{order.id}</div>
-            <div style={{ fontWeight: 600, color: "#1B2130" }}>{order.style}</div>
+      {rows.map(({ order, stage, stageIdx }, itemIdx) => {
+        const orderKey = order?.primaryId || order?.id;
+        return (
+          <div
+            key={`${orderKey || "ord"}-${stage?.name || ""}-${stageIdx ?? itemIdx}-${itemIdx}`}
+            onClick={() => onOpenOrder && onOpenOrder(order.primaryId || order.id, order.primaryId)}
+            style={{ display: "grid", gridTemplateColumns: "1.1fr 1.3fr 0.9fr 0.9fr 1fr", alignItems: "center", fontSize: 12.5, padding: "10px 4px", borderBottom: "1px solid #F5F5F7", cursor: "pointer" }}
+            onMouseEnter={e => e.currentTarget.style.background = "#FAFAFB"}
+            onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+          >
+            <div>
+              <div style={{ fontFamily: "monospace", fontSize: 11, color: "#8A8D98", display: "flex", alignItems: "center", gap: 6 }}>
+                <span>{order.id}</span>
+                {order.color && (
+                  <span style={{ fontSize: 9.5, background: "#EFF6FF", color: "#1D4ED8", padding: "1px 5px", borderRadius: 4, fontWeight: 600 }}>
+                    {order.color}
+                  </span>
+                )}
+              </div>
+              <div style={{ fontWeight: 600, color: "#1B2130" }}>{order.style}</div>
+            </div>
+            <div>{stage.name}</div>
+            <div>{stage.planned}</div>
+            <div>{statusPill(stage.status)}</div>
+            <div style={{ color: stage.reason ? "#A32D2D" : "#B0B2BA" }}>{stage.reason || "—"}</div>
           </div>
-          <div>{stage.name}</div>
-          <div>{stage.planned}</div>
-          <div>{statusPill(stage.status)}</div>
-          <div style={{ color: stage.reason ? "#A32D2D" : "#B0B2BA" }}>{stage.reason || "—"}</div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -156,11 +185,16 @@ function groupRows(rows) {
   buckets["Awaiting action"] = [];
   buckets["Not started yet"] = [];
   buckets["Completed"] = [];
-  rows.forEach(r => {
-    if (r.stage.reason) buckets[`Delayed — ${r.stage.reason}`].push(r);
-    else if (r.stage.status === "in_progress") buckets["Awaiting action"].push(r);
-    else if (r.stage.status === "pending") buckets["Not started yet"].push(r);
-    else buckets["Completed"].push(r);
+  (Array.isArray(rows) ? rows : []).forEach(r => {
+    const stage = r?.stage || {};
+    const bucket = stage.reason
+      ? `Delayed — ${stage.reason}`
+      : stage.status === "in_progress"
+        ? "Awaiting action"
+        : stage.status === "pending"
+          ? "Not started yet"
+          : "Completed";
+    (buckets[bucket] ??= []).push(r);
   });
   return Object.entries(buckets).filter(([, v]) => v.length > 0);
 }
@@ -173,9 +207,10 @@ function groupColor(label) {
 }
 
 export function GroupedTaskList({ rows, onOpenOrder, emptyText }) {
-  const groups = useMemo(() => groupRows(rows), [rows]);
+  const safeRows = Array.isArray(rows) ? rows : [];
+  const groups = useMemo(() => groupRows(safeRows), [safeRows]);
   const [openMap, setOpenMap] = useState({});
-  if (rows.length === 0) {
+  if (safeRows.length === 0) {
     return <div style={{ fontSize: 12.5, color: "#B0B2BA", padding: "12px 4px" }}>{emptyText}</div>;
   }
   const isOpen = (label) => (openMap[label] !== undefined ? openMap[label] : label !== "Completed");
@@ -203,23 +238,38 @@ export function GroupedTaskList({ rows, onOpenOrder, emptyText }) {
               <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1.3fr 0.9fr 0.9fr", fontSize: 10.5, color: "#B0B2BA", padding: "8px 10px 4px" }}>
                 <div>Order / Style</div><div>Task / stage</div><div>Due</div><div>Status</div>
               </div>
-              {groupItems.map(({ order, stage, stageIdx }) => (
-                <div
-                  key={order.id + stageIdx}
-                  onClick={() => onOpenOrder(order.id)}
-                  style={{ display: "grid", gridTemplateColumns: "1.1fr 1.3fr 0.9fr 0.9fr", alignItems: "center", fontSize: 12.5, padding: "9px 10px", borderBottom: "1px solid #F5F5F7", cursor: "pointer" }}
-                  onMouseEnter={e => e.currentTarget.style.background = "#FAFAFB"}
-                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-                >
-                  <div>
-                    <div style={{ fontFamily: "monospace", fontSize: 11, color: "#8A8D98" }}>{order.id}</div>
-                    <div style={{ fontWeight: 600, color: "#1B2130" }}>{order.style}</div>
+              {groupItems.map(({ order, stage, stageIdx }, itemIdx) => {
+                const orderKey = order?.primaryId || order?.id;
+                return (
+                  <div
+                    key={`${orderKey || "ord"}-${stage?.name || ""}-${stageIdx ?? itemIdx}-${itemIdx}`}
+                    onClick={() => onOpenOrder && onOpenOrder(order.primaryId || order.id, order.primaryId)}
+                    style={{ display: "grid", gridTemplateColumns: "1.1fr 1.3fr 0.9fr 0.9fr", alignItems: "center", fontSize: 12.5, padding: "9px 10px", borderBottom: "1px solid #F5F5F7", cursor: "pointer" }}
+                    onMouseEnter={e => e.currentTarget.style.background = "#FAFAFB"}
+                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                  >
+                    <div>
+                      <div style={{ fontFamily: "monospace", fontSize: 11, color: "#8A8D98", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                        <span>{order.id}</span>
+                        {order.buyer && (
+                          <span style={{ fontSize: 9.5, background: "#E6F7F4", color: "#0D7A68", padding: "1px 7px", borderRadius: 20, fontWeight: 700, letterSpacing: 0.2, border: "1px solid #A7E3D8", fontFamily: "inherit" }}>
+                            {order.buyer}
+                          </span>
+                        )}
+                        {order.color && (
+                          <span style={{ fontSize: 9.5, background: "#EFF6FF", color: "#1D4ED8", padding: "1px 5px", borderRadius: 4, fontWeight: 600 }}>
+                            {order.color}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontWeight: 600, color: "#1B2130", marginTop: 2 }}>{order.style}</div>
+                    </div>
+                    <div>{stage.name} <span style={{ color: "#B0B2BA", fontSize: 10.5 }}>· {stage.dept}</span></div>
+                    <div>{stage.planned}</div>
+                    <div>{statusPill(stage.status)}</div>
                   </div>
-                  <div>{stage.name} <span style={{ color: "#B0B2BA", fontSize: 10.5 }}>· {stage.dept}</span></div>
-                  <div>{stage.planned}</div>
-                  <div>{statusPill(stage.status)}</div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -231,13 +281,11 @@ export function GroupedTaskList({ rows, onOpenOrder, emptyText }) {
 export function MiniDonut({ data, size = 96, centerLabel, centerSub, labelColor }) {
   return (
     <div style={{ position: "relative", width: size, height: size }}>
-      <ResponsiveContainer width={size} height={size}>
-        <PieChart>
-          <Pie data={data} dataKey="value" nameKey="name" innerRadius={size * 0.32} outerRadius={size * 0.48} paddingAngle={2} stroke="none">
-            {data.map((d, i) => <Cell key={i} fill={d.color} />)}
-          </Pie>
-        </PieChart>
-      </ResponsiveContainer>
+      <PieChart width={size} height={size}>
+        <Pie data={data} dataKey="value" nameKey="name" innerRadius={size * 0.32} outerRadius={size * 0.48} paddingAngle={2} stroke="none">
+          {data.map((d, i) => <Cell key={i} fill={d.color} />)}
+        </Pie>
+      </PieChart>
       {centerLabel && (
         <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
           <div style={{ fontSize: size > 90 ? 18 : 14, fontWeight: 700, color: labelColor || "#fff" }}>{centerLabel}</div>
@@ -265,11 +313,42 @@ export function DarkCardHeader({ title, sub, action }) {
 }
 
 export function gatingApproval(stages, idx) {
-  if (!stages) return null;
+  if (!Array.isArray(stages) || idx <= 0) return null;
+  const currentStage = stages[idx];
+  if (!currentStage) return null;
+
+  // 1. Parallel stages (isParallel: true / default parallel) are ALWAYS OPEN from Day 1
+  if (currentStage.isParallel === true || currentStage.alwaysEnabled === true || currentStage.parallel === true) {
+    return null;
+  }
+
+  // 2. Sequential stages (isParallel: false) open ONLY when the previous stage completes
+  if (currentStage.isParallel === false || currentStage.parallel === false || currentStage.sequential === true) {
+    const prevStage = stages[idx - 1];
+    if (prevStage && prevStage.status !== "done") {
+      if (Array.isArray(prevStage.colourways) && prevStage.colourways.length > 0) {
+        const anyDone = prevStage.colourways.some(c => c.status === "done" || (Number(c.completedQty) || 0) > 0);
+        if (!anyDone) return prevStage;
+      } else {
+        return prevStage;
+      }
+    }
+  }
+
+  // 3. Check for previous gating approval steps
   for (let j = idx - 1; j >= 0; j--) {
-    if (stages[j].name.toLowerCase().includes("approval")) {
-      return stages[j].status !== "done" ? stages[j] : null;
+    const s = stages[j];
+    if (s && s.name && s.name.toLowerCase().includes("approval")) {
+      if (Array.isArray(s.colourways) && s.colourways.length > 0) {
+        const anyDone = s.colourways.some(c => c.status === "done" || (Number(c.completedQty) || 0) > 0);
+        if (!anyDone && s.status !== "done") {
+          return s;
+        }
+      } else if (s.status !== "done") {
+        return s;
+      }
     }
   }
   return null;
 }
+

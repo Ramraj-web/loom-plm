@@ -11,8 +11,20 @@ export async function connectMongo() {
   const database = client.db(process.env.MONGODB_DB_NAME || "loom_plm");
   storageCollection = database.collection("storage");
   await storageCollection.createIndex({ key: 1, shared: 1 }, { unique: true });
+
   resourceCollection = database.collection("resources");
-  await resourceCollection.createIndex({ resource: 1, id: 1 }, { unique: true });
+  const existingIndexes = await resourceCollection.listIndexes().toArray();
+
+  for (const index of existingIndexes) {
+    if (index.name === "_id_") continue;
+    try {
+      await resourceCollection.dropIndex(index.name);
+    } catch (e) {
+      // Ignore indexes that are already gone or cannot be dropped.
+    }
+  }
+
+  await resourceCollection.createIndex({ resource: 1, id: 1 });
   return storageCollection;
 }
 

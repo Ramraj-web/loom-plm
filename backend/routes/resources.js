@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { RESOURCE_SEEDS } from "../data/seed.js";
-import { getResourceCollection } from "../db/mongodb.js";
+import { getResourceCollection, getStorageCollection } from "../db/mongodb.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_FILE = path.join(__dirname, "..", "data", "resources.json");
@@ -81,6 +81,46 @@ function writeDB(db) {
 
 function validResource(name) { return Object.prototype.hasOwnProperty.call(RESOURCE_SEEDS, name); }
 function makeId(resource, record) { return record.id || `${resource}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`; }
+function uniqueById(records, collection, resource, db) {
+  if (!Array.isArray(records)) return records;
+  const seenIds = new Set();
+  const seenNames = new Set();
+  const duplicateIdsToDelete = [];
+  const cleanRecords = [];
+
+  for (const record of records) {
+    if (!record) continue;
+    const idKey = record.id ? String(record.id) : (record.primaryId ? String(record.primaryId) : null);
+    const nameKey = record.name ? String(record.name).trim().toLowerCase() : null;
+
+    let isDuplicate = false;
+    if (idKey && seenIds.has(idKey)) {
+      isDuplicate = true;
+    } else if (resource === "teams" && nameKey && seenNames.has(nameKey)) {
+      isDuplicate = true;
+    }
+
+    if (isDuplicate) {
+      if (idKey) duplicateIdsToDelete.push(idKey);
+    } else {
+      if (idKey) seenIds.add(idKey);
+      if (nameKey) seenNames.add(nameKey);
+      cleanRecords.push(record);
+    }
+  }
+
+  if (duplicateIdsToDelete.length > 0) {
+    if (collection) {
+      collection.deleteMany({ resource, id: { $in: duplicateIdsToDelete } }).catch(() => {});
+    } else if (db && Array.isArray(db[resource])) {
+      const keepIds = new Set(cleanRecords.map(r => r.id).filter(Boolean));
+      db[resource] = db[resource].filter(r => keepIds.has(r.id));
+      writeDB(db);
+    }
+  }
+
+  return cleanRecords;
+}
 
 const SOFT_DELETE_RESOURCES = [
   "orders",
@@ -95,25 +135,198 @@ const SOFT_DELETE_RESOURCES = [
   "compliances",
   "debitNotes",
   "capas",
+  "buyers",
   "notifications",
   "suppliers",
   "supplierWork",
+  "user_sessions",
+  "audit_logs",
+  "units",
 ];
+
+const NOTIFICATION_EXPIRY_DAYS = 15;
+const NOTIFICATION_EXPIRY_MS = NOTIFICATION_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
+let lastNotificationCleanupAt = 0;
+
+export async function cleanExpiredNotifications(collection, db) {
+  const now = Date.now();
+  if (now - lastNotificationCleanupAt < 60000) return;
+  lastNotificationCleanupAt = now;
+
+  const cutoffDate = new Date(now - NOTIFICATION_EXPIRY_MS);
+  const cutoffIso = cutoffDate.toISOString();
+
+  if (collection) {
+    try {
+      await collection.deleteMany({
+        resource: "notifications",
+        createdAt: {
+          $type: "string",
+          $lte: cutoffIso
+        }
+      });
+    } catch (err) {
+      console.warn("Mongo notifications expiry cleanup warning:", err.message);
+    }
+  }
+
+  if (db && Array.isArray(db.notifications)) {
+    const beforeCount = db.notifications.length;
+    db.notifications = db.notifications.filter(n => {
+      if (!n || !n.createdAt || typeof n.createdAt !== "string") return true;
+      const t = new Date(n.createdAt).getTime();
+      if (isNaN(t)) return true;
+      return now - t < NOTIFICATION_EXPIRY_MS;
+    });
+    if (db.notifications.length !== beforeCount) {
+      writeDB(db);
+    }
+  }
+}
+
+export function normalizeOrderStages(record) {
+  if (!record || !Array.isArray(record.stages)) return record;
+  const is120 = record.template === "120";
+  record.stages.forEach((s) => {
+    if (
+      s.name === "Print / Emb / Hotfix Complete" ||
+      s.name === "Print/emb/out source" ||
+      s.name === "Print / Emb Complete" ||
+      s.name === "print / emb / hotfix complete"
+    ) {
+      s.name = "Print / Emb / Outsource";
+      s.dept = "Cutting";
+      s.planned = is120 ? "Day 56-59" : "Day 42-44";
+      delete s.supplier;
+    } else if (
+      s.name === "VAP Send" ||
+      s.name === "vap send"
+    ) {
+      s.name = "Print / Emb / IH";
+      s.dept = "Merchandising";
+      s.planned = is120 ? "Day 60-80" : "Day 45-60";
+      delete s.supplier;
+    } else if (
+      s.name === "Lot Card Approval" ||
+      s.name === "lot card approval"
+    ) {
+      s.name = "Fabric Inspection Report";
+      s.dept = "Quality";
+    }
+  });
+  return record;
+}
+
+function deduplicateOrders(ordersList, collection, db) {
+  if (!Array.isArray(ordersList)) return ordersList;
+
+  const cleanBaseId = (idStr) => {
+    let str = String(idStr || "").trim();
+    while (str.startsWith("ord_")) {
+      str = str.replace(/^ord_/, "");
+    }
+    str = str.replace(/_[a-z0-9]{4,12}$/i, "");
+    return str.trim();
+  };
+
+  const groups = new Map();
+  const phantomIdsToDelete = [];
+
+  ordersList.forEach(order => {
+    const rawId = String(order.id || order.orderId || order.primaryId || "");
+    const baseKey = cleanBaseId(rawId).toUpperCase();
+    if (!baseKey) return;
+
+    if (!groups.has(baseKey)) {
+      groups.set(baseKey, []);
+    }
+    groups.get(baseKey).push(order);
+
+    if (rawId.startsWith("ord_") || /_[a-z0-9]{4,12}$/i.test(rawId)) {
+      phantomIdsToDelete.push(rawId);
+    }
+  });
+
+  const mergedList = [];
+  groups.forEach((list, baseKey) => {
+    const sorted = [...list].sort((a, b) => {
+      const aIsClean = !String(a.id || "").startsWith("ord_") && !/_[a-z0-9]{4,12}$/i.test(String(a.id || ""));
+      const bIsClean = !String(b.id || "").startsWith("ord_") && !/_[a-z0-9]{4,12}$/i.test(String(b.id || ""));
+      if (aIsClean && !bIsClean) return -1;
+      if (!aIsClean && bIsClean) return 1;
+      return 0;
+    });
+
+    const canonical = { ...sorted[0] };
+    canonical.id = cleanBaseId(canonical.id) || baseKey;
+    canonical.primaryId = canonical.id;
+    canonical.orderId = canonical.id;
+
+    for (let i = 1; i < sorted.length; i++) {
+      const other = sorted[i];
+      if (Array.isArray(other.stages) && Array.isArray(canonical.stages)) {
+        other.stages.forEach((dStage, idx) => {
+          const cStage = canonical.stages[idx];
+          if (dStage.status === "done" && cStage && cStage.status !== "done") {
+            canonical.stages[idx] = { ...dStage };
+          }
+        });
+      }
+      if (other.status && other.status !== "On Track") canonical.status = other.status;
+      if (other.completed && !canonical.completed) {
+        canonical.completed = true;
+        canonical.completedAt = other.completedAt || new Date().toISOString();
+      }
+      if (other.isDeleted && !canonical.isDeleted) {
+        canonical.isDeleted = true;
+        canonical.deletedAt = other.deletedAt || new Date().toISOString();
+      }
+    }
+
+    normalizeOrderStages(canonical);
+
+    mergedList.push(canonical);
+  });
+
+  if (phantomIdsToDelete.length > 0) {
+    if (collection) {
+      collection.deleteMany({ resource: "orders", id: { $in: phantomIdsToDelete } }).catch(() => {});
+    } else if (db && Array.isArray(db.orders)) {
+      db.orders = db.orders.filter(o => !phantomIdsToDelete.includes(o.id));
+      writeDB(db);
+    }
+  }
+
+  return mergedList;
+}
 
 router.get("/:resource", async (req, res, next) => {
   const { resource } = req.params;
   if (!validResource(resource)) return res.status(404).json({ error: "Unknown resource" });
   try {
     const collection = getResourceCollection();
+    if (resource === "notifications") {
+      await cleanExpiredNotifications(collection, collection ? null : readDB());
+    }
     const isSoftDelete = SOFT_DELETE_RESOURCES.includes(resource);
     const showAll = req.query.all === "true";
     const isTrash = req.query.trash === "true";
     const filter = isSoftDelete && !showAll
       ? { resource, isDeleted: isTrash ? true : { $ne: true } }
       : { resource };
-    if (collection) return res.json(await collection.find(filter).project({ _id: 0 }).toArray());
+    if (collection) {
+      const records = await collection.find(filter).project({ _id: 0 }).toArray();
+      if (resource === "orders") {
+        return res.json(deduplicateOrders(records, collection));
+      }
+      return res.json(uniqueById(records, collection, resource));
+    }
     const db = readDB();
-    res.json((db[resource] || []).filter(record => !isSoftDelete || showAll || (isTrash ? record.isDeleted === true : record.isDeleted !== true)));
+    const records = (db[resource] || []).filter(record => !isSoftDelete || showAll || (isTrash ? record.isDeleted === true : record.isDeleted !== true));
+    if (resource === "orders") {
+      return res.json(deduplicateOrders(records, null, db));
+    }
+    res.json(uniqueById(records, null, resource, db));
   } catch (error) { next(error); }
 });
 
@@ -133,9 +346,42 @@ router.get("/:resource/:id(*)", async (req, res, next) => {
   if (!validResource(resource)) return res.status(404).json({ error: "Unknown resource" });
   try {
     const collection = getResourceCollection();
-    const record = collection ? await collection.findOne({ resource, id }, { projection: { _id: 0 } }) : readDB()[resource]?.find(item => String(item.id) === id);
+    const record = collection
+      ? await collection.findOne({ resource, $or: [{ primaryId: id }, { id }] }, { projection: { _id: 0 } })
+      : readDB()[resource]?.find(item => String(item.primaryId) === id || String(item.id) === id);
     if (!record) return res.status(404).json({ error: "Record not found" });
-    res.json(record);
+    if (SOFT_DELETE_RESOURCES.includes(resource) && req.query.all !== "true" && req.query.trash !== "true" && record.isDeleted === true) {
+      return res.status(404).json({ error: "Record not found" });
+    }
+    res.json(resource === "orders" ? normalizeOrderStages(record) : record);
+  } catch (error) { next(error); }
+});
+
+router.post("/notifications/mark-all-read", async (req, res, next) => {
+  try {
+    const rCol = getResourceCollection();
+    if (rCol) {
+      await rCol.updateMany({ resource: "notifications", isRead: { $ne: true } }, { $set: { isRead: true } });
+    }
+    const sCol = getStorageCollection();
+    if (sCol) {
+      const notifDoc = await sCol.findOne({ key: "notifications" });
+      if (notifDoc?.value) {
+        try {
+          const list = typeof notifDoc.value === "string" ? JSON.parse(notifDoc.value) : notifDoc.value;
+          if (Array.isArray(list)) {
+            const updated = list.map(n => ({ ...n, isRead: true }));
+            await sCol.updateOne({ key: "notifications" }, { $set: { value: JSON.stringify(updated) } });
+          }
+        } catch (e) {}
+      }
+    }
+    const db = readDB();
+    if (Array.isArray(db.notifications)) {
+      db.notifications.forEach(n => { n.isRead = true; });
+      writeDB(db);
+    }
+    res.json({ success: true, message: "All notifications marked as read" });
   } catch (error) { next(error); }
 });
 
@@ -143,17 +389,32 @@ router.post("/:resource", async (req, res, next) => {
   const { resource } = req.params;
   if (!validResource(resource)) return res.status(404).json({ error: "Unknown resource" });
   const recordId = makeId(resource, req.body);
-  const record = { ...req.body, id: recordId, ...(SOFT_DELETE_RESOURCES.includes(resource) ? { isDeleted: false } : {}) };
+  const primaryId = req.body.primaryId || `pri_${resource}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const record = { ...req.body, primaryId, id: recordId, ...(SOFT_DELETE_RESOURCES.includes(resource) ? { isDeleted: false } : {}) };
   try {
     const collection = getResourceCollection();
     if (collection) {
       delete record._id;
-      await collection.replaceOne({ resource, id: recordId }, { resource, ...record }, { upsert: true });
+      const queryOr = [];
+      if (record.id) queryOr.push({ id: record.id });
+      if (record.primaryId) queryOr.push({ primaryId: record.primaryId });
+      if (resource === "teams" && record.name) queryOr.push({ name: record.name });
+
+      const existingDoc = queryOr.length > 0 ? await collection.findOne({ resource, $or: queryOr }) : null;
+      if (existingDoc) {
+        await collection.updateOne({ resource, _id: existingDoc._id }, { $set: record });
+      } else {
+        await collection.insertOne({ resource, ...record });
+      }
     } else {
       const db = readDB();
       if (!db[resource]) db[resource] = [];
-      const existingIdx = db[resource].findIndex(item => String(item.id) === String(recordId));
-      if (existingIdx >= 0) {
+      const existingIdx = db[resource].findIndex(item => (
+        (record.id && item.id === record.id) ||
+        (record.primaryId && item.primaryId === record.primaryId) ||
+        (resource === "teams" && item.name && record.name && item.name.toLowerCase() === record.name.toLowerCase())
+      ));
+      if (existingIdx !== -1) {
         db[resource][existingIdx] = record;
       } else {
         db[resource] = [record, ...(db[resource] || [])];
@@ -170,23 +431,84 @@ router.put("/:resource/:id(*)", async (req, res, next) => {
   if (!validResource(resource)) return res.status(404).json({ error: "Unknown resource" });
   try {
     const collection = getResourceCollection();
+    const candidateIds = new Set();
+    if (id) candidateIds.add(String(id));
+    if (req.body?.primaryId) candidateIds.add(String(req.body.primaryId));
+    if (req.body?.id) candidateIds.add(String(req.body.id));
+    if (req.body?.orderId) candidateIds.add(String(req.body.orderId));
+    if (resource === "orders") {
+      const cleanCandidate = (cid) => {
+        let str = String(cid || "").trim();
+        while (str.startsWith("ord_")) str = str.replace(/^ord_/, "");
+        str = str.replace(/_[a-z0-9]{4,12}$/i, "");
+        return str.trim();
+      };
+      if (id) {
+        const base = cleanCandidate(id);
+        if (base) candidateIds.add(base);
+      }
+      if (req.body?.id) {
+        const base = cleanCandidate(req.body.id);
+        if (base) candidateIds.add(base);
+      }
+      if (req.body?.primaryId) {
+        const base = cleanCandidate(req.body.primaryId);
+        if (base) candidateIds.add(base);
+      }
+    }
+    const idList = Array.from(candidateIds);
+
     if (collection) {
-      const existing = await collection.findOne({ resource, id });
-      const record = { ...(existing || {}), ...req.body, id, resource };
+      const queryOr = idList.flatMap(cid => [
+        { primaryId: cid },
+        { id: cid },
+        { orderId: cid },
+        ...(cid.length === 24 && /^[0-9a-fA-F]{24}$/.test(cid) ? [{ _id: cid }] : [])
+      ]);
+      const existing = await collection.findOne({ resource, $or: queryOr });
+
+      const realId = (existing?.id && !/^ord_/.test(existing.id))
+        ? existing.id
+        : (req.body.id && !/^ord_/.test(req.body.id) ? req.body.id : (req.body.orderId || id.replace(/^ord_/, "").replace(/_[a-z0-9]+$/i, "") || id));
+      const realPrimaryId = existing?.primaryId || realId;
+
+      const record = {
+        ...(existing || {}),
+        ...req.body,
+        id: realId,
+        primaryId: realPrimaryId,
+        resource
+      };
       delete record._id;
-      await collection.replaceOne({ resource, id }, { resource, ...record }, { upsert: true });
+      if (existing?._id) {
+        await collection.replaceOne({ resource, _id: existing._id }, { resource, ...record });
+      } else {
+        await collection.insertOne({ resource, ...record });
+      }
       return res.json(record);
     } else {
       const db = readDB();
       if (!db[resource]) db[resource] = [];
-      const index = db[resource].findIndex(item => String(item.id) === id);
+      const index = db[resource].findIndex(item =>
+        candidateIds.has(String(item.primaryId)) ||
+        candidateIds.has(String(item.id)) ||
+        candidateIds.has(String(item.orderId)) ||
+        (item._id && candidateIds.has(String(item._id)))
+      );
       if (index < 0) {
-        const record = { ...req.body, id, resource };
+        const realId = (req.body.id && !/^ord_/.test(req.body.id)) ? req.body.id : (req.body.orderId || id.replace(/^ord_/, "").replace(/_[a-z0-9]+$/i, "") || id);
+        const realPrimaryId = realId;
+        const record = { ...req.body, id: realId, primaryId: realPrimaryId, resource };
         db[resource].push(record);
         writeDB(db);
         return res.json(record);
       }
-      const record = { ...db[resource][index], ...req.body, id };
+      const existing = db[resource][index];
+      const realId = (existing?.id && !/^ord_/.test(existing.id))
+        ? existing.id
+        : (req.body.id && !/^ord_/.test(req.body.id) ? req.body.id : (req.body.orderId || id.replace(/^ord_/, "").replace(/_[a-z0-9]+$/i, "") || existing?.id || id));
+      const realPrimaryId = existing?.primaryId || realId;
+      const record = { ...existing, ...req.body, id: realId, primaryId: realPrimaryId, resource };
       db[resource][index] = record;
       writeDB(db);
       return res.json(record);
@@ -200,23 +522,64 @@ router.patch("/:resource/:id(*)", async (req, res, next) => {
   if (!validResource(resource)) return res.status(404).json({ error: "Unknown resource" });
   try {
     const collection = getResourceCollection();
+    const candidateIds = new Set();
+    if (id) candidateIds.add(String(id));
+    if (req.body?.primaryId) candidateIds.add(String(req.body.primaryId));
+    if (req.body?.id) candidateIds.add(String(req.body.id));
+    if (req.body?.orderId) candidateIds.add(String(req.body.orderId));
+    if (resource === "orders") {
+      const cleanCandidate = (cid) => {
+        let str = String(cid || "").trim();
+        while (str.startsWith("ord_")) str = str.replace(/^ord_/, "");
+        str = str.replace(/_[a-z0-9]{4,12}$/i, "");
+        return str.trim();
+      };
+      if (id) {
+        const base = cleanCandidate(id);
+        if (base) candidateIds.add(base);
+      }
+      if (req.body?.id) {
+        const base = cleanCandidate(req.body.id);
+        if (base) candidateIds.add(base);
+      }
+      if (req.body?.primaryId) {
+        const base = cleanCandidate(req.body.primaryId);
+        if (base) candidateIds.add(base);
+      }
+    }
+    const idList = Array.from(candidateIds);
+
     if (collection) {
-      const existing = await collection.findOne({ resource, id });
-      const record = { ...(existing || {}), ...req.body, id, resource };
+      const queryOr = idList.flatMap(cid => [
+        { primaryId: cid },
+        { id: cid },
+        { orderId: cid },
+        ...(cid.length === 24 && /^[0-9a-fA-F]{24}$/.test(cid) ? [{ _id: cid }] : [])
+      ]);
+      const existing = await collection.findOne({ resource, $or: queryOr });
+      if (!existing) return res.status(404).json({ error: "Record not found" });
+      const record = {
+        ...existing,
+        ...req.body,
+        id: existing.id || id,
+        primaryId: existing.primaryId || req.body.primaryId || id,
+        resource
+      };
       delete record._id;
-      await collection.replaceOne({ resource, id }, { resource, ...record }, { upsert: true });
+      // Strictly update by unique MongoDB _id so other orders sharing the same id (e.g. PO-123) are never overwritten!
+      await collection.replaceOne({ resource, _id: existing._id }, { resource, ...record }, { upsert: false });
       return res.json(record);
     } else {
       const db = readDB();
       if (!db[resource]) db[resource] = [];
-      const index = db[resource].findIndex(item => String(item.id) === id);
-      if (index < 0) {
-        const record = { ...req.body, id, resource };
-        db[resource].push(record);
-        writeDB(db);
-        return res.json(record);
-      }
-      const record = { ...db[resource][index], ...req.body, id };
+      const index = db[resource].findIndex(item =>
+        candidateIds.has(String(item.primaryId)) ||
+        candidateIds.has(String(item.id)) ||
+        candidateIds.has(String(item.orderId)) ||
+        (item._id && candidateIds.has(String(item._id)))
+      );
+      if (index < 0) return res.status(404).json({ error: "Record not found" });
+      const record = { ...db[resource][index], ...req.body, id: db[resource][index].id || id, primaryId: db[resource][index].primaryId || id };
       db[resource][index] = record;
       writeDB(db);
       return res.json(record);
@@ -228,31 +591,91 @@ router.delete("/:resource/:id(*)", async (req, res, next) => {
   const { resource } = req.params;
   const id = extractId(req.params.id);
   if (!validResource(resource)) return res.status(404).json({ error: "Unknown resource" });
+  const isPermanent = req.query.permanent === "true" || req.query.force === "true";
+
   try {
     const collection = getResourceCollection();
-    if (SOFT_DELETE_RESOURCES.includes(resource)) {
+    const queryFilter = { resource, $or: [{ primaryId: id }, { id }, { name: id }] };
+    if (SOFT_DELETE_RESOURCES.includes(resource) && !isPermanent) {
       const update = { $set: { isDeleted: true, deletedAt: new Date().toISOString() } };
       if (collection) {
-        const result = await collection.updateOne({ resource, id }, update);
+        const result = await collection.updateOne(queryFilter, update);
         if (!result.matchedCount) return res.status(404).json({ error: "Record not found" });
       } else {
-        const db = readDB(); const record = db[resource]?.find(item => String(item.id) === id);
+        const db = readDB();
+        const record = db[resource]?.find(item => String(item.primaryId) === id || String(item.id) === id);
         if (!record) return res.status(404).json({ error: "Record not found" });
         Object.assign(record, update.$set); writeDB(db);
       }
       return res.json({ id, deleted: true, isDeleted: true });
     }
+
     if (collection) {
-      const result = await collection.deleteOne({ resource, $or: [{ id }, { name: id }] });
-      return res.json({ id, deleted: result.deletedCount > 0 });
+      const result = await collection.deleteOne(queryFilter);
+      
+      // Cascade delete order-associated records from MongoDB
+      if (resource === "orders") {
+        try {
+          await collection.deleteMany({
+            resource: "tasks",
+            $or: [{ orderId: id }, { order: id }, { relatedOrderId: id }]
+          });
+          await collection.deleteMany({
+            resource: "notifications",
+            $or: [{ relatedId: id }, { orderId: id }, { eventKey: { $regex: id } }]
+          });
+          await collection.deleteMany({
+            resource: "supplierWork",
+            $or: [{ orderId: id }, { order: id }]
+          });
+          await collection.deleteMany({
+            resource: "certifications",
+            orderId: id
+          });
+          await collection.deleteMany({
+            resource: "compliances",
+            orderId: id
+          });
+          await collection.deleteMany({
+            resource: "debitNotes",
+            $or: [{ po: id }, { orderId: id }]
+          });
+          await collection.deleteMany({
+            resource: "capas",
+            $or: [{ po: id }, { orderId: id }]
+          });
+          const { getStorageCollection } = await import("../db/mongodb.js").catch(() => ({}));
+          const storageCol = getStorageCollection ? getStorageCollection() : null;
+          if (storageCol) {
+            await storageCol.deleteMany({
+              key: { $in: [`docs:${id}`, `highlights:${id}`, `chat:${id}`, `customTypes:${id}`] }
+            });
+          }
+        } catch (cascadeErr) {
+          console.warn("Cascade delete error in resources route:", cascadeErr.message);
+        }
+      }
+
+      return res.json({ id, deleted: result.deletedCount > 0, permanent: true });
     } else {
       const db = readDB();
       const before = db[resource]?.length || 0;
       db[resource] = (db[resource] || []).filter(item => String(item.id) !== id && String(item.name) !== id);
+      
+      // Cascade delete from local DB
+      if (resource === "orders") {
+        ["tasks", "notifications", "supplierWork", "certifications", "compliances", "debitNotes", "capas"].forEach(relRes => {
+          if (Array.isArray(db[relRes])) {
+            db[relRes] = db[relRes].filter(r =>
+              r.orderId !== id && r.order !== id && r.po !== id && r.relatedId !== id
+            );
+          }
+        });
+      }
+
       writeDB(db);
-      return res.json({ id, deleted: db[resource].length < before });
+      return res.json({ id, deleted: db[resource].length < before, permanent: true });
     }
-    res.json({ id, deleted: true });
   } catch (error) { next(error); }
 });
 

@@ -58,7 +58,7 @@ const DEFAULT_GENERIC_KPIS = [
 function getAppraisalRecommendation(score) {
   if (score < 60) {
     return {
-      title: "Appraisal recommendation: Intensive support required",
+      title: "Performance concern",
       sub: `Score ${score}/100 · Performance concern`,
       bg: "#FEF2F2",
       border: "#FCA5A5",
@@ -67,80 +67,227 @@ function getAppraisalRecommendation(score) {
       badgeColor: "#EF4444"
     };
   }
-  if (score < 75) {
+  if (score < 80) {
     return {
-      title: "Appraisal recommendation: Performance improvement plan recommended",
-      sub: `Score ${score}/100 · Needs improvement`,
-      bg: "#FFFBEB",
-      border: "#FCD34D",
-      text: "#92400E",
-      badge: "Needs improvement",
-      badgeColor: "#F59E0B"
-    };
-  }
-  if (score < 90) {
-    return {
-      title: "Appraisal recommendation: Solid performer · Meets expectations",
-      sub: `Score ${score}/100 · Meets expectations`,
+      title: "Good Progress",
+      sub: `Score ${score}/100 · Good Progress`,
       bg: "#EFF6FF",
       border: "#93C5FD",
       text: "#1E40AF",
-      badge: "Meets expectations",
+      badge: "Good Progress",
       badgeColor: "#2563EB"
     };
   }
   return {
-    title: "Appraisal recommendation: Outstanding performer · Ready for leadership / promotion",
+    title: "Top Performer",
     sub: `Score ${score}/100 · High performer`,
     bg: "#F0FDF4",
     border: "#86EFAC",
     text: "#166534",
-    badge: "High performer",
+    badge: "Top Performer",
     badgeColor: "#16A34A"
+  };
+}
+
+const DONE_STATUSES = new Set(["done", "completed", "complete", "closed"]);
+const normalizeName = value => String(value || "").trim().toLowerCase();
+const isDone = item => DONE_STATUSES.has(normalizeName(item?.status)) || Number(item?.progress) >= 100;
+const parseDate = value => {
+  if (!value || typeof value !== "string" || /^day\s/i.test(value)) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+export function computeEmployeeKPIMetrics(employee, orders = [], tasks = [], complaints = [], deptName = "", buyers = []) {
+  const employeeName = normalizeName(employee?.name || employee?.username);
+  const employeeUsername = normalizeName(employee?.username);
+  const employeeId = String(employee?.id || employee?.user?.id || "");
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+  const assignedItems = [];
+
+  const matchesEmployee = (target) => {
+    if (!target) return false;
+    const cleanTarget = normalizeName(target);
+    if (!cleanTarget || cleanTarget === "unassigned" || cleanTarget === "assigned") return false;
+    return (
+      cleanTarget === employeeName ||
+      (employeeUsername && cleanTarget === employeeUsername) ||
+      cleanTarget.includes(employeeName) ||
+      (employeeName && employeeName.includes(cleanTarget))
+    );
+  };
+
+  (Array.isArray(orders) ? orders : []).forEach(order => {
+    const buyerObj = Array.isArray(buyers) ? buyers.find(b => 
+      (order.buyerId && b.id === order.buyerId) || 
+      (b.name && String(b.name).toLowerCase() === String(order.buyer || "").trim().toLowerCase())
+    ) : null;
+
+    // Check if employee is the assigned merchandiser, fabric manager, trims in-charge, or artwork designer for this buyer/order
+    const isMappedToOrder = Boolean(
+      employeeId &&
+      ((Array.isArray(order?.merchandiserIds) && order.merchandiserIds.includes(employeeId)) ||
+       (Array.isArray(order?.fabricManagerIds) && order.fabricManagerIds.includes(employeeId)) ||
+       (Array.isArray(order?.trimsManagerIds) && order.trimsManagerIds.includes(employeeId)) ||
+       (Array.isArray(order?.artworkManagerIds) && order.artworkManagerIds.includes(employeeId)) ||
+       (buyerObj && Array.isArray(buyerObj.merchandiserIds) && buyerObj.merchandiserIds.includes(employeeId)) ||
+       (buyerObj && Array.isArray(buyerObj.fabricManagerIds) && buyerObj.fabricManagerIds.includes(employeeId)) ||
+       (buyerObj && Array.isArray(buyerObj.trimsManagerIds) && buyerObj.trimsManagerIds.includes(employeeId)) ||
+       (buyerObj && Array.isArray(buyerObj.artworkManagerIds) && buyerObj.artworkManagerIds.includes(employeeId)) ||
+       matchesEmployee(order?.merchandiser) ||
+       matchesEmployee(order?.fabricManager) ||
+       matchesEmployee(order?.trimsManager) ||
+       matchesEmployee(order?.artworkManager))
+    );
+
+    (Array.isArray(order?.stages) ? order.stages : []).forEach(stage => {
+      if (!stage || (deptName && stage.dept !== deptName)) return;
+
+      const directAssigneeMatch = matchesEmployee(stage.assignee) || matchesEmployee(stage.assignedTo);
+      const completedByMatch = matchesEmployee(stage.completedBy) || matchesEmployee(stage.updatedBy);
+
+      // If user is directly assigned or completed it:
+      if (directAssigneeMatch || completedByMatch) {
+        assignedItems.push({ ...stage, source: "stage", orderId: order.id || order.primaryId });
+      } else if (isMappedToOrder) {
+        // If stages in this department don't have personal assignees set yet, 
+        // but this employee is the designated manager for this order's buyer:
+        assignedItems.push({ ...stage, source: "stage", orderId: order.id || order.primaryId });
+      }
+    });
+  });
+
+  (Array.isArray(tasks) ? tasks : []).forEach(task => {
+    if (!task || (deptName && task.dept && task.dept !== deptName && task.dept !== "All")) return;
+    const matchesName = matchesEmployee(task.assignedTo) || matchesEmployee(task.assignee) || matchesEmployee(task.userName);
+    const matchesId = employeeId && String(task.userId || task.assignedUserId || "") === employeeId;
+    if (matchesName || matchesId) assignedItems.push({ ...task, source: "task" });
+  });
+
+  const completedItems = assignedItems.filter(isDone);
+  const delayedItems = assignedItems.filter(item => {
+    if (normalizeName(item.status) === "delayed") return true;
+    if (isDone(item)) return false;
+    const targetDate = parseDate(item.targetDate || item.dueDate || item.plannedDate);
+    return targetDate ? targetDate < today : Boolean(item.reason);
+  });
+  const onTimeItems = completedItems.filter(item => {
+    const targetDate = parseDate(item.targetDate || item.dueDate || item.plannedDate);
+    const completedDate = parseDate(item.actualCompletionDate || item.completedAt || item.updatedAt);
+    return !targetDate || !completedDate || completedDate <= targetDate;
+  });
+  const approvalItems = assignedItems.filter(item => /approval|approve|sign.?off/i.test(`${item.name || ""} ${item.title || ""} ${item.stageName || ""}`));
+  const approvalCompleted = approvalItems.filter(isDone);
+  const approvalOnTime = approvalCompleted.filter(item => {
+    const targetDate = parseDate(item.targetDate || item.dueDate || item.plannedDate);
+    const completedDate = parseDate(item.actualCompletionDate || item.completedAt || item.updatedAt);
+    return !targetDate || !completedDate || completedDate <= targetDate;
+  });
+  const personalCompletionRate = assignedItems.length > 0 ? Math.round((completedItems.length / assignedItems.length) * 100) : 0;
+  const personalOnTimeRate = completedItems.length > 0 ? Math.round((onTimeItems.length / completedItems.length) * 100) : (assignedItems.length > 0 ? 100 : 0);
+  const approvalRate = approvalItems.length > 0 ? Math.round((approvalOnTime.length / approvalItems.length) * 100) : personalOnTimeRate;
+
+  const employeeIssues = (Array.isArray(complaints) ? complaints : []).filter(issue => {
+    const issueUser = normalizeName(issue?.assignedTo || issue?.assignee || issue?.taggedUser || issue?.completedBy);
+    const unresolved = !["resolved", "closed", "done"].includes(normalizeName(issue?.status));
+    return unresolved && issueUser === employeeName;
+  });
+  const reportedIssues = assignedItems.filter(item => {
+    const issueText = `${item.reason || ""} ${item.rejectionNote || ""} ${item.rejectionReason || ""} ${item.mistake || ""} ${item.qualityIssue || ""}`;
+    return issueText.trim() && !["no delay flagged", "none", "no issue"].includes(normalizeName(issueText));
+  });
+  const recentCutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const recentActivityCount = assignedItems.filter(item => {
+    const date = parseDate(item.updatedAt || item.completedAt || item.actualCompletionDate || item.createdAt);
+    return date && date.getTime() >= recentCutoff;
+  }).length;
+  const activityWeight = Math.min(20, recentActivityCount * 5);
+  const complaintDeduction = employeeIssues.reduce((sum, issue) => sum + (issue.severity === "critical" || issue.priority === "high" ? 10 : 5), 0);
+  const issueDeduction = complaintDeduction + reportedIssues.length * 5;
+
+  let overallScore = 0;
+  if (assignedItems.length > 0) {
+    const baseScore = (personalCompletionRate * 0.6) + (personalOnTimeRate * 0.4);
+    overallScore = Math.min(100, Math.max(0, Math.round(baseScore + activityWeight - issueDeduction)));
+  } else {
+    // If no direct tasks assigned yet, score is 0 until they complete or get assigned tasks
+    overallScore = 0;
+  }
+
+  return {
+    assignedItems,
+    totalAssignedTasks: assignedItems.length,
+    completedTasks: completedItems.length,
+    delayedTasks: delayedItems.length,
+    onTimeTasks: onTimeItems.length,
+    personalCompletionRate,
+    personalOnTimeRate,
+    approvalRate,
+    recentActivityCount,
+    activityWeight,
+    issueCount: employeeIssues.length + reportedIssues.length,
+    issueDeduction,
+    overallScore
   };
 }
 
 export function DepartmentPerformanceAndKPI({
   deptName,
   roles = [],
+  mappedUsers = [],
+  orders = [],
+  buyers = [],
+  tasks = [],
+  complaints = [],
   allDeptTasks = [],
   doneTasks = [],
   processTasks = [],
 }) {
-  // Extract staff list from roles
+  // Extract staff list from mappedUsers (real assigned personnel) AND roles
   const staffList = useMemo(() => {
     const list = [];
-    roles.forEach(r => {
-      if (r.name && r.name !== "—") {
-        r.name.split(/&|,/).forEach(n => {
-          const clean = n.trim();
-          if (clean && !list.some(s => s.name === clean)) {
-            list.push({
-              name: clean,
-              title: r.title || "Staff",
-              initials: clean.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2)
-            });
-          }
-        });
-      }
-    });
-    if (list.length === 0) {
-      list.push({
-        name: `${deptName} Head`,
-        title: "Manager",
-        initials: deptName.slice(0, 2).toUpperCase()
+    // 1. Add mappedUsers (from Settings -> User Access / teams assigned to this department)
+    if (Array.isArray(mappedUsers)) {
+      mappedUsers.forEach(u => {
+        const name = u.name || u.username;
+        if (name && !list.some(s => s.name.toLowerCase() === name.toLowerCase())) {
+          list.push({
+            name,
+            title: u.role || u.title || "Staff",
+            initials: (u.name || u.username || "U").split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2),
+            user: u
+          });
+        }
+      });
+    }
+    // 2. Add roles (from legacy orgStructure if any)
+    if (Array.isArray(roles)) {
+      roles.forEach(r => {
+        if (r.name && r.name !== "—") {
+          r.name.split(/&|,/).forEach(n => {
+            const clean = n.trim();
+            if (clean && !list.some(s => s.name.toLowerCase() === clean.toLowerCase())) {
+              list.push({
+                name: clean,
+                title: r.title || "Staff",
+                initials: clean.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2)
+              });
+            }
+          });
+        }
       });
     }
     return list;
-  }, [roles, deptName]);
+  }, [roles, mappedUsers]);
 
   // Live Department Performance Metrics
-  const totalTasksCount = allDeptTasks.length > 0 ? allDeptTasks.length : 54;
-  const completedCount = allDeptTasks.length > 0 ? doneTasks.length : 19;
-  const inProgressCount = allDeptTasks.length > 0 ? processTasks.length : 2;
+  const totalTasksCount = allDeptTasks.length;
+  const completedCount = doneTasks.length;
+  const inProgressCount = processTasks.length;
   const delayedCount = allDeptTasks.filter(t => t.stage?.status === "delayed" || t.stage?.reason).length;
 
-  const taskCompletionRate = totalTasksCount > 0 ? Math.round((completedCount / totalTasksCount) * 100) : 35;
+  const taskCompletionRate = totalTasksCount > 0 ? Math.round((completedCount / totalTasksCount) * 100) : 0;
   const onTimeRate = totalTasksCount > 0 ? Math.max(0, Math.round(((totalTasksCount - delayedCount) / totalTasksCount) * 100)) : 100;
 
   // Selected KPI template
@@ -165,6 +312,14 @@ export function DepartmentPerformanceAndKPI({
 
   const [expandedStaff, setExpandedStaff] = useState(null);
 
+  const employeeMetrics = useMemo(() => {
+    const metrics = {};
+    staffList.forEach(staff => {
+      metrics[staff.name] = computeEmployeeKPIMetrics(staff, orders, tasks, complaints, deptName, buyers);
+    });
+    return metrics;
+  }, [staffList, orders, tasks, complaints, deptName, buyers]);
+
   useEffect(() => {
     try {
       localStorage.setItem("loom_dept_kpi_scores", JSON.stringify(scoresState));
@@ -181,7 +336,10 @@ export function DepartmentPerformanceAndKPI({
     const key = `${deptName}_${staffName}_${kpi.name}`;
     if (scoresState[key] !== undefined) return scoresState[key];
     if (kpi.isAuto) {
-      return kpi.defaultMetric === "completion" ? taskCompletionRate : onTimeRate;
+      const metrics = employeeMetrics[staffName] || {};
+      if (/approval/i.test(kpi.name)) return metrics.approvalRate ?? 0;
+      if (/on.?time|tracking|output|quality|readiness|control|right rate/i.test(kpi.name)) return metrics.personalOnTimeRate ?? 100;
+      return metrics.personalCompletionRate ?? 0;
     }
     return kpi.defaultValue !== undefined ? kpi.defaultValue : 50;
   };
@@ -203,6 +361,8 @@ export function DepartmentPerformanceAndKPI({
   };
 
   const calculateOverallScore = (staffName) => {
+    const liveScore = employeeMetrics[staffName]?.overallScore;
+    if (liveScore !== undefined) return liveScore;
     let totalWeight = 0;
     let weightedSum = 0;
     kpiTemplate.forEach(kpi => {
@@ -210,7 +370,7 @@ export function DepartmentPerformanceAndKPI({
       weightedSum += val * kpi.weight;
       totalWeight += kpi.weight;
     });
-    return totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 59;
+    return totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 0;
   };
 
   return (
@@ -333,8 +493,14 @@ export function DepartmentPerformanceAndKPI({
 
         {/* Staff List */}
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {staffList.map(staff => {
+          {staffList.length === 0 ? (
+            <div style={{ padding: "28px 16px", textAlign: "center", color: "#64748B", background: "#F8FAFC", borderRadius: 8, border: "1px dashed #E2E8F0" }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#334155" }}>No personnel assigned yet</div>
+              <div style={{ fontSize: 12, marginTop: 4 }}>Click &quot;Edit Department&quot; above to assign team members and managers to track their KPIs.</div>
+            </div>
+          ) : staffList.map(staff => {
             const isExpanded = expandedStaff === staff.name;
+            const metrics = employeeMetrics[staff.name] || computeEmployeeKPIMetrics(staff, orders, tasks, complaints, deptName, buyers);
             const overallScore = calculateOverallScore(staff.name);
             const appraisal = getAppraisalRecommendation(overallScore);
             const notesText = notesState[`${deptName}_${staff.name}`] || "";
@@ -388,7 +554,7 @@ export function DepartmentPerformanceAndKPI({
                         {staff.name}
                       </div>
                       <div style={{ fontSize: 11.5, color: "#64748B", marginTop: 2 }}>
-                        {taskCompletionRate}% done · {onTimeRate}% on-time
+                        {metrics.personalCompletionRate}% done · {metrics.personalOnTimeRate}% on-time · {metrics.totalAssignedTasks} assigned
                       </div>
                     </div>
                   </div>
@@ -427,15 +593,15 @@ export function DepartmentPerformanceAndKPI({
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 20 }}>
                       <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 8, padding: "12px 16px" }}>
                         <div style={{ fontSize: 11, color: "#64748B", marginBottom: 4 }}>Task completion</div>
-                        <div style={{ fontSize: 22, fontWeight: 700, color: taskCompletionRate < 50 ? "#E11D48" : "#10B981" }}>
-                          {taskCompletionRate}%
+                        <div style={{ fontSize: 22, fontWeight: 700, color: metrics.personalCompletionRate < 50 ? "#E11D48" : "#10B981" }}>
+                          {metrics.personalCompletionRate}%
                         </div>
                       </div>
 
                       <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 8, padding: "12px 16px" }}>
                         <div style={{ fontSize: 11, color: "#64748B", marginBottom: 4 }}>On-time rate</div>
                         <div style={{ fontSize: 22, fontWeight: 700, color: "#10B981" }}>
-                          {onTimeRate}%
+                          {metrics.personalOnTimeRate}%
                         </div>
                       </div>
                     </div>
@@ -455,9 +621,21 @@ export function DepartmentPerformanceAndKPI({
                                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                                   <span style={{ fontWeight: 600, color: "#1E293B" }}>{kpi.name}</span>
                                   {kpi.isAuto && (
-                                    <span style={{ fontSize: 10, background: "#CCFBF1", color: "#0F766E", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>
-                                      Auto
-                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const key = `${deptName}_${staff.name}_${kpi.name}`;
+                                        setScoresState(prev => {
+                                          const next = { ...prev };
+                                          delete next[key];
+                                          return next;
+                                        });
+                                      }}
+                                      style={{ border: 0, background: "#CCFBF1", color: "#0F766E", padding: "1px 6px", borderRadius: 4, fontSize: 10, fontWeight: 600, cursor: "pointer" }}
+                                      title="Reset to live metric"
+                                    >
+                                      {scoresState[`${deptName}_${staff.name}_${kpi.name}`] !== undefined ? "Manual · reset" : "Auto"}
+                                    </button>
                                   )}
                                 </div>
                                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>

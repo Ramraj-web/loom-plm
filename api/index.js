@@ -8,6 +8,15 @@ export const RESOURCE_SEEDS = {
     { id: "DR-5566", buyer: "Next", country: "United Kingdom", season: "SS26", style: "Dress", qty: 5300, ship: "23 May", risk: "medium", status: "Delayed" },
     { id: "PL-3321", buyer: "Zara", country: "Spain", season: "SS26", style: "Polo", qty: 9100, ship: "28 May", risk: "low", status: "On Track" },
   ],
+  users: [],
+  teams: [],
+  buyers: [],
+  units: [
+    { id: "unit-1", name: "Unit 1 - Main Apparel Factory", code: "UNT-01", location: "Tirupur Main Road", lines: 12, contactPerson: "S. Murugan", mobile: "+91 98421 11001", status: "Active" },
+    { id: "unit-2", name: "Unit 2 - Knits & Outerwear", code: "UNT-02", location: "Avinashi SEZ Park", lines: 8, contactPerson: "K. Ramesh", mobile: "+91 98421 22002", status: "Active" },
+    { id: "unit-3", name: "Unit 3 - Printing & VAP Facility", code: "UNT-03", location: "Angeripalayam", lines: 4, contactPerson: "P. Anand", mobile: "+91 98421 33003", status: "Active" }
+  ],
+  dashboard_rotation: [],
   staff: [
     { id: "staff-arasinth-raja", name: "Arasinth Raja", title: "Manager", dept: "Merchandising", status: "present" },
     { id: "staff-suresh", name: "Suresh", title: "Senior", dept: "Merchandising", status: "present" },
@@ -457,6 +466,12 @@ async function getMongoCollections() {
 
     const storage = cachedDb.collection("storage");
     const resources = cachedDb.collection("resources");
+
+    if (!global._indexesInitialized) {
+      global._indexesInitialized = true;
+      resources.createIndex({ resource: 1, id: 1 }).catch(() => {});
+      resources.createIndex({ resource: 1, isDeleted: 1 }).catch(() => {});
+    }
     
     return { resources, storage };
   } catch (err) {
@@ -483,10 +498,49 @@ const SOFT_DELETE_RESOURCES = [
   "compliances",
   "debitNotes",
   "capas",
+  "buyers",
   "notifications",
   "suppliers",
   "supplierWork",
+  "units",
 ];
+
+const NOTIFICATION_EXPIRY_DAYS = 15;
+const NOTIFICATION_EXPIRY_MS = NOTIFICATION_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
+let lastNotificationCleanupAt = 0;
+
+async function cleanExpiredNotifications(collection, memory) {
+  const now = Date.now();
+  // Throttle database cleanup calls to once every 60 seconds
+  if (now - lastNotificationCleanupAt < 60000) return;
+  lastNotificationCleanupAt = now;
+
+  const cutoffDate = new Date(now - NOTIFICATION_EXPIRY_MS);
+  const cutoffIso = cutoffDate.toISOString();
+
+  if (collection) {
+    try {
+      await collection.deleteMany({
+        resource: "notifications",
+        createdAt: {
+          $type: "string",
+          $lte: cutoffIso
+        }
+      });
+    } catch (err) {
+      console.warn("Mongo notifications expiry cleanup warning:", err.message);
+    }
+  }
+
+  if (memory && Array.isArray(memory.notifications)) {
+    memory.notifications = memory.notifications.filter(n => {
+      if (!n || !n.createdAt || typeof n.createdAt !== "string") return true;
+      const t = new Date(n.createdAt).getTime();
+      if (isNaN(t)) return true;
+      return now - t < NOTIFICATION_EXPIRY_MS;
+    });
+  }
+}
 
 function validResource(name) {
   return Object.prototype.hasOwnProperty.call(RESOURCE_SEEDS, name);
@@ -547,17 +601,59 @@ export default async function handler(req, res) {
 
       // GET /api/resources/:resource or /api/resources/:resource/:id
       if (req.method === "GET") {
+        if (resource === "notifications") {
+          cleanExpiredNotifications(mongoCols?.resources, memoryDB).catch(() => {});
+        }
+
         if (mongoCols?.resources) {
           try {
             if (id) {
-              const record = await mongoCols.resources.findOne({ resource, id }, { projection: { _id: 0 } });
+              const record = await mongoCols.resources.findOne({
+                resource,
+                $or: [{ id }, { primaryId: id }, { _id: id }, { orderId: id }]
+              }, { projection: { _id: 0 } });
               if (!record) return res.status(404).json({ error: "Record not found" });
+              if (isSoftDelete && !showAll && !isTrash && record.isDeleted === true) {
+                return res.status(404).json({ error: "Record not found" });
+              }
               return res.status(200).json(record);
             }
             const filter = isSoftDelete && !showAll
               ? { resource, isDeleted: isTrash ? true : { $ne: true } }
               : { resource };
             const items = await mongoCols.resources.find(filter).project({ _id: 0 }).toArray();
+            if (resource === "orders") {
+              const cleanBaseId = (idStr) => {
+                let str = String(idStr || "").trim();
+                while (str.startsWith("ord_")) str = str.replace(/^ord_/, "");
+                str = str.replace(/_[a-z0-9]{4,12}$/i, "");
+                return str.trim();
+              };
+
+              const map = new Map();
+              items.forEach(o => {
+                const rawId = String(o.id || o.orderId || o.primaryId || "");
+                if (rawId.startsWith("ord_ord_") || /_C0\d_[a-z0-9]+/i.test(rawId)) return;
+                const baseKey = cleanBaseId(rawId).toUpperCase();
+                if (!baseKey) return;
+                if (!map.has(baseKey)) {
+                  map.set(baseKey, o);
+                } else {
+                  // Merge stages if necessary
+                  const existing = map.get(baseKey);
+                  if (Array.isArray(o.stages) && Array.isArray(existing.stages)) {
+                    o.stages.forEach((s, idx) => {
+                      if (s.status === "done" && existing.stages[idx] && existing.stages[idx].status !== "done") {
+                        existing.stages[idx] = { ...s };
+                      }
+                    });
+                  }
+                  if (o.status && o.status !== "On Track") existing.status = o.status;
+                  if (o.completed) existing.completed = true;
+                }
+              });
+              return res.status(200).json(Array.from(map.values()));
+            }
             return res.status(200).json(items);
           } catch (e) {
             console.error("Mongo resource GET error:", e.message);
@@ -569,8 +665,13 @@ export default async function handler(req, res) {
         }
 
         if (id) {
-          const item = memoryDB[resource].find(r => String(r.id) === id);
+          const item = memoryDB[resource].find(r =>
+            String(r.id) === id || String(r.primaryId) === id || String(r._id) === id || String(r.orderId) === id
+          );
           if (!item) return res.status(404).json({ error: "Record not found" });
+          if (isSoftDelete && !showAll && !isTrash && item.isDeleted === true) {
+            return res.status(404).json({ error: "Record not found" });
+          }
           return res.status(200).json(item);
         }
         const items = memoryDB[resource].filter(r => {
@@ -594,7 +695,7 @@ export default async function handler(req, res) {
         if (mongoCols?.resources) {
           try {
             delete record._id;
-            await mongoCols.resources.replaceOne({ resource, id: recordId }, { resource, ...record }, { upsert: true });
+            await mongoCols.resources.insertOne({ resource, ...record });
             return res.status(201).json(record);
           } catch (e) {
             console.error("Mongo resource POST error:", e.message);
@@ -602,7 +703,9 @@ export default async function handler(req, res) {
         }
 
         if (!Array.isArray(memoryDB[resource])) memoryDB[resource] = [];
-        const existingIdx = memoryDB[resource].findIndex(r => String(r.id) === String(recordId));
+        const existingIdx = memoryDB[resource].findIndex(r =>
+          String(r.id) === String(recordId) || (record.primaryId && String(r.primaryId) === String(record.primaryId))
+        );
         if (existingIdx >= 0) memoryDB[resource][existingIdx] = record;
         else memoryDB[resource] = [record, ...memoryDB[resource]];
         return res.status(201).json(record);
@@ -613,12 +716,51 @@ export default async function handler(req, res) {
         if (!id) return res.status(400).json({ error: "Record ID required" });
         const body = parsedBody;
 
+        const cleanCandidate = (cid) => {
+          let str = String(cid || "").trim();
+          while (str.startsWith("ord_")) str = str.replace(/^ord_/, "");
+          str = str.replace(/_[a-z0-9]{4,12}$/i, "");
+          return str.trim();
+        };
+
+        const candidateIds = new Set([id, body?.id, body?.primaryId, body?.orderId].filter(Boolean).map(String));
+        if (resource === "orders") {
+          Array.from(candidateIds).forEach(cid => {
+            const base = cleanCandidate(cid);
+            if (base) candidateIds.add(base);
+          });
+        }
+
         if (mongoCols?.resources) {
           try {
-            const existing = await mongoCols.resources.findOne({ resource, id });
-            const updated = { ...(existing || {}), ...body, id, resource };
+            const query = {
+              resource,
+              $or: Array.from(candidateIds).flatMap(cid => [
+                { id: cid },
+                { primaryId: cid },
+                { orderId: cid },
+                ...(cid.length === 24 && /^[0-9a-fA-F]{24}$/.test(cid) ? [{ _id: cid }] : [])
+              ])
+            };
+            const existing = await mongoCols.resources.findOne(query);
+            const realId = (existing?.id && !/^ord_/.test(existing.id))
+              ? existing.id
+              : (body?.id && !/^ord_/.test(body.id) ? body.id : (body?.orderId || cleanCandidate(id) || id));
+            const realPrimaryId = existing?.primaryId || realId;
+
+            const updated = {
+              ...(existing || {}),
+              ...body,
+              id: realId,
+              primaryId: realPrimaryId,
+              resource
+            };
             delete updated._id;
-            await mongoCols.resources.replaceOne({ resource, id }, { resource, ...updated }, { upsert: true });
+            if (existing) {
+              await mongoCols.resources.updateOne({ resource, _id: existing._id }, { $set: updated });
+            } else {
+              await mongoCols.resources.insertOne({ resource, id: realId, ...updated });
+            }
             return res.status(200).json(updated);
           } catch (e) {
             console.error("Mongo resource PUT/PATCH error:", e.message);
@@ -626,17 +768,22 @@ export default async function handler(req, res) {
         }
 
         if (!Array.isArray(memoryDB[resource])) memoryDB[resource] = [];
-        const index = memoryDB[resource].findIndex(r => String(r.id) === id);
+        const index = memoryDB[resource].findIndex(r =>
+          candidateIds.has(String(r.id)) || candidateIds.has(String(r.primaryId)) || candidateIds.has(String(r._id)) || candidateIds.has(String(r.orderId))
+        );
         if (index < 0) {
-          const newRecord = { ...body, id, resource };
+          const realId = (resource === "orders" && cleanCandidate(body?.id || id)) || body?.id || id;
+          const newRecord = { ...body, id: realId, primaryId: realId, resource };
           memoryDB[resource].push(newRecord);
           return res.status(200).json(newRecord);
         }
 
+        const realId = memoryDB[resource][index].id || id;
         const updated = {
           ...memoryDB[resource][index],
           ...body,
-          id,
+          id: realId,
+          primaryId: memoryDB[resource][index].primaryId || realId,
         };
         memoryDB[resource][index] = updated;
         return res.status(200).json(updated);
@@ -645,41 +792,255 @@ export default async function handler(req, res) {
       // DELETE /api/resources/:resource/:id
       if (req.method === "DELETE") {
         if (!id) return res.status(400).json({ error: "Record ID required" });
+        const isPermanent = url.searchParams.get("permanent") === "true" || url.searchParams.get("force") === "true";
 
         if (mongoCols?.resources) {
           try {
-            if (isSoftDelete) {
+            const query = {
+              resource,
+              $or: [{ id }, { primaryId: id }, { _id: id }, { orderId: id }, { name: id }]
+            };
+            const target = await mongoCols.resources.findOne(query);
+            if (!target) return res.status(404).json({ error: "Record not found" });
+
+            const targetIdentifiers = Array.from(new Set([target.id, target.primaryId, target._id, target.orderId, id].filter(Boolean).map(String)));
+
+            if (isSoftDelete && !isPermanent) {
               const update = { $set: { isDeleted: true, deletedAt: new Date().toISOString() } };
-              const result = await mongoCols.resources.updateOne({ resource, id }, update);
-              if (!result.matchedCount) return res.status(404).json({ error: "Record not found" });
+              if (resource === "orders") {
+                await mongoCols.resources.updateMany({
+                  resource: "orders",
+                  $or: [
+                    { id: { $in: targetIdentifiers } },
+                    { primaryId: { $in: targetIdentifiers } },
+                    { orderId: { $in: targetIdentifiers } }
+                  ]
+                }, update);
+              } else {
+                await mongoCols.resources.updateOne(query, update);
+              }
+
+              // Cascade soft-delete related tasks
+              if (resource === "orders") {
+                try {
+                  await mongoCols.resources.updateMany({
+                    resource: "tasks",
+                    $or: [
+                      { orderId: { $in: targetIdentifiers } },
+                      { order: { $in: targetIdentifiers } },
+                      { relatedOrderId: { $in: targetIdentifiers } }
+                    ]
+                  }, update);
+                } catch (taskErr) {
+                  console.warn("Cascade soft-delete tasks error:", taskErr.message);
+                }
+              }
+
               return res.status(200).json({ id, deleted: true, isDeleted: true });
             }
-            const result = await mongoCols.resources.deleteOne({ resource, $or: [{ id }, { name: id }] });
-            return res.status(200).json({ id, deleted: result.deletedCount > 0 });
+
+            // Permanent deletion from MongoDB
+            let result;
+            if (resource === "orders") {
+              result = await mongoCols.resources.deleteMany({
+                resource: "orders",
+                $or: [
+                  { id: { $in: targetIdentifiers } },
+                  { primaryId: { $in: targetIdentifiers } },
+                  { orderId: { $in: targetIdentifiers } }
+                ]
+              });
+            } else {
+              result = await mongoCols.resources.deleteOne(query);
+            }
+
+            // If an order is permanently deleted, cascade delete related records from MongoDB
+            if (resource === "orders") {
+              try {
+                // Delete tasks associated with this order
+                await mongoCols.resources.deleteMany({
+                  resource: "tasks",
+                  $or: [
+                    { orderId: { $in: targetIdentifiers } },
+                    { order: { $in: targetIdentifiers } },
+                    { relatedOrderId: { $in: targetIdentifiers } }
+                  ]
+                });
+                // Delete notifications associated with this order
+                await mongoCols.resources.deleteMany({
+                  resource: "notifications",
+                  $or: [
+                    { relatedId: { $in: targetIdentifiers } },
+                    { orderId: { $in: targetIdentifiers } },
+                    ...targetIdentifiers.map(ti => ({ eventKey: { $regex: ti } }))
+                  ]
+                });
+                // Delete supplier work associated with this order
+                await mongoCols.resources.deleteMany({
+                  resource: "supplierWork",
+                  $or: [
+                    { orderId: { $in: targetIdentifiers } },
+                    { order: { $in: targetIdentifiers } }
+                  ]
+                });
+                // Delete certifications associated with this order
+                await mongoCols.resources.deleteMany({
+                  resource: "certifications",
+                  orderId: { $in: targetIdentifiers }
+                });
+                // Delete compliances associated with this order
+                await mongoCols.resources.deleteMany({
+                  resource: "compliances",
+                  orderId: { $in: targetIdentifiers }
+                });
+                // Delete debit notes associated with this order
+                await mongoCols.resources.deleteMany({
+                  resource: "debitNotes",
+                  $or: [
+                    { po: { $in: targetIdentifiers } },
+                    { orderId: { $in: targetIdentifiers } }
+                  ]
+                });
+                // Delete capas associated with this order
+                await mongoCols.resources.deleteMany({
+                  resource: "capas",
+                  $or: [
+                    { po: { $in: targetIdentifiers } },
+                    { orderId: { $in: targetIdentifiers } }
+                  ]
+                });
+                // Delete order-specific storage keys
+                if (mongoCols?.storage) {
+                  const storageKeys = [];
+                  targetIdentifiers.forEach(ti => {
+                    storageKeys.push(`docs:${ti}`, `highlights:${ti}`, `chat:${ti}`, `customTypes:${ti}`);
+                  });
+                  await mongoCols.storage.deleteMany({
+                    key: { $in: storageKeys }
+                  });
+                }
+              } catch (cascadeErr) {
+                console.warn("Cascade delete warning for order", id, cascadeErr.message);
+              }
+            }
+
+            return res.status(200).json({ id, deleted: result.deletedCount > 0, permanent: true });
           } catch (e) {
             console.error("Mongo resource DELETE error:", e.message);
           }
         }
 
         if (!Array.isArray(memoryDB[resource])) memoryDB[resource] = [];
-        const index = memoryDB[resource].findIndex(r => String(r.id) === id);
+        const index = memoryDB[resource].findIndex(r =>
+          String(r.id) === id || String(r.primaryId) === id || String(r._id) === id || String(r.orderId) === id || String(r.name) === id
+        );
         if (index < 0) return res.status(404).json({ error: "Record not found" });
 
-        if (isSoftDelete) {
-          memoryDB[resource][index] = {
-            ...memoryDB[resource][index],
-            isDeleted: true,
-            deletedAt: new Date().toISOString(),
-          };
+        const target = memoryDB[resource][index];
+        const targetIdentifiers = Array.from(new Set([target.id, target.primaryId, target._id, target.orderId, id].filter(Boolean).map(String)));
+
+        if (isSoftDelete && !isPermanent) {
+          if (resource === "orders") {
+            memoryDB[resource] = memoryDB[resource].map(r => {
+              if (targetIdentifiers.includes(String(r.id)) || targetIdentifiers.includes(String(r.primaryId)) || targetIdentifiers.includes(String(r.orderId))) {
+                return { ...r, isDeleted: true, deletedAt: new Date().toISOString() };
+              }
+              return r;
+            });
+          } else {
+            memoryDB[resource][index] = {
+              ...memoryDB[resource][index],
+              isDeleted: true,
+              deletedAt: new Date().toISOString(),
+            };
+          }
+          if (resource === "orders" && Array.isArray(memoryDB["tasks"])) {
+            memoryDB["tasks"] = memoryDB["tasks"].map(t => {
+              if (targetIdentifiers.includes(String(t.orderId)) || targetIdentifiers.includes(String(t.order))) {
+                return { ...t, isDeleted: true, deletedAt: new Date().toISOString() };
+              }
+              return t;
+            });
+          }
           return res.status(200).json({ id, deleted: true, isDeleted: true });
         }
 
-        memoryDB[resource].splice(index, 1);
-        return res.status(200).json({ id, deleted: true });
+        if (resource === "orders") {
+          memoryDB[resource] = memoryDB[resource].filter(r =>
+            !targetIdentifiers.includes(String(r.id)) &&
+            !targetIdentifiers.includes(String(r.primaryId)) &&
+            !targetIdentifiers.includes(String(r.orderId))
+          );
+        } else {
+          memoryDB[resource].splice(index, 1);
+        }
+
+        // Cascade delete from memoryDB for orders
+        if (resource === "orders") {
+          ["tasks", "notifications", "supplierWork", "certifications", "compliances", "debitNotes", "capas"].forEach(relRes => {
+            if (Array.isArray(memoryDB[relRes])) {
+              memoryDB[relRes] = memoryDB[relRes].filter(r =>
+                !targetIdentifiers.includes(String(r.orderId)) &&
+                !targetIdentifiers.includes(String(r.order)) &&
+                !targetIdentifiers.includes(String(r.po)) &&
+                !targetIdentifiers.includes(String(r.relatedId))
+              );
+            }
+          });
+          ["personal", "shared"].forEach(b => {
+            if (memoryStorage[b]) {
+              targetIdentifiers.forEach(ti => {
+                delete memoryStorage[b][`docs:${ti}`];
+                delete memoryStorage[b][`highlights:${ti}`];
+                delete memoryStorage[b][`chat:${ti}`];
+                delete memoryStorage[b][`customTypes:${ti}`];
+              });
+            }
+          });
+        }
+
+        return res.status(200).json({ id, deleted: true, permanent: true });
       }
     }
 
-    // 4. Storage API: /api/storage/:key?
+    // 4. General project chat
+    if (pathname === "/api/gemini/chat" || pathname === "/gemini/chat") {
+      const { message, orders = [] } = parsedBody;
+      if (!message || !String(message).trim()) return res.status(400).json({ error: "message is required" });
+      const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+      if (!apiKey) return res.status(503).json({ error: "AI chat is not configured" });
+      const prompt = `You are the expert production assistant for a garment manufacturing PLM system (LOOM PLM).
+Answer the user's question accurately, directly, and specifically using ONLY the project data provided below.
+
+Instructions:
+1. When asked about an order's process, stage, or progress:
+   - Identify the exact order from the data.
+   - State clearly which CURRENT ACTIVE STAGE or PROCESS it is running in (e.g. "Cutting", "Sewing", "Trims Plan", "Lab Dip Approval").
+   - Mention the department handling it, the completion progress (e.g., 6 of 34 stages done), and any delays or bottleneck reasons flagged.
+2. Always output the exact Order ID (e.g. GKT-1054, ST-7788) so the user can click it.
+3. Be concise, direct, and structured with bullet points. Avoid repeating generic boilerplate answers.
+
+Project orders data:
+${JSON.stringify(orders, null, 2)}
+
+User question:
+${String(message).trim()}`;
+      try {
+        const { GoogleGenerativeAI } = await import("@google/generative-ai");
+        const genAI = new GoogleGenerativeAI(apiKey);
+        let result;
+        try {
+          result = await genAI.getGenerativeModel({ model: "gemini-3.6-flash" }).generateContent(prompt);
+        } catch (error) {
+          result = await genAI.getGenerativeModel({ model: "gemini-flash-latest" }).generateContent(prompt);
+        }
+        return res.status(200).json({ reply: result.response.text().trim() });
+      } catch (error) {
+        return res.status(500).json({ error: error.message || "Failed to answer chat message" });
+      }
+    }
+
+    // 5. Storage API: /api/storage/:key?
     const storageMatch = pathname.match(/^\/(?:api\/)?storage(?:\/([^/]+))?\/?$/);
     if (storageMatch) {
       const key = storageMatch[1] ? decodeURIComponent(storageMatch[1]) : null;
@@ -714,20 +1075,82 @@ export default async function handler(req, res) {
 
       if (req.method === "POST" && key) {
         const body = parsedBody;
+        let value = body.value;
+        const shared = !!body.shared;
+
+        // Intelligently merge user_sessions and audit_logs so concurrent tabs, logins, and refreshes
+        // never wipe out other active users, daily time tracking, or history
+        if (key === "user_sessions") {
+          try {
+            const incoming = typeof value === "string" ? JSON.parse(value) : value;
+            if (Array.isArray(incoming)) {
+              let existing = [];
+              if (mongoCols?.storage) {
+                const rec = await mongoCols.storage.findOne({ key, shared });
+                if (rec && rec.value) {
+                  try { existing = typeof rec.value === "string" ? JSON.parse(rec.value) : rec.value; } catch (e) {}
+                }
+              } else if (memoryStorage[bucket] && memoryStorage[bucket][key]) {
+                try { existing = typeof memoryStorage[bucket][key] === "string" ? JSON.parse(memoryStorage[bucket][key]) : memoryStorage[bucket][key]; } catch (e) {}
+              }
+
+              if (Array.isArray(existing) && existing.length > 0) {
+                const sessionMap = new Map();
+                existing.forEach(s => { if (s && s.id) sessionMap.set(s.id, s); });
+                incoming.forEach(s => {
+                  if (s && s.id) {
+                    const prevSess = sessionMap.get(s.id) || {};
+                    sessionMap.set(s.id, { ...prevSess, ...s });
+                  }
+                });
+                const merged = Array.from(sessionMap.values()).sort((a, b) => new Date(b.loginTime || 0) - new Date(a.loginTime || 0));
+                value = JSON.stringify(merged.slice(0, 500));
+              }
+            }
+          } catch (e) {
+            console.warn("Error merging user_sessions on Vercel:", e.message);
+          }
+        } else if (key === "audit_logs") {
+          try {
+            const incoming = typeof value === "string" ? JSON.parse(value) : value;
+            if (Array.isArray(incoming)) {
+              let existing = [];
+              if (mongoCols?.storage) {
+                const rec = await mongoCols.storage.findOne({ key, shared });
+                if (rec && rec.value) {
+                  try { existing = typeof rec.value === "string" ? JSON.parse(rec.value) : rec.value; } catch (e) {}
+                }
+              } else if (memoryStorage[bucket] && memoryStorage[bucket][key]) {
+                try { existing = typeof memoryStorage[bucket][key] === "string" ? JSON.parse(memoryStorage[bucket][key]) : memoryStorage[bucket][key]; } catch (e) {}
+              }
+
+              if (Array.isArray(existing) && existing.length > 0) {
+                const logMap = new Map();
+                incoming.forEach(l => { if (l && l.id) logMap.set(l.id, l); });
+                existing.forEach(l => { if (l && l.id && !logMap.has(l.id)) logMap.set(l.id, l); });
+                const merged = Array.from(logMap.values()).sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+                value = JSON.stringify(merged.slice(0, 500));
+              }
+            }
+          } catch (e) {
+            console.warn("Error merging audit_logs on Vercel:", e.message);
+          }
+        }
+
         if (mongoCols?.storage) {
           try {
             await mongoCols.storage.updateOne(
-              { key, shared: !!body.shared },
-              { $set: { key, value: body.value, shared: !!body.shared } },
+              { key, shared },
+              { $set: { key, value, shared } },
               { upsert: true }
             );
-            return res.status(200).json({ key, value: body.value, shared: !!body.shared });
+            return res.status(200).json({ key, value, shared });
           } catch (e) {
             console.error("Mongo storage POST error:", e.message);
           }
         }
-        memoryStorage[bucket][key] = body.value;
-        return res.status(200).json({ key, value: body.value, shared: !!body.shared });
+        memoryStorage[bucket][key] = value;
+        return res.status(200).json({ key, value, shared });
       }
 
       if (req.method === "DELETE" && key) {

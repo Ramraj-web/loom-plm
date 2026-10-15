@@ -2,25 +2,253 @@ import React, { useState, useMemo, useEffect } from "react";
 import {
   TriangleAlert, Globe, Gauge, CheckCircle2, ClipboardList, Landmark, Clock, Truck, TrendingUp,
   Bell, Package, Calendar, CheckSquare, ClipboardCheck, Award, ShieldCheck, CheckCircle, Search, Trash2, Check,
-  Plus, Edit, X, ChevronLeft, ChevronRight, Building2, Phone, Mail, MapPin, ExternalLink, AlertCircle, Layers
+  Plus, Edit, X, ChevronLeft, ChevronRight, Building2, Phone, Mail, MapPin, ExternalLink, AlertCircle, Layers, RefreshCw,
+  Crown, Trophy, Sparkles, Flame, Star, Zap, Target
 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer
 } from "recharts";
 import {
-  SHIPMENT_PERFORMANCE, ROLE_OPTIONS, SEASON_OPTIONS, CAPA_STATUS_STYLE,
+  SHIPMENT_PERFORMANCE, computeMonthlyShipmentPerformance, ROLE_OPTIONS, SEASON_OPTIONS, CAPA_STATUS_STYLE,
   NOTIFICATION_PRIORITY_STYLE, formatTimeAgo, SUPPLIER_TYPES, WORK_PURPOSES,
-  calculateSupplierMetrics, INITIAL_SUPPLIER_WORK, INITIAL_SUPPLIERS
+  calculateSupplierMetrics, INITIAL_SUPPLIER_WORK, INITIAL_SUPPLIERS, ORG_STRUCTURE
 } from "../../constants/loomData.js";
 import {
   Card, CardHeader, PageHeader, DarkCard, DarkCardHeader, MiniDonut, BackLink, statusPill
 } from "../common/CommonUI.jsx";
+import { analyzeCuttingDelayForOrder, CuttingDelayDashboardBanner } from "../CuttingDelayAlertModal.jsx";
 
-export function FinanceEntryPage({ orders, financials, onUpdate, onUpdateOrderCost }) {
-  const totals = orders.reduce((a, o) => ({
-    planned: a.planned + (o.plannedCost || 0),
-    actual: a.actual + (o.actualCost || 0),
-  }), { planned: 0, actual: 0 });
+/**
+ * Helper function to compute category-level planned vs actual variance breakdown
+ * using stored costing rows, template sections, CMT values, and actual order costs.
+ */
+function computeOrderVarianceBreakdown(order) {
+  const isCostingApproved = order && order.costingApproval?.status === "approved";
+  const qty = Number(order.qty) || 1;
+  const plannedCost = isCostingApproved ? (Number(order.plannedCost) || 0) : 0;
+  const actualCost = isCostingApproved ? (Number(order.actualCost) || 0) : 0;
+  const totalVariance = actualCost - plannedCost;
+  const totalVariancePct = plannedCost > 0 ? (totalVariance / plannedCost) * 100 : 0;
+
+  // Standard category definitions
+  const CATEGORY_MAP = [
+    {
+      key: "fabric",
+      label: "Fabric / Raw Material",
+      sections: ["Fabric", "Yarn & Fabrication", "Yarn"],
+      defaultRatio: 0.48, // typical garment fabric share if row pricing is unset
+    },
+    {
+      key: "trims",
+      label: "Trims & Accessories",
+      sections: ["Trims & Accessories", "Trims", "Accessories"],
+      defaultRatio: 0.18,
+    },
+    {
+      key: "cmt",
+      label: "Production / CMT",
+      sections: ["CMT", "Production", "Manufacturing"],
+      defaultRatio: 0.20,
+    },
+    {
+      key: "vap",
+      label: "VAP / Value Addition",
+      sections: ["VAP", "Printing", "Embroidery"],
+      defaultRatio: 0.08,
+    },
+    {
+      key: "logistics",
+      label: "Logistics & Commercial",
+      sections: ["Commercial Costs", "Logistics", "Shipping", "Freight"],
+      defaultRatio: 0.03,
+    },
+    {
+      key: "other",
+      label: "Other / Overheads & Margin",
+      sections: ["Overheads", "Rejection", "Profit", "Other"],
+      defaultRatio: 0.03,
+    }
+  ];
+
+  // Map costingRows if present and approved
+  const rows = isCostingApproved && Array.isArray(order.costingRows) ? order.costingRows : [];
+
+  // Calculate planned amounts per category from costing rows
+  const plannedByCategory = {};
+  let totalCostingRowsValue = 0;
+
+  rows.forEach(r => {
+    if (r && !r.isHeader) {
+      const p = Number(r.price) || 0;
+      const q = Number(r.qty) || 0;
+      const rowVal = p * q;
+      totalCostingRowsValue += rowVal;
+
+      const sec = (r.section || r.label || "").trim();
+      let matchedCatKey = "other";
+      for (const cat of CATEGORY_MAP) {
+        if (cat.sections.some(s => sec.toLowerCase().includes(s.toLowerCase()))) {
+          matchedCatKey = cat.key;
+          break;
+        }
+      }
+      plannedByCategory[matchedCatKey] = (plannedByCategory[matchedCatKey] || 0) + rowVal;
+    }
+  });
+
+  const hasCostingData = Boolean(isCostingApproved && (plannedCost > 0 || actualCost > 0 || totalCostingRowsValue > 0));
+
+  // If order has CMT rate/total explicitly recorded, reflect or adjust CMT category
+  const explicitCmtTotal = isCostingApproved && order.cmtTotal !== undefined && order.cmtTotal !== ""
+    ? Number(order.cmtTotal)
+    : (isCostingApproved && order.cmtRate !== undefined && order.cmtRate !== "" ? qty * Number(order.cmtRate) : null);
+
+  // If order has a custom actualCostBreakdown stored, use it; otherwise compute from real data
+  const storedActualBreakdown = isCostingApproved ? (order.actualCostBreakdown || null) : null;
+
+  // Build each category's planned and actual values
+  let categories = CATEGORY_MAP.map(cat => {
+    let planned = 0;
+    if (hasCostingData) {
+      if (totalCostingRowsValue > 0) {
+        const perPieceFromRows = plannedByCategory[cat.key] || 0;
+        if (plannedCost > 0) {
+          planned = Math.round((perPieceFromRows / totalCostingRowsValue) * plannedCost);
+        } else {
+          planned = Math.round(perPieceFromRows * qty);
+        }
+      } else if (plannedCost > 0) {
+        planned = Math.round(plannedCost * cat.defaultRatio);
+      }
+    }
+
+    return {
+      key: cat.key,
+      label: cat.label,
+      planned,
+      actual: 0,
+      variance: 0,
+      variancePct: 0,
+    };
+  });
+
+  // Calculate actuals only if valid costing data exists
+  if (hasCostingData) {
+    if (storedActualBreakdown) {
+      categories.forEach(c => {
+        c.actual = storedActualBreakdown[c.key] !== undefined ? Number(storedActualBreakdown[c.key]) || 0 : c.planned;
+      });
+    } else if (explicitCmtTotal !== null && explicitCmtTotal > 0) {
+      const cmtCategory = categories.find(c => c.key === "cmt");
+      if (cmtCategory) {
+        cmtCategory.actual = explicitCmtTotal;
+      }
+      const nonCmtCategories = categories.filter(c => c.key !== "cmt");
+      const nonCmtPlannedSum = nonCmtCategories.reduce((sum, c) => sum + c.planned, 0);
+      const remainingActual = Math.max(0, actualCost - explicitCmtTotal);
+
+      nonCmtCategories.forEach(c => {
+        if (nonCmtPlannedSum > 0) {
+          c.actual = Math.round(remainingActual * (c.planned / nonCmtPlannedSum));
+        } else {
+          c.actual = Math.round(remainingActual * (1 / nonCmtCategories.length));
+        }
+      });
+    } else if (actualCost > 0) {
+      categories.forEach(c => {
+        if (plannedCost > 0) {
+          c.actual = Math.round(actualCost * (c.planned / plannedCost));
+        } else {
+          const catDef = CATEGORY_MAP.find(m => m.key === c.key);
+          c.actual = Math.round(actualCost * (catDef ? catDef.defaultRatio : 1 / categories.length));
+        }
+      });
+    }
+
+    // Adjust rounding differences so sum of category actuals strictly equals actualCost
+    const currentActualSum = categories.reduce((sum, c) => sum + c.actual, 0);
+    const actualDiff = actualCost - currentActualSum;
+    if (actualDiff !== 0 && categories.length > 0) {
+      const targetCat = categories.find(c => c.key === "fabric") || categories[0];
+      targetCat.actual += actualDiff;
+    }
+
+    // Calculate final variances and percentage for each category
+    categories.forEach(c => {
+      c.variance = c.actual - c.planned;
+      c.variancePct = c.planned > 0 ? (c.variance / c.planned) * 100 : (c.actual > 0 ? 100 : 0);
+    });
+
+    const sumPlanned = categories.reduce((sum, c) => sum + c.planned, 0);
+    const diffPlanned = plannedCost - sumPlanned;
+    if (diffPlanned !== 0 && categories.length > 0) {
+      categories[0].planned += diffPlanned;
+      categories[0].variance = categories[0].actual - categories[0].planned;
+      categories[0].variancePct = categories[0].planned > 0 ? (categories[0].variance / categories[0].planned) * 100 : 0;
+    }
+
+    const sumActual = categories.reduce((sum, c) => sum + c.actual, 0);
+    const diffActual = actualCost - sumActual;
+    if (diffActual !== 0 && categories.length > 0) {
+      categories[0].actual += diffActual;
+      categories[0].variance = categories[0].actual - categories[0].planned;
+      categories[0].variancePct = categories[0].planned > 0 ? (categories[0].variance / categories[0].planned) * 100 : 0;
+    }
+  }
+
+  // Find biggest overrun category (positive variance)
+  const overrunCategories = hasCostingData ? categories.filter(c => c.variance > 0).sort((a, b) => b.variance - a.variance) : [];
+  const biggestOverrun = overrunCategories.length > 0 ? overrunCategories[0] : null;
+
+  // Retrieve actual documented reasons/notes stored in project data
+  const realReasons = [];
+  if (Array.isArray(order.stages)) {
+    order.stages.forEach(s => {
+      if (s && s.reason && typeof s.reason === "string" && s.reason.trim()) {
+        realReasons.push({
+          source: `T&A Stage: ${s.name} (${s.dept || "General"})`,
+          reason: s.reason.trim(),
+          status: s.status || "delayed"
+        });
+      }
+    });
+  }
+  if (order.riskNotes || order.delayNotes) {
+    realReasons.push({
+      source: "Order Notes",
+      reason: order.riskNotes || order.delayNotes,
+      status: order.risk || "medium"
+    });
+  }
+
+  return {
+    order,
+    qty,
+    isCostingApproved,
+    hasCostingData,
+    plannedCost,
+    actualCost,
+    totalVariance,
+    totalVariancePct,
+    categories,
+    biggestOverrun,
+    realReasons
+  };
+}
+
+export function FinanceEntryPage({ orders = [], financials, onUpdate, onUpdateOrderCost }) {
+  const [selectedOrderForVariance, setSelectedOrderForVariance] = useState(null);
+  const activeOrders = useMemo(() => orders.filter(o => o && o.isDeleted !== true && o.isDeleted !== "true" && !o.deletedAt), [orders]);
+
+  const totals = activeOrders.reduce((a, o) => {
+    const cmtTotal = o.cmtTotal !== undefined ? (Number(o.cmtTotal) || 0) : ((Number(o.qty) || 0) * (Number(o.cmtRate) || 0));
+    const isCostingApproved = o.costingApproval?.status === "approved";
+    return {
+      planned: a.planned + (isCostingApproved ? (Number(o.plannedCost) || 0) : 0),
+      actual: a.actual + (isCostingApproved ? (Number(o.actualCost) || 0) : 0),
+      cmt: a.cmt + cmtTotal,
+    };
+  }, { planned: 0, actual: 0, cmt: 0 });
   const totalVariance = totals.actual - totals.planned;
   const totalVariancePct = totals.planned > 0 ? (totalVariance / totals.planned) * 100 : 0;
 
@@ -32,85 +260,691 @@ export function FinanceEntryPage({ orders, financials, onUpdate, onUpdateOrderCo
   const grossProfit = financials.revenue - financials.cogs;
   const grossMargin = financials.revenue > 0 ? Math.round((grossProfit / financials.revenue) * 1000) / 10 : 0;
 
+  // Active breakdown if an order is selected
+  const activeBreakdown = useMemo(() => {
+    if (!selectedOrderForVariance) return null;
+    const currentOrder = orders.find(o => o.id === selectedOrderForVariance.id) || selectedOrderForVariance;
+    return computeOrderVarianceBreakdown(currentOrder);
+  }, [selectedOrderForVariance, orders]);
+
   return (
     <div>
       <PageHeader title="Finance data" sub="Cost planned vs. actual cost per order — Total COGS on the Executive Dashboard comes straight from the actual costs below" />
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 16 }}>
-        <Card style={{ padding: "16px 18px" }}><div style={{ fontSize: 12, color: "#8A8D98" }}>Total planned cost</div><div style={{ fontSize: 22, fontWeight: 700, marginTop: 6 }}>${totals.planned.toLocaleString()}</div></Card>
-        <Card style={{ padding: "16px 18px" }}><div style={{ fontSize: 12, color: "#8A8D98" }}>Total actual cost</div><div style={{ fontSize: 22, fontWeight: 700, marginTop: 6 }}>${totals.actual.toLocaleString()}</div></Card>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 16 }}>
+        <Card style={{ padding: "16px 18px" }}><div style={{ fontSize: 12, color: "#8A8D98" }}>Total planned cost</div><div style={{ fontSize: 22, fontWeight: 700, marginTop: 6 }}>₹{totals.planned.toLocaleString("en-IN")}</div></Card>
+        <Card style={{ padding: "16px 18px" }}><div style={{ fontSize: 12, color: "#8A8D98" }}>Total actual cost</div><div style={{ fontSize: 22, fontWeight: 700, marginTop: 6 }}>₹{totals.actual.toLocaleString("en-IN")}</div></Card>
+        <Card style={{ padding: "16px 18px" }}>
+          <div style={{ fontSize: 12, color: "#8A8D98" }}>Total CMT Value</div>
+          <div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: "#1F9E8D" }}>
+            ₹{totals.cmt.toLocaleString("en-IN")}
+          </div>
+        </Card>
         <Card style={{ padding: "16px 18px" }}>
           <div style={{ fontSize: 12, color: "#8A8D98" }}>Total variance</div>
-          <div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: totalVariance > 0 ? "#D64545" : "#1F9E8D" }}>
-            {totalVariance > 0 ? "+" : ""}{totalVariance.toLocaleString()} <span style={{ fontSize: 13 }}>({totalVariancePct > 0 ? "+" : ""}{totalVariancePct.toFixed(1)}%)</span>
+          <div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: totalVariance > 0 ? "#DC2626" : totalVariance < 0 ? "#059669" : "#4B5563" }}>
+            {totalVariance > 0 ? "+" : totalVariance < 0 ? "-" : ""}₹{Math.abs(totalVariance).toLocaleString("en-IN")} <span style={{ fontSize: 13 }}>({totalVariancePct > 0 ? "+" : ""}{totalVariancePct.toFixed(1)}%)</span>
           </div>
         </Card>
       </div>
 
       <Card style={{ marginBottom: 16 }}>
-        <CardHeader title="Cost by order" sub="Planned cost is set when the order is costed; actual cost is updated as spend comes in through the season" />
-        <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr 1fr 0.9fr", fontSize: 11, color: "#8A8D98", padding: "0 4px 8px", borderBottom: "1px solid #F0F0F2" }}>
-          <div>Order / Style</div><div>Buyer</div><div>Planned cost</div><div>Actual cost</div><div>Variance</div>
+        <CardHeader title="Cost by order" sub="Planned cost is set when the order is costed; click on any order's Variance to view the complete category breakdown & root causes" />
+        <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.9fr 0.8fr 1fr 1fr 1fr 1fr 1.3fr", fontSize: 11, color: "#8A8D98", padding: "0 4px 8px", borderBottom: "1px solid #F0F0F2", gap: 6 }}>
+          <div>Order / Style</div>
+          <div>Buyer</div>
+          <div>Order Qty</div>
+          <div>CMT Rate / pc (₹)</div>
+          <div>CMT Total (₹)</div>
+          <div>Planned cost (₹)</div>
+          <div>Actual cost (₹)</div>
+          <div>Variance & Status</div>
         </div>
-        {orders.map(o => {
-          const variance = (o.actualCost || 0) - (o.plannedCost || 0);
-          const variancePct = o.plannedCost > 0 ? (variance / o.plannedCost) * 100 : 0;
-          return (
-            <div key={o.id} style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr 1fr 0.9fr", alignItems: "center", fontSize: 12.5, padding: "8px 4px", borderBottom: "1px solid #F5F5F7" }}>
-              <div>
-                <div style={{ fontFamily: "monospace", fontSize: 11, color: "#8A8D98" }}>{o.id}</div>
-                <div style={{ fontWeight: 600, color: "#1B2130" }}>{o.style}</div>
+        {orders.length === 0 ? (
+          <div style={{ padding: "32px 16px", textAlign: "center", color: "#8A8D98", fontSize: 13 }}>
+            No orders available. Create or import orders to record planned and actual costs.
+          </div>
+        ) : (
+          orders.map(o => {
+            const qty = Number(o.qty) || 0;
+            const cmtRate = o.cmtRate !== undefined ? o.cmtRate : "";
+            const calculatedCmtTotal = qty * (Number(cmtRate) || 0);
+            const isCostingApproved = o.costingApproval?.status === "approved";
+            const planned = isCostingApproved ? (Number(o.plannedCost) || 0) : 0;
+            const actual = Number(o.actualCost) || 0;
+            const hasCostingData = isCostingApproved && (planned > 0 || actual > 0);
+            const variance = actual - planned;
+            const variancePct = planned > 0 ? (variance / planned) * 100 : 0;
+
+            // Status category & styling
+            const isNotCosted = !hasCostingData;
+            const isOverrun = hasCostingData && variance > 0;
+            const isFavourable = hasCostingData && variance < 0;
+            const isNoVariance = hasCostingData && variance === 0;
+
+            const statusText = !isCostingApproved 
+              ? (o.costingApproval?.status === "submitted" ? "Pending Approval" : "Not Costed")
+              : (isOverrun ? "Cost Overrun" : isFavourable ? "Favourable" : "No variance");
+            const statusBg = isNotCosted ? "#F8FAFC" : isOverrun ? "#FEF2F2" : isFavourable ? "#ECFDF5" : "#F3F4F6";
+            const statusColor = isNotCosted ? "#64748B" : isOverrun ? "#DC2626" : isFavourable ? "#059669" : "#4B5563";
+            const statusBorder = isNotCosted ? "#E2E8F0" : isOverrun ? "#FECACA" : isFavourable ? "#A7F3D0" : "#E5E7EB";
+
+            return (
+              <div key={o.id} style={{ display: "grid", gridTemplateColumns: "1.2fr 0.9fr 0.8fr 1fr 1fr 1fr 1fr 1.3fr", alignItems: "center", fontSize: 12.5, padding: "8px 4px", borderBottom: "1px solid #F5F5F7", gap: 6 }}>
+                <div>
+                  <div style={{ fontFamily: "monospace", fontSize: 11, color: "#8A8D98" }}>{o.id}</div>
+                  <div style={{ fontWeight: 600, color: "#1B2130" }}>{o.style}</div>
+                </div>
+                <div>{o.buyer}</div>
+                <div style={{ fontWeight: 600, color: "#475569" }}>{qty.toLocaleString("en-IN")} pcs</div>
+                <div>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={o.cmtRate !== undefined ? o.cmtRate : ""}
+                    onChange={e => {
+                      const rate = e.target.value === "" ? "" : Number(e.target.value);
+                      onUpdateOrderCost(o.id, "cmtRate", rate);
+                      if (rate !== "") {
+                        onUpdateOrderCost(o.id, "cmtTotal", Math.round(qty * Number(rate) * 100) / 100);
+                      }
+                    }}
+                    style={{ width: 84, fontSize: 12, padding: "5px 7px", borderRadius: 6, border: "1px solid #E7E8ED" }}
+                  />
+                </div>
+                <div>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={o.cmtTotal !== undefined ? o.cmtTotal : (cmtRate !== "" ? calculatedCmtTotal : "")}
+                    onChange={e => onUpdateOrderCost(o.id, "cmtTotal", e.target.value === "" ? "" : Number(e.target.value))}
+                    style={{ width: 88, fontSize: 12, padding: "5px 7px", borderRadius: 6, border: "1px solid #E7E8ED", color: "#0F766E", fontWeight: 600 }}
+                    title="Auto-calculated from Qty × CMT Rate, or enter manual override"
+                  />
+                </div>
+                <div>
+                  <input
+                    type="number"
+                    placeholder="—"
+                    value={isCostingApproved && o.plannedCost ? o.plannedCost : ""}
+                    onChange={e => onUpdateOrderCost(o.id, "plannedCost", e.target.value === "" ? 0 : Number(e.target.value))}
+                    style={{ width: 84, fontSize: 12, padding: "5px 7px", borderRadius: 6, border: "1px solid #E7E8ED" }}
+                  />
+                </div>
+                <div>
+                  <input
+                    type="number"
+                    placeholder="—"
+                    value={isCostingApproved && o.actualCost ? o.actualCost : ""}
+                    onChange={e => onUpdateOrderCost(o.id, "actualCost", e.target.value === "" ? 0 : Number(e.target.value))}
+                    style={{ width: 84, fontSize: 12, padding: "5px 7px", borderRadius: 6, border: "1px solid #E7E8ED" }}
+                  />
+                </div>
+
+                {/* Clickable Variance Column with Indicator & Status */}
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedOrderForVariance(o)}
+                    title="Click to view detailed Category Variance Breakdown"
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      padding: "4px 6px",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      borderRadius: 6,
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "flex-start",
+                      gap: 3,
+                      transition: "background 0.15s ease",
+                      width: "100%",
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = isOverrun ? "#FEE2E2" : "#F3F4F6"}
+                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{
+                        fontWeight: 700,
+                        fontSize: 13,
+                        color: isNotCosted ? "#64748B" : isOverrun ? "#DC2626" : isFavourable ? "#059669" : "#4B5563",
+                        textDecoration: hasCostingData ? "underline" : "none",
+                        textUnderlineOffset: 3,
+                      }}>
+                        {isNotCosted ? "—" : `${variance > 0 ? "+" : variance < 0 ? "-" : ""}₹${Math.abs(variance).toLocaleString("en-IN")}`}
+                      </span>
+                      {hasCostingData && planned > 0 && (
+                        <span style={{ fontSize: 11, color: isOverrun ? "#B91C1C" : isFavourable ? "#047857" : "#6B7280", fontWeight: 600 }}>
+                          ({variancePct > 0 ? "+" : ""}{variancePct.toFixed(1)}%)
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Status badge */}
+                    <div style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      fontSize: 10.5,
+                      fontWeight: 700,
+                      padding: "2px 7px",
+                      borderRadius: 999,
+                      background: statusBg,
+                      color: statusColor,
+                      border: `1px solid ${statusBorder}`,
+                      letterSpacing: 0.2
+                    }}>
+                      {isOverrun && <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "#DC2626" }} />}
+                      {isFavourable && <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "#059669" }} />}
+                      {isNoVariance && <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "#9CA3AF" }} />}
+                      {statusText}
+                    </div>
+                  </button>
+                </div>
               </div>
-              <div>{o.buyer}</div>
-              <div>
-                <input
-                  type="number"
-                  value={o.plannedCost || 0}
-                  onChange={e => onUpdateOrderCost(o.id, "plannedCost", Number(e.target.value))}
-                  style={{ width: 92, fontSize: 12, padding: "5px 7px", borderRadius: 6, border: "1px solid #E7E8ED" }}
-                />
-              </div>
-              <div>
-                <input
-                  type="number"
-                  value={o.actualCost || 0}
-                  onChange={e => onUpdateOrderCost(o.id, "actualCost", Number(e.target.value))}
-                  style={{ width: 92, fontSize: 12, padding: "5px 7px", borderRadius: 6, border: "1px solid #E7E8ED" }}
-                />
-              </div>
-              <div style={{ fontWeight: 600, color: variance > 0 ? "#D64545" : variance < 0 ? "#1F9E8D" : "#8A8D98" }}>
-                {variance > 0 ? "+" : ""}{variance.toLocaleString()}{o.plannedCost > 0 ? ` (${variancePct > 0 ? "+" : ""}${variancePct.toFixed(1)}%)` : ""}
-              </div>
-            </div>
-          );
-        })}
+            );
+          })
+        )}
       </Card>
 
       <Card style={{ maxWidth: 460 }}>
         <CardHeader title="Computed" />
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 8 }}><span style={{ color: "#8A8D98" }}>Gross profit</span><span style={{ fontWeight: 700 }}>${grossProfit.toLocaleString()}</span></div>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}><span style={{ color: "#8A8D98" }}>Gross margin</span><span style={{ fontWeight: 700 }}>{grossMargin}%</span></div>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+          <span style={{ color: "#8A8D98" }}>Gross profit</span>
+          <span style={{ fontWeight: 700 }}>
+            {grossProfit < 0 ? "-₹" : "₹"}{Math.abs(grossProfit).toLocaleString("en-IN")}
+          </span>
+        </div>
       </Card>
+
+      {/* DETAILED VARIANCE BREAKDOWN MODAL */}
+      {activeBreakdown && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setSelectedOrderForVariance(null)}
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(15, 23, 42, 0.55)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: 16
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: "#FFFFFF",
+              borderRadius: 14,
+              width: "100%",
+              maxWidth: 780,
+              maxHeight: "90vh",
+              display: "flex",
+              flexDirection: "column",
+              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+              border: "1px solid #E2E8F0",
+              overflow: "hidden",
+              animation: "fadeIn 0.18s ease-out"
+            }}
+          >
+            {/* Modal Header */}
+            <div style={{
+              padding: "18px 24px",
+              borderBottom: "1px solid #E2E8F0",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+              background: "#F8FAFC"
+            }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 700, color: "#64748B", background: "#E2E8F0", padding: "2px 8px", borderRadius: 4 }}>
+                    {activeBreakdown.order.id}
+                  </span>
+                  <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#0F172A" }}>
+                    Variance Analysis: {activeBreakdown.order.style}
+                  </h2>
+                </div>
+                <div style={{ fontSize: 12.5, color: "#64748B", marginTop: 4 }}>
+                  Buyer: <span style={{ fontWeight: 600, color: "#334155" }}>{activeBreakdown.order.buyer}</span> · Quantity: <span style={{ fontWeight: 600, color: "#334155" }}>{activeBreakdown.qty.toLocaleString()} pcs</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedOrderForVariance(null)}
+                style={{
+                  background: "#F1F5F9",
+                  border: "none",
+                  borderRadius: 8,
+                  width: 32,
+                  height: 32,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  color: "#64748B"
+                }}
+                title="Close modal"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Scrollable Body */}
+            <div style={{ padding: "20px 24px", overflowY: "auto", flex: 1 }}>
+              {!activeBreakdown.hasCostingData ? (
+                <div style={{
+                  background: "#F8FAFC",
+                  border: "1px dashed #CBD5E1",
+                  borderRadius: 12,
+                  padding: "32px 24px",
+                  textAlign: "center",
+                  marginBottom: 20
+                }}>
+                  <div style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: "50%",
+                    background: "#F1F5F9",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    margin: "0 auto 12px",
+                    color: "#64748B"
+                  }}>
+                    <TriangleAlert size={22} />
+                  </div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: "#1E293B", marginBottom: 6 }}>
+                    {!activeBreakdown.isCostingApproved ? "Costing Not Approved" : "No Costing Data Entered"}
+                  </div>
+                  <div style={{ fontSize: 13, color: "#64748B", maxWidth: 460, margin: "0 auto", lineHeight: 1.5 }}>
+                    {!activeBreakdown.isCostingApproved
+                      ? "Costing values for this order have not been approved yet. Cost category variance breakdown and budget totals will only appear after costing is created and approved."
+                      : "No planned or actual cost figures have been entered for this order yet."}
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* Summary Highlights */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
+                    <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, padding: "12px 16px" }}>
+                      <div style={{ fontSize: 11.5, color: "#64748B", fontWeight: 600 }}>Planned Budget</div>
+                      <div style={{ fontSize: 20, fontWeight: 800, color: "#0F172A", marginTop: 4 }}>
+                        ₹{activeBreakdown.plannedCost.toLocaleString("en-IN")}
+                      </div>
+                    </div>
+                    <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, padding: "12px 16px" }}>
+                      <div style={{ fontSize: 11.5, color: "#64748B", fontWeight: 600 }}>Actual Incurred</div>
+                      <div style={{ fontSize: 20, fontWeight: 800, color: "#0F172A", marginTop: 4 }}>
+                        ₹{activeBreakdown.actualCost.toLocaleString("en-IN")}
+                      </div>
+                    </div>
+                    <div style={{
+                      background: activeBreakdown.totalVariance > 0 ? "#FEF2F2" : activeBreakdown.totalVariance < 0 ? "#ECFDF5" : "#F8FAFC",
+                      border: `1px solid ${activeBreakdown.totalVariance > 0 ? "#FECACA" : activeBreakdown.totalVariance < 0 ? "#A7F3D0" : "#E2E8F0"}`,
+                      borderRadius: 10,
+                      padding: "12px 16px"
+                    }}>
+                      <div style={{ fontSize: 11.5, fontWeight: 600, color: activeBreakdown.totalVariance > 0 ? "#991B1B" : activeBreakdown.totalVariance < 0 ? "#065F46" : "#475569" }}>
+                        Total Variance
+                      </div>
+                      <div style={{
+                        fontSize: 20,
+                        fontWeight: 800,
+                        color: activeBreakdown.totalVariance > 0 ? "#DC2626" : activeBreakdown.totalVariance < 0 ? "#059669" : "#334155",
+                        marginTop: 4
+                      }}>
+                        {activeBreakdown.totalVariance > 0 ? "+" : activeBreakdown.totalVariance < 0 ? "-" : ""}₹{Math.abs(activeBreakdown.totalVariance).toLocaleString("en-IN")}
+                        <span style={{ fontSize: 12.5, fontWeight: 600, marginLeft: 6 }}>
+                          ({activeBreakdown.totalVariancePct > 0 ? "+" : ""}{activeBreakdown.totalVariancePct.toFixed(1)}%)
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Biggest Overrun Callout Banner (Requirement 8 & 3) */}
+                  {activeBreakdown.biggestOverrun ? (
+                    <div style={{
+                      background: "#FEF2F2",
+                      border: "1px solid #F87171",
+                      borderRadius: 10,
+                      padding: "12px 16px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      marginBottom: 20
+                    }}>
+                      <div style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 8,
+                        background: "#FEE2E2",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0
+                      }}>
+                        <TriangleAlert size={18} color="#DC2626" />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#991B1B", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                          Biggest Cost Overrun Driver
+                        </div>
+                        <div style={{ fontSize: 13.5, fontWeight: 600, color: "#7F1D1D", marginTop: 2 }}>
+                          <span style={{ fontWeight: 800 }}>{activeBreakdown.biggestOverrun.label}</span> is exceeding budget by{" "}
+                          <span style={{ fontWeight: 800 }}>+{activeBreakdown.biggestOverrun.variance > 0 ? "" : "-"}₹{Math.abs(activeBreakdown.biggestOverrun.variance).toLocaleString("en-IN")}</span>{" "}
+                          (+{activeBreakdown.biggestOverrun.variancePct.toFixed(1)}%)
+                        </div>
+                      </div>
+                    </div>
+                  ) : activeBreakdown.totalVariance <= 0 ? (
+                    <div style={{
+                      background: "#ECFDF5",
+                      border: "1px solid #6EE7B7",
+                      borderRadius: 10,
+                      padding: "12px 16px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      marginBottom: 20
+                    }}>
+                      <div style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 8,
+                        background: "#D1FAE5",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0
+                      }}>
+                        <CheckCircle size={18} color="#059669" />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#065F46", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                          No Overruns Detected
+                        </div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "#047857", marginTop: 1 }}>
+                          All individual cost categories are operating within or below the planned budget limits.
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {/* Category Contribution Table (Requirements 5, 6, 7) */}
+                  <div style={{ border: "1px solid #E2E8F0", borderRadius: 10, overflow: "hidden", marginBottom: 20 }}>
+                    <div style={{
+                      display: "grid",
+                      gridTemplateColumns: "2.2fr 1fr 1fr 1.2fr 1fr",
+                      background: "#F8FAFC",
+                      borderBottom: "1px solid #E2E8F0",
+                      padding: "10px 14px",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: "#64748B",
+                      textTransform: "uppercase",
+                      letterSpacing: 0.4
+                    }}>
+                      <div>Cost Category</div>
+                      <div style={{ textAlign: "right" }}>Planned (₹)</div>
+                      <div style={{ textAlign: "right" }}>Actual (₹)</div>
+                      <div style={{ textAlign: "right" }}>Variance (₹)</div>
+                      <div style={{ textAlign: "right" }}>Variance (%)</div>
+                    </div>
+
+                    {activeBreakdown.categories.map((cat, idx) => {
+                      const isCatOverrun = cat.variance > 0;
+                      const isCatFavourable = cat.variance < 0;
+
+                      return (
+                        <div
+                          key={cat.key}
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "2.2fr 1fr 1fr 1.2fr 1fr",
+                            alignItems: "center",
+                            padding: "11px 14px",
+                            fontSize: 12.5,
+                            borderBottom: idx === activeBreakdown.categories.length - 1 ? "none" : "1px solid #F1F5F9",
+                            background: isCatOverrun ? "#FFFBFB" : "transparent"
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{
+                              display: "inline-block",
+                              width: 8,
+                              height: 8,
+                              borderRadius: "50%",
+                              background: isCatOverrun ? "#DC2626" : isCatFavourable ? "#059669" : "#9CA3AF"
+                            }} />
+                            <span style={{ fontWeight: 600, color: "#1E293B" }}>{cat.label}</span>
+                            {activeBreakdown.biggestOverrun && activeBreakdown.biggestOverrun.key === cat.key && (
+                              <span style={{
+                                fontSize: 9.5,
+                                fontWeight: 700,
+                                padding: "1px 6px",
+                                borderRadius: 4,
+                                background: "#FEE2E2",
+                                color: "#DC2626",
+                                border: "1px solid #FECACA"
+                              }}>
+                                HIGHEST OVERRUN
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ textAlign: "right", color: "#475569", fontWeight: 500 }}>
+                            ₹{cat.planned.toLocaleString("en-IN")}
+                          </div>
+                          <div style={{ textAlign: "right", color: "#0F172A", fontWeight: 600 }}>
+                            ₹{cat.actual.toLocaleString("en-IN")}
+                          </div>
+                          <div style={{
+                            textAlign: "right",
+                            fontWeight: 700,
+                            color: isCatOverrun ? "#DC2626" : isCatFavourable ? "#059669" : "#64748B"
+                          }}>
+                            {cat.variance > 0 ? "+" : cat.variance < 0 ? "-" : ""}₹{Math.abs(cat.variance).toLocaleString("en-IN")}
+                          </div>
+                          <div style={{
+                            textAlign: "right",
+                            fontWeight: 700,
+                            color: isCatOverrun ? "#DC2626" : isCatFavourable ? "#059669" : "#64748B"
+                          }}>
+                            {cat.variancePct > 0 ? "+" : ""}{cat.variancePct.toFixed(1)}%
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* Total Row (Requirement 7) */}
+                    <div style={{
+                      display: "grid",
+                      gridTemplateColumns: "2.2fr 1fr 1fr 1.2fr 1fr",
+                      alignItems: "center",
+                      padding: "12px 14px",
+                      fontSize: 13,
+                      fontWeight: 800,
+                      background: "#F1F5F9",
+                      borderTop: "2px solid #CBD5E1",
+                      color: "#0F172A"
+                    }}>
+                      <div>Total Order Spend</div>
+                      <div style={{ textAlign: "right" }}>₹{activeBreakdown.plannedCost.toLocaleString("en-IN")}</div>
+                      <div style={{ textAlign: "right" }}>₹{activeBreakdown.actualCost.toLocaleString("en-IN")}</div>
+                      <div style={{
+                        textAlign: "right",
+                        color: activeBreakdown.totalVariance > 0 ? "#DC2626" : activeBreakdown.totalVariance < 0 ? "#059669" : "#475569"
+                      }}>
+                        {activeBreakdown.totalVariance > 0 ? "+" : activeBreakdown.totalVariance < 0 ? "-" : ""}₹{Math.abs(activeBreakdown.totalVariance).toLocaleString("en-IN")}
+                      </div>
+                      <div style={{
+                        textAlign: "right",
+                        color: activeBreakdown.totalVariance > 0 ? "#DC2626" : activeBreakdown.totalVariance < 0 ? "#059669" : "#475569"
+                      }}>
+                        {activeBreakdown.totalVariancePct > 0 ? "+" : ""}{activeBreakdown.totalVariancePct.toFixed(1)}%
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Documented Root Causes / Stage Notes (Requirement 9: Show only when actually exists in stored data) */}
+              <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, padding: "14px 16px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                  <ClipboardList size={14} color="#64748B" />
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: 0.3 }}>
+                    Documented Project Records & Stage Flags
+                  </div>
+                </div>
+
+                {activeBreakdown.realReasons.length > 0 ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {activeBreakdown.realReasons.map((r, i) => (
+                      <div key={i} style={{
+                        background: "#FFFFFF",
+                        border: "1px solid #E2E8F0",
+                        borderRadius: 6,
+                        padding: "8px 12px",
+                        fontSize: 12
+                      }}>
+                        <div style={{ fontWeight: 700, color: "#991B1B", fontSize: 11.5, marginBottom: 2 }}>
+                          {r.source}
+                        </div>
+                        <div style={{ color: "#334155" }}>
+                          "{r.reason}"
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 12, color: "#64748B", fontStyle: "italic", padding: "4px 0" }}>
+                    No delay flags or rework issues recorded in this order's T&A stages. Variance reflects direct operational cost differences between original costing estimates and actual financial inputs.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{
+              padding: "14px 24px",
+              borderTop: "1px solid #E2E8F0",
+              background: "#F8FAFC",
+              display: "flex",
+              justifyContent: "flex-end"
+            }}>
+              <button
+                type="button"
+                onClick={() => setSelectedOrderForVariance(null)}
+                style={{
+                  background: "#0F172A",
+                  color: "#FFFFFF",
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "8px 18px",
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  cursor: "pointer"
+                }}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-export function ReportsPage({ orders }) {
-  const total = orders.length;
-  const onTrack = orders.filter(o => o.status === "On Track").length;
-  const totalQty = orders.reduce((a, o) => a + (Number(o.qty) || 0), 0);
+export function ReportsPage({ orders = [] }) {
+  const activeOrders = useMemo(() => orders.filter(o => o && o.isDeleted !== true && o.isDeleted !== "true" && !o.deletedAt), [orders]);
+  const total = activeOrders.length;
+  const onTrack = activeOrders.filter(o => o.status === "On Track").length;
+  const totalQty = activeOrders.reduce((a, o) => a + (Number(o.qty) || 0), 0);
+  // Compute live metrics dynamically from active orders
+  const leadTimeDays = useMemo(() => {
+    let daysTotal = 0, count = 0;
+    activeOrders.forEach(o => {
+      const shipStr = o.shipDate || o.ship;
+      const startStr = o.orderDate || o.createdAt;
+      if (shipStr) {
+        let shipD = new Date(shipStr);
+        if (isNaN(shipD.getTime()) && typeof shipStr === "string") shipD = new Date(`${shipStr} ${new Date().getFullYear()}`);
+        let startD = startStr ? new Date(startStr) : null;
+        if (startD && isNaN(startD.getTime()) && typeof startStr === "string") startD = new Date(`${startStr} ${new Date().getFullYear()}`);
+        if (!startD || isNaN(startD.getTime())) {
+          daysTotal += (o.stages?.length > 35 ? 120 : 90);
+          count++;
+        } else if (!isNaN(shipD.getTime()) && !isNaN(startD.getTime())) {
+          const diff = Math.round(Math.abs(shipD.getTime() - startD.getTime()) / (1000 * 60 * 60 * 24));
+          if (diff > 0) { daysTotal += diff; count++; }
+        }
+      }
+    });
+    return count > 0 ? `${Math.round(daysTotal / count)} days` : "—";
+  }, [activeOrders]);
+
+  const samplingTimeDays = useMemo(() => {
+    let daysTotal = 0, count = 0;
+    activeOrders.forEach(o => {
+      (o.stages || []).filter(s => (s.name || "").toLowerCase().includes("sample") || (s.name || "").toLowerCase().includes("proto")).forEach(s => {
+        const match = (s.day || "").match(/(\d+)\s*-\s*(\d+)/);
+        if (match) {
+          const span = Math.abs(parseInt(match[2], 10) - parseInt(match[1], 10));
+          if (span > 0) { daysTotal += span; count++; }
+        } else if ((s.day || "").match(/(\d+)/)) {
+          daysTotal += 7;
+          count++;
+        }
+      });
+    });
+    return count > 0 ? `${Math.round(daysTotal / count)} days` : "—";
+  }, [activeOrders]);
+
+  const qualityRate = useMemo(() => {
+    let inspPassed = 0, inspTotal = 0;
+    activeOrders.forEach(o => {
+      const insp = o.inspectionData || {};
+      ["inline", "endline", "final"].forEach(sec => {
+        if (insp[sec]) {
+          const i = Number(insp[sec].unitsInspected);
+          const p = Number(insp[sec].unitsPassed);
+          if (!isNaN(i) && i > 0 && !isNaN(p)) { inspTotal += i; inspPassed += p; }
+        }
+      });
+    });
+    if (inspTotal > 0) return `${((inspPassed / inspTotal) * 100).toFixed(1)}%`;
+    const allStages = activeOrders.flatMap(o => o.stages || []);
+    const qStages = allStages.filter(s => s.dept === "Quality" || (s.name || "").toLowerCase().includes("quality"));
+    if (qStages.length > 0) {
+      const passed = qStages.filter(s => s.status === "done" && !s.reason).length;
+      return `${Math.round((passed / qStages.length) * 100)}%`;
+    }
+    return "100%";
+  }, [activeOrders]);
+
   const rows = [
     ["Total orders", total],
-    ["On-time rate", `${Math.round((onTrack / (total || 1)) * 100)}%`],
+    ["On-time rate", total > 0 ? `${Math.round((onTrack / total) * 100)}%` : "0%"],
     ["Total order quantity", totalQty.toLocaleString() + " pcs"],
-    ["Avg order lead time", "87 days"],
-    ["Avg sampling time", "24 days"],
-    ["Quality pass rate", "93.6%"],
+    ["Avg order lead time", total > 0 ? leadTimeDays : "0 days"],
+    ["Avg sampling time", total > 0 ? samplingTimeDays : "0 days"],
+    ["Quality pass rate", total > 0 ? qualityRate : "0%"],
   ];
 
   const seasonRows = useMemo(() => {
     const groups = {};
-    orders.forEach(o => {
+    activeOrders.forEach(o => {
       const key = `${o.buyer}||${o.season || "—"}`;
       if (!groups[key]) groups[key] = { buyer: o.buyer, season: o.season || "—", ordered: 0, shipped: 0 };
       groups[key].ordered += (Number(o.qty) || 0);
@@ -121,7 +955,7 @@ export function ReportsPage({ orders }) {
       diff: g.shipped - g.ordered,
       pctDiff: g.ordered > 0 ? ((g.shipped - g.ordered) / g.ordered) * 100 : 0,
     }));
-  }, [orders]);
+  }, [activeOrders]);
 
   return (
     <div>
@@ -140,16 +974,22 @@ export function ReportsPage({ orders }) {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 0.8fr 1fr 1fr 0.9fr 0.9fr", fontSize: 11, color: "#8A8D98", padding: "0 4px 8px", borderBottom: "1px solid #F0F0F2" }}>
           <div>Buyer</div><div>Season</div><div>Ordered Qty</div><div>Shipped Qty</div><div>Difference</div><div>% Diff</div>
         </div>
-        {seasonRows.map(r => (
-          <div key={r.buyer + r.season} style={{ display: "grid", gridTemplateColumns: "1fr 0.8fr 1fr 1fr 0.9fr 0.9fr", alignItems: "center", fontSize: 12.5, padding: "9px 4px", borderBottom: "1px solid #F5F5F7" }}>
-            <div style={{ fontWeight: 600, color: "#1B2130" }}>{r.buyer}</div>
-            <div>{r.season}</div>
-            <div>{r.ordered.toLocaleString()}</div>
-            <div>{r.shipped.toLocaleString()}</div>
-            <div style={{ color: r.diff < 0 ? "#D64545" : "#1F9E8D", fontWeight: 600 }}>{r.diff > 0 ? "+" : ""}{r.diff.toLocaleString()}</div>
-            <div style={{ color: r.pctDiff < 0 ? "#D64545" : "#1F9E8D", fontWeight: 600 }}>{r.pctDiff > 0 ? "+" : ""}{r.pctDiff.toFixed(2)}%</div>
+        {seasonRows.length === 0 ? (
+          <div style={{ padding: "32px 16px", textAlign: "center", color: "#8A8D98", fontSize: 13 }}>
+            No orders or seasonal shipments recorded yet.
           </div>
-        ))}
+        ) : (
+          seasonRows.map(r => (
+            <div key={r.buyer + r.season} style={{ display: "grid", gridTemplateColumns: "1fr 0.8fr 1fr 1fr 0.9fr 0.9fr", alignItems: "center", fontSize: 12.5, padding: "9px 4px", borderBottom: "1px solid #F5F5F7" }}>
+              <div style={{ fontWeight: 600, color: "#1B2130" }}>{r.buyer}</div>
+              <div>{r.season}</div>
+              <div>{r.ordered.toLocaleString()}</div>
+              <div>{r.shipped.toLocaleString()}</div>
+              <div style={{ color: r.diff < 0 ? "#D64545" : "#1F9E8D", fontWeight: 600 }}>{r.diff > 0 ? "+" : ""}{r.diff.toLocaleString()}</div>
+              <div style={{ color: r.pctDiff < 0 ? "#D64545" : "#1F9E8D", fontWeight: 600 }}>{r.pctDiff > 0 ? "+" : ""}{r.pctDiff.toFixed(2)}%</div>
+            </div>
+          ))
+        )}
       </Card>
     </div>
   );
@@ -362,8 +1202,8 @@ export function AssignWorkModal({
                   }}
                   style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB", fontSize: 12.5 }}
                 >
-                  {orders.filter(o => !o.isDeleted).map(o => (
-                    <option key={o.id} value={o.id}>
+                  {Array.from(new Map((orders || []).filter(o => !o.isDeleted).map(o => [o.id, o])).values()).map((o, idx) => (
+                    <option key={o.primaryId || `${o.id}-${idx}`} value={o.id}>
                       {o.id} · {o.style} ({o.buyer})
                     </option>
                   ))}
@@ -600,7 +1440,7 @@ export function AddSupplierModal({ onClose, onAdd }) {
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
           <div style={{ padding: "20px 24px", overflowY: "auto", flex: 1 }}>
-            
+
             <div style={{ fontSize: 12.5, fontWeight: 700, color: "#1F9E8D", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>
               Supplier Information
             </div>
@@ -854,7 +1694,7 @@ export function EditSupplierModal({ supplier, onClose, onSave }) {
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
           <div style={{ padding: "20px 24px", overflowY: "auto", flex: 1 }}>
-            
+
             <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: 12, marginBottom: 12 }}>
               <div>
                 <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#374151", marginBottom: 4 }}>Supplier Name *</label>
@@ -1315,12 +2155,12 @@ export function SupplierDetailView({
                     border: "1px solid #D1D5DB",
                     background:
                       item.status === "Completed" ? "#E1F5EE" :
-                      item.status === "Delayed" ? "#FEE2E2" :
-                      item.status === "In Progress" ? "#FEF3C7" : "#F3F4F6",
+                        item.status === "Delayed" ? "#FEE2E2" :
+                          item.status === "In Progress" ? "#FEF3C7" : "#F3F4F6",
                     color:
                       item.status === "Completed" ? "#085041" :
-                      item.status === "Delayed" ? "#991B1B" :
-                      item.status === "In Progress" ? "#92400E" : "#4B5563",
+                        item.status === "Delayed" ? "#991B1B" :
+                          item.status === "In Progress" ? "#92400E" : "#4B5563",
                     cursor: "pointer"
                   }}
                 >
@@ -1343,10 +2183,10 @@ export function SupplierDetailView({
                     border: "1px solid #D1D5DB",
                     background:
                       item.qualityStatus === "Passed" ? "#E1F5EE" :
-                      item.qualityStatus === "Issue" ? "#FEE2E2" : "#F3F4F6",
+                        item.qualityStatus === "Issue" ? "#FEE2E2" : "#F3F4F6",
                     color:
                       item.qualityStatus === "Passed" ? "#085041" :
-                      item.qualityStatus === "Issue" ? "#991B1B" : "#4B5563",
+                        item.qualityStatus === "Issue" ? "#991B1B" : "#4B5563",
                     cursor: "pointer"
                   }}
                 >
@@ -1510,7 +2350,7 @@ export function SupplierPerformancePage({
             Vendor management and performance tracking — assign work from existing orders & tasks, track on-time delivery and quality
           </div>
         </div>
-        
+
         <div style={{ display: "flex", gap: 10 }}>
           <button
             onClick={() => setShowAssignModal(true)}
@@ -1767,7 +2607,7 @@ export function NotificationsPage({
   const filteredNotifications = useMemo(() => {
     return notifications.filter(n => {
       if (n.isDeleted === true) return false;
-      
+
       // Tab filter
       if (tabFilter === "unread" && n.isRead) return false;
       if (["order", "tna", "task", "approval", "compliance", "certification"].includes(tabFilter) && n.type !== tabFilter) return false;
@@ -2130,7 +2970,10 @@ export function DebitNotesPage({ orders, notes, onAdd }) {
   const set = (field, val) => setForm(f => ({ ...f, [field]: val }));
   const total = notes.reduce((a, n) => a + (Number(n.amount) || 0), 0);
   const bySeason = {};
-  notes.forEach(n => { bySeason[n.season] = (bySeason[n.season] || 0) + (Number(n.amount) || 0); });
+  notes.forEach(n => {
+    const sKey = n.season || "Other";
+    bySeason[sKey] = (bySeason[sKey] || 0) + (Number(n.amount) || 0);
+  });
 
   function submit() {
     if (!form.buyer.trim() || !form.amount) return;
@@ -2143,11 +2986,11 @@ export function DebitNotesPage({ orders, notes, onAdd }) {
       <PageHeader title="Debit Notes" sub="Entered by Merchandising each season — buyer deductions and claims against orders" />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 16 }}>
         <Card style={{ padding: "16px 18px" }}><div style={{ fontSize: 12, color: "#8A8D98" }}>Total debit notes</div><div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: "#D64545" }}>{notes.length}</div></Card>
-        <Card style={{ padding: "16px 18px" }}><div style={{ fontSize: 12, color: "#8A8D98" }}>Total value</div><div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: "#D64545" }}>${total.toLocaleString()}</div></Card>
+        <Card style={{ padding: "16px 18px" }}><div style={{ fontSize: 12, color: "#8A8D98" }}>Total value</div><div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: "#D64545" }}>₹{total.toLocaleString("en-IN")}</div></Card>
         <Card style={{ padding: "16px 18px" }}>
           <div style={{ fontSize: 12, color: "#8A8D98", marginBottom: 4 }}>By season</div>
           {Object.entries(bySeason).map(([s, v]) => (
-            <div key={s} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}><span>{s}</span><span style={{ fontWeight: 600 }}>${v.toLocaleString()}</span></div>
+            <div key={s} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}><span>{s}</span><span style={{ fontWeight: 600 }}>₹{v.toLocaleString("en-IN")}</span></div>
           ))}
         </Card>
       </div>
@@ -2169,11 +3012,13 @@ export function DebitNotesPage({ orders, notes, onAdd }) {
             <label style={{ fontSize: 11, color: "#8A8D98", display: "block", marginBottom: 4 }}>PO (optional)</label>
             <select value={form.po} onChange={e => set("po", e.target.value)} style={{ width: "100%", padding: "7px 8px", borderRadius: 7, border: "1px solid #E7E8ED", fontSize: 12.5 }}>
               <option value="">—</option>
-              {orders.map(o => <option key={o.id} value={o.id}>{o.id}</option>)}
+              {Array.from(new Map((orders || []).map(o => [o.id, o])).values()).map(o => (
+                <option key={o.primaryId || o.id} value={o.id}>{o.id}</option>
+              ))}
             </select>
           </div>
           <div>
-            <label style={{ fontSize: 11, color: "#8A8D98", display: "block", marginBottom: 4 }}>Amount ($)</label>
+            <label style={{ fontSize: 11, color: "#8A8D98", display: "block", marginBottom: 4 }}>Amount (₹)</label>
             <input type="number" value={form.amount} onChange={e => set("amount", e.target.value)} style={{ width: "100%", padding: "7px 8px", borderRadius: 7, border: "1px solid #E7E8ED", fontSize: 12.5 }} />
           </div>
           <div>
@@ -2190,16 +3035,16 @@ export function DebitNotesPage({ orders, notes, onAdd }) {
 
       <Card>
         <div style={{ display: "grid", gridTemplateColumns: "0.8fr 1fr 0.9fr 0.9fr 1.6fr 0.8fr", fontSize: 11, color: "#8A8D98", padding: "0 4px 8px", borderBottom: "1px solid #F0F0F2" }}>
-          <div>Season</div><div>Buyer</div><div>PO</div><div>Amount</div><div>Reason</div><div>Date</div>
+          <div>Season</div><div>Buyer</div><div>PO</div><div>Amount (₹)</div><div>Reason</div><div>Date</div>
         </div>
         {notes.length === 0 ? (
           <div style={{ fontSize: 12.5, color: "#B0B2BA", padding: "12px 4px" }}>No debit notes recorded yet.</div>
         ) : notes.map(n => (
           <div key={n.id} style={{ display: "grid", gridTemplateColumns: "0.8fr 1fr 0.9fr 0.9fr 1.6fr 0.8fr", alignItems: "center", fontSize: 12.5, padding: "10px 4px", borderBottom: "1px solid #F5F5F7" }}>
-            <div>{n.season}</div>
+            <div>{n.season || "—"}</div>
             <div style={{ fontWeight: 600, color: "#1B2130" }}>{n.buyer}</div>
             <div style={{ fontFamily: "monospace", fontSize: 11 }}>{n.po || "—"}</div>
-            <div style={{ color: "#D64545", fontWeight: 600 }}>${Number(n.amount).toLocaleString()}</div>
+            <div style={{ color: "#D64545", fontWeight: 600 }}>₹{Number(n.amount || 0).toLocaleString("en-IN")}</div>
             <div style={{ color: "#565A66" }}>{n.reason}</div>
             <div>{n.date}</div>
           </div>
@@ -2246,7 +3091,9 @@ export function CapasPage({ orders, capas, onAdd, onCycleStatus }) {
             <label style={{ fontSize: 11, color: "#8A8D98", display: "block", marginBottom: 4 }}>PO (optional)</label>
             <select value={form.po} onChange={e => set("po", e.target.value)} style={{ width: "100%", padding: "7px 8px", borderRadius: 7, border: "1px solid #E7E8ED", fontSize: 12.5 }}>
               <option value="">—</option>
-              {orders.map(o => <option key={o.id} value={o.id}>{o.id}</option>)}
+              {Array.from(new Map((orders || []).map(o => [o.id, o])).values()).map(o => (
+                <option key={o.primaryId || o.id} value={o.id}>{o.id}</option>
+              ))}
             </select>
           </div>
           <div>
@@ -2293,13 +3140,878 @@ export function CapasPage({ orders, capas, onAdd, onCycleStatus }) {
   );
 }
 
-export function ExecutiveOverviewPage({ orders, attendance, financials, roster, onOpenOrder, onNavigate, onApproveCosting, onRejectCosting }) {
-  const allStages = orders.flatMap(o => (o.stages || []).map(s => ({ ...s, orderId: o.id, style: o.style, buyer: o.buyer })));
-  const totalOrders = orders.length;
-  const totalQty = orders.reduce((a, o) => a + (Number(o.qty) || 0), 0);
+const BUYER_SCOPED_DEPTS = {
+  "Merchandising": "merchandiserIds",
+  "Purchase – Fabric": "fabricManagerIds",
+  "Purchase – Trims": "trimsManagerIds",
+  "Artwork": "artworkManagerIds",
+};
+
+export function EmployeePerformancePanel({ orders = [], buyers = [], roster = [], attendance = {}, userSessions = [], customTasks = [], leaveRequests = [], users = [], teams = [], complaints = [], onResolveComplaint, isAdmin = false, onNavigate, onBack }) {
+  const employeeRows = useMemo(() => {
+    const activeOrders = orders.filter(order => order.isDeleted !== true);
+    const allStages = activeOrders.flatMap(order => (order.stages || []).map(stage => ({ ...stage, orderId: order.id })));
+    const cleanName = value => String(value || "").replace(/^@/, "").split("(")[0].trim().toLowerCase();
+    const isDone = value => ["done", "completed", "complete", "closed"].includes(String(value || "").toLowerCase());
+    const todayStr = new Date().toISOString().slice(0, 10);
+
+    const teamMap = new Map((teams || []).map(t => [t.id, t.name]));
+
+    const candidateEmployees = (users && users.length > 0)
+      ? users.filter(u => u.active !== false && !u.isMD).map(u => {
+        const teamName = teamMap.get(u.teamId);
+        return {
+          id: u.id,
+          name: u.name,
+          username: u.username,
+          dept: teamName || u.dept || "Merchandising",
+          teamIds: Array.isArray(u.teamIds) ? u.teamIds : (u.teamId ? [u.teamId] : []),
+          isUser: true,
+        };
+      })
+      : (roster || []).filter(person => person.name && person.name !== "—");
+
+    const findBuyerForOrder = order => {
+      if (!order) return null;
+      const buyerName = String(order.buyer || "").trim().toLowerCase();
+      return (buyers || []).find(b => (order.buyerId && b.id === order.buyerId) || String(b.name || "").trim().toLowerCase() === buyerName) || null;
+    };
+
+    return candidateEmployees
+      .map(person => {
+        const name = cleanName(person.name);
+        const username = cleanName(person.username);
+        const userDept = cleanName(person.dept);
+
+        const assignedTasks = (customTasks || []).filter(task => {
+          const assignee = cleanName(task.assignee);
+          const taskDept = cleanName(task.dept);
+          const directMatch = (name && (assignee === name || assignee.includes(name))) ||
+            (username && (assignee === username || assignee.includes(username)));
+          if (directMatch) return true;
+          return userDept && taskDept && taskDept === userDept;
+        });
+
+        // Resolve user departments (including multi-team / teamIds if user record exists)
+        const userDepts = person.teamIds && person.teamIds.length > 0
+          ? person.teamIds.map(tId => teamMap.get(tId)).filter(Boolean)
+          : [person.dept];
+        const scopedFields = Array.from(new Set(userDepts.map(d => BUYER_SCOPED_DEPTS[d]).filter(Boolean)));
+
+        // Determine accessible/visible orders exactly like canSeeOrder in App.jsx
+        let visibleOrdersForUser;
+        if (scopedFields.length > 0 && person.id) {
+          // Buyer-scoped departments (Merchandising, Purchase – Fabric, Purchase – Trims, Artwork):
+          // User only sees orders whose buyer is explicitly mapped to their user ID
+          visibleOrdersForUser = activeOrders.filter(order => {
+            const b = findBuyerForOrder(order);
+            if (!b) return false;
+            return scopedFields.some(field => {
+              const ids = Array.isArray(b[field]) ? b[field] : [];
+              return ids.includes(person.id);
+            });
+          });
+        } else {
+          // Non-buyer-scoped departments (Planning, Cutting, Production, Quality, etc.):
+          // Order is visible if it touches the user's department (or all active orders if no dept stages)
+          visibleOrdersForUser = activeOrders.filter(order => {
+            if (!Array.isArray(order.stages)) return false;
+            return order.stages.some(s => s && userDepts.some(ud => cleanName(ud) === cleanName(s.dept)));
+          });
+          // Fallback if none matched: all active orders
+          if (visibleOrdersForUser.length === 0) {
+            visibleOrdersForUser = activeOrders;
+          }
+        }
+
+        const employeeOrderSet = new Set(visibleOrdersForUser.map(o => o.id));
+
+        // Department tasks on the user's visible orders (matches collectTasks(visibleOrders, role.dept) on user's dashboard)
+        const deptTnaRows = [];
+        visibleOrdersForUser.forEach(o => {
+          if (!Array.isArray(o.stages)) return;
+          o.stages.forEach(s => {
+            if (!s || typeof s !== "object") return;
+            const stageDept = cleanName(s.dept);
+            if (userDepts.some(ud => cleanName(ud) === stageDept) || stageDept === userDept) {
+              deptTnaRows.push({ ...s, orderId: o.id });
+            }
+          });
+        });
+
+        // Open tasks strictly matching openRows on user dashboard: rows.filter(r => r.stage.status !== "done")
+        const openDeptTnaRows = deptTnaRows.filter(s => !isDone(s.status));
+        const completedDeptTnaRows = deptTnaRows.filter(s => isDone(s.status));
+        const delayedDeptTnaRows = deptTnaRows.filter(s => s.reason || s.status === "Delayed");
+
+        // Custom tasks assigned to user (or unassigned in their department)
+        const openCustomTasks = assignedTasks.filter(task => !isDone(task.status));
+        const completedCustomTasks = assignedTasks.filter(task => isDone(task.status));
+
+        const totalTasksCount = deptTnaRows.length + assignedTasks.length;
+        const totalOpenTasksCount = openDeptTnaRows.length + openCustomTasks.length;
+        const totalCompletedCount = completedDeptTnaRows.length + completedCustomTasks.length;
+        const delayedItems = delayedDeptTnaRows.length;
+        const workItems = totalTasksCount;
+
+        const employeeLeave = leaveRequests.filter(leave => cleanName(leave.name) === name || cleanName(leave.username) === username);
+        const approvedLeave = employeeLeave.filter(leave => String(leave.status || "").toLowerCase() === "approved").length;
+        const openTasks = totalOpenTasksCount;
+
+        // Stage completion complaints / false reporting against this user (-10 pts each)
+        const userComplaints = (complaints || []).filter(c => {
+          const tagged = cleanName(c.taggedUser);
+          const compBy = cleanName(c.completedBy);
+          return (name && (tagged === name || (tagged && name.includes(tagged)) || (name && tagged.includes(name)))) ||
+            (username && (tagged === username || (tagged && username.includes(tagged)) || (username && tagged.includes(username)))) ||
+            (compBy && name && (compBy === name || compBy.includes(name))) ||
+            (compBy && username && (compBy === username || compBy.includes(username)));
+        });
+        const complaintsCount = userComplaints.length;
+
+        // Unique mistake incidents: delayed stages + dispute complaints against this user (a mistake is always recorded)
+        const mistakeKeys = new Set();
+        delayedDeptTnaRows.forEach((s, i) => mistakeKeys.add(`delay_${s.orderId || "ord"}_${s.name || i}`));
+        userComplaints.forEach((c, i) => mistakeKeys.add(`complaint_${c.id || (c.orderId + "_" + (c.stageName || i))}`));
+        const mistakesCount = mistakeKeys.size;
+        const mistakeFreeRate = workItems > 0
+          ? Math.max(0, Math.round(((workItems - mistakesCount) / workItems) * 100))
+          : (mistakesCount > 0 ? 0 : 100);
+
+        const score = workItems > 0 ? Math.max(0, Math.round((totalCompletedCount / workItems) * 100 - delayedItems * 5 - complaintsCount * 10)) : 0;
+
+        // Attendance determination:
+        // 1. Approved leave
+        const isOnLeave = approvedLeave > 0 || (attendance[person.name] === "leave") || (person.username && attendance[person.username] === "leave");
+
+        // 2. Logged in today check: Must have an active or completed login session today
+        const hasSessionToday = (userSessions || []).some(s => {
+          const matchDate = s.date === todayStr || (s.loginTime && s.loginTime.startsWith(todayStr));
+          if (!matchDate) return false;
+          const sName = cleanName(s.name);
+          const sUser = cleanName(s.username);
+          return (person.id && s.userId === person.id) ||
+            (username && sUser && (sUser === username || sUser.includes(username))) ||
+            (name && sName && (sName === name || sName.includes(name)));
+        });
+
+        const attendanceStatus = isOnLeave
+          ? "leave"
+          : hasSessionToday
+            ? "present"
+            : "absent";
+
+        return {
+          ...person,
+          orderCount: employeeOrderSet.size,
+          completed: totalCompletedCount,
+          delayed: delayedItems,
+          taskCount: totalTasksCount,
+          openTasks,
+          leaveCount: approvedLeave,
+          complaintsCount,
+          mistakesCount,
+          mistakeFreeRate,
+          attendance: attendanceStatus,
+          score,
+        };
+      })
+      .sort((a, b) => b.score - a.score || b.completed - a.completed || b.orderCount - a.orderCount);
+  }, [orders, buyers, roster, attendance, userSessions, customTasks, leaveRequests, users, teams, complaints]);
+
+  const totals = employeeRows.reduce((summary, row) => ({
+    orders: summary.orders + row.orderCount,
+    tasks: summary.tasks + row.taskCount,
+    open: summary.open + row.openTasks,
+    leave: summary.leave + row.leaveCount,
+    complaints: summary.complaints + row.complaintsCount,
+  }), { orders: 0, tasks: 0, open: 0, leave: 0, complaints: 0 });
+
+  return (
+    <div>
+      {onBack && (
+        <div style={{ marginBottom: 14 }}>
+          <button
+            onClick={onBack}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "6px 12px",
+              borderRadius: 6,
+              border: "1px solid #D1D5DB",
+              background: "#FFFFFF",
+              fontSize: 12.5,
+              fontWeight: 600,
+              color: "#374151",
+              cursor: "pointer"
+            }}
+          >
+            ← Back to MD Executive Dashboard
+          </button>
+        </div>
+      )}
+      <Card style={{ marginBottom: 16 }}>
+        <CardHeader
+          title="EMPLOYEE PERFORMANCE & WORK BREAKDOWN"
+          sub="Order maintenance, tasks, attendance, false-stage complaints (-10 pts), and leave tracking"
+          action="Open tasks"
+          onAction={() => onNavigate && onNavigate("tasks")}
+        />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, marginBottom: 14 }}>
+          {[
+            ["Employees tracked", employeeRows.length, "#378ADD"],
+            ["Orders maintained", totals.orders, "#1F9E8D"],
+            ["Tasks", totals.tasks, "#7F77DD"],
+            ["Open work items", totals.open, "#D64545"],
+            ["Stage disputes / complaints", totals.complaints, "#DC2626"],
+          ].map(([label, value, color]) => (
+            <div key={label} style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 8, padding: "10px 12px" }}>
+              <div style={{ fontSize: 10.5, color: "#64748B" }}>{label}</div>
+              <div style={{ fontSize: 19, fontWeight: 800, color, marginTop: 4 }}>{value}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ overflowX: "auto" }}>
+          <div style={{ minWidth: 920, display: "grid", gridTemplateColumns: "1.5fr 0.9fr 0.6fr 0.6fr 0.8fr 0.6fr 0.8fr 0.8fr 0.7fr", fontSize: 10.5, color: "#64748B", fontWeight: 700, padding: "0 0 7px", borderBottom: "1px solid #F1F5F9" }}>
+            <div>EMPLOYEE</div><div>DEPARTMENT</div><div>ORDERS</div><div>DONE</div><div>TASKS</div><div>DELAYED</div><div>COMPLAINTS</div><div>MISTAKE-FREE</div><div>PERFORMANCE</div>
+          </div>
+          <div style={{ minWidth: 920, maxHeight: 300, overflowY: "auto" }}>
+            {employeeRows.length === 0 ? (
+              <div style={{ padding: "24px 0", color: "#94A3B8", fontSize: 12 }}>No employee records available.</div>
+            ) : employeeRows.map(employee => (
+              <div key={employee.name} style={{ display: "grid", gridTemplateColumns: "1.5fr 0.9fr 0.6fr 0.6fr 0.8fr 0.6fr 0.8fr 0.8fr 0.7fr", alignItems: "center", fontSize: 11.5, padding: "9px 0", borderBottom: "1px solid #F8FAFC" }}>
+                <div>
+                  <div style={{ fontWeight: 700, color: "#1E293B" }}>{employee.name}</div>
+                  <div style={{
+                    fontSize: 10,
+                    fontWeight: 600,
+                    color: employee.attendance === "present" ? "#059669" : employee.attendance === "leave" ? "#D97706" : "#DC2626",
+                    marginTop: 2
+                  }}>
+                    {employee.attendance === "present" ? "Present" : employee.attendance === "leave" ? "On Leave" : "Absent"}
+                  </div>
+                </div>
+                <div style={{ color: "#64748B" }}>{employee.dept || "—"}</div>
+                <div style={{ color: "#1E293B", fontWeight: 600 }}>{employee.orderCount}</div>
+                <div style={{ color: "#059669", fontWeight: 700 }}>{employee.completed}</div>
+                <div style={{ color: "#1E293B" }}>{employee.taskCount} <span style={{ color: "#94A3B8" }}>({employee.openTasks} open)</span></div>
+                <div style={{ color: employee.delayed > 0 ? "#DC2626" : "#059669", fontWeight: 700 }}>{employee.delayed}</div>
+                <div>
+                  {employee.complaintsCount > 0 ? (
+                    <span style={{ display: "inline-block", padding: "2px 7px", borderRadius: 999, background: "#FEE2E2", color: "#B91C1C", fontWeight: 700, fontSize: 11 }}>
+                      {employee.complaintsCount} (-{employee.complaintsCount * 10} pts)
+                    </span>
+                  ) : (
+                    <span style={{ color: "#94A3B8" }}>0</span>
+                  )}
+                </div>
+                <div>
+                  <span style={{
+                    display: "inline-block",
+                    padding: "2px 7px",
+                    borderRadius: 999,
+                    background: (employee.mistakeFreeRate !== undefined && employee.mistakeFreeRate < 100) ? "#FEE2E2" : "#F3E8FF",
+                    color: (employee.mistakeFreeRate !== undefined && employee.mistakeFreeRate < 100) ? "#B91C1C" : "#7E22CE",
+                    fontWeight: 700,
+                    fontSize: 11
+                  }}>
+                    {employee.mistakeFreeRate !== undefined ? employee.mistakeFreeRate : 100}%
+                  </span>
+                </div>
+                <div style={{ color: employee.score >= 75 ? "#059669" : employee.score >= 50 ? "#D97706" : "#DC2626", fontWeight: 800 }}>{employee.score}%</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Card>
+
+      {/* Stage Disputes & False Completion Complaints Card */}
+      <Card style={{ marginBottom: 16 }}>
+        <CardHeader
+          title="STAGE DISPUTES & FALSE COMPLETION COMPLAINTS"
+          sub="Complaints filed by downstream stage owners against false stage completions (-10 points per complaint)"
+        />
+        {complaints.length === 0 ? (
+          <div style={{ padding: "24px 0", color: "#94A3B8", fontSize: 12, textAlign: "center" }}>
+            No stage completion disputes reported. All stages completed cleanly.
+          </div>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+              <thead>
+                <tr style={{ background: "#F8FAFC", borderBottom: "1px solid #E2E8F0", textAlign: "left" }}>
+                  <th style={{ padding: "8px 10px", fontWeight: 700, color: "#475569" }}>ORDER / STYLE</th>
+                  <th style={{ padding: "8px 10px", fontWeight: 700, color: "#475569" }}>STAGE & DEPT</th>
+                  <th style={{ padding: "8px 10px", fontWeight: 700, color: "#475569" }}>REPORTED BY</th>
+                  <th style={{ padding: "8px 10px", fontWeight: 700, color: "#475569" }}>TAGGED USER (PENALTY)</th>
+                  <th style={{ padding: "8px 10px", fontWeight: 700, color: "#475569" }}>REASON / REMARK</th>
+                  <th style={{ padding: "8px 10px", fontWeight: 700, color: "#475569" }}>DATE</th>
+                  <th style={{ padding: "8px 10px", fontWeight: 700, color: "#475569" }}>STATUS</th>
+                  {onResolveComplaint && <th style={{ padding: "8px 10px", fontWeight: 700, color: "#475569", textAlign: "right" }}>ACTION</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {complaints.map(c => {
+                  const isResolved = c.status === "Resolved";
+                  const isReverted = c.status === "Reverted";
+                  return (
+                    <tr key={c.id} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                      <td style={{ padding: "9px 10px", fontWeight: 600, color: "#0F172A" }}>
+                        <div>{c.orderId}</div>
+                        <div style={{ fontSize: 10.5, color: "#64748B" }}>{c.orderStyle || "—"}</div>
+                      </td>
+                      <td style={{ padding: "9px 10px" }}>
+                        <div style={{ fontWeight: 600, color: "#1E293B" }}>{c.stageName}</div>
+                        <div style={{ fontSize: 10.5, color: "#64748B" }}>{c.stageDept}</div>
+                      </td>
+                      <td style={{ padding: "9px 10px" }}>
+                        <span style={{ fontWeight: 600, color: "#3B82F6" }}>@{c.reportedBy}</span>
+                      </td>
+                      <td style={{ padding: "9px 10px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ fontWeight: 700, color: "#DC2626" }}>@{c.taggedUser}</span>
+                          <span style={{ background: "#FEE2E2", color: "#991B1B", padding: "1px 6px", borderRadius: 4, fontSize: 10.5, fontWeight: 800 }}>-10 pts</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: "9px 10px", color: "#334155", maxWidth: 280, wordBreak: "break-word" }}>
+                        {c.reason}
+                      </td>
+                      <td style={{ padding: "9px 10px", color: "#64748B", fontSize: 11 }}>
+                        {c.createdAt ? new Date(c.createdAt).toLocaleDateString("en-IN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
+                      </td>
+                      <td style={{ padding: "9px 10px" }}>
+                        <span style={{
+                          display: "inline-block",
+                          padding: "2px 8px",
+                          borderRadius: 999,
+                          fontSize: 10.5,
+                          fontWeight: 700,
+                          background: isResolved ? "#DCFCE7" : isReverted ? "#F1F5F9" : "#FEF3C7",
+                          color: isResolved ? "#166534" : isReverted ? "#475569" : "#92400E"
+                        }}>
+                          {c.status || "Under Review"}
+                        </span>
+                      </td>
+                      {onResolveComplaint && (
+                        <td style={{ padding: "9px 10px", textAlign: "right" }}>
+                          {!isResolved && !isReverted ? (
+                            <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                              <button
+                                onClick={() => onResolveComplaint(c.id, "Resolved")}
+                                style={{
+                                  background: "#10B981",
+                                  color: "#FFFFFF",
+                                  border: "none",
+                                  borderRadius: 5,
+                                  padding: "4px 8px",
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  cursor: "pointer"
+                                }}
+                              >
+                                Resolve
+                              </button>
+                              <button
+                                onClick={() => onResolveComplaint(c.id, "Reverted")}
+                                title="Revert stage dispute: unblocks order stage while keeping mistake record on tagged employee"
+                                style={{
+                                  background: "#64748B",
+                                  color: "#FFFFFF",
+                                  border: "none",
+                                  borderRadius: 5,
+                                  padding: "4px 8px",
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  cursor: "pointer"
+                                }}
+                              >
+                                Revert
+                              </button>
+                            </div>
+                          ) : (
+                            <span style={{ fontSize: 11, color: isResolved ? "#059669" : "#64748B", fontWeight: 600 }}>{c.status}</span>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+/**
+ * 3D Graphic Spotlight for the #1 Top Performing Employee in the MD Dashboard.
+ * Positioned absolute / fixed on the left side, displaying 3D visuals and employee name only.
+ */
+export function TopPerformer3DSpotlight({ performer, isSidebarCollapsed = false, onViewDetails }) {
+  const [isHovered, setIsHovered] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(() => {
+    try {
+      return sessionStorage.getItem("hide_top_performer_badge") === "true";
+    } catch (e) {
+      return false;
+    }
+  });
+
+  if (!performer) return null;
+
+  if (isMinimized) {
+    return (
+      <button
+        type="button"
+        aria-label="Show Top Performer"
+        title="Show Top Performer"
+        onClick={() => {
+          setIsMinimized(false);
+          try {
+            sessionStorage.removeItem("hide_top_performer_badge");
+          } catch (storageError) {}
+        }}
+        style={{
+          position: "fixed",
+          bottom: 20,
+          left: isSidebarCollapsed ? 84 : 228,
+          zIndex: 90,
+          width: 42,
+          height: 42,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 0,
+          border: "1px solid rgba(245, 158, 11, 0.7)",
+          borderRadius: "50%",
+          background: "linear-gradient(145deg, #1E1B4B 0%, #0F172A 100%)",
+          color: "#FDE68A",
+          fontSize: 21,
+          cursor: "pointer",
+          boxShadow: "0 8px 18px rgba(0, 0, 0, 0.4), 0 0 14px rgba(245, 158, 11, 0.22)",
+          transition: "left 0.22s ease, transform 0.18s ease, box-shadow 0.18s ease"
+        }}
+        onMouseEnter={e => {
+          e.currentTarget.style.transform = "translateY(-3px) scale(1.06)";
+          e.currentTarget.style.boxShadow = "0 12px 22px rgba(0, 0, 0, 0.5), 0 0 20px rgba(245, 158, 11, 0.4)";
+        }}
+        onMouseLeave={e => {
+          e.currentTarget.style.transform = "translateY(0) scale(1)";
+          e.currentTarget.style.boxShadow = "0 8px 18px rgba(0, 0, 0, 0.4), 0 0 14px rgba(245, 158, 11, 0.22)";
+        }}
+      >
+        ★
+      </button>
+    );
+  }
+
+  const isPresent = performer.attendance === "present";
+  const initials = String(performer.name || "★")
+    .trim()
+    .split(/\s+/)
+    .map(p => p[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase() || "★";
+
+  return (
+    <div
+      onClick={onViewDetails}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      title={`#1 Top Performer: ${performer.name} · Click to view detailed work breakdown`}
+      style={{
+        position: "fixed",
+        bottom: 24,
+        left: isSidebarCollapsed ? 84 : 228,
+        zIndex: 90,
+        width: 146,
+        background: "linear-gradient(165deg, rgba(9, 13, 22, 0.96) 0%, rgba(21, 25, 52, 0.96) 50%, rgba(10, 14, 26, 0.96) 100%)",
+        border: isHovered ? "1px solid rgba(245, 158, 11, 0.85)" : "1px solid rgba(245, 158, 11, 0.45)",
+        borderRadius: 16,
+        padding: "11px 10px 10px",
+        boxShadow: isHovered
+          ? "0 20px 35px -6px rgba(0, 0, 0, 0.65), 0 0 24px rgba(245, 158, 11, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.25)"
+          : "0 12px 26px -8px rgba(0, 0, 0, 0.5), 0 0 16px rgba(245, 158, 11, 0.18), inset 0 1px 1px rgba(255, 255, 255, 0.12)",
+        cursor: "pointer",
+        backdropFilter: "blur(8px)",
+        transform: isHovered ? "translateY(-4px) scale(1.03)" : "translateY(0) scale(1)",
+        transition: "left 0.22s ease, transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.22s ease, border-color 0.22s ease",
+        userSelect: "none"
+      }}
+    >
+      {/* Holographic Top Sheen */}
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 2,
+          background: "linear-gradient(90deg, transparent 0%, #F59E0B 30%, #FDE047 50%, #F59E0B 70%, transparent 100%)"
+        }}
+      />
+
+      <button
+        type="button"
+        aria-label="Minimize top performer badge"
+        onClick={e => {
+          e.stopPropagation();
+          setIsMinimized(true);
+          try {
+            sessionStorage.setItem("hide_top_performer_badge", "true");
+          } catch (storageError) {}
+        }}
+        style={{
+          position: "absolute",
+          top: 7,
+          right: 7,
+          width: 20,
+          height: 20,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 0,
+          border: "1px solid rgba(253, 230, 138, 0.45)",
+          borderRadius: 6,
+          background: "rgba(15, 23, 42, 0.55)",
+          color: "#FDE68A",
+          cursor: "pointer",
+          zIndex: 4,
+          transition: "background 0.15s ease, color 0.15s ease, border-color 0.15s ease"
+        }}
+        onMouseEnter={e => {
+          e.currentTarget.style.background = "rgba(245, 158, 11, 0.3)";
+          e.currentTarget.style.color = "#FFFFFF";
+          e.currentTarget.style.borderColor = "rgba(253, 230, 138, 0.9)";
+        }}
+        onMouseLeave={e => {
+          e.currentTarget.style.background = "rgba(15, 23, 42, 0.55)";
+          e.currentTarget.style.color = "#FDE68A";
+          e.currentTarget.style.borderColor = "rgba(253, 230, 138, 0.45)";
+        }}
+      >
+        <X size={12} strokeWidth={2.5} />
+      </button>
+
+      {/* Top Header: Badge & Live Status */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 3 }}>
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+            padding: "2px 6px",
+            borderRadius: 12,
+            background: "linear-gradient(135deg, rgba(245, 158, 11, 0.3), rgba(217, 119, 6, 0.15))",
+            border: "1px solid rgba(245, 158, 11, 0.5)",
+            color: "#FDE68A",
+            fontSize: 9,
+            fontWeight: 800,
+            letterSpacing: 0.4
+          }}
+        >
+          <Crown size={10} color="#FBBF24" fill="#FBBF24" />
+          <span>#1 TOP</span>
+        </div>
+
+        <span
+          title={isPresent ? "Present Today" : "Absent / Away"}
+          style={{
+            width: 7,
+            height: 7,
+            borderRadius: "50%",
+            background: isPresent ? "#22C55E" : "#EF4444",
+            boxShadow: isPresent ? "0 0 6px #22C55E" : "none"
+          }}
+        />
+      </div>
+
+      {/* 3D Isometric Pedestal & Elevated Avatar Graphic */}
+      <div
+        style={{
+          position: "relative",
+          width: "100%",
+          height: 84,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center"
+        }}
+      >
+        {/* Isometric Pedestal Platform SVG */}
+        <svg
+          width="130"
+          height="52"
+          viewBox="0 0 220 85"
+          fill="none"
+          style={{
+            position: "absolute",
+            bottom: 2,
+            filter: "drop-shadow(0 8px 14px rgba(0, 0, 0, 0.5))"
+          }}
+        >
+          <defs>
+            <linearGradient id="podiumTop" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#FEF3C7" />
+              <stop offset="40%" stopColor="#FDE68A" />
+              <stop offset="100%" stopColor="#D97706" />
+            </linearGradient>
+            <linearGradient id="podiumFront" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="#B45309" />
+              <stop offset="100%" stopColor="#451A03" />
+            </linearGradient>
+            <linearGradient id="podiumRight" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#92400E" />
+              <stop offset="100%" stopColor="#270E02" />
+            </linearGradient>
+            <linearGradient id="goldGlowRing" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#F59E0B" stopOpacity="0.9" />
+              <stop offset="50%" stopColor="#FDE047" stopOpacity="1" />
+              <stop offset="100%" stopColor="#D97706" stopOpacity="0.9" />
+            </linearGradient>
+          </defs>
+
+          {/* Pedestal Facets */}
+          <path d="M 28 42 L 110 74 L 192 42 L 192 56 L 110 82 L 28 56 Z" fill="url(#podiumFront)" />
+          <path d="M 110 74 L 192 42 L 192 56 L 110 82 Z" fill="url(#podiumRight)" opacity="0.85" />
+          <polygon points="110,10 192,42 110,72 28,42" fill="url(#podiumTop)" stroke="#FDE68A" strokeWidth="1" />
+          <ellipse cx="110" cy="42" rx="54" ry="18" fill="none" stroke="url(#goldGlowRing)" strokeWidth="2.5" strokeDasharray="5 3" opacity="0.85" />
+          <ellipse cx="110" cy="42" rx="34" ry="11" fill="white" opacity="0.3" filter="blur(1.5px)" />
+        </svg>
+
+        {/* Floating Avatar */}
+        <div
+          style={{
+            position: "relative",
+            zIndex: 3,
+            transform: isHovered ? "translateY(-4px) scale(1.06)" : "translateY(0)",
+            transition: "transform 0.22s ease"
+          }}
+        >
+          <div
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: "50%",
+              background: "linear-gradient(135deg, #FFE066 0%, #F59E0B 40%, #B45309 100%)",
+              padding: 2.5,
+              boxShadow: "0 8px 18px rgba(0, 0, 0, 0.45), 0 0 16px rgba(245, 158, 11, 0.4)"
+            }}
+          >
+            <div
+              style={{
+                width: "100%",
+                height: "100%",
+                borderRadius: "50%",
+                background: "linear-gradient(145deg, #1E1B4B 0%, #0F172A 100%)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#FDE68A",
+                fontSize: 16,
+                fontWeight: 900,
+                textShadow: "0 2px 4px rgba(0,0,0,0.5)"
+              }}
+            >
+              {initials}
+            </div>
+          </div>
+
+          {/* Trophy Badge */}
+          <div
+            style={{
+              position: "absolute",
+              bottom: -2,
+              right: -2,
+              width: 18,
+              height: 18,
+              borderRadius: "50%",
+              background: "linear-gradient(135deg, #F59E0B, #B45309)",
+              border: "1.5px solid #0B0F19",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 2px 6px rgba(0, 0, 0, 0.5)"
+            }}
+          >
+            <Trophy size={9} color="#FFFFFF" fill="#FFFFFF" />
+          </div>
+
+          <Sparkles
+            size={11}
+            color="#FDE047"
+            style={{ position: "absolute", top: -4, left: -8, opacity: 0.9, filter: "drop-shadow(0 0 3px #FDE047)" }}
+          />
+        </div>
+      </div>
+
+      {/* ONLY DISPLAYED NAME */}
+      <div style={{ textAlign: "center", marginTop: 2 }}>
+        <div
+          style={{
+            fontSize: 13.5,
+            fontWeight: 800,
+            color: "#F8FAFC",
+            letterSpacing: -0.2,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis"
+          }}
+        >
+          {performer.name}
+        </div>
+        <div style={{ fontSize: 9.5, color: "#FDE68A", fontWeight: 700, marginTop: 1 }}>
+          ★ Top Performer
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ExecutiveOrderDrilldownDrawer({
+  orders,
+  activeDrillDown,
+  filter,
+  onFilterChange,
+  onClose,
+  onOpenOrder,
+  onNavigate,
+  formatInr
+}) {
+  useEffect(() => {
+    const handleKeyDown = event => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  if (!activeDrillDown) return null;
+
+  const getOrderValue = order => {
+    const qty = Number(order?.qty) || Number(order?.preProd?.poSheet?.values?.poQty) || 0;
+    const poValues = order?.preProd?.poSheet?.values || {};
+    if (Number(poValues.orderValue) > 0) return Number(poValues.orderValue);
+    if (Number(order?.orderValue) > 0) return Number(order.orderValue);
+    const fob = Number(poValues.fobPrice || order?.fobPrice || order?.fob || order?.fobRate) || 0;
+    return fob * (qty || 1);
+  };
+  const getCurrentStage = order => (order?.stages || []).find(stage => stage?.status === "in_progress") ||
+    (order?.stages || []).find(stage => stage?.status !== "done" && stage?.status !== "completed") ||
+    (order?.stages || []).at(-1);
+  const isDelayed = order => order?.status === "Delayed" || (order?.stages || []).some(stage => stage?.reason);
+  const isShipped = order => order?.status === "Shipped" || ((order?.stages || []).length > 0 && order.stages.every(stage => ["done", "completed"].includes(stage?.status)));
+  const matchesQuickFilter = order => {
+    if (filter === "all") return true;
+    if (filter === "on-track") return order?.status === "On Track" && !isDelayed(order);
+    if (filter === "delayed") return isDelayed(order);
+    if (filter === "in-cutting") return (order?.stages || []).some(stage => stage?.dept === "Cutting" && !["done", "completed"].includes(stage?.status));
+    if (filter === "in-sewing") return (order?.stages || []).some(stage => /sewing/i.test(stage?.name || "") && !["done", "completed"].includes(stage?.status));
+    if (filter === "shipped") return isShipped(order);
+    return true;
+  };
+
+  const selectedOrders = (orders || []).filter(order => {
+    if (order?.isDeleted === true) return false;
+    const field = activeDrillDown.type === "buyer" ? order?.buyer : order?.country;
+    return field === activeDrillDown.value;
+  });
+  const filteredOrders = selectedOrders.filter(matchesQuickFilter);
+  const totalValue = selectedOrders.reduce((sum, order) => sum + getOrderValue(order), 0);
+  const delayedCount = selectedOrders.filter(isDelayed).length;
+  const title = `${activeDrillDown.type === "buyer" ? "Buyer" : "Country"} Insights: ${activeDrillDown.value}`;
+  const filters = [
+    ["all", "All"],
+    ["on-track", "On-Track"],
+    ["delayed", "Delayed"],
+    ["in-cutting", "In Cutting"],
+    ["in-sewing", "In Sewing"],
+    ["shipped", "Shipped"]
+  ];
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 1000, pointerEvents: "auto" }}>
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(15, 23, 42, 0.35)", backdropFilter: "blur(3px)" }} />
+      <aside style={{ position: "absolute", top: 0, right: 0, height: "100%", width: "min(760px, 94vw)", background: "#FFFFFF", boxShadow: "-12px 0 35px rgba(15, 23, 42, 0.16)", display: "flex", flexDirection: "column", transform: "translateX(0)", transition: "transform 300ms ease" }}>
+        <div style={{ padding: "20px 24px 16px", borderBottom: "1px solid #E2E8F0", background: "linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 100%)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 11, color: "#64748B", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>Executive drill-down</div>
+              <h2 style={{ margin: "4px 0 0", fontSize: 20, color: "#0F172A" }}>{title}</h2>
+            </div>
+            <button type="button" onClick={onClose} aria-label="Close order insights" style={{ border: "1px solid #E2E8F0", borderRadius: 8, width: 32, height: 32, background: "#FFFFFF", color: "#64748B", cursor: "pointer", fontSize: 17 }}>✕</button>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginTop: 16 }}>
+            {[
+              ["Orders", selectedOrders.length, "#2563EB"],
+              ["Quantity", `${selectedOrders.reduce((sum, order) => sum + (Number(order?.qty) || 0), 0).toLocaleString()} pcs`, "#0F766E"],
+              ["Value", formatInr(totalValue), "#7C3AED"],
+              ["Delayed", delayedCount, delayedCount > 0 ? "#DC2626" : "#16A34A"]
+            ].map(([label, value, color]) => (
+              <div key={label} style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, padding: "9px 10px" }}>
+                <div style={{ fontSize: 10, color: "#64748B", fontWeight: 700 }}>{label}</div>
+                <div style={{ fontSize: 15, color, fontWeight: 800, marginTop: 3 }}>{value}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", padding: "12px 24px", borderBottom: "1px solid #E2E8F0" }}>
+          {filters.map(([value, label]) => (
+            <button key={value} type="button" onClick={() => onFilterChange(value)} style={{ border: filter === value ? "1px solid #4F46E5" : "1px solid #E2E8F0", borderRadius: 999, padding: "5px 10px", background: filter === value ? "#EEF2FF" : "#FFFFFF", color: filter === value ? "#4338CA" : "#64748B", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{label}</button>
+          ))}
+        </div>
+        <div style={{ flex: 1, overflow: "auto", padding: "0 24px" }}>
+          {filteredOrders.length === 0 ? (
+            <div style={{ padding: "70px 20px", textAlign: "center", color: "#64748B" }}>
+              <div style={{ fontSize: 34, marginBottom: 10 }}>◌</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#334155" }}>No orders found for this selection</div>
+              <div style={{ fontSize: 12, marginTop: 4 }}>Try another quick filter.</div>
+            </div>
+          ) : (
+            <div style={{ minWidth: 680 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "0.9fr 1.2fr 0.9fr 0.9fr 0.9fr 1fr 0.8fr 0.9fr", gap: 8, padding: "14px 0 8px", borderBottom: "1px solid #E2E8F0", color: "#64748B", fontSize: 10, fontWeight: 800, textTransform: "uppercase" }}>
+                <div>Order / PO</div><div>Style</div><div>Buyer</div><div>Country</div><div>Qty</div><div>Current Stage</div><div>Status</div><div>Actions</div>
+              </div>
+              {filteredOrders.map(order => {
+                const currentStage = getCurrentStage(order);
+                const delayed = isDelayed(order);
+                return (
+                  <div key={order.primaryId || order.id} style={{ display: "grid", gridTemplateColumns: "0.9fr 1.2fr 0.9fr 0.9fr 0.9fr 1fr 0.8fr 0.9fr", gap: 8, alignItems: "center", padding: "11px 0", borderBottom: "1px solid #F1F5F9", fontSize: 11.5 }}>
+                    <button type="button" onClick={() => onOpenOrder && onOpenOrder(order.primaryId || order.id, order.primaryId)} style={{ padding: 0, border: 0, background: "none", textAlign: "left", color: "#2563EB", fontFamily: "monospace", fontWeight: 700, cursor: "pointer" }}>{order.id || order.primaryId}</button>
+                    <div style={{ color: "#334155", fontWeight: 600 }}>{order.style || "—"}</div>
+                    <div>{order.buyer || "—"}</div>
+                    <div>{order.country || "—"}</div>
+                    <div>{(Number(order.qty) || 0).toLocaleString()}</div>
+                    <div style={{ color: "#475569" }}>{currentStage?.name || "Order Started"}</div>
+                    <span style={{ justifySelf: "start", background: delayed ? "#FEF2F2" : "#ECFDF5", color: delayed ? "#B91C1C" : "#047857", borderRadius: 999, padding: "3px 7px", fontSize: 10, fontWeight: 800 }}>{delayed ? "Delayed" : order.status || "On Track"}</span>
+                    <button type="button" onClick={() => onOpenOrder && onOpenOrder(order.primaryId || order.id, order.primaryId)} style={{ border: "1px solid #C7D2FE", borderRadius: 6, padding: "5px 7px", background: "#EEF2FF", color: "#4338CA", fontSize: 10, fontWeight: 800, cursor: "pointer" }}>Open Order</button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        <div style={{ padding: "14px 24px", borderTop: "1px solid #E2E8F0", background: "#F8FAFC" }}>
+          <button type="button" onClick={() => { localStorage.setItem("loom_orders_drilldown_filter", JSON.stringify(activeDrillDown)); onNavigate && onNavigate("orders"); onClose(); }} style={{ width: "100%", border: 0, borderRadius: 9, padding: "10px 14px", background: "#4F46E5", color: "#FFFFFF", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>View filtered in Orders Master Page →</button>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+export function ExecutiveOverviewPage({ orders, buyers = [], attendance, userSessions = [], financials, roster, customTasks = [], leaveRequests = [], users = [], teams = [], orgStructure = {}, complaints = [], onResolveComplaint, isAdmin = false, onOpenOrder, onNavigate, onApproveCosting, onRejectCosting, onRefresh, isRefreshing = false, lastRefreshedAt = null, onOpenDept, isSidebarCollapsed = false }) {
+  // Only consider active, non-deleted orders for MD Executive Dashboard metrics
+  const activeOrders = useMemo(() => (orders || []).filter(o => o.isDeleted !== true && o.completed !== true), [orders]);
+  const allStages = useMemo(() => activeOrders.flatMap(o => (o.stages || []).map(s => ({ ...s, orderId: o.id, style: o.style, buyer: o.buyer }))), [activeOrders]);
+  const totalOrders = activeOrders.length;
+  const totalQty = activeOrders.reduce((a, o) => a + (Number(o.qty) || 0), 0);
 
   // 1. Order Health Calculation
-  const health = orders.map(o => {
+  const health = activeOrders.map(o => {
     const flags = (o.stages || []).filter(s => s.reason).length;
     let score = 100 - flags * 15 - (o.status === "Delayed" ? 20 : 0);
     score = Math.max(0, Math.min(100, score));
@@ -2314,13 +4026,99 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
   ].filter(b => b.value > 0);
 
   const overallHealth = Math.round(health.reduce((a, h) => a + h.score, 0) / (health.length || 1));
-  const onTrackCount = orders.filter(o => o.status === "On Track").length;
+  const onTrackCount = activeOrders.filter(o => o.status === "On Track").length;
   const onTimePct = Math.round((onTrackCount / (totalOrders || 1)) * 100);
 
-  const avgProgress = totalOrders > 0
-    ? orders.reduce((a, o) => a + (o.stages ? o.stages.filter(s => s.status === "done").length / o.stages.length : 0), 0) / totalOrders
-    : 0;
-  const shippedPcs = Math.round(totalQty * avgProgress);
+  // Shipped PCS: only count orders where all stages are 100% completed/done
+  const completedOrdersList = (orders || []).filter(o => {
+    if (o.isDeleted) return false;
+    const stages = o.stages || [];
+    if (stages.length === 0) return false;
+    return stages.every(s => s.status === "done" || s.status === "completed");
+  });
+  const shippedPcs = completedOrdersList.reduce((sum, o) => sum + (Number(o.qty) || 0), 0);
+
+  // Dynamic 6-month Shipment Performance Trend computed directly from active orders
+  const shipmentTrendData = useMemo(() => computeMonthlyShipmentPerformance(activeOrders), [activeOrders]);
+
+  // Calculate financial overview metrics from orders & finances:
+  // 1) Order Value: Total value across orders from scanned PO Sheet / FOB / costing / order revenue
+  const totalCalculatedOrderValue = useMemo(() => {
+    let sum = 0;
+    activeOrders.forEach(o => {
+      const qty = Number(o.qty) || Number(o.preProd?.poSheet?.values?.poQty) || 0;
+
+      // 1. First priority: Uploaded / Scanned PO Sheet values
+      const poSheetValues = o.preProd?.poSheet?.values || {};
+      if (poSheetValues.orderValue && Number(poSheetValues.orderValue) > 0) {
+        sum += Number(poSheetValues.orderValue);
+        return;
+      }
+      if (poSheetValues.fobPrice && Number(poSheetValues.fobPrice) > 0) {
+        sum += Number(poSheetValues.fobPrice) * (Number(poSheetValues.poQty) || qty || 1);
+        return;
+      }
+
+      // 2. Direct order FOB or orderValue fields
+      if (o.orderValue && Number(o.orderValue) > 0) {
+        sum += Number(o.orderValue);
+        return;
+      }
+      if (o.fobPrice || o.fob || o.fobRate) {
+        sum += (Number(o.fobPrice || o.fob || o.fobRate) || 0) * (qty || 1);
+        return;
+      }
+
+      // 3. Approved Costing / Costing Rows
+      if (o.costingApproval?.grandTotal) {
+        sum += Number(o.costingApproval.grandTotal) * (qty || 1);
+        return;
+      }
+      if (Array.isArray(o.costingRows) && o.costingRows.length > 0) {
+        const perPc = o.costingRows.reduce((acc, r) => acc + (r.isHeader ? 0 : (Number(r.price) || 0) * (Number(r.qty) || 0)), 0);
+        if (perPc > 0) {
+          sum += perPc * (qty || 1);
+          return;
+        }
+      }
+    });
+    return sum > 0 ? sum : (financials?.revenue || 0);
+  }, [activeOrders, financials?.revenue]);
+
+  // 2) Planned Cost & 3) Actual Cost from all active orders
+  const financialTotals = useMemo(() => {
+    const planned = activeOrders.reduce((sum, o) => sum + (Number(o.plannedCost) || 0), 0);
+    const actual = activeOrders.reduce((sum, o) => sum + (Number(o.actualCost) || 0), 0);
+    return {
+      plannedCost: planned > 0 ? planned : (financials?.cogs || 0),
+      actualCost: actual > 0 ? actual : (financials?.cogs || 0),
+    };
+  }, [activeOrders, financials?.cogs]);
+
+  // 4) Profit: Difference between Order Value and Actual Cost (or Planned Cost if actual is 0)
+  const overallProfitVal = totalCalculatedOrderValue - financialTotals.actualCost;
+
+  // 5) & 6) Variances across categories:
+  // Overall Variance Raw Material: Fabric / Raw Material + Trims & Accessories
+  // Overall Variance in Development: Production / CMT + VAP + Logistics + Other / Overheads & Margin
+  const varianceAggregates = useMemo(() => {
+    let rawMaterialVariance = 0;
+    let devVariance = 0;
+
+    activeOrders.forEach(o => {
+      const breakdown = computeOrderVarianceBreakdown(o);
+      (breakdown.categories || []).forEach(cat => {
+        if (cat.key === "fabric" || cat.key === "trims") {
+          rawMaterialVariance += (cat.variance || 0);
+        } else {
+          devVariance += (cat.variance || 0);
+        }
+      });
+    });
+
+    return { rawMaterialVariance, devVariance };
+  }, [activeOrders]);
+
   const grossProfit = (financials?.revenue || 0) - (financials?.cogs || 0);
   const grossMargin = financials?.revenue > 0 ? Math.round((grossProfit / financials.revenue) * 1000) / 10 : 0;
 
@@ -2332,38 +4130,91 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
 
   // 3. Order & Production Performance
   const inProduction = allStages.filter(s => ["Cutting", "Production"].includes(s.dept) && s.status === "in_progress").length;
-  const ordersAtRisk = orders.filter(o => o.status === "At Risk").length;
-  const ordersDelayed = orders.filter(o => o.status === "Delayed").length;
-  const ordersCompleted = orders.filter(o => o.status === "On Track" && o.stages && o.stages.every(s => s.status === "done")).length;
+  const ordersAtRisk = activeOrders.filter(o => o.status === "At Risk").length;
+  const ordersDelayed = activeOrders.filter(o => o.status === "Delayed").length;
+  const ordersCompleted = activeOrders.filter(o => o.status === "On Track" && o.stages && o.stages.every(s => s.status === "done")).length;
   const presentCount = roster.filter(s => (attendance[s.name] || "present") === "present").length;
   const capacityUtilization = Math.round((presentCount / (roster.length || 1)) * 100);
 
-  // 4. Department Performance (replacing Critical Alerts per user instruction)
-  const depts = ["Merchandising", "Program", "Planning", "Purchase – Fabric", "Purchase – Trims", "Quality", "Cutting", "Production", "Finishing", "Logistics & Documentation"];
-  const deptStats = depts.map(d => {
-    const dStages = allStages.filter(s => s.dept === d);
-    const total = dStages.length;
-    const completed = dStages.filter(s => s.status === "done").length;
-    const delayed = dStages.filter(s => s.reason).length;
-    const rate = total > 0 ? Math.round((completed / total) * 100) : 100;
-    return { name: d, total, completed, delayed, rate };
-  });
+  // 4. Department Performance (Dynamic across all departments added in settings or orgStructure, completely live)
+  const availableDepts = useMemo(() => {
+    const set = new Set();
+    const normalize = str => (str || "").trim();
+
+    // 1. From orgStructure (Settings / Departments setup)
+    Object.keys(orgStructure || {}).forEach(k => {
+      const trimmed = normalize(k);
+      if (trimmed && !["Administrators", "Executive (MD)"].includes(trimmed)) set.add(trimmed);
+    });
+
+    // 2. From teams list (Settings / Teams setup)
+    (teams || []).forEach(t => {
+      const trimmed = normalize(t.name);
+      if (trimmed && !["Administrators", "Executive (MD)"].includes(trimmed)) set.add(trimmed);
+    });
+
+    // 3. From default departments in ORG_STRUCTURE fallback
+    Object.keys(ORG_STRUCTURE || {}).forEach(k => {
+      const trimmed = normalize(k);
+      if (trimmed && !["Administrators", "Executive (MD)"].includes(trimmed)) set.add(trimmed);
+    });
+
+    // 4. Any department present in stages or custom tasks
+    allStages.forEach(s => {
+      const trimmed = normalize(s.dept);
+      if (trimmed && !["Administrators", "Executive (MD)"].includes(trimmed)) set.add(trimmed);
+    });
+    (customTasks || []).forEach(t => {
+      const trimmed = normalize(t.dept || t.department);
+      if (trimmed && !["Administrators", "Executive (MD)"].includes(trimmed)) set.add(trimmed);
+    });
+
+    return Array.from(set);
+  }, [orgStructure, teams, allStages, customTasks]);
+
+  const deptStats = useMemo(() => {
+    return availableDepts.map(d => {
+      const dLower = d.toLowerCase();
+      const dStages = allStages.filter(s => (s.dept || "").trim().toLowerCase() === dLower);
+      const dTasks = (customTasks || []).filter(t => t.isDeleted !== true && ((t.dept || t.department || "").trim().toLowerCase() === dLower));
+
+      const totalStages = dStages.length;
+      const completedStages = dStages.filter(s => s.status === "done" || s.status === "completed").length;
+      const delayedStages = dStages.filter(s => Boolean(s.reason && s.reason.trim() !== "" && s.reason !== "No delay flagged")).length;
+
+      const totalTasks = dTasks.length;
+      const completedTasks = dTasks.filter(t => t.status === "completed" || t.status === "done").length;
+      const delayedTasks = dTasks.filter(t => t.status === "delayed" || (t.dueDate && new Date(t.dueDate) < new Date() && t.status !== "completed")).length;
+
+      // Combined volume (stages + departmental tasks if no stages belong to department)
+      const total = totalStages + (totalStages === 0 ? totalTasks : 0);
+      const completed = completedStages + (totalStages === 0 ? completedTasks : 0);
+      const delayed = delayedStages + (totalStages === 0 ? delayedTasks : 0);
+      const rate = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+      return { name: d, total, completed, delayed, rate };
+    }).sort((a, b) => {
+      // Sort by active workload (descending) so active departments appear first, followed by alphabetical
+      if (b.total !== a.total) return b.total - a.total;
+      return a.name.localeCompare(b.name);
+    });
+  }, [availableDepts, allStages, customTasks]);
 
   // 5. Demographics & Risk
   const buyerCounts = {};
-  orders.forEach(o => { buyerCounts[o.buyer] = (buyerCounts[o.buyer] || 0) + 1; });
+  activeOrders.forEach(o => { if (o.buyer) buyerCounts[o.buyer] = (buyerCounts[o.buyer] || 0) + 1; });
   const buyerColors = ["#7F77DD", "#378ADD", "#1F9E8D", "#E2A83B", "#D64545", "#8A8D98"];
   const buyerData = Object.entries(buyerCounts).map(([name, value], i) => ({ name, value, color: buyerColors[i % buyerColors.length] }));
 
   const countryCounts = {};
-  orders.forEach(o => { countryCounts[o.country] = (countryCounts[o.country] || 0) + 1; });
+  activeOrders.forEach(o => { if (o.country) countryCounts[o.country] = (countryCounts[o.country] || 0) + 1; });
   const countryArr = Object.entries(countryCounts).sort((a, b) => b[1] - a[1]);
   const countryMax = Math.max(...countryArr.map(c => c[1]), 1);
 
   const riskCounts = {
-    high: orders.filter(o => o.risk === "high").length,
-    medium: orders.filter(o => o.risk === "medium").length,
-    low: orders.filter(o => o.risk === "low").length
+    high: activeOrders.filter(o => o.risk === "high").length,
+    medium: activeOrders.filter(o => o.risk === "medium").length,
+    low: activeOrders.filter(o => o.risk === "low").length
   };
   const riskData = [
     { name: "High risk", value: riskCounts.high, color: "#D64545" },
@@ -2371,15 +4222,176 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
     { name: "Low risk", value: riskCounts.low, color: "#1F9E8D" },
   ].filter(r => r.value > 0);
 
-  // 6. Activity feed & bottom counters
-  const activityFeed = orders.map(o => {
-    if (!o.stages) return null;
-    const lastDoneIdx = [...o.stages].reverse().findIndex(s => s.status === "done");
-    if (lastDoneIdx === -1) return null;
-    const idx = o.stages.length - 1 - lastDoneIdx;
-    const s = o.stages[idx];
-    return { text: `${s.name} completed`, sub: `PO #${o.id} · ${s.dept}` };
-  }).filter(Boolean).slice(0, 6);
+  // 6. Top 5 Performing Employees (Overall Performance with Work Breakdown)
+  const [selectedPerformer, setSelectedPerformer] = useState(null);
+  const [activeDrillDown, setActiveDrillDown] = useState(null);
+  const [drillDownFilter, setDrillDownFilter] = useState("all");
+
+  const openDrillDown = (type, value) => {
+    setDrillDownFilter("all");
+    setActiveDrillDown({ type, value });
+  };
+
+  const topPerformers = useMemo(() => {
+    const activeOrders = orders.filter(order => order.isDeleted !== true);
+    const activeStages = activeOrders.flatMap(order => (order.stages || []).map(stage => ({ ...stage, orderId: order.id, style: order.style, buyer: order.buyer })));
+    const cleanName = value => String(value || "").replace(/^@/, "").split("(")[0].trim().toLowerCase();
+    const isDone = value => ["done", "completed", "complete", "closed"].includes(String(value || "").toLowerCase());
+
+    const teamMap = new Map((teams || []).map(t => [t.id, t.name]));
+
+    const candidateEmployees = (users && users.length > 0)
+      ? users.filter(u => u.active !== false && !u.isMD).map(u => {
+        const teamName = teamMap.get(u.teamId);
+        return {
+          id: u.id,
+          name: u.name,
+          username: u.username,
+          dept: teamName || u.dept || "Merchandising",
+          teamIds: Array.isArray(u.teamIds) ? u.teamIds : (u.teamId ? [u.teamId] : []),
+          isUser: true,
+        };
+      })
+      : (roster || []).filter(person => person.name && person.name !== "—");
+
+    const findBuyerForOrder = order => {
+      if (!order) return null;
+      const buyerName = String(order.buyer || "").trim().toLowerCase();
+      return (buyers || []).find(b => (order.buyerId && b.id === order.buyerId) || String(b.name || "").trim().toLowerCase() === buyerName) || null;
+    };
+
+    return candidateEmployees
+      .map(person => {
+        const name = cleanName(person.name);
+        const username = cleanName(person.username);
+        const userDept = cleanName(person.dept);
+
+        const assignedTasks = (customTasks || []).filter(task => {
+          const assignee = cleanName(task.assignee);
+          const taskDept = cleanName(task.dept);
+          const directMatch = (name && (assignee === name || assignee.includes(name))) ||
+            (username && (assignee === username || assignee.includes(username)));
+          if (directMatch) return true;
+          return userDept && taskDept && taskDept === userDept;
+        });
+
+        // Resolve user departments (including multi-team / teamIds if user record exists)
+        const userDepts = person.teamIds && person.teamIds.length > 0
+          ? person.teamIds.map(tId => teamMap.get(tId)).filter(Boolean)
+          : [person.dept];
+        const scopedFields = Array.from(new Set(userDepts.map(d => BUYER_SCOPED_DEPTS[d]).filter(Boolean)));
+
+        // Determine accessible/visible orders exactly like canSeeOrder in App.jsx
+        let visibleOrdersForUser;
+        if (scopedFields.length > 0 && person.id) {
+          // Buyer-scoped departments (Merchandising, Purchase – Fabric, Purchase – Trims, Artwork):
+          // User only sees orders whose buyer is explicitly mapped to their user ID
+          visibleOrdersForUser = activeOrders.filter(order => {
+            const b = findBuyerForOrder(order);
+            if (!b) return false;
+            return scopedFields.some(field => {
+              const ids = Array.isArray(b[field]) ? b[field] : [];
+              return ids.includes(person.id);
+            });
+          });
+        } else {
+          // Non-buyer-scoped departments (Planning, Cutting, Production, Quality, etc.):
+          // Order is visible if it touches the user's department (or all active orders if no dept stages)
+          visibleOrdersForUser = activeOrders.filter(order => {
+            if (!Array.isArray(order.stages)) return false;
+            return order.stages.some(s => s && userDepts.some(ud => cleanName(ud) === cleanName(s.dept)));
+          });
+          // Fallback if none matched: all active orders
+          if (visibleOrdersForUser.length === 0) {
+            visibleOrdersForUser = activeOrders;
+          }
+        }
+
+        const employeeOrderIds = visibleOrdersForUser.map(o => o.id);
+
+        // Department tasks on the user's visible orders (matches collectTasks(visibleOrders, role.dept) on user's dashboard)
+        const deptTnaRows = [];
+        visibleOrdersForUser.forEach(o => {
+          if (!Array.isArray(o.stages)) return;
+          o.stages.forEach(s => {
+            if (!s || typeof s !== "object") return;
+            const stageDept = cleanName(s.dept);
+            if (userDepts.some(ud => cleanName(ud) === stageDept) || stageDept === userDept) {
+              deptTnaRows.push({ ...s, orderId: o.id, style: o.style, buyer: o.buyer });
+            }
+          });
+        });
+
+        const completedStages = deptTnaRows.filter(stage => isDone(stage.status));
+        const completedTasks = assignedTasks.filter(task => isDone(task.status));
+        const workItems = deptTnaRows.length + assignedTasks.length;
+        const completedItems = completedStages.length + completedTasks.length;
+        const delayedStages = deptTnaRows.filter(stage => stage.reason || stage.status === "Delayed");
+        const onTimeStages = completedStages.filter(stage => !stage.reason);
+
+        // Stage disputes / complaints against this user (-10 pts each)
+        const userComplaints = (complaints || []).filter(c => {
+          const tagged = cleanName(c.taggedUser);
+          const compBy = cleanName(c.completedBy);
+          return (name && (tagged === name || (tagged && name.includes(tagged)) || (name && tagged.includes(name)))) ||
+            (username && (tagged === username || (tagged && username.includes(tagged)) || (username && tagged.includes(username)))) ||
+            (compBy && name && (compBy === name || compBy.includes(name))) ||
+            (compBy && username && (compBy === username || compBy.includes(username)));
+        });
+        const complaintsCount = userComplaints.length;
+
+        // Unique mistake incidents: delayed stages + dispute complaints against this user (mistake is recorded on employee profile)
+        const mistakeKeys = new Set();
+        delayedStages.forEach((s, i) => mistakeKeys.add(`delay_${s.orderId || "ord"}_${s.name || i}`));
+        userComplaints.forEach((c, i) => mistakeKeys.add(`complaint_${c.id || (c.orderId + "_" + (c.stageName || i))}`));
+        const mistakesCount = mistakeKeys.size;
+
+        const score = workItems > 0 ? Math.max(0, Math.round((completedItems / workItems) * 100 - delayedStages.length * 5 - complaintsCount * 10)) : 0;
+        const onTimeRate = completedStages.length > 0 ? Math.round((onTimeStages.length / completedStages.length) * 100) : 100;
+        const mistakeFreeRate = workItems > 0
+          ? Math.max(0, Math.round(((workItems - mistakesCount) / workItems) * 100))
+          : (mistakesCount > 0 ? 0 : 100);
+
+        // Attendance determination:
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const isOnLeave = (leaveRequests || []).some(l =>
+          String(l.status || "").toLowerCase() === "approved" &&
+          (cleanName(l.name) === name || cleanName(l.username) === username)
+        ) || (attendance && (attendance[person.name] === "leave" || (person.username && attendance[person.username] === "leave")));
+
+        const hasSessionToday = (userSessions || []).some(s => {
+          const matchDate = s.date === todayStr || (s.loginTime && s.loginTime.startsWith(todayStr));
+          if (!matchDate) return false;
+          const sName = cleanName(s.name);
+          const sUser = cleanName(s.username);
+          return (person.id && s.userId === person.id) ||
+            (username && sUser && (sUser === username || sUser.includes(username))) ||
+            (name && sName && (sName === name || sName.includes(name)));
+        });
+
+        const attendanceStatus = isOnLeave ? "leave" : hasSessionToday ? "present" : "absent";
+
+        return {
+          ...person,
+          orderCount: employeeOrderIds.length,
+          orderIds: employeeOrderIds,
+          completed: completedItems,
+          totalWork: workItems,
+          delayed: delayedStages.length,
+          delayedStages,
+          completedStages,
+          completedTasks,
+          onTimeRate,
+          mistakesCount,
+          mistakeFreeRate,
+          complaintsCount,
+          attendance: attendanceStatus,
+          score,
+        };
+      })
+      .sort((a, b) => b.score - a.score || b.completed - a.completed || b.orderCount - a.orderCount)
+      .slice(0, 5);
+  }, [orders, buyers, roster, attendance, userSessions, customTasks, leaveRequests, users, teams, complaints]);
 
   const openTasksRows = allStages.filter(s => s.status !== "done");
   const overdueRows = allStages.filter(s => s.status === "in_progress" && s.reason);
@@ -2387,43 +4399,243 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
   const openPOStages = allStages.filter(s => (s.name === "Fabric Booking" || s.name === "Trim Booking") && s.status !== "done");
   const latePOStages = openPOStages.filter(s => s.reason);
 
+  const formatInr = (amount) => {
+    const val = Number(amount) || 0;
+    if (val >= 1e7) return `₹${(val / 1e7).toFixed(2)} Cr`;
+    if (val >= 1e5) return `₹${(val / 1e5).toFixed(2)} L`;
+    return `₹${val.toLocaleString("en-IN")}`;
+  };
+
   const kpis = [
     { label: "Total Orders", value: totalOrders, sub: `${totalQty.toLocaleString()} pcs`, icon: ClipboardList, color: "#378ADD" },
-    { label: "Total Value (USD)", value: `$${((financials?.revenue || 0) / 1e6).toFixed(2)}M`, icon: Landmark, color: "#1F9E8D" },
+    { label: "Total Value (INR)", value: formatInr(financials?.revenue || 0), icon: Landmark, color: "#1F9E8D" },
     { label: "On-Time Shipment %", value: `${onTimePct}%`, icon: Clock, color: "#378ADD" },
-    { label: "Overall Order Health", value: `${overallHealth} /100`, icon: Gauge, color: "#E2A83B" },
     { label: "Total Shipped (PCS)", value: shippedPcs.toLocaleString(), icon: Truck, color: "#7F77DD" },
-    { label: "Gross Margin", value: `${grossMargin}%`, icon: TrendingUp, color: "#E2A83B" },
+    { label: "Overall Order Health", value: `${overallHealth} /100`, icon: Gauge, color: "#E2A83B" },
+    // { label: "Gross Margin", value: `${grossMargin}%`, icon: TrendingUp, color: "#E2A83B" },
   ];
+
+  const cuttingDelayedOrders = useMemo(() => {
+    if (!Array.isArray(activeOrders)) return [];
+    const res = [];
+    for (const ord of activeOrders) {
+      const a = analyzeCuttingDelayForOrder(ord);
+      if (a) res.push(a);
+    }
+    return res;
+  }, [activeOrders]);
 
   return (
     <div style={{ padding: "0 0 40px 0" }}>
-      {/* Title */}
-      <div style={{ marginBottom: 18 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0F172A", margin: 0 }}>MD Executive Dashboard</h1>
-        <div style={{ fontSize: 12.5, color: "#64748B", marginTop: 3 }}>Real-time overview of entire organization performance</div>
+      {/* Cutting Delay Warning Banner for MD */}
+      <CuttingDelayDashboardBanner
+        delayedOrders={cuttingDelayedOrders}
+        onOpenAlert={() => window.dispatchEvent(new CustomEvent("loom_open_cutting_alert"))}
+        snoozedUntil={Number(localStorage.getItem("loom_cutting_delay_snooze_until_5m")) || 0}
+      />
+
+      {/* Title & Screen Refresh Controls */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12, marginBottom: 18 }}>
+        <div>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0F172A", margin: 0 }}>MD Executive Dashboard</h1>
+          <div style={{ fontSize: 12.5, color: "#64748B", marginTop: 3 }}>Real-time overview of entire organization performance</div>
+        </div>
+
+        {/* Right side top - Screen Refresh Button & Live Sync status (positioned right above Gross Margin widget) */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {/* Live Auto-Refresh 5 min status badge */}
+          <div
+            title="Dashboard auto-refreshes automatically every 5 minutes with live changes"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "6px 12px",
+              borderRadius: 20,
+              background: "#F0FDF4",
+              border: "1px solid #BBF7D0",
+              fontSize: 11.5,
+              fontWeight: 600,
+              color: "#166534"
+            }}
+          >
+            <span
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: "50%",
+                background: "#22C55E",
+                boxShadow: "0 0 6px #22C55E",
+                display: "inline-block"
+              }}
+            />
+            <span>Auto Sync: 5m</span>
+            <span style={{ color: "#86EFAC", margin: "0 1px" }}>•</span>
+            <span style={{ color: "#15803D", fontWeight: 500 }}>
+              {lastRefreshedAt ? lastRefreshedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Live"}
+            </span>
+          </div>
+
+          {/* Screen Refresh Button */}
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={isRefreshing}
+            title="Click to refresh entire MD Dashboard immediately"
+            style={{
+              cursor: isRefreshing ? "not-allowed" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "8px 16px",
+              borderRadius: 8,
+              background: isRefreshing ? "#E2E8F0" : "#534AB7",
+              border: "none",
+              color: isRefreshing ? "#64748B" : "#FFFFFF",
+              fontSize: 12.5,
+              fontWeight: 700,
+              boxShadow: isRefreshing ? "none" : "0 2px 8px rgba(83, 74, 183, 0.28)",
+              transition: "all 0.2s ease"
+            }}
+            onMouseEnter={e => { if (!isRefreshing) e.currentTarget.style.background = "#4338CA"; }}
+            onMouseLeave={e => { if (!isRefreshing) e.currentTarget.style.background = "#534AB7"; }}
+          >
+            <RefreshCw
+              size={15}
+              style={{
+                animation: isRefreshing ? "spin 1s linear infinite" : "none",
+                transition: "transform 0.2s ease"
+              }}
+            />
+            <span>{isRefreshing ? "Refreshing Dashboard..." : "Screen Refresh"}</span>
+          </button>
+        </div>
       </div>
+
+      {/* 3D Top Performer Graphic View (Absolute / Fixed on left side, only showing 3D graphic + name) */}
+      <TopPerformer3DSpotlight
+        performer={topPerformers[0]}
+        isSidebarCollapsed={isSidebarCollapsed}
+        onViewDetails={() => topPerformers[0] && setSelectedPerformer(topPerformers[0])}
+      />
 
       {/* Row 1: Top 6 KPI Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 12, marginBottom: 16 }}>
-        {kpis.map(k => (
-          <Card key={k.label} style={{ padding: "14px 16px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-              <div style={{ width: 26, height: 26, borderRadius: 8, background: k.color + "1A", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <k.icon size={13} color={k.color} />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, marginBottom: 16 }}>
+        {kpis.map(k => {
+          const isClickable = k.label === "Total Orders";
+          return (
+            <Card
+              key={k.label}
+              onClick={() => {
+                if (isClickable && onNavigate) {
+                  onNavigate("orders");
+                }
+              }}
+              style={{
+                padding: "14px 16px",
+                cursor: isClickable ? "pointer" : "default",
+                transition: "all 0.18s ease",
+              }}
+              onMouseEnter={e => {
+                if (isClickable) {
+                  e.currentTarget.style.transform = "translateY(-2px)";
+                  e.currentTarget.style.boxShadow = "0 6px 14px rgba(55, 138, 221, 0.15)";
+                  e.currentTarget.style.borderColor = k.color;
+                }
+              }}
+              onMouseLeave={e => {
+                if (isClickable) {
+                  e.currentTarget.style.transform = "none";
+                  e.currentTarget.style.boxShadow = "";
+                  e.currentTarget.style.borderColor = "";
+                }
+              }}
+              title={isClickable ? "Click to view Orders details" : undefined}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ width: 26, height: 26, borderRadius: 8, background: k.color + "1A", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <k.icon size={13} color={k.color} />
+                  </div>
+                  <div style={{ fontSize: 10, color: "#64748B", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.3 }}>{k.label}</div>
+                </div>
+                {isClickable && (
+                  <span style={{ fontSize: 10.5, fontWeight: 600, color: k.color, background: k.color + "14", padding: "1px 6px", borderRadius: 4 }}>
+                    View →
+                  </span>
+                )}
               </div>
-              <div style={{ fontSize: 10, color: "#64748B", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.3 }}>{k.label}</div>
-            </div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: "#0F172A" }}>{k.value}</div>
-            {k.sub && <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>{k.sub}</div>}
-          </Card>
-        ))}
+              <div style={{ fontSize: 20, fontWeight: 800, color: "#0F172A" }}>{k.value}</div>
+              {k.sub && <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>{k.sub}</div>}
+            </Card>
+          );
+        })}
+     
       </div>
+         <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, marginBottom: 10 }}>
+          {[
+            ["Open Tasks", openTasksRows.length, "#378ADD"],
+            ["Overdue Tasks", overdueRows.length, "#EF4444"],
+            ["Pending Approvals", pendingApprovals.length, "#F59E0B"],
+            // ["Open POs", openPOStages.length, "#378ADD"],
+            // ["Late POs", latePOStages.length, "#EF4444"],
+          ].map(([label, val, color]) => {
+            const handleClick = () => {
+              if (!onNavigate) return;
+              if (label === "Open Tasks") {
+                try {
+                  localStorage.setItem("loom_tasks_filter", "open");
+                  window.dispatchEvent(new CustomEvent("loom_tasks_filter_change", { detail: "open" }));
+                } catch (e) {}
+                onNavigate("tasks");
+              } else if (label === "Overdue Tasks") {
+                try {
+                  localStorage.setItem("loom_tasks_filter", "overdue");
+                  window.dispatchEvent(new CustomEvent("loom_tasks_filter_change", { detail: "overdue" }));
+                } catch (e) {}
+                onNavigate("tasks");
+              } else if (label === "Pending Approvals") {
+                onNavigate("approvals");
+              }
+            };
+
+            return (
+              <Card
+                key={label}
+                onClick={handleClick}
+                style={{
+                  padding: "12px 14px",
+                  cursor: "pointer",
+                  transition: "all 0.18s ease"
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.transform = "translateY(-2px)";
+                  e.currentTarget.style.boxShadow = `0 6px 14px ${color}26`;
+                  e.currentTarget.style.borderColor = color;
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.transform = "none";
+                  e.currentTarget.style.boxShadow = "";
+                  e.currentTarget.style.borderColor = "";
+                }}
+                title={`Click to view ${label} details`}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                  <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600, textTransform: "uppercase" }}>{label}</div>
+                  <span style={{ fontSize: 10, fontWeight: 700, color, background: color + "14", padding: "1px 6px", borderRadius: 4 }}>
+                    View →
+                  </span>
+                </div>
+                <div style={{ fontSize: 18, fontWeight: 800, color }}>{val}</div>
+              </Card>
+            );
+          })}
+        </div>
 
       {/* Row 2: Order Health Distribution, Shipment Performance Trend, Top Delay Reasons */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr 0.95fr", gap: 12, marginBottom: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 0.95fr 1fr", gap: 12, marginBottom: 16 }}>
         {/* Order Health Distribution */}
-        <Card>
+        {/* <Card>
           <CardHeader title="ORDER HEALTH DISTRIBUTION" />
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
             <MiniDonut data={healthBuckets} size={104} centerLabel={totalOrders} centerSub="Orders" labelColor="#0F172A" />
@@ -2437,21 +4649,101 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
               ))}
             </div>
           </div>
+        </Card> */}
+           <Card>
+          <CardHeader title="ORDERS BY BUYER" sub="Click a buyer to drill down" />
+          {buyerData.length === 0 ? (
+            <div style={{ fontSize: 12, color: "#94A3B8", textAlign: "center", padding: "20px 0" }}>No buyers recorded.</div>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <MiniDonut data={buyerData} size={84} centerLabel={totalOrders} labelColor="#0F172A" />
+              <div style={{ flex: 1 }}>
+                {buyerData.map(b => (
+                  <div
+                    key={b.name}
+                    onClick={() => openDrillDown("buyer", b.name)}
+                    title="Click to drill down"
+                    style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 4, fontSize: 11, cursor: "pointer", borderRadius: 6, padding: "3px 5px", transition: "transform 0.15s ease, background 0.15s ease, border-color 0.15s ease", border: "1px solid transparent" }}
+                    onMouseEnter={e => { e.currentTarget.style.background = "#F8FAFC"; e.currentTarget.style.borderColor = "#C7D2FE"; e.currentTarget.style.transform = "translateX(2px)"; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.transform = "translateX(0)"; }}
+                  >
+                    <span style={{ width: 7, height: 7, borderRadius: 999, background: b.color }} />
+                    <span style={{ color: "#475569", flex: 1 }}>{b.name}</span>
+                    <span style={{ color: "#0F172A", fontWeight: 700 }}>{b.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </Card>
+
+        {/* Orders by Country */}
+        <Card>
+          <CardHeader title="ORDERS BY COUNTRY" sub="Click a country to drill down" />
+          {countryArr.length === 0 ? (
+            <div style={{ fontSize: 12, color: "#94A3B8", textAlign: "center", padding: "20px 0" }}>No country data.</div>
+          ) : (
+            countryArr.map(([country, count]) => (
+              <div
+                key={country}
+                onClick={() => openDrillDown("country", country)}
+                title="Click to drill down"
+                style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 7, fontSize: 11, cursor: "pointer", borderRadius: 6, padding: "3px 5px", transition: "transform 0.15s ease, background 0.15s ease, border-color 0.15s ease", border: "1px solid transparent" }}
+                onMouseEnter={e => { e.currentTarget.style.background = "#F8FAFC"; e.currentTarget.style.borderColor = "#BFDBFE"; e.currentTarget.style.transform = "translateX(2px)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.transform = "translateX(0)"; }}
+              >
+                <Globe size={11} color="#64748B" style={{ flexShrink: 0 }} />
+                <span style={{ color: "#475569", width: 70, flexShrink: 0 }}>{country}</span>
+                <div style={{ flex: 1, height: 5, background: "#F1F5F9", borderRadius: 999 }}>
+                  <div style={{ height: 5, width: `${(count / countryMax) * 100}%`, background: "#378ADD", borderRadius: 999 }} />
+                </div>
+                <span style={{ color: "#0F172A", fontWeight: 700 }}>{count}</span>
+              </div>
+            ))
+          )}
         </Card>
 
         {/* Shipment Performance Trend */}
         <Card>
-          <CardHeader title="SHIPMENT PERFORMANCE TREND" sub="Last 6 months" />
+          <CardHeader
+            title="SHIPMENT PERFORMANCE TREND"
+            sub={shipmentTrendData.rangeLabel ? `${shipmentTrendData.rangeLabel} (Based on Orders)` : "Last 6 months"}
+          />
           <div style={{ width: "100%", height: 140 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={SHIPMENT_PERFORMANCE} margin={{ top: 4, right: 8, left: -24, bottom: 0 }}>
+              <LineChart data={shipmentTrendData} margin={{ top: 4, right: 8, left: -24, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
                 <XAxis dataKey="month" tick={{ fontSize: 10, fill: "#64748B" }} axisLine={{ stroke: "#E2E8F0" }} tickLine={false} />
                 <YAxis tick={{ fontSize: 10, fill: "#64748B" }} axisLine={false} tickLine={false} domain={[0, 100]} />
-                <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, background: "#FFFFFF", border: "1px solid #E2E8F0", color: "#0F172A" }} />
-                <Line type="monotone" dataKey="onTime" name="On-time %" stroke="#4F46E5" strokeWidth={2.2} dot={{ r: 3, fill: "#4F46E5" }} />
-                <Line type="monotone" dataKey="target" name="Target %" stroke="#94A3B8" strokeWidth={1.5} strokeDasharray="4 4" dot={false} />
-              </LineChart>
+                <Tooltip
+                  content={({ active, payload, label }) => {
+                    if (!active || !payload || !payload.length) return null;
+                    const pt = payload[0]?.payload;
+                    if (!pt) return null;
+                    return (
+                      <div style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: 8, padding: "8px 12px", boxShadow: "0 4px 12px rgba(0,0,0,0.08)", fontSize: 11.5 }}>
+                        <div style={{ fontWeight: 700, color: "#0F172A", marginBottom: 4 }}>{pt.fullLabel || label}</div>
+                        {pt.totalOrders > 0 ? (
+                          <>
+                            <div style={{ color: "#4F46E5", fontWeight: 700 }}>
+                              On-time: <span style={{ fontSize: 13 }}>{pt.onTime !== null ? `${pt.onTime}%` : "—"}</span>
+                            </div>
+                            <div style={{ color: "#475569", marginTop: 2 }}>
+                              Orders: {pt.onTimeOrders} on-track / {pt.totalOrders} total {pt.delayedOrders > 0 ? `(${pt.delayedOrders} delayed)` : ""}
+                            </div>
+                          </>
+                        ) : (
+                          <div style={{ color: "#94A3B8" }}>No active order activity</div>
+                        )}
+                        <div style={{ color: "#64748B", marginTop: 4, fontSize: 10.5, borderTop: "1px dashed #E2E8F0", paddingTop: 4 }}>
+                          🎯 Target Benchmark: <b>{pt.target}%</b> (Industry KPI Goal)
+                        </div>
+                      </div>
+                    );
+                  }}
+                />
+                <Line type="monotone" dataKey="onTime" name="Actual On-time %" stroke="#4F46E5" strokeWidth={2.2} dot={{ r: 3, fill: "#4F46E5" }} connectNulls={true} />
+                <Line type="monotone" dataKey="target" name="Target Goal % (75% Benchmark)" stroke="#94A3B8" strokeWidth={1.5} strokeDasharray="4 4" dot={false} /></LineChart>
             </ResponsiveContainer>
           </div>
         </Card>
@@ -2477,7 +4769,7 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
 
       {/* Row: Pending Costing Approvals (MD Sign-off) */}
       {(() => {
-        const costingPending = orders.filter(o => o.costingApproval && o.costingApproval.status === "submitted");
+        const costingPending = activeOrders.filter(o => o.costingApproval && o.costingApproval.status === "submitted");
         if (costingPending.length === 0) return null;
         return (
           <Card style={{ marginBottom: 16, borderLeft: "4px solid #F59E0B", background: "#FFFDF7" }}>
@@ -2539,7 +4831,7 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
             {[
               ["Orders in Production", inProduction, "#4F46E5"],
-              ["Capacity Utilization", `${capacityUtilization}%`, "#0284C7"],
+              // ["Capacity Utilization", `${capacityUtilization}%`, "#0284C7"],
               ["Orders Completed", ordersCompleted, "#10B981"],
               ["Orders At Risk", ordersAtRisk, "#F59E0B"],
               ["Orders Delayed", ordersDelayed, "#EF4444"],
@@ -2554,18 +4846,45 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
         </Card>
 
         {/* Department Performance (substituting Critical Alerts box per user request) */}
-        <Card>
-          <CardHeader title="DEPARTMENT PERFORMANCE" sub="Stage completion & delay tracking per division" />
-          <div style={{ display: "grid", gridTemplateColumns: "1.8fr 1fr 1.2fr 1fr", fontSize: 10.5, color: "#64748B", fontWeight: 700, paddingBottom: 6, borderBottom: "1px solid #F1F5F9" }}>
+        <Card style={{ overflow: "hidden" }}>
+          <CardHeader title={`DEPARTMENT PERFORMANCE (${deptStats.length})`} sub="Stage completion & delay tracking per division" />
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.8fr) minmax(0, 0.9fr) minmax(0, 1.2fr) minmax(0, 0.8fr)", gap: 4, fontSize: 10.5, color: "#64748B", fontWeight: 700, paddingBottom: 6, borderBottom: "1px solid #F1F5F9" }}>
             <div>DEPARTMENT</div>
             <div style={{ textAlign: "center" }}>STAGES</div>
             <div>ON-TIME RATE</div>
             <div style={{ textAlign: "right" }}>DELAYS</div>
           </div>
-          <div style={{ maxHeight: 180, overflowY: "auto" }}>
+          <div style={{ maxHeight: 260, overflowY: "auto", overflowX: "hidden" }}>
             {deptStats.map(d => (
-              <div key={d.name} style={{ display: "grid", gridTemplateColumns: "1.8fr 1fr 1.2fr 1fr", alignItems: "center", fontSize: 11.5, padding: "6px 0", borderBottom: "1px solid #F8FAFC" }}>
-                <div style={{ fontWeight: 600, color: "#1E293B" }}>{d.name}</div>
+              <div
+                key={d.name}
+                onClick={() => {
+                  if (onOpenDept) {
+                    onOpenDept(d.name);
+                  } else if (onNavigate) {
+                    onNavigate("departmentDetail");
+                  }
+                }}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "minmax(0, 1.8fr) minmax(0, 0.9fr) minmax(0, 1.2fr) minmax(0, 0.8fr)",
+                  alignItems: "center",
+                  fontSize: 11.5,
+                  padding: "7px 6px",
+                  borderBottom: "1px solid #F8FAFC",
+                  cursor: "pointer",
+                  borderRadius: 6,
+                  transition: "all 0.15s ease",
+                  gap: 4
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = "#F1F5F9"}
+                onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                title={`Click to open ${d.name} department page`}
+              >
+                <div style={{ fontWeight: 600, color: "#1E293B", display: "flex", alignItems: "center", gap: 6, minWidth: 0, overflow: "hidden" }}>
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</span>
+                  <span style={{ fontSize: 11, color: "#6366F1", fontWeight: 700, flexShrink: 0 }}>→</span>
+                </div>
                 <div style={{ textAlign: "center", color: "#64748B", fontSize: 11 }}>
                   {d.completed} / {d.total}
                 </div>
@@ -2587,51 +4906,20 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
       {/* Row 4: Orders by Buyer, Orders by Country, Quality Overview, Predicted Shipment Risk */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, marginBottom: 16 }}>
         {/* Orders by Buyer */}
-        <Card>
-          <CardHeader title="ORDERS BY BUYER" />
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <MiniDonut data={buyerData} size={84} centerLabel={totalOrders} labelColor="#0F172A" />
-            <div style={{ flex: 1 }}>
-              {buyerData.map(b => (
-                <div key={b.name} style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 4, fontSize: 11 }}>
-                  <span style={{ width: 7, height: 7, borderRadius: 999, background: b.color }} />
-                  <span style={{ color: "#475569", flex: 1 }}>{b.name}</span>
-                  <span style={{ color: "#0F172A", fontWeight: 700 }}>{b.value}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </Card>
-
-        {/* Orders by Country */}
-        <Card>
-          <CardHeader title="ORDERS BY COUNTRY" />
-          {countryArr.map(([country, count]) => (
-            <div key={country} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 7, fontSize: 11 }}>
-              <Globe size={11} color="#64748B" style={{ flexShrink: 0 }} />
-              <span style={{ color: "#475569", width: 70, flexShrink: 0 }}>{country}</span>
-              <div style={{ flex: 1, height: 5, background: "#F1F5F9", borderRadius: 999 }}>
-                <div style={{ height: 5, width: `${(count / countryMax) * 100}%`, background: "#378ADD", borderRadius: 999 }} />
-              </div>
-              <span style={{ color: "#0F172A", fontWeight: 700 }}>{count}</span>
-            </div>
-          ))}
-        </Card>
-
         {/* Quality Overview */}
-        <Card>
+        {/* <Card>
           <CardHeader title="QUALITY OVERVIEW" />
           <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}>
-            <MiniDonut data={[{ name: "Pass", value: 93.4, color: "#10B981" }, { name: "Fail", value: 6.6, color: "#E2E8F0" }]} size={80} centerLabel="93.4%" centerSub="Pass rate" labelColor="#0F172A" />
+            <MiniDonut data={totalOrders > 0 ? [{ name: "Pass", value: 100, color: "#10B981" }] : [{ name: "None", value: 100, color: "#E2E8F0" }]} size={80} centerLabel={totalOrders > 0 ? "100%" : "—"} centerSub="Pass rate" labelColor="#0F172A" />
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#64748B" }}>
-            <span>Defect rate <b style={{ color: "#0F172A" }}>2.1%</b></span>
-            <span>Rework <b style={{ color: "#0F172A" }}>1.8%</b></span>
+            <span>Defect rate <b style={{ color: "#0F172A" }}>{totalOrders > 0 ? "0.0%" : "—"}</b></span>
+            <span>Rework <b style={{ color: "#0F172A" }}>{totalOrders > 0 ? "0.0%" : "—"}</b></span>
           </div>
-        </Card>
+        </Card> */}
 
         {/* Predicted Shipment Risk */}
-        <Card>
+        {/* <Card>
           <CardHeader title="PREDICTED SHIPMENT RISK" sub="Next 30 days" />
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <MiniDonut data={riskData} size={80} centerLabel={totalOrders} labelColor="#0F172A" />
@@ -2645,22 +4933,30 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
               ))}
             </div>
           </div>
-        </Card>
+        </Card> */}
       </div>
 
       {/* Row 5: Financial Overview + Activity Feed */}
       <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 12, marginBottom: 16 }}>
         {/* Financial Overview */}
         <Card>
-          <CardHeader title="FINANCIAL OVERVIEW" sub="YTD — entered by Finance team" />
+          <CardHeader title="FINANCIAL OVERVIEW" sub="YTD (INR) — Scanned PO sheets & live orders" />
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
             {[
-              ["Total Revenue", `$${((financials?.revenue || 0) / 1e6).toFixed(2)}M`, "#0F172A"],
-              ["Total COGS", `$${((financials?.cogs || 0) / 1e6).toFixed(2)}M`, "#0F172A"],
-              ["Gross Profit", `$${(grossProfit / 1e6).toFixed(2)}M`, "#10B981"],
-              ["Gross Margin", `${grossMargin}%`, "#10B981"],
-              ["EBITDA", `$${((financials?.ebitda || 0) / 1e6).toFixed(2)}M`, "#0F172A"],
-              ["Stock Value", `$${((financials?.stockValue || 0) / 1e6).toFixed(2)}M`, "#0F172A"],
+              ["Order Value", formatInr(totalCalculatedOrderValue), "#0F172A"],
+              ["Planned Cost", formatInr(financialTotals.plannedCost), "#0F172A"],
+              ["Actual Cost", formatInr(financialTotals.actualCost), "#0F172A"],
+              ["Profit", formatInr(overallProfitVal), overallProfitVal >= 0 ? "#10B981" : "#EF4444"],
+              [
+                "Overall Variance Raw Material",
+                `${varianceAggregates.rawMaterialVariance > 0 ? "+" : varianceAggregates.rawMaterialVariance < 0 ? "-" : ""}${formatInr(Math.abs(varianceAggregates.rawMaterialVariance))}`,
+                varianceAggregates.rawMaterialVariance > 0 ? "#DC2626" : varianceAggregates.rawMaterialVariance < 0 ? "#059669" : "#0F172A"
+              ],
+              [
+                "Overall Variance in Development",
+                `${varianceAggregates.devVariance > 0 ? "+" : varianceAggregates.devVariance < 0 ? "-" : ""}${formatInr(Math.abs(varianceAggregates.devVariance))}`,
+                varianceAggregates.devVariance > 0 ? "#DC2626" : varianceAggregates.devVariance < 0 ? "#059669" : "#0F172A"
+              ],
             ].map(([label, val, color]) => (
               <div key={label} style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 8, padding: "10px 12px" }}>
                 <div style={{ fontSize: 10.5, color: "#64748B", marginBottom: 4 }}>{label}</div>
@@ -2670,38 +4966,512 @@ export function ExecutiveOverviewPage({ orders, attendance, financials, roster, 
           </div>
         </Card>
 
-        {/* Activity Feed */}
+        {/* Top 5 Performing Employees (Clickable with Detailed Work Breakdown Modal) */}
         <Card>
-          <CardHeader title="ACTIVITY FEED" sub="Latest updates" />
-          {activityFeed.length === 0 ? (
-            <div style={{ fontSize: 12, color: "#94A3B8" }}>No recent activity.</div>
-          ) : activityFeed.map((a, i) => (
-            <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "6px 0", borderBottom: i < activityFeed.length - 1 ? "1px solid #F1F5F9" : "none" }}>
-              <CheckCircle2 size={13} color="#10B981" style={{ marginTop: 2, flexShrink: 0 }} />
-              <div>
-                <div style={{ fontSize: 11.5, color: "#1E293B", fontWeight: 500 }}>{a.text}</div>
-                <div style={{ fontSize: 10, color: "#94A3B8" }}>{a.sub}</div>
-              </div>
+          <CardHeader
+            title="TOP PERFORMING EMPLOYEES"
+            sub="Overall top 5 performers based on efficiency & delivery"
+            action="View all details"
+            onAction={() => onNavigate && onNavigate("employeePerformance")}
+          />
+          {topPerformers.length === 0 ? (
+            <div style={{ fontSize: 12, color: "#94A3B8", padding: "18px 0", textAlign: "center" }}>
+              No employee performance data recorded yet.
             </div>
-          ))}
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {topPerformers.map((emp, idx) => {
+                const rankColors = ["#F59E0B", "#94A3B8", "#B45309", "#3B82F6", "#6366F1"];
+                const rankColor = rankColors[idx] || "#64748B";
+                const isPresent = emp.attendance === "present";
+
+                return (
+                  <div
+                    key={emp.name || idx}
+                    onClick={() => setSelectedPerformer(emp)}
+                    title={`Click to view ${emp.name}'s detailed performance & completed works`}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "10px 12px",
+                      borderRadius: 8,
+                      background: idx === 0 ? "#F0FDF4" : "#F8FAFC",
+                      border: `1px solid ${idx === 0 ? "#BBF7D0" : "#E2E8F0"}`,
+                      cursor: "pointer",
+                      transition: "all 0.15s ease"
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.transform = "translateY(-1px)";
+                      e.currentTarget.style.boxShadow = "0 3px 10px rgba(0,0,0,0.06)";
+                      e.currentTarget.style.background = idx === 0 ? "#DCFCE7" : "#F1F5F9";
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.transform = "none";
+                      e.currentTarget.style.boxShadow = "none";
+                      e.currentTarget.style.background = idx === 0 ? "#F0FDF4" : "#F8FAFC";
+                    }}
+                  >
+                    {/* Rank & Profile */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
+                      {/* Rank Number / Badge */}
+                      <div
+                        style={{
+                          width: 26,
+                          height: 26,
+                          borderRadius: 7,
+                          background: rankColor + "22",
+                          color: rankColor,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: 12,
+                          fontWeight: 800,
+                          flexShrink: 0
+                        }}
+                      >
+                        #{idx + 1}
+                      </div>
+
+                      {/* Employee Details */}
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {emp.name}
+                          </span>
+                          <span
+                            style={{
+                              width: 7,
+                              height: 7,
+                              borderRadius: "50%",
+                              background: isPresent ? "#10B981" : "#EF4444",
+                              display: "inline-block",
+                              flexShrink: 0
+                            }}
+                            title={isPresent ? "Present Today" : "Absent / On Leave"}
+                          />
+                        </div>
+                        <div style={{ fontSize: 11, color: "#64748B", marginTop: 2, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                          <span>{emp.dept || "Merchandising"}</span>
+                          <span>•</span>
+                          <span style={{ color: "#059669", fontWeight: 600 }}>{emp.completed || 0} completed</span>
+                          <span>•</span>
+                          <span style={{ color: emp.onTimeRate >= 90 ? "#16A34A" : "#D97706", fontWeight: 600 }}>{emp.onTimeRate}% on-time</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Performance Score Pill & View tag */}
+                    <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 10 }}>
+                      <div
+                        style={{
+                          display: "inline-block",
+                          padding: "3px 9px",
+                          borderRadius: 999,
+                          background: emp.score >= 80 ? "#DCFCE7" : emp.score >= 60 ? "#FEF3C7" : "#FEE2E2",
+                          color: emp.score >= 80 ? "#15803D" : emp.score >= 60 ? "#B45309" : "#B91C1C",
+                          fontSize: 12,
+                          fontWeight: 800
+                        }}
+                      >
+                        {emp.score}%
+                      </div>
+                      <div style={{ fontSize: 10, color: "#534AB7", fontWeight: 600, marginTop: 2 }}>
+                        View details →
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </Card>
       </div>
 
-      {/* Row 6: Bottom 5 Summary Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12 }}>
-        {[
-          ["Open Tasks", openTasksRows.length, "#378ADD"],
-          ["Overdue Tasks", overdueRows.length, "#EF4444"],
-          ["Pending Approvals", pendingApprovals.length, "#F59E0B"],
-          ["Open POs", openPOStages.length, "#378ADD"],
-          ["Late POs", latePOStages.length, "#EF4444"],
-        ].map(([label, val, color]) => (
-          <Card key={label} style={{ padding: "12px 14px" }}>
-            <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600, textTransform: "uppercase", marginBottom: 6 }}>{label}</div>
-            <div style={{ fontSize: 18, fontWeight: 800, color }}>{val}</div>
-          </Card>
-        ))}
-      </div>
+      {/* Performer Work Details Modal */}
+      <ExecutiveOrderDrilldownDrawer
+        orders={activeOrders}
+        activeDrillDown={activeDrillDown}
+        filter={drillDownFilter}
+        onFilterChange={setDrillDownFilter}
+        onClose={() => setActiveDrillDown(null)}
+        onOpenOrder={onOpenOrder}
+        onNavigate={onNavigate}
+        formatInr={formatInr}
+      />
+
+      {selectedPerformer && (
+        <div
+          onClick={() => setSelectedPerformer(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 23, 42, 0.6)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: 16
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: "#FFFFFF",
+              borderRadius: 14,
+              width: "100%",
+              maxWidth: 640,
+              maxHeight: "88vh",
+              display: "flex",
+              flexDirection: "column",
+              boxShadow: "0 20px 40px rgba(0,0,0,0.24)",
+              border: "1px solid #E2E8F0",
+              overflow: "hidden"
+            }}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                padding: "16px 20px",
+                borderBottom: "1px solid #E2E8F0",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                background: "#F8FAFC"
+              }}
+            >
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 18, fontWeight: 800, color: "#0F172A" }}>
+                    {selectedPerformer.name}
+                  </span>
+                  <span
+                    style={{
+                      padding: "2px 8px",
+                      borderRadius: 999,
+                      background: "#EEF2FF",
+                      color: "#4F46E5",
+                      fontSize: 11,
+                      fontWeight: 700
+                    }}
+                  >
+                    {selectedPerformer.dept || "Department"}
+                  </span>
+                </div>
+                <div style={{ fontSize: 12, color: "#64748B", marginTop: 4 }}>
+                  Top Performer Work & Execution Breakdown · Efficiency Score: <b>{selectedPerformer.score}%</b>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedPerformer(null)}
+                style={{
+                  background: "#EDE9FE",
+                  border: "none",
+                  borderRadius: 8,
+                  width: 30,
+                  height: 30,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  color: "#534AB7",
+                  fontSize: 16,
+                  fontWeight: 700
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ padding: "18px 20px", overflowY: "auto", display: "flex", flexDirection: "column", gap: 16 }}>
+              {/* 4 Performance Metric Badges */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+                <div style={{ background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 8, padding: "10px 12px" }}>
+                  <div style={{ fontSize: 10, color: "#166534", fontWeight: 700, textTransform: "uppercase" }}>Completed</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: "#15803D", marginTop: 2 }}>
+                    {selectedPerformer.completed || 0} items
+                  </div>
+                </div>
+
+                <div style={{
+                  background: (selectedPerformer.onTimeRate !== undefined && selectedPerformer.onTimeRate < 100) ? "#FFFBEB" : "#EFF6FF",
+                  border: `1px solid ${(selectedPerformer.onTimeRate !== undefined && selectedPerformer.onTimeRate < 100) ? "#FDE68A" : "#BFDBFE"}`,
+                  borderRadius: 8,
+                  padding: "10px 12px"
+                }}>
+                  <div style={{ fontSize: 10, color: (selectedPerformer.onTimeRate !== undefined && selectedPerformer.onTimeRate < 100) ? "#92400E" : "#1E40AF", fontWeight: 700, textTransform: "uppercase" }}>On-Time Rate</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: (selectedPerformer.onTimeRate !== undefined && selectedPerformer.onTimeRate < 100) ? "#B45309" : "#1D4ED8", marginTop: 2 }}>
+                    {selectedPerformer.onTimeRate !== undefined ? selectedPerformer.onTimeRate : 100}%
+                  </div>
+                </div>
+
+                <div style={{
+                  background: (selectedPerformer.mistakeFreeRate !== undefined && selectedPerformer.mistakeFreeRate < 100) ? "#FEF2F2" : "#FAF5FF",
+                  border: `1px solid ${(selectedPerformer.mistakeFreeRate !== undefined && selectedPerformer.mistakeFreeRate < 100) ? "#FECACA" : "#E9D5FF"}`,
+                  borderRadius: 8,
+                  padding: "10px 12px"
+                }}>
+                  <div style={{ fontSize: 10, color: (selectedPerformer.mistakeFreeRate !== undefined && selectedPerformer.mistakeFreeRate < 100) ? "#991B1B" : "#6B21A8", fontWeight: 700, textTransform: "uppercase" }}>Mistake-Free</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: (selectedPerformer.mistakeFreeRate !== undefined && selectedPerformer.mistakeFreeRate < 100) ? "#DC2626" : "#7E22CE", marginTop: 2 }}>
+                    {selectedPerformer.mistakeFreeRate !== undefined ? selectedPerformer.mistakeFreeRate : 100}%
+                  </div>
+                </div>
+
+                <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 8, padding: "10px 12px" }}>
+                  <div style={{ fontSize: 10, color: "#92400E", fontWeight: 700, textTransform: "uppercase" }}>Active Orders</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: "#B45309", marginTop: 2 }}>
+                    {selectedPerformer.orderCount || 0} orders
+                  </div>
+                </div>
+              </div>
+
+              {/* Why Top Performer explanation note */}
+              <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 8, padding: "12px 14px" }}>
+                <div style={{ fontSize: 11.5, fontWeight: 700, color: "#0F172A", marginBottom: 3 }}>
+                  ⭐ Why {selectedPerformer.name} is a Top Performer:
+                </div>
+                <div style={{ fontSize: 11.5, color: "#475569", lineHeight: 1.5 }}>
+                  {selectedPerformer.mistakesCount > 0
+                    ? `Recorded ${selectedPerformer.completed || 0} completed items with ${selectedPerformer.mistakesCount} mistake incident(s) / dispute(s) on file (${selectedPerformer.mistakeFreeRate}% mistake-free rating).`
+                    : (selectedPerformer.delayed === 0
+                      ? `100% on-time execution without any delivery flags or errors across ${selectedPerformer.completed || 0} completed tasks and order stages.`
+                      : `Completed ${selectedPerformer.completed || 0} critical tasks on-time with an impressive ${selectedPerformer.onTimeRate}% on-time completion rate across ${selectedPerformer.orderCount || 0} active client orders.`)}
+                </div>
+              </div>
+
+              {selectedPerformer.complaintsCount > 0 && (
+                <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+                  <AlertCircle size={18} color="#DC2626" style={{ flexShrink: 0 }} />
+                  <div style={{ fontSize: 11.5, color: "#991B1B" }}>
+                    <b>{selectedPerformer.complaintsCount} Stage Completion Dispute(s) Filed</b> — mistake recorded on employee profile ({selectedPerformer.mistakeFreeRate}% mistake-free rate) and penalty of -{selectedPerformer.complaintsCount * 10} points applied to efficiency score.
+                  </div>
+                </div>
+              )}
+
+              {/* Section 1: Completed Order Stages & Work */}
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#0F172A", marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span>Completed Order Stages ({selectedPerformer.completedStages?.length || 0})</span>
+                  <span style={{ fontSize: 10.5, color: "#059669", fontWeight: 600 }}>Zero delays reported</span>
+                </div>
+                {(!selectedPerformer.completedStages || selectedPerformer.completedStages.length === 0) ? (
+                  <div style={{ fontSize: 11.5, color: "#94A3B8", fontStyle: "italic", padding: "8px 0" }}>
+                    No order stages assigned yet.
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 160, overflowY: "auto" }}>
+                    {selectedPerformer.completedStages.map((st, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "7px 10px",
+                          background: "#F8FAFC",
+                          border: "1px solid #F1F5F9",
+                          borderRadius: 6,
+                          fontSize: 11.5
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <CheckCircle2 size={14} color="#10B981" />
+                          <span style={{ fontWeight: 600, color: "#1E293B" }}>{st.name}</span>
+                          <span style={{ fontSize: 10.5, color: "#64748B" }}>({st.orderId} · {st.buyer || "Buyer"})</span>
+                        </div>
+                        <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: "#DCFCE7", color: "#166534" }}>
+                          On Time
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Section 2: Completed Daily Tasks */}
+              {selectedPerformer.completedTasks && selectedPerformer.completedTasks.length > 0 && (
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#0F172A", marginBottom: 8 }}>
+                    Completed Department Tasks ({selectedPerformer.completedTasks.length})
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 130, overflowY: "auto" }}>
+                    {selectedPerformer.completedTasks.map((t, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "7px 10px",
+                          background: "#F8FAFC",
+                          border: "1px solid #F1F5F9",
+                          borderRadius: 6,
+                          fontSize: 11.5
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <CheckCircle size={14} color="#3B82F6" />
+                          <span style={{ fontWeight: 600, color: "#1E293B" }}>{t.title || t.name}</span>
+                          <span style={{ fontSize: 10.5, color: "#64748B" }}>({t.dept || selectedPerformer.dept})</span>
+                        </div>
+                        <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: "#EFF6FF", color: "#1E40AF" }}>
+                          Completed
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div
+              style={{
+                padding: "12px 20px",
+                borderTop: "1px solid #E2E8F0",
+                display: "flex",
+                justifyContent: "flex-end",
+                background: "#F8FAFC"
+              }}
+            >
+              <button
+                onClick={() => setSelectedPerformer(null)}
+                style={{
+                  padding: "6px 16px",
+                  borderRadius: 6,
+                  border: "1px solid #CBD5E1",
+                  background: "#FFFFFF",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  color: "#334155"
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Stage Disputes & False Completion Complaints Card */}
+      <Card style={{ marginBottom: 16 }}>
+        <CardHeader
+          title="STAGE DISPUTES & FALSE COMPLETION COMPLAINTS"
+          sub="Disputes filed by team members when previous stages were falsified or marked done prematurely (-10 pts per incident)"
+        />
+        {complaints.length === 0 ? (
+          <div style={{ padding: "20px 0", color: "#94A3B8", fontSize: 12, textAlign: "center" }}>
+            No stage completion disputes recorded. All order workflows progressing cleanly.
+          </div>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+              <thead>
+                <tr style={{ background: "#F8FAFC", borderBottom: "1px solid #E2E8F0", textAlign: "left" }}>
+                  <th style={{ padding: "9px 12px", fontWeight: 700, color: "#475569" }}>ORDER / STYLE</th>
+                  <th style={{ padding: "9px 12px", fontWeight: 700, color: "#475569" }}>STAGE & DEPT</th>
+                  <th style={{ padding: "9px 12px", fontWeight: 700, color: "#475569" }}>FILED BY</th>
+                  <th style={{ padding: "9px 12px", fontWeight: 700, color: "#475569" }}>TAGGED USER (PENALTY)</th>
+                  <th style={{ padding: "9px 12px", fontWeight: 700, color: "#475569" }}>REASON / REMARK</th>
+                  <th style={{ padding: "9px 12px", fontWeight: 700, color: "#475569" }}>DATE</th>
+                  <th style={{ padding: "9px 12px", fontWeight: 700, color: "#475569" }}>STATUS</th>
+                  {onResolveComplaint && <th style={{ padding: "9px 12px", fontWeight: 700, color: "#475569", textAlign: "right" }}>ACTION</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {complaints.map(c => {
+                  const isResolved = c.status === "Resolved";
+                  const isReverted = c.status === "Reverted";
+                  return (
+                    <tr key={c.id} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                      <td style={{ padding: "10px 12px", fontWeight: 600, color: "#0F172A" }}>
+                        <div>{c.orderId}</div>
+                        <div style={{ fontSize: 11, color: "#64748B" }}>{c.orderStyle || "—"}</div>
+                      </td>
+                      <td style={{ padding: "10px 12px" }}>
+                        <div style={{ fontWeight: 600, color: "#1E293B" }}>{c.stageName}</div>
+                        <div style={{ fontSize: 11, color: "#64748B" }}>{c.stageDept}</div>
+                      </td>
+                      <td style={{ padding: "10px 12px" }}>
+                        <span style={{ fontWeight: 600, color: "#3B82F6" }}>@{c.reportedBy}</span>
+                      </td>
+                      <td style={{ padding: "10px 12px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ fontWeight: 700, color: "#DC2626" }}>@{c.taggedUser}</span>
+                          <span style={{ background: "#FEE2E2", color: "#991B1B", padding: "1px 6px", borderRadius: 4, fontSize: 10.5, fontWeight: 800 }}>-10 pts</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: "10px 12px", color: "#334155", maxWidth: 280, wordBreak: "break-word" }}>
+                        {c.reason}
+                      </td>
+                      <td style={{ padding: "10px 12px", color: "#64748B", fontSize: 11 }}>
+                        {c.createdAt ? new Date(c.createdAt).toLocaleDateString("en-IN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
+                      </td>
+                      <td style={{ padding: "10px 12px" }}>
+                        <span style={{
+                          display: "inline-block",
+                          padding: "3px 9px",
+                          borderRadius: 999,
+                          fontSize: 11,
+                          fontWeight: 700,
+                          background: isResolved ? "#DCFCE7" : isReverted ? "#F1F5F9" : "#FEF3C7",
+                          color: isResolved ? "#166534" : isReverted ? "#475569" : "#92400E"
+                        }}>
+                          {c.status || "Under Review"}
+                        </span>
+                      </td>
+                      {onResolveComplaint && (
+                        <td style={{ padding: "10px 12px", textAlign: "right" }}>
+                          {!isResolved && !isReverted ? (
+                            <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                              <button
+                                onClick={() => onResolveComplaint(c.id, "Resolved")}
+                                style={{
+                                  background: "#10B981",
+                                  color: "#FFFFFF",
+                                  border: "none",
+                                  borderRadius: 5,
+                                  padding: "4px 10px",
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  cursor: "pointer"
+                                }}
+                              >
+                                Resolve
+                              </button>
+                              <button
+                                onClick={() => onResolveComplaint(c.id, "Reverted")}
+                                title="Revert stage dispute: unblocks order stage while keeping mistake record on tagged employee"
+                                style={{
+                                  background: "#64748B",
+                                  color: "#FFFFFF",
+                                  border: "none",
+                                  borderRadius: 5,
+                                  padding: "4px 10px",
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  cursor: "pointer"
+                                }}
+                              >
+                                Revert
+                              </button>
+                            </div>
+                          ) : (
+                            <span style={{ fontSize: 11, color: isResolved ? "#059669" : "#64748B", fontWeight: 600 }}>{c.status}</span>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
     </div>
   );
 }

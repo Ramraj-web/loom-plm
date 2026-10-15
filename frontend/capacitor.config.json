@@ -1,0 +1,8 @@
+{
+  "appId": "com.noolizhai.plm",
+  "appName": "Loom PLM",
+  "webDir": "../dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}
