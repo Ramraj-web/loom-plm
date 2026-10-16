@@ -6619,8 +6619,9 @@ export function AuditLoggerPage({
       if (userFilter !== "ALL" && log.username !== userFilter && log.userName !== userFilter) return false;
       if (dateFilter) {
         if (!log.timestamp) return false;
-        // Check both ISO prefix (UTC) and client local calendar date representation
-        const isoPrefix = String(log.timestamp).slice(0, 10);
+        // Check ISO prefix (UTC), local calendar representation, and substring
+        const rawTs = String(log.timestamp);
+        const isoPrefix = rawTs.slice(0, 10);
         let localDateStr = "";
         try {
           const d = new Date(log.timestamp);
@@ -6631,7 +6632,7 @@ export function AuditLoggerPage({
             localDateStr = `${y}-${m}-${day}`;
           }
         } catch (e) { }
-        if (isoPrefix !== dateFilter && localDateStr !== dateFilter) return false;
+        if (isoPrefix !== dateFilter && localDateStr !== dateFilter && !rawTs.startsWith(dateFilter)) return false;
       }
       if (searchTerm.trim()) {
         const q = searchTerm.toLowerCase();

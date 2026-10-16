@@ -194,7 +194,7 @@ router.post("/:key(*)", async (req, res, next) => {
           incoming.forEach(l => { if (l && l.id) logMap.set(l.id, l); });
           existing.forEach(l => { if (l && l.id && !logMap.has(l.id)) logMap.set(l.id, l); });
           const merged = Array.from(logMap.values()).sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
-          value = JSON.stringify(merged.slice(0, 500));
+          value = JSON.stringify(merged.slice(0, 50000));
         }
       }
     } catch (e) {

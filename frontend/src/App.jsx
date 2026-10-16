@@ -1118,7 +1118,7 @@ export default function LoomPLM() {
       };
 
       setAuditLogs(prevLogs => {
-        const updatedLogs = [logEntry, ...prevLogs.slice(0, 499)];
+        const updatedLogs = [logEntry, ...prevLogs.slice(0, 49999)];
         try {
           localStorage.setItem("loom_audit_logs", JSON.stringify(updatedLogs));
           if (window.storage?.set) window.storage.set("audit_logs", JSON.stringify(updatedLogs), true);
@@ -2065,7 +2065,7 @@ export default function LoomPLM() {
     };
 
     setAuditLogs(prev => {
-      const updated = [newEntry, ...prev.slice(0, 499)];
+      const updated = [newEntry, ...prev.slice(0, 49999)];
       try {
         localStorage.setItem("loom_audit_logs", JSON.stringify(updated));
         if (window.storage?.set) window.storage.set("audit_logs", JSON.stringify(updated), true);
@@ -2200,7 +2200,7 @@ export default function LoomPLM() {
     };
 
     setAuditLogs(prevLogs => {
-      const updatedLogs = [initialLogEntry, ...prevLogs.slice(0, 499)];
+      const updatedLogs = [initialLogEntry, ...prevLogs.slice(0, 49999)];
       try {
         localStorage.setItem("loom_audit_logs", JSON.stringify(updatedLogs));
         if (window.storage?.set) window.storage.set("audit_logs", JSON.stringify(updatedLogs), true);
@@ -2286,7 +2286,7 @@ export default function LoomPLM() {
         };
 
         setAuditLogs(prevLogs => {
-          const updatedLogs = [logEntry, ...prevLogs.slice(0, 499)];
+          const updatedLogs = [logEntry, ...prevLogs.slice(0, 49999)];
           try {
             localStorage.setItem("loom_audit_logs", JSON.stringify(updatedLogs));
             if (window.storage?.set) window.storage.set("audit_logs", JSON.stringify(updatedLogs), true);
