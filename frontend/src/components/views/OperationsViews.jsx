@@ -138,6 +138,7 @@ export function OrdersPage({
   const todayIso = new Date().toISOString().split("T")[0];
   const defaultShipIso = new Date(Date.now() + 90 * 86400000).toISOString().split("T")[0];
 
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
   const [form, setForm] = useState({
     id: "",
     style: "",
@@ -248,7 +249,9 @@ export function OrdersPage({
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (isSubmittingOrder) return;
     if (!form.id.trim() || !form.style.trim()) return;
+    setIsSubmittingOrder(true);
 
     // Filter to valid non-empty breakdown rows
     const validBreakdown = form.colorBreakdown.filter(
@@ -326,6 +329,7 @@ export function OrdersPage({
         { color: "", size: "M", qty: "" }
       ]
     });
+    setIsSubmittingOrder(false);
     setShowAddModal(false);
   };
 
@@ -1083,18 +1087,20 @@ export function OrdersPage({
                 </button>
                 <button
                   type="submit"
+                  disabled={isSubmittingOrder}
                   style={{
                     padding: "8px 18px",
                     borderRadius: 7,
                     border: "none",
-                    background: "#1F9E8D",
+                    background: isSubmittingOrder ? "#9CA3AF" : "#1F9E8D",
                     fontSize: 13,
                     fontWeight: 600,
                     color: "#FFFFFF",
-                    cursor: "pointer"
+                    cursor: isSubmittingOrder ? "not-allowed" : "pointer",
+                    opacity: isSubmittingOrder ? 0.7 : 1
                   }}
                 >
-                  Create Order & Realign T&A →
+                  {isSubmittingOrder ? "Creating..." : "Create Order & Realign T&A →"}
                 </button>
               </div>
             </form>

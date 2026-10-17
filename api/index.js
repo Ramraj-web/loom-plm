@@ -841,6 +841,26 @@ export default async function handler(req, res) {
         if (mongoCols?.resources) {
           try {
             delete record._id;
+            // Prevent duplicate creation for orders with identical uppercase canonical ID
+            if (resource === "orders" && record.id) {
+              const cleanId = String(record.id).trim().toUpperCase();
+              const existingOrder = await mongoCols.resources.findOne({
+                resource: "orders",
+                $or: [
+                  { id: cleanId },
+                  { id: record.id },
+                  { primaryId: cleanId },
+                  { primaryId: record.id }
+                ]
+              });
+              if (existingOrder) {
+                await mongoCols.resources.updateOne(
+                  { _id: existingOrder._id },
+                  { $set: { ...record, _id: existingOrder._id } }
+                );
+                return res.status(200).json({ ...existingOrder, ...record });
+              }
+            }
             await mongoCols.resources.insertOne({ resource, ...record });
             return res.status(201).json(record);
           } catch (e) {

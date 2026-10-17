@@ -2808,7 +2808,17 @@ export default function LoomPLM() {
       completedAt: null,
       deletedAt: null,
     };
-    setOrders(prev => [fullOrder, ...prev]);
+
+    setOrders(prev => {
+      const cleanTargetId = String(primaryId).trim().toUpperCase();
+      const existsIdx = prev.findIndex(o => String(o.id || o.primaryId).trim().toUpperCase() === cleanTargetId);
+      if (existsIdx >= 0) {
+        const next = [...prev];
+        next[existsIdx] = { ...next[existsIdx], ...fullOrder };
+        return next;
+      }
+      return [fullOrder, ...prev];
+    });
     invalidateOrdersCache();
     try {
       resourcesApi.create("orders", fullOrder).catch(err => {
