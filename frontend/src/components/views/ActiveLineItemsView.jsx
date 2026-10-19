@@ -537,7 +537,7 @@ export default function ActiveLineItemsView({
         {/* Right Toolbar Items */}
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           {/* View in-charge toggle */}
-          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, fontWeight: 600, color: isDarkMode ? "#CBD5E1" : "#475569", cursor: "pointer" }}>
+          {/* <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, fontWeight: 600, color: isDarkMode ? "#CBD5E1" : "#475569", cursor: "pointer" }}>
             <span>View in-charge</span>
             <input
               type="checkbox"
@@ -545,7 +545,7 @@ export default function ActiveLineItemsView({
               onChange={e => setViewInCharge(e.target.checked)}
               style={{ width: 16, height: 16, cursor: "pointer", accentColor: "#2563EB" }}
             />
-          </label>
+          </label> */}
 
           {/* Export Button */}
           <button
@@ -591,20 +591,7 @@ export default function ActiveLineItemsView({
                 left: 0,
                 top: 0,
                 zIndex: 25,
-                width: 44,
-                minWidth: 44,
-                padding: "10px 12px",
-                textAlign: "center",
-                background: isDarkMode ? "#1E293B" : "#F8FAFC",
-                borderBottom: `2px solid ${isDarkMode ? "#334155" : "#CBD5E1"}`
-              }}>
-                <input type="checkbox" style={{ accentColor: "#2563EB" }} />
-              </th>
-              <th style={{
-                position: "sticky",
-                left: 44,
-                top: 0,
-                zIndex: 25,
+                width: 140,
                 minWidth: 140,
                 padding: "10px 12px",
                 fontWeight: 700,
@@ -616,7 +603,7 @@ export default function ActiveLineItemsView({
               </th>
               <th style={{
                 position: "sticky",
-                left: 184,
+                left: 140,
                 top: 0,
                 zIndex: 25,
                 minWidth: 230,
@@ -655,7 +642,7 @@ export default function ActiveLineItemsView({
           <tbody>
             {Object.keys(groupedOrders).length === 0 ? (
               <tr>
-                <td colSpan={3 + masterStageColumns.length} style={{ padding: "40px", textAlign: "center", color: isDarkMode ? "#64748B" : "#9498A8" }}>
+                <td colSpan={2 + masterStageColumns.length} style={{ padding: "40px", textAlign: "center", color: isDarkMode ? "#64748B" : "#9498A8" }}>
                   No active line items match the selected filter.
                 </td>
               </tr>
@@ -672,7 +659,7 @@ export default function ActiveLineItemsView({
                       style={{ background: isDarkMode ? "#182238" : "#F1F5F9", cursor: "pointer", userSelect: "none" }}
                     >
                       <td
-                        colSpan={3 + masterStageColumns.length}
+                        colSpan={2 + masterStageColumns.length}
                         style={{
                           position: "sticky",
                           left: 0,
@@ -715,27 +702,13 @@ export default function ActiveLineItemsView({
                             transition: "background 0.15s ease"
                           }}
                         >
-                          {/* Checkbox (Sticky Left) */}
-                          <td
-                            onClick={e => e.stopPropagation()}
-                            style={{
-                              position: "sticky",
-                              left: 0,
-                              zIndex: 6,
-                              padding: "12px",
-                              textAlign: "center",
-                              background: rowBg,
-                              borderBottom: `1px solid ${isDarkMode ? "#1E293B" : "#F1F5F9"}`
-                            }}
-                          >
-                            <input type="checkbox" style={{ accentColor: "#2563EB" }} />
-                          </td>
-
                           {/* Order ID (Sticky Left) */}
                           <td style={{
                             position: "sticky",
-                            left: 44,
+                            left: 0,
                             zIndex: 6,
+                            width: 140,
+                            minWidth: 140,
                             padding: "12px",
                             background: rowBg,
                             borderBottom: `1px solid ${isDarkMode ? "#1E293B" : "#F1F5F9"}`
@@ -753,8 +726,9 @@ export default function ActiveLineItemsView({
                           {/* Style info & Merch / Buyer tags (Sticky Left) */}
                           <td style={{
                             position: "sticky",
-                            left: 184,
+                            left: 140,
                             zIndex: 6,
+                            minWidth: 230,
                             padding: "10px 12px",
                             background: rowBg,
                             borderBottom: `1px solid ${isDarkMode ? "#1E293B" : "#F1F5F9"}`,
