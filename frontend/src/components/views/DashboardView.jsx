@@ -308,7 +308,7 @@ export function DateWiseActivityFeed({
   );
 }
 
-export function OrderDeliveryCalendarWidget({ orders = [], onOpenOrder, onNavigate }) {
+export function OrderDeliveryCalendarWidget({ orders = [], onOpenOrder, onNavigate, style = {}, className = "", listMaxHeight = 310 }) {
   const [viewMode, setViewMode] = useState("milestones");
   const today = useMemo(() => new Date(), []);
 
@@ -464,7 +464,7 @@ export function OrderDeliveryCalendarWidget({ orders = [], onOpenOrder, onNaviga
   };
 
   return (
-    <Card style={{ display: "flex", flexDirection: "column", height: "100%", padding: "16px 18px", boxSizing: "border-box" }}>
+    <Card className={className} style={{ display: "flex", flexDirection: "column", height: "100%", padding: "16px 18px", boxSizing: "border-box", ...style }}>
       {/* Header with Title, Mode Switcher & Calendar Action */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
         <div>
@@ -547,7 +547,7 @@ export function OrderDeliveryCalendarWidget({ orders = [], onOpenOrder, onNaviga
 
       {/* VIEW 1: Delivery Milestones Schedule */}
       {viewMode === "milestones" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: 1, overflowY: "auto", maxHeight: 310 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: 1, overflowY: "auto", maxHeight: listMaxHeight }}>
           {upcomingShipments.length === 0 ? (
             <div style={{ padding: "30px 16px", textAlign: "center", color: "#94A3B8", fontSize: 12 }}>
               No active orders with target ship dates found.

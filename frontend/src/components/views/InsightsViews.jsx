@@ -17,6 +17,7 @@ import {
   Card, CardHeader, PageHeader, DarkCard, DarkCardHeader, MiniDonut, BackLink, statusPill
 } from "../common/CommonUI.jsx";
 import { analyzeCuttingDelayForOrder, CuttingDelayDashboardBanner } from "../CuttingDelayAlertModal.jsx";
+import { OrderDeliveryCalendarWidget } from "./DashboardView.jsx";
 
 /**
  * Helper function to compute category-level planned vs actual variance breakdown
@@ -4632,25 +4633,10 @@ export function ExecutiveOverviewPage({ orders, buyers = [], attendance, userSes
           })}
         </div>
 
-      {/* Row 2: Order Health Distribution, Shipment Performance Trend, Top Delay Reasons */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 0.95fr 1fr", gap: 12, marginBottom: 16 }}>
-        {/* Order Health Distribution */}
-        {/* <Card>
-          <CardHeader title="ORDER HEALTH DISTRIBUTION" />
-          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <MiniDonut data={healthBuckets} size={104} centerLabel={totalOrders} centerSub="Orders" labelColor="#0F172A" />
-            <div style={{ flex: 1 }}>
-              {healthBuckets.map(b => (
-                <div key={b.name} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, fontSize: 11.5 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: 999, background: b.color }} />
-                  <span style={{ color: "#475569", flex: 1 }}>{b.name}</span>
-                  <span style={{ color: "#0F172A", fontWeight: 700 }}>{b.value}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </Card> */}
-           <Card>
+      {/* Row 2: Orders by Buyer, Orders by Country, Shipment Performance Trend */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1.35fr", gap: 12, marginBottom: 16 }}>
+        {/* Orders by Buyer */}
+        <Card>
           <CardHeader title="ORDERS BY BUYER" sub="Click a buyer to drill down" />
           {buyerData.length === 0 ? (
             <div style={{ fontSize: 12, color: "#94A3B8", textAlign: "center", padding: "20px 0" }}>No buyers recorded.</div>
@@ -4746,24 +4732,6 @@ export function ExecutiveOverviewPage({ orders, buyers = [], attendance, userSes
                 <Line type="monotone" dataKey="target" name="Target Goal % (75% Benchmark)" stroke="#94A3B8" strokeWidth={1.5} strokeDasharray="4 4" dot={false} /></LineChart>
             </ResponsiveContainer>
           </div>
-        </Card>
-
-        {/* Top Delay Reasons */}
-        <Card>
-          <CardHeader title="TOP DELAY REASONS" sub="All orders" />
-          {reasonArr.length === 0 ? (
-            <div style={{ fontSize: 12, color: "#94A3B8" }}>No delays flagged.</div>
-          ) : reasonArr.map(([reason, count]) => (
-            <div key={reason} style={{ marginBottom: 10 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, marginBottom: 4 }}>
-                <span style={{ color: "#334155", fontWeight: 500 }}>{reason}</span>
-                <span style={{ color: "#64748B" }}>{Math.round(count / reasonTotal * 100)}%</span>
-              </div>
-              <div style={{ height: 6, background: "#F1F5F9", borderRadius: 999 }}>
-                <div style={{ height: 6, width: `${count / reasonTotal * 100}%`, background: "#EF4444", borderRadius: 999 }} />
-              </div>
-            </div>
-          ))}
         </Card>
       </div>
 
@@ -4903,37 +4871,40 @@ export function ExecutiveOverviewPage({ orders, buyers = [], attendance, userSes
         </Card>
       </div>
 
-      {/* Row 4: Orders by Buyer, Orders by Country, Quality Overview, Predicted Shipment Risk */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, marginBottom: 16 }}>
-        {/* Orders by Buyer */}
-        {/* Quality Overview */}
-        {/* <Card>
-          <CardHeader title="QUALITY OVERVIEW" />
-          <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}>
-            <MiniDonut data={totalOrders > 0 ? [{ name: "Pass", value: 100, color: "#10B981" }] : [{ name: "None", value: 100, color: "#E2E8F0" }]} size={80} centerLabel={totalOrders > 0 ? "100%" : "—"} centerSub="Pass rate" labelColor="#0F172A" />
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#64748B" }}>
-            <span>Defect rate <b style={{ color: "#0F172A" }}>{totalOrders > 0 ? "0.0%" : "—"}</b></span>
-            <span>Rework <b style={{ color: "#0F172A" }}>{totalOrders > 0 ? "0.0%" : "—"}</b></span>
-          </div>
-        </Card> */}
+      {/* Row 4: Delivery Schedule & Milestones + Top Delay Reasons (2-column layout matching surrounding rows) */}
+      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 12, marginBottom: 16 }}>
+        {/* Delivery Schedule & Milestones Widget */}
+        <OrderDeliveryCalendarWidget
+          orders={activeOrders}
+          onOpenOrder={onOpenOrder}
+          onNavigate={onNavigate}
+          listMaxHeight={260}
+          style={{ height: "100%" }}
+        />
 
-        {/* Predicted Shipment Risk */}
-        {/* <Card>
-          <CardHeader title="PREDICTED SHIPMENT RISK" sub="Next 30 days" />
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <MiniDonut data={riskData} size={80} centerLabel={totalOrders} labelColor="#0F172A" />
-            <div style={{ flex: 1 }}>
-              {riskData.map(r => (
-                <div key={r.name} style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 4, fontSize: 10.5 }}>
-                  <span style={{ width: 7, height: 7, borderRadius: 999, background: r.color }} />
-                  <span style={{ color: "#475569", flex: 1 }}>{r.name}</span>
-                  <span style={{ color: "#0F172A", fontWeight: 700 }}>{r.value}</span>
+        {/* Top Delay Reasons */}
+        <Card style={{ display: "flex", flexDirection: "column", height: "100%", boxSizing: "border-box" }}>
+          <CardHeader title="TOP DELAY REASONS" sub="Delay frequency across all active orders" />
+          <div style={{ flex: 1, overflowY: "auto", maxHeight: 260, paddingRight: 4 }}>
+            {reasonArr.length === 0 ? (
+              <div style={{ fontSize: 12, color: "#94A3B8", padding: "20px 0", textAlign: "center" }}>
+                No active delays flagged across production.
+              </div>
+            ) : reasonArr.map(([reason, count]) => (
+              <div key={reason} style={{ marginBottom: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, marginBottom: 5 }}>
+                  <span style={{ color: "#334155", fontWeight: 600 }}>{reason}</span>
+                  <span style={{ color: "#0F172A", fontWeight: 700 }}>
+                    {count} {count === 1 ? "order" : "orders"} ({Math.round(count / reasonTotal * 100)}%)
+                  </span>
                 </div>
-              ))}
-            </div>
+                <div style={{ height: 6, background: "#F1F5F9", borderRadius: 999, overflow: "hidden" }}>
+                  <div style={{ height: 6, width: `${(count / reasonTotal) * 100}%`, background: "#EF4444", borderRadius: 999 }} />
+                </div>
+              </div>
+            ))}
           </div>
-        </Card> */}
+        </Card>
       </div>
 
       {/* Row 5: Financial Overview + Activity Feed */}

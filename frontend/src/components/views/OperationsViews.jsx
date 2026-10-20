@@ -9,7 +9,7 @@ import {
 import {
   TA_STAGES, TA_STAGES_90, TA_STAGES_120, makeStages, DEPT_ICONS, ORG_STRUCTURE, ATTENDANCE_STATUS_STYLE, CERT_STATUS_STYLE,
   COMPLIANCE_STATUS_STYLE, COMPLIANCE_PRIORITY_STYLE, CERT_NAME_OPTIONS, BUYER_LIST, COMPLIANCE_CATEGORIES,
-  DEFAULT_DEPT_DESCRIPTIONS, firstNamedAssignee
+  DEFAULT_DEPT_DESCRIPTIONS, firstNamedAssignee, parseShipDateSafe
 } from "../../constants/loomData.js";
 import {
   Card, CardHeader, PageHeader, BackLink, statusPill, riskDot, collectTasks, GroupedTaskList, OrgChain, TaskTable
@@ -200,10 +200,39 @@ export function OrdersPage({
     return () => window.removeEventListener("loom_orders_drilldown_filter_change", handleFilterChange);
   }, []);
 
+  const [buyerFilter, setBuyerFilter] = useState("all");
+
+  const getOrderDeliveryTime = (order) => {
+    if (!order) return Infinity;
+    const raw = order.shipDate || order.ship;
+    const parsed = parseShipDateSafe(raw);
+    return parsed ? parsed.getTime() : Infinity;
+  };
+
+  const availableBuyers = useMemo(() => {
+    const buyerSet = new Set();
+    orders.forEach(o => {
+      const b = typeof o?.buyer === "string" ? o.buyer.trim() : "";
+      if (b) buyerSet.add(b);
+    });
+    return Array.from(buyerSet).sort((a, b) => a.localeCompare(b));
+  }, [orders]);
+
   const visibleActiveOrders = useMemo(() => {
-    if (!masterFilter?.type || !masterFilter?.value) return activeOrders;
-    return activeOrders.filter(order => order?.[masterFilter.type] === masterFilter.value);
-  }, [activeOrders, masterFilter]);
+    let list = activeOrders;
+    if (masterFilter?.type && masterFilter?.value) {
+      list = list.filter(order => order?.[masterFilter.type] === masterFilter.value);
+    }
+    if (buyerFilter && buyerFilter !== "all") {
+      list = list.filter(order => (order?.buyer || "").trim() === buyerFilter.trim());
+    }
+    return [...list].sort((a, b) => {
+      const timeA = getOrderDeliveryTime(a);
+      const timeB = getOrderDeliveryTime(b);
+      if (timeA !== timeB) return timeA - timeB;
+      return (a.id || "").localeCompare(b.id || "");
+    });
+  }, [activeOrders, masterFilter, buyerFilter]);
 
   const addColorBreakdownRow = () => {
     setForm(prev => ({
@@ -336,14 +365,66 @@ export function OrdersPage({
   return (
     <div>
       {/* Header with Title and + Add Order Button */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 700, color: "#151B2E", margin: 0 }}>Orders</h1>
           <div style={{ fontSize: 13, color: "#8A8D98", marginTop: 4 }}>
             {visibleActiveOrders.length} active order{visibleActiveOrders.length === 1 ? "" : "s"} · {completedOrders.length} completed · {deletedOrders.length} in history
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          {/* Buyer Filter Dropdown before Add Buyer & Add Order buttons */}
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#FFFFFF", padding: "3px 4px 3px 10px", borderRadius: 8, border: "1px solid #D1D5DB", boxShadow: "0 1px 2px rgba(0,0,0,0.03)" }}>
+            <label htmlFor="orders-buyer-filter" style={{ fontSize: 12, fontWeight: 600, color: "#4B5563", whiteSpace: "nowrap" }}>Buyer:</label>
+            <select
+              id="orders-buyer-filter"
+              value={buyerFilter}
+              onChange={e => setBuyerFilter(e.target.value)}
+              style={{
+                padding: "5px 8px",
+                borderRadius: 6,
+                border: "none",
+                fontSize: 13,
+                fontWeight: 500,
+                color: "#1F2937",
+                background: "transparent",
+                cursor: "pointer",
+                outline: "none"
+              }}
+            >
+              <option value="all">All Buyers ({availableBuyers.length})</option>
+              {availableBuyers.map(b => (
+                <option key={b} value={b}>{b}</option>
+              ))}
+            </select>
+            {buyerFilter !== "all" && (
+              <button
+                type="button"
+                onClick={() => setBuyerFilter("all")}
+                title="Clear buyer filter"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 3,
+                  border: "none",
+                  borderRadius: 6,
+                  background: "#F3F4F6",
+                  color: "#4B5563",
+                  padding: "4px 8px",
+                  fontSize: 11.5,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  marginLeft: 2
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = "#E5E7EB"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "#F3F4F6"; }}
+              >
+                <X size={12} />
+                Clear
+              </button>
+            )}
+          </div>
+
           <button
             onClick={() => setShowBuyerModal(true)}
             style={{
@@ -398,15 +479,20 @@ export function OrdersPage({
       {/* 1. Active Orders Section */}
       <Card style={{ marginBottom: 24 }}>
         <div style={{ padding: "0 0 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ fontSize: 14, fontWeight: 700, color: "#1B2130" }}>Active Orders</span>
-            <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, background: "#E1F5EE", color: "#085041", padding: "2px 8px", borderRadius: 999 }}>
+            <span style={{ fontSize: 11, fontWeight: 600, background: "#E1F5EE", color: "#085041", padding: "2px 8px", borderRadius: 999 }}>
               {visibleActiveOrders.length} active
             </span>
             {masterFilter && (
-              <button type="button" onClick={() => { setMasterFilter(null); localStorage.removeItem("loom_orders_drilldown_filter"); }} style={{ marginLeft: 8, border: "1px solid #C7D2FE", borderRadius: 999, background: "#EEF2FF", color: "#4338CA", padding: "2px 8px", fontSize: 10.5, cursor: "pointer" }}>
+              <button type="button" onClick={() => { setMasterFilter(null); localStorage.removeItem("loom_orders_drilldown_filter"); }} style={{ border: "1px solid #C7D2FE", borderRadius: 999, background: "#EEF2FF", color: "#4338CA", padding: "2px 8px", fontSize: 10.5, cursor: "pointer" }}>
                 Filter: {masterFilter.type} = {masterFilter.value} ×
               </button>
+            )}
+            {buyerFilter !== "all" && (
+              <span style={{ fontSize: 11, fontWeight: 600, background: "#EDE9FE", color: "#5B21B6", padding: "2px 8px", borderRadius: 999 }}>
+                Buyer: {buyerFilter}
+              </span>
             )}
           </div>
         </div>
@@ -435,7 +521,11 @@ export function OrdersPage({
 
         {visibleActiveOrders.length === 0 ? (
           <div style={{ padding: "32px 0", textAlign: "center", color: "#8A8D98", fontSize: 13 }}>
-            {masterFilter ? "No orders found for this filter." : <>No active orders. Click <strong>+ Add Order</strong> above to create one.</>}
+            {masterFilter
+              ? "No orders found for this filter."
+              : buyerFilter !== "all"
+                ? <>No active orders found for buyer <strong>"{buyerFilter}"</strong>. <button type="button" onClick={() => setBuyerFilter("all")} style={{ background: "none", border: "none", color: "#1F9E8D", fontWeight: 600, cursor: "pointer", padding: 0, textDecoration: "underline" }}>Clear filter</button></>
+                : <>No active orders. Click <strong>+ Add Order</strong> above to create one.</>}
           </div>
         ) : (
           visibleActiveOrders.map(o => (
