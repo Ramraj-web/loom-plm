@@ -352,9 +352,22 @@ export function formatStageDoneDate(completedAt) {
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const now = new Date();
     const isSameYear = d.getFullYear() === now.getFullYear();
-    return isSameYear
+    const datePart = isSameYear
       ? `${d.getDate()} ${monthNames[d.getMonth()]}`
       : `${d.getDate()} ${monthNames[d.getMonth()]} ${d.getFullYear()}`;
+
+    // Format time if timestamp contains time info (12-hour format with am/pm, e.g. 05:07 pm)
+    const hasTime = typeof completedAt === "string" ? completedAt.includes("T") || completedAt.includes(":") : true;
+    if (hasTime) {
+      let hours = d.getHours();
+      const minutes = String(d.getMinutes()).padStart(2, "0");
+      const ampm = hours >= 12 ? "pm" : "am";
+      hours = hours % 12;
+      hours = hours ? hours : 12; // 0 hour should be 12
+      const formattedHour = String(hours).padStart(2, "0");
+      return `${datePart}, ${formattedHour}:${minutes} ${ampm}`;
+    }
+    return datePart;
   } catch (e) {
     return "";
   }
