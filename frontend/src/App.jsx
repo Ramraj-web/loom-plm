@@ -4862,6 +4862,22 @@ export default function LoomPLM() {
         users={users}
         teams={teams}
         buyers={buyers}
+        orders={visibleOrders}
+        onUpdateOrder={(orderId, updatedFields) => {
+          setOrders(prev => {
+            const list = Array.isArray(prev) ? prev : [];
+            const updated = list.map(o => {
+              if (String(o.id) === String(orderId) || String(o.primaryId) === String(orderId)) {
+                const merged = { ...o, ...updatedFields };
+                const primId = o.id || o.primaryId || o._id;
+                try { resourcesApi.update("orders", primId, merged).catch(() => {}); } catch (e) {}
+                return merged;
+              }
+              return o;
+            });
+            return updated;
+          });
+        }}
         onChangeUsers={handleUsersChange}
         onChangeTeams={handleTeamsChange}
         rotation={rotation}

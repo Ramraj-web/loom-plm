@@ -4872,18 +4872,17 @@ export function ExecutiveOverviewPage({ orders, buyers = [], attendance, userSes
       </div>
 
       {/* Row 4: Delivery Schedule & Milestones + Top Delay Reasons (2-column layout matching surrounding rows) */}
-      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 12, marginBottom: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 12, marginBottom: 16, alignItems: "start" }}>
         {/* Delivery Schedule & Milestones Widget */}
         <OrderDeliveryCalendarWidget
           orders={activeOrders}
           onOpenOrder={onOpenOrder}
           onNavigate={onNavigate}
           listMaxHeight={260}
-          style={{ height: "100%" }}
         />
 
         {/* Top Delay Reasons */}
-        <Card style={{ display: "flex", flexDirection: "column", height: "100%", boxSizing: "border-box" }}>
+        <Card style={{ display: "flex", flexDirection: "column", boxSizing: "border-box" }}>
           <CardHeader title="TOP DELAY REASONS" sub="Delay frequency across all active orders" />
           <div style={{ flex: 1, overflowY: "auto", maxHeight: 260, paddingRight: 4 }}>
             {reasonArr.length === 0 ? (

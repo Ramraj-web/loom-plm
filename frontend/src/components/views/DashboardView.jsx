@@ -464,7 +464,7 @@ export function OrderDeliveryCalendarWidget({ orders = [], onOpenOrder, onNaviga
   };
 
   return (
-    <Card className={className} style={{ display: "flex", flexDirection: "column", height: "100%", padding: "16px 18px", boxSizing: "border-box", ...style }}>
+    <Card className={className} style={{ display: "flex", flexDirection: "column", padding: "16px 18px", boxSizing: "border-box", ...style }}>
       {/* Header with Title, Mode Switcher & Calendar Action */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
         <div>
@@ -802,22 +802,40 @@ export function OrderDeliveryCalendarWidget({ orders = [], onOpenOrder, onNaviga
 
           {/* Day Inspection Box (when a date is clicked) */}
           {selectedDateKey && (
-            <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 8, padding: "10px 12px", marginTop: 4 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "#0F172A", marginBottom: 6, display: "flex", justifyContent: "space-between" }}>
-                <span>Scheduled on {selectedDateKey}:</span>
-                <span style={{ color: "#64748B", fontWeight: 500 }}>{selectedDayOrders.length} order(s)</span>
+            <div style={{ background: "#F8FAFC", border: "1px solid #CBD5E1", borderRadius: 8, padding: "10px 12px", marginTop: 4, boxShadow: "0 2px 6px rgba(0,0,0,0.04)" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#0F172A", marginBottom: 6, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>Scheduled on {selectedDateKey} ({selectedDayOrders.length} orders):</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedDateKey(null)}
+                  style={{
+                    border: "none",
+                    background: "#E2E8F0",
+                    color: "#475569",
+                    borderRadius: 4,
+                    padding: "2px 6px",
+                    fontSize: 10,
+                    fontWeight: 700,
+                    cursor: "pointer"
+                  }}
+                  title="Close inspection"
+                >
+                  ✕ Close
+                </button>
               </div>
               {selectedDayOrders.length === 0 ? (
-                <div style={{ fontSize: 11, color: "#94A3B8", fontStyle: "italic" }}>
+                <div style={{ fontSize: 11, color: "#94A3B8", fontStyle: "italic", padding: "4px 0" }}>
                   No order shipments scheduled on this date.
                 </div>
               ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 150, overflowY: "auto", paddingRight: 2 }}>
                   {selectedDayOrders.map(o => (
                     <div
                       key={o.id}
                       onClick={() => onOpenOrder && onOpenOrder(o.primaryId || o.id, o.primaryId)}
-                      style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#FFFFFF", border: "1px solid #CBD5E1", borderRadius: 6, padding: "6px 8px", cursor: "pointer" }}
+                      style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: 6, padding: "6px 8px", cursor: "pointer", transition: "border-color 0.12s ease" }}
+                      onMouseEnter={e => e.currentTarget.style.borderColor = "#94A3B8"}
+                      onMouseLeave={e => e.currentTarget.style.borderColor = "#E2E8F0"}
                     >
                       <div>
                         <div style={{ fontSize: 11.5, fontWeight: 700, color: "#0F172A" }}>{o.id} · {o.style}</div>
@@ -1731,7 +1749,7 @@ export function Dashboard({
         </div>
       </Card>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr 1fr", gap: 16, marginBottom: 16, alignItems: "stretch" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr 1fr", gap: 16, marginBottom: 16, alignItems: "start" }}>
         <OrderDeliveryCalendarWidget orders={orders} onOpenOrder={onOpenOrder} onNavigate={onNavigate} />
 
         {/* Production vs plan (today) - Hidden per user request (preserved for future reference) */}
@@ -1757,7 +1775,7 @@ export function Dashboard({
         )}
 
         {/* My tasks Widget - Expanded to fill the covered area */}
-        <Card style={{ display: "flex", flexDirection: "column", height: "100%", boxSizing: "border-box" }}>
+        <Card style={{ display: "flex", flexDirection: "column", boxSizing: "border-box" }}>
           <CardHeader title="My tasks" action="Open" onAction={() => onNavigate("tasks")} />
           <div style={{ flex: 1, overflowY: "auto", maxHeight: 320 }}>
             {myTasksPreview.length === 0 ? (
@@ -1843,7 +1861,7 @@ export function Dashboard({
           const presentPct = totalStaff > 0 ? Math.round((counts.present / totalStaff) * 100) : 0;
 
           return (
-            <Card style={{ display: "flex", flexDirection: "column", height: "100%", boxSizing: "border-box" }}>
+            <Card style={{ display: "flex", flexDirection: "column", boxSizing: "border-box" }}>
               <CardHeader title="Attendance today" action="Open" onAction={() => onNavigate("attendance")} />
               {totalStaff === 0 ? (
                 <div style={{ fontSize: 12, color: "#B0B2BA", padding: "16px 0" }}>No staff or attendance records recorded yet.</div>

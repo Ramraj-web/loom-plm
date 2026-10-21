@@ -1,7 +1,8 @@
 import React, { useMemo, useState, useEffect } from "react";
 import {
   Eye, EyeOff, Search, X, Briefcase, Filter, Plus, Trash2, Edit2,
-  Layers, ArrowUp, ArrowDown, GripVertical, CheckCircle, Factory, MapPin, Check
+  Layers, ArrowUp, ArrowDown, GripVertical, CheckCircle, Factory, MapPin, Check,
+  Box, RefreshCw, TrendingUp, RotateCcw, AlertTriangle, ArrowRightLeft, MoveRight
 } from "lucide-react";
 
 import { ORG_STRUCTURE, TA_STAGES_90, TA_STAGES_120 } from "../constants/loomData.js";
@@ -101,6 +102,8 @@ export function UserAccessPage({
   users = [],
   teams = [],
   buyers = [],
+  orders = [],
+  onUpdateOrder = null,
   onChangeUsers,
   onChangeTeams,
   rotation,
@@ -318,6 +321,138 @@ export function UserAccessPage({
     if (onChangeUnits) {
       onChangeUnits(updated);
     }
+  };
+
+  // State for Unit Selection & Sub-tabs in Settings Units Page
+  const [selectedUnitId, setSelectedUnitId] = useState(null);
+  const [unitSearch, setUnitSearch] = useState("");
+  const [unitSubTab, setUnitSubTab] = useState("production"); // 'production' | 'details' | 'summary' | 'ledger'
+  const [unitOrderFilter, setUnitOrderFilter] = useState("all"); // 'all' | 'allocated' | 'wip' | 'pendingReturns'
+  const [unitOrderSearch, setUnitOrderSearch] = useState("");
+
+  // Modal State for Assigning Order to Unit or Transferring Order Qty to another Unit
+  const [transferModal, setTransferModal] = useState({
+    isOpen: false,
+    order: null,
+    sourceUnitId: null,
+    targetUnitId: "",
+    transferQty: 0,
+    maxQty: 0,
+    stageName: "Production",
+    notes: ""
+  });
+
+  // Ensure an active unit is selected by default if available
+  useEffect(() => {
+    if (!selectedUnitId && unitList.length > 0) {
+      setSelectedUnitId(unitList[0].id);
+    }
+  }, [unitList, selectedUnitId]);
+
+  // Load and persist Movement Ledger history
+  const [movementLedger, setMovementLedger] = useState(() => {
+    try {
+      const cached = localStorage.getItem("loom_unit_movement_ledger");
+      if (cached) return JSON.parse(cached);
+    } catch (e) {}
+    return [];
+  });
+
+  const recordMovement = (entry) => {
+    setMovementLedger(prev => {
+      const updated = [
+        {
+          id: `mov-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          timestamp: new Date().toISOString(),
+          ...entry
+        },
+        ...prev
+      ];
+      try {
+        localStorage.setItem("loom_unit_movement_ledger", JSON.stringify(updated));
+        if (window.storage?.set) window.storage.set("global_unit_movement_ledger", JSON.stringify(updated), true);
+      } catch (e) {}
+      return updated;
+    });
+  };
+
+  // Handle Transfer / Split Submission
+  const handleExecuteTransfer = (e) => {
+    e.preventDefault();
+    const { order, sourceUnitId, targetUnitId, transferQty, stageName, notes } = transferModal;
+    if (!order || !targetUnitId || Number(transferQty) <= 0) return;
+
+    const sourceUnit = unitList.find(u => u.id === sourceUnitId) || { name: "Unassigned", code: "—" };
+    const targetUnit = unitList.find(u => u.id === targetUnitId) || { name: targetUnitId, code: targetUnitId };
+    const qtyNum = Number(transferQty);
+
+    // Existing unit allocations on order
+    const existingAllocations = Array.isArray(order.unitAllocations) ? [...order.unitAllocations] : [];
+
+    // Decrement source allocation
+    const srcIdx = existingAllocations.findIndex(a => a.unitId === sourceUnitId);
+    if (srcIdx >= 0) {
+      const newSrcQty = Math.max(0, (Number(existingAllocations[srcIdx].qty) || 0) - qtyNum);
+      if (newSrcQty === 0) {
+        existingAllocations.splice(srcIdx, 1);
+      } else {
+        existingAllocations[srcIdx] = { ...existingAllocations[srcIdx], qty: newSrcQty };
+      }
+    }
+
+    // Increment target allocation
+    const tgtIdx = existingAllocations.findIndex(a => a.unitId === targetUnitId);
+    if (tgtIdx >= 0) {
+      existingAllocations[tgtIdx] = {
+        ...existingAllocations[tgtIdx],
+        qty: (Number(existingAllocations[tgtIdx].qty) || 0) + qtyNum
+      };
+    } else {
+      existingAllocations.push({
+        unitId: targetUnitId,
+        unitName: targetUnit.name,
+        unitCode: targetUnit.code,
+        qty: qtyNum,
+        allocatedAt: new Date().toISOString()
+      });
+    }
+
+    // Update order with primary unit + multi-unit allocations
+    const updatedOrder = {
+      ...order,
+      unitId: existingAllocations.length === 1 ? existingAllocations[0].unitId : (order.unitId || targetUnitId),
+      unitName: existingAllocations.length === 1 ? existingAllocations[0].unitName : (order.unitName || targetUnit.name),
+      unitAllocations: existingAllocations
+    };
+
+    if (onUpdateOrder) {
+      onUpdateOrder(order.id, updatedOrder);
+    }
+
+    // Record in Movement Ledger
+    recordMovement({
+      orderId: order.id,
+      style: order.style,
+      buyer: order.buyer,
+      qty: qtyNum,
+      fromUnitId: sourceUnitId,
+      fromUnitName: sourceUnit.name,
+      toUnitId: targetUnitId,
+      toUnitName: targetUnit.name,
+      stageName: stageName || "Production",
+      notes: notes || "Split / Re-assigned from Unit Tracking"
+    });
+
+    setTransferModal({
+      isOpen: false,
+      order: null,
+      sourceUnitId: null,
+      targetUnitId: "",
+      transferQty: 0,
+      maxQty: 0,
+      stageName: "Production",
+      notes: ""
+    });
   };
 
   const teamMap = useMemo(() => Object.fromEntries(teams.map(team => [team.id, team])), [teams]);
@@ -1160,193 +1295,925 @@ export function UserAccessPage({
       </div>
     )}
 
-    {/* TAB 4: Manufacturing Units Setup */}
-    {tab === "units" && (
-      <div>
-        {/* Add / Edit Unit Form */}
-        <div style={panelStyle}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "#1B2130", marginBottom: 12 }}>
-            {unitEditingId ? "Edit Manufacturing Unit" : "Add Manufacturing UNIT"}
+    {/* TAB 4: Manufacturing Units & Floor Tracking (Matching Reference UI) */}
+    {tab === "units" && (() => {
+      // Compute Metric Totals
+      const totalUnitsCount = unitList.length;
+      const activeOrdersList = (orders || []).filter(o => !o.isDeleted && o.completed !== true);
+
+      // Orders allocated to any unit
+      const allocatedOrders = activeOrdersList.filter(o => {
+        if (o.unitId && o.unitId !== "Unassigned") return true;
+        if (Array.isArray(o.unitAllocations) && o.unitAllocations.length > 0) return true;
+        return false;
+      });
+
+      // Filtered Unit List for Left Sidebar
+      const filteredUnits = unitList.filter(u => {
+        if (!unitSearch.trim()) return true;
+        const q = unitSearch.toLowerCase();
+        return (u.name || "").toLowerCase().includes(q) || (u.code || "").toLowerCase().includes(q) || (u.location || "").toLowerCase().includes(q);
+      });
+
+      // Currently selected unit
+      const activeUnit = unitList.find(u => u.id === selectedUnitId) || unitList[0] || null;
+
+      // Filtered orders for the selected unit
+      const ordersForSelectedUnit = activeOrdersList.filter(o => {
+        if (!activeUnit) return true;
+        // Search filter
+        if (unitOrderSearch.trim()) {
+          const q = unitOrderSearch.toLowerCase();
+          const matchText = `${o.id} ${o.style || ""} ${o.buyer || ""}`.toLowerCase();
+          if (!matchText.includes(q)) return false;
+        }
+
+        const isDirectAssigned = o.unitId === activeUnit.id || o.unitName === activeUnit.name || o.unitCode === activeUnit.code;
+        const alloc = Array.isArray(o.unitAllocations) ? o.unitAllocations.find(a => a.unitId === activeUnit.id) : null;
+
+        if (unitOrderFilter === "allocated") {
+          return isDirectAssigned || !!alloc;
+        }
+        if (unitOrderFilter === "wip") {
+          return (isDirectAssigned || !!alloc) && (o.status === "In Progress" || o.status === "At Risk");
+        }
+        if (unitOrderFilter === "pendingReturns") {
+          return (isDirectAssigned || !!alloc) && (Number(o.pendingReturns) > 0 || Number(o.reworkQty) > 0);
+        }
+
+        // 'all' shows all orders, displaying allocated status
+        return true;
+      });
+
+      const selectedUnitAllocatedCount = activeOrdersList.filter(o => {
+        if (!activeUnit) return false;
+        return o.unitId === activeUnit.id || (Array.isArray(o.unitAllocations) && o.unitAllocations.some(a => a.unitId === activeUnit.id));
+      }).length;
+
+      return (
+        <div>
+          {/* Top Banner Header */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+            <div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: "#0F172A" }}>Manufacturing Units</div>
+              <div style={{ fontSize: 12.5, color: "#64748B", marginTop: 2 }}>Manage units and track production in one place</div>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (onChangeUnits) onChangeUnits([...unitList]);
+                }}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "7px 14px",
+                  borderRadius: 8,
+                  border: "1px solid #E2E8F0",
+                  background: "#FFFFFF",
+                  color: "#334155",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: "pointer"
+                }}
+              >
+                <RefreshCw size={13} /> Refresh
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setUnitEditingId(null);
+                  setUnitForm({ name: "", code: "", location: "", lines: 4, contactPerson: "", mobile: "", status: "Active" });
+                  setUnitSubTab("details");
+                }}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "7px 16px",
+                  borderRadius: 8,
+                  border: "none",
+                  background: "#4F46E5",
+                  color: "#FFFFFF",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: "pointer"
+                }}
+              >
+                + Add Unit
+              </button>
+            </div>
           </div>
-          <form onSubmit={handleSaveUnit}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 12 }}>
-              <div>
-                <label style={labelStyle}>
-                  Unit Name *
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Unit 1 - Main Factory"
-                    value={unitForm.name}
-                    onChange={e => setUnitForm({ ...unitForm, name: e.target.value })}
-                    style={inputStyle}
-                  />
-                </label>
+
+          {/* 4 Top Metric Cards (Matching Screenshot) */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, marginBottom: 20 }}>
+            {/* Card 1 */}
+            <div style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: 12, padding: "16px 18px", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 11.5, color: "#64748B", fontWeight: 600 }}>Registered Units</span>
+                <span style={{ color: "#6366F1", background: "#EEF2FF", padding: 6, borderRadius: 8 }}><Factory size={16} /></span>
               </div>
-              <div>
-                <label style={labelStyle}>
-                  Unit Code / ID *
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. UNT-01"
-                    value={unitForm.code}
-                    onChange={e => setUnitForm({ ...unitForm, code: e.target.value })}
-                    style={inputStyle}
-                  />
-                </label>
+              <div style={{ fontSize: 24, fontWeight: 800, color: "#0F172A", marginTop: 8 }}>{totalUnitsCount}</div>
+            </div>
+
+            {/* Card 2 */}
+            <div style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: 12, padding: "16px 18px", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 11.5, color: "#64748B", fontWeight: 600 }}>Active Orders</span>
+                <span style={{ color: "#3B82F6", background: "#EFF6FF", padding: 6, borderRadius: 8 }}><Box size={16} /></span>
               </div>
-              <div>
-                <label style={labelStyle}>
-                  Location / City
-                  <input
-                    type="text"
-                    placeholder="e.g. Tirupur Main Road"
-                    value={unitForm.location}
-                    onChange={e => setUnitForm({ ...unitForm, location: e.target.value })}
-                    style={inputStyle}
-                  />
-                </label>
+              <div style={{ fontSize: 24, fontWeight: 800, color: "#0F172A", marginTop: 8 }}>{activeOrdersList.length}</div>
+            </div>
+
+            {/* Card 3 */}
+            <div style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: 12, padding: "16px 18px", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 11.5, color: "#64748B", fontWeight: 600 }}>Units with WIP</span>
+                <span style={{ color: "#F59E0B", background: "#FFFBEB", padding: 6, borderRadius: 8 }}><TrendingUp size={16} /></span>
               </div>
-              <div>
-                <label style={labelStyle}>
-                  Sewing Lines / Capacity
-                  <input
-                    type="number"
-                    min="1"
-                    placeholder="e.g. 12"
-                    value={unitForm.lines}
-                    onChange={e => setUnitForm({ ...unitForm, lines: e.target.value })}
-                    style={inputStyle}
-                  />
-                </label>
-              </div>
-              <div>
-                <label style={labelStyle}>
-                  Contact Person
-                  <input
-                    type="text"
-                    placeholder="e.g. S. Murugan"
-                    value={unitForm.contactPerson}
-                    onChange={e => setUnitForm({ ...unitForm, contactPerson: e.target.value })}
-                    style={inputStyle}
-                  />
-                </label>
-              </div>
-              <div>
-                <label style={labelStyle}>
-                  Mobile Number
-                  <input
-                    type="text"
-                    placeholder="e.g. +91 98421 11001"
-                    value={unitForm.mobile}
-                    onChange={e => setUnitForm({ ...unitForm, mobile: e.target.value })}
-                    style={inputStyle}
-                  />
-                </label>
-              </div>
-              <div>
-                <label style={labelStyle}>
-                  Status
-                  <select
-                    value={unitForm.status}
-                    onChange={e => setUnitForm({ ...unitForm, status: e.target.value })}
-                    style={{ ...inputStyle, background: "#fff" }}
-                  >
-                    <option value="Active">Active</option>
-                    <option value="Inactive">Inactive</option>
-                  </select>
-                </label>
+              <div style={{ fontSize: 24, fontWeight: 800, color: "#0F172A", marginTop: 8 }}>
+                {unitList.filter(u => activeOrdersList.some(o => o.unitId === u.id || (Array.isArray(o.unitAllocations) && o.unitAllocations.some(a => a.unitId === u.id)))).length}
               </div>
             </div>
-            <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 8 }}>
-              <button type="submit" style={{ ...primaryButtonStyle, marginTop: 0, background: "#151B2E" }}>
-                {unitEditingId ? "Update Unit" : "+ Add Unit"}
-              </button>
-              {unitEditingId && (
+
+            {/* Card 4 */}
+            <div style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: 12, padding: "16px 18px", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 11.5, color: "#64748B", fontWeight: 600 }}>Pending Returns</span>
+                <span style={{ color: "#10B981", background: "#ECFDF5", padding: 6, borderRadius: 8 }}><RotateCcw size={16} /></span>
+              </div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: "#0F172A", marginTop: 8 }}>
+                0 <span style={{ fontSize: 13, fontWeight: 500, color: "#64748B" }}>pcs</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Main 2-Column Layout: Left Sidebar (Units) + Right Panel (Tabs & Details) */}
+          <div style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: 16, alignItems: "start" }}>
+            {/* Left Sidebar: Manufacturing Units List */}
+            <div style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: 12, padding: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A" }}>Manufacturing Units ({unitList.length})</div>
                 <button
                   type="button"
                   onClick={() => {
                     setUnitEditingId(null);
                     setUnitForm({ name: "", code: "", location: "", lines: 4, contactPerson: "", mobile: "", status: "Active" });
+                    setUnitSubTab("details");
                   }}
-                  style={{ ...secondaryButtonStyle, marginTop: 0 }}
+                  style={{ border: "none", background: "transparent", color: "#4F46E5", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}
                 >
-                  Cancel Edit
+                  + Add
                 </button>
+              </div>
+
+              {/* Search Units */}
+              <div style={{ position: "relative", marginBottom: 12 }}>
+                <Search size={14} color="#94A3B8" style={{ position: "absolute", left: 10, top: 9 }} />
+                <input
+                  type="text"
+                  placeholder="Search units by code, name..."
+                  value={unitSearch}
+                  onChange={e => setUnitSearch(e.target.value)}
+                  style={{
+                    width: "100%",
+                    boxSizing: "border-box",
+                    padding: "7px 10px 7px 30px",
+                    borderRadius: 8,
+                    border: "1px solid #E2E8F0",
+                    fontSize: 11.5,
+                    background: "#F8FAFC"
+                  }}
+                />
+              </div>
+
+              {/* Units List Cards */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 520, overflowY: "auto" }}>
+                {filteredUnits.length === 0 ? (
+                  <div style={{ fontSize: 11.5, color: "#94A3B8", textAlign: "center", padding: "20px 0" }}>
+                    No matching manufacturing units found.
+                  </div>
+                ) : filteredUnits.map(u => {
+                  const isSelected = activeUnit && activeUnit.id === u.id;
+                  return (
+                    <div
+                      key={u.id}
+                      onClick={() => {
+                        setSelectedUnitId(u.id);
+                        if (unitEditingId) {
+                          setUnitEditingId(null);
+                          setUnitForm({ name: "", code: "", location: "", lines: 4, contactPerson: "", mobile: "", status: "Active" });
+                        }
+                      }}
+                      style={{
+                        padding: "10px 12px",
+                        borderRadius: 10,
+                        border: isSelected ? "2px solid #6366F1" : "1px solid #E2E8F0",
+                        background: isSelected ? "#F8FAFF" : "#FFFFFF",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease"
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ fontSize: 12, fontWeight: 800, color: "#4F46E5" }}>{u.code}</span>
+                          <span style={{ fontSize: 12.5, fontWeight: 700, color: "#0F172A" }}>{u.name}</span>
+                        </div>
+                        <span style={{
+                          fontSize: 10,
+                          fontWeight: 700,
+                          padding: "2px 7px",
+                          borderRadius: 999,
+                          background: u.status === "Active" ? "#DCFCE7" : "#F1F5F9",
+                          color: u.status === "Active" ? "#166534" : "#64748B"
+                        }}>
+                          {u.status || "Active"}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 11, color: "#64748B", marginTop: 4, display: "flex", alignItems: "center", gap: 6 }}>
+                        <MapPin size={11} color="#94A3B8" />
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.location || "Location not set"}</span>
+                        <span>·</span>
+                        <span>{u.lines || 1} Lines</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Right Panel: Selected Unit Details & Sub-Tabs */}
+            <div style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: 12, padding: 18 }}>
+              {activeUnit ? (
+                <>
+                  {/* Unit Header Card */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", paddingBottom: 14, borderBottom: "1px solid #F1F5F9", marginBottom: 14 }}>
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ fontSize: 15, fontWeight: 800, color: "#4F46E5" }}>{activeUnit.code}</span>
+                        <span style={{ fontSize: 16, fontWeight: 800, color: "#0F172A" }}>{activeUnit.name}</span>
+                        <span style={{
+                          fontSize: 10.5,
+                          fontWeight: 700,
+                          padding: "2px 8px",
+                          borderRadius: 999,
+                          background: activeUnit.status === "Active" ? "#DCFCE7" : "#F1F5F9",
+                          color: activeUnit.status === "Active" ? "#166534" : "#64748B"
+                        }}>
+                          {activeUnit.status || "Active"}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 11.5, color: "#64748B", marginTop: 5, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                          <MapPin size={12} color="#94A3B8" /> {activeUnit.location || "Tirupur"}
+                        </span>
+                        <span>·</span>
+                        <span>🧵 {activeUnit.lines || 1} Sewing Lines</span>
+                        {activeUnit.contactPerson && (
+                          <>
+                            <span>·</span>
+                            <span>👤 {activeUnit.contactPerson} ({activeUnit.mobile || "—"})</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          startEditUnit(activeUnit);
+                          setUnitSubTab("details");
+                        }}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 5,
+                          padding: "5px 12px",
+                          borderRadius: 6,
+                          border: "1px solid #CBD5E1",
+                          background: "#FFFFFF",
+                          color: "#334155",
+                          fontSize: 11.5,
+                          fontWeight: 600,
+                          cursor: "pointer"
+                        }}
+                      >
+                        <Edit2 size={12} /> Edit Unit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteUnit(activeUnit.id)}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 5,
+                          padding: "5px 12px",
+                          borderRadius: 6,
+                          border: "1px solid #FECACA",
+                          background: "#FEF2F2",
+                          color: "#DC2626",
+                          fontSize: 11.5,
+                          fontWeight: 600,
+                          cursor: "pointer"
+                        }}
+                      >
+                        <Trash2 size={12} /> Delete
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 4 Tabs: Production Tracking | Unit Details | Production Summary | Movement Ledger */}
+                  <div style={{ display: "flex", gap: 6, borderBottom: "1px solid #E2E8F0", paddingBottom: 10, marginBottom: 14 }}>
+                    <button
+                      type="button"
+                      onClick={() => setUnitSubTab("production")}
+                      style={{
+                        padding: "6px 14px",
+                        borderRadius: 8,
+                        border: "none",
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        background: unitSubTab === "production" ? "#4F46E5" : "#F1F5F9",
+                        color: unitSubTab === "production" ? "#FFFFFF" : "#475569"
+                      }}
+                    >
+                      Production Tracking
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setUnitSubTab("details")}
+                      style={{
+                        padding: "6px 14px",
+                        borderRadius: 8,
+                        border: "none",
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        background: unitSubTab === "details" ? "#4F46E5" : "#F1F5F9",
+                        color: unitSubTab === "details" ? "#FFFFFF" : "#475569"
+                      }}
+                    >
+                      Unit Details
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setUnitSubTab("summary")}
+                      style={{
+                        padding: "6px 14px",
+                        borderRadius: 8,
+                        border: "none",
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        background: unitSubTab === "summary" ? "#4F46E5" : "#F1F5F9",
+                        color: unitSubTab === "summary" ? "#FFFFFF" : "#475569"
+                      }}
+                    >
+                      Production Summary
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setUnitSubTab("ledger")}
+                      style={{
+                        padding: "6px 14px",
+                        borderRadius: 8,
+                        border: "none",
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        background: unitSubTab === "ledger" ? "#4F46E5" : "#F1F5F9",
+                        color: unitSubTab === "ledger" ? "#FFFFFF" : "#475569"
+                      }}
+                    >
+                      Movement Ledger ({movementLedger.length})
+                    </button>
+                  </div>
+
+                  {/* SUB-TAB 1: Production Tracking (Orders Table Matching Reference Screenshot) */}
+                  {unitSubTab === "production" && (
+                    <div>
+                      {/* Search & Status Filter Pills */}
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
+                        <div style={{ position: "relative", minWidth: 260 }}>
+                          <Search size={14} color="#94A3B8" style={{ position: "absolute", left: 10, top: 9 }} />
+                          <input
+                            type="text"
+                            placeholder="Search order ID, style, buyer..."
+                            value={unitOrderSearch}
+                            onChange={e => setUnitOrderSearch(e.target.value)}
+                            style={{
+                              width: "100%",
+                              boxSizing: "border-box",
+                              padding: "6px 10px 6px 30px",
+                              borderRadius: 8,
+                              border: "1px solid #CBD5E1",
+                              fontSize: 11.5
+                            }}
+                          />
+                        </div>
+
+                        {/* Filter Pills */}
+                        <div style={{ display: "flex", gap: 6 }}>
+                          {[
+                            { key: "all", label: `All Orders (${activeOrdersList.length})` },
+                            { key: "allocated", label: `Allocated (${selectedUnitAllocatedCount})` },
+                            { key: "wip", label: "In Floor WIP" },
+                            { key: "pendingReturns", label: "Pending Returns" }
+                          ].map(f => (
+                            <button
+                              key={f.key}
+                              type="button"
+                              onClick={() => setUnitOrderFilter(f.key)}
+                              style={{
+                                padding: "4px 10px",
+                                borderRadius: 6,
+                                border: unitOrderFilter === f.key ? "1px solid #4F46E5" : "1px solid #E2E8F0",
+                                background: unitOrderFilter === f.key ? "#EEF2FF" : "#FFFFFF",
+                                color: unitOrderFilter === f.key ? "#4338CA" : "#64748B",
+                                fontSize: 11,
+                                fontWeight: 600,
+                                cursor: "pointer"
+                              }}
+                            >
+                              {f.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Production Table */}
+                      <div style={{ overflowX: "auto" }}>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11.5 }}>
+                          <thead>
+                            <tr style={{ background: "#F8FAFC", borderBottom: "2px solid #E2E8F0", textAlign: "left", color: "#475569", fontWeight: 700 }}>
+                              <th style={{ padding: "8px 10px" }}>Order & Style</th>
+                              <th style={{ padding: "8px 10px" }}>PO / Cut Qty</th>
+                              <th style={{ padding: "8px 10px", textAlign: "center" }}>Allocated</th>
+                              <th style={{ padding: "8px 10px", textAlign: "center" }}>In Transit</th>
+                              <th style={{ padding: "8px 10px", textAlign: "center" }}>Floor WIP</th>
+                              <th style={{ padding: "8px 10px", textAlign: "center" }}>Good Output</th>
+                              <th style={{ padding: "8px 10px", textAlign: "center" }}>Rework</th>
+                              <th style={{ padding: "8px 10px", textAlign: "center" }}>Scrap</th>
+                              <th style={{ padding: "8px 10px", textAlign: "center" }}>Returned</th>
+                              <th style={{ padding: "8px 10px", textAlign: "right" }}>Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {ordersForSelectedUnit.length === 0 ? (
+                              <tr>
+                                <td colSpan="10" style={{ padding: "24px 0", textAlign: "center", color: "#94A3B8" }}>
+                                  No orders matching this filter in {activeUnit.name}.
+                                </td>
+                              </tr>
+                            ) : ordersForSelectedUnit.map(o => {
+                              const isAllocatedToActiveUnit = o.unitId === activeUnit.id || (Array.isArray(o.unitAllocations) && o.unitAllocations.some(a => a.unitId === activeUnit.id));
+                              const allocObj = Array.isArray(o.unitAllocations) ? o.unitAllocations.find(a => a.unitId === activeUnit.id) : null;
+                              const allocatedQty = allocObj ? allocObj.qty : (isAllocatedToActiveUnit ? (Number(o.qty) || 0) : 0);
+
+                              // Stage Done percentage
+                              const stages = o.stages || [];
+                              const doneStages = stages.filter(s => s.status === "done" || s.status === "completed").length;
+                              const progressPct = stages.length > 0 ? Math.round((doneStages / stages.length) * 100) : 0;
+                              const goodOutput = isAllocatedToActiveUnit ? Math.round(allocatedQty * (progressPct / 100)) : 0;
+                              const floorWip = Math.max(0, allocatedQty - goodOutput);
+
+                              return (
+                                <tr key={o.id} style={{ borderBottom: "1px solid #F1F5F9", background: isAllocatedToActiveUnit ? "#FAF5FF" : "transparent" }}>
+                                  {/* Order & Style */}
+                                  <td style={{ padding: "8px 10px" }}>
+                                    <div style={{ fontWeight: 700, color: "#0F172A" }}>{o.id}</div>
+                                    <div style={{ fontSize: 10.5, color: "#64748B" }}>
+                                      {o.style || "Standard"} ({o.buyer || "Direct"})
+                                    </div>
+                                  </td>
+
+                                  {/* PO / Cut Qty */}
+                                  <td style={{ padding: "8px 10px" }}>
+                                    <div style={{ fontWeight: 700, color: "#1E293B" }}>{(Number(o.qty) || 0).toLocaleString()} PO</div>
+                                    <div style={{ fontSize: 10, color: "#94A3B8" }}>Cut unconfirmed</div>
+                                  </td>
+
+                                  {/* Allocated */}
+                                  <td style={{ padding: "8px 10px", textAlign: "center", fontWeight: 700, color: isAllocatedToActiveUnit ? "#7C3AED" : "#94A3B8" }}>
+                                    {isAllocatedToActiveUnit ? `${allocatedQty.toLocaleString()} pcs` : "0"}
+                                  </td>
+
+                                  {/* In Transit */}
+                                  <td style={{ padding: "8px 10px", textAlign: "center", color: "#D97706", fontWeight: 600 }}>0</td>
+
+                                  {/* Floor WIP */}
+                                  <td style={{ padding: "8px 10px", textAlign: "center", color: floorWip > 0 ? "#2563EB" : "#64748B", fontWeight: 700 }}>
+                                    {floorWip.toLocaleString()}
+                                  </td>
+
+                                  {/* Good Output */}
+                                  <td style={{ padding: "8px 10px", textAlign: "center", color: goodOutput > 0 ? "#16A34A" : "#64748B", fontWeight: 700 }}>
+                                    {goodOutput.toLocaleString()}
+                                  </td>
+
+                                  {/* Rework */}
+                                  <td style={{ padding: "8px 10px", textAlign: "center", color: "#64748B" }}>0</td>
+
+                                  {/* Scrap */}
+                                  <td style={{ padding: "8px 10px", textAlign: "center", color: "#64748B" }}>0</td>
+
+                                  {/* Returned */}
+                                  <td style={{ padding: "8px 10px", textAlign: "center", color: "#64748B" }}>0</td>
+
+                                  {/* Actions: Re-assign / Transfer Qty */}
+                                  <td style={{ padding: "8px 10px", textAlign: "right" }}>
+                                    <div style={{ display: "inline-flex", gap: 6 }}>
+                                      {isAllocatedToActiveUnit ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setTransferModal({
+                                              isOpen: true,
+                                              order: o,
+                                              sourceUnitId: activeUnit.id,
+                                              targetUnitId: unitList.find(u => u.id !== activeUnit.id)?.id || "",
+                                              transferQty: Math.max(1, Math.round(allocatedQty / 2)),
+                                              maxQty: allocatedQty,
+                                              stageName: "Production",
+                                              notes: `Transfer balance from ${activeUnit.name}`
+                                            });
+                                          }}
+                                          style={{
+                                            padding: "3px 8px",
+                                            borderRadius: 6,
+                                            border: "1px solid #DDD6FE",
+                                            background: "#F5F3FF",
+                                            color: "#6D28D9",
+                                            fontSize: 10.5,
+                                            fontWeight: 700,
+                                            cursor: "pointer",
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            gap: 3
+                                          }}
+                                          title="Split / Transfer order quantity to another unit"
+                                        >
+                                          <ArrowRightLeft size={11} /> Transfer
+                                        </button>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setTransferModal({
+                                              isOpen: true,
+                                              order: o,
+                                              sourceUnitId: o.unitId || null,
+                                              targetUnitId: activeUnit.id,
+                                              transferQty: Number(o.qty) || 100,
+                                              maxQty: Number(o.qty) || 100,
+                                              stageName: "Production",
+                                              notes: `Assign to ${activeUnit.name}`
+                                            });
+                                          }}
+                                          style={{
+                                            padding: "3px 8px",
+                                            borderRadius: 6,
+                                            border: "1px solid #CBD5E1",
+                                            background: "#FFFFFF",
+                                            color: "#334155",
+                                            fontSize: 10.5,
+                                            fontWeight: 600,
+                                            cursor: "pointer"
+                                          }}
+                                        >
+                                          + Assign
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SUB-TAB 2: Unit Details / Edit Form */}
+                  {unitSubTab === "details" && (
+                    <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, padding: 16 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#1B2130", marginBottom: 12 }}>
+                        {unitEditingId ? `Edit ${unitForm.name}` : `Create New Manufacturing Unit`}
+                      </div>
+                      <form onSubmit={handleSaveUnit}>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginBottom: 12 }}>
+                          <div>
+                            <label style={labelStyle}>
+                              Unit Name *
+                              <input
+                                type="text"
+                                required
+                                placeholder="e.g. Unit 2 - Knits Factory"
+                                value={unitForm.name}
+                                onChange={e => setUnitForm({ ...unitForm, name: e.target.value })}
+                                style={inputStyle}
+                              />
+                            </label>
+                          </div>
+                          <div>
+                            <label style={labelStyle}>
+                              Unit Code / ID *
+                              <input
+                                type="text"
+                                required
+                                placeholder="e.g. UNT-02"
+                                value={unitForm.code}
+                                onChange={e => setUnitForm({ ...unitForm, code: e.target.value })}
+                                style={inputStyle}
+                              />
+                            </label>
+                          </div>
+                          <div>
+                            <label style={labelStyle}>
+                              Location / Address
+                              <input
+                                type="text"
+                                placeholder="e.g. Avinashi SEZ Park"
+                                value={unitForm.location}
+                                onChange={e => setUnitForm({ ...unitForm, location: e.target.value })}
+                                style={inputStyle}
+                              />
+                            </label>
+                          </div>
+                          <div>
+                            <label style={labelStyle}>
+                              Sewing Lines
+                              <input
+                                type="number"
+                                min="1"
+                                placeholder="e.g. 8"
+                                value={unitForm.lines}
+                                onChange={e => setUnitForm({ ...unitForm, lines: e.target.value })}
+                                style={inputStyle}
+                              />
+                            </label>
+                          </div>
+                          <div>
+                            <label style={labelStyle}>
+                              Contact Person
+                              <input
+                                type="text"
+                                placeholder="e.g. K. Ramesh"
+                                value={unitForm.contactPerson}
+                                onChange={e => setUnitForm({ ...unitForm, contactPerson: e.target.value })}
+                                style={inputStyle}
+                              />
+                            </label>
+                          </div>
+                          <div>
+                            <label style={labelStyle}>
+                              Mobile Number
+                              <input
+                                type="text"
+                                placeholder="e.g. +91 98421 22002"
+                                value={unitForm.mobile}
+                                onChange={e => setUnitForm({ ...unitForm, mobile: e.target.value })}
+                                style={inputStyle}
+                              />
+                            </label>
+                          </div>
+                          <div>
+                            <label style={labelStyle}>
+                              Status
+                              <select
+                                value={unitForm.status}
+                                onChange={e => setUnitForm({ ...unitForm, status: e.target.value })}
+                                style={{ ...inputStyle, background: "#fff" }}
+                              >
+                                <option value="Active">Active</option>
+                                <option value="Inactive">Inactive</option>
+                              </select>
+                            </label>
+                          </div>
+                        </div>
+
+                        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                          <button type="submit" style={{ ...primaryButtonStyle, marginTop: 0, background: "#151B2E" }}>
+                            {unitEditingId ? "Update Unit" : "+ Add Unit"}
+                          </button>
+                          {unitEditingId && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setUnitEditingId(null);
+                                setUnitForm({ name: "", code: "", location: "", lines: 4, contactPerson: "", mobile: "", status: "Active" });
+                              }}
+                              style={{ ...secondaryButtonStyle, marginTop: 0 }}
+                            >
+                              Cancel
+                            </button>
+                          )}
+                        </div>
+                      </form>
+                    </div>
+                  )}
+
+                  {/* SUB-TAB 3: Production Summary */}
+                  {unitSubTab === "summary" && (
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
+                      <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, padding: 14 }}>
+                        <div style={{ fontSize: 11.5, color: "#64748B", fontWeight: 600 }}>Active Allocated Orders</div>
+                        <div style={{ fontSize: 20, fontWeight: 800, color: "#0F172A", marginTop: 4 }}>{selectedUnitAllocatedCount}</div>
+                      </div>
+                      <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, padding: 14 }}>
+                        <div style={{ fontSize: 11.5, color: "#64748B", fontWeight: 600 }}>Total Sewing Lines Capacity</div>
+                        <div style={{ fontSize: 20, fontWeight: 800, color: "#4F46E5", marginTop: 4 }}>{activeUnit.lines || 1} Lines</div>
+                      </div>
+                      <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, padding: 14 }}>
+                        <div style={{ fontSize: 11.5, color: "#64748B", fontWeight: 600 }}>Estimated Daily Capacity</div>
+                        <div style={{ fontSize: 20, fontWeight: 800, color: "#16A34A", marginTop: 4 }}>
+                          {((activeUnit.lines || 1) * 350).toLocaleString()} pcs / day
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SUB-TAB 4: Movement Ledger History */}
+                  {unitSubTab === "ledger" && (
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: "#0F172A", marginBottom: 10 }}>
+                        Internal Order Transfers & Movement Ledger
+                      </div>
+                      {movementLedger.length === 0 ? (
+                        <div style={{ fontSize: 12, color: "#94A3B8", textAlign: "center", padding: "30px 0" }}>
+                          No inter-unit movements or partial transfers recorded yet.
+                        </div>
+                      ) : (
+                        <div style={{ overflowX: "auto" }}>
+                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11.5 }}>
+                            <thead>
+                              <tr style={{ background: "#F8FAFC", borderBottom: "2px solid #E2E8F0", textAlign: "left", color: "#475569" }}>
+                                <th style={{ padding: "8px 10px" }}>Date & Time</th>
+                                <th style={{ padding: "8px 10px" }}>Order ID</th>
+                                <th style={{ padding: "8px 10px" }}>Transfer Route</th>
+                                <th style={{ padding: "8px 10px" }}>Quantity</th>
+                                <th style={{ padding: "8px 10px" }}>Notes</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {movementLedger.map(m => (
+                                <tr key={m.id} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                                  <td style={{ padding: "8px 10px", color: "#64748B" }}>
+                                    {new Date(m.timestamp).toLocaleString()}
+                                  </td>
+                                  <td style={{ padding: "8px 10px", fontWeight: 700, color: "#0F172A" }}>
+                                    {m.orderId}
+                                  </td>
+                                  <td style={{ padding: "8px 10px" }}>
+                                    <span style={{ fontWeight: 600, color: "#DC2626" }}>{m.fromUnitName}</span>
+                                    <span style={{ margin: "0 6px", color: "#94A3B8" }}>→</span>
+                                    <span style={{ fontWeight: 600, color: "#16A34A" }}>{m.toUnitName}</span>
+                                  </td>
+                                  <td style={{ padding: "8px 10px", fontWeight: 700, color: "#7C3AED" }}>
+                                    {(Number(m.qty) || 0).toLocaleString()} pcs
+                                  </td>
+                                  <td style={{ padding: "8px 10px", color: "#64748B" }}>
+                                    {m.notes || "—"}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div style={{ textAlign: "center", padding: "40px 0", color: "#94A3B8" }}>
+                  Please select or add a manufacturing unit.
+                </div>
               )}
             </div>
-          </form>
-        </div>
-
-        {/* Units Table */}
-        <div style={panelStyle}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "#1B2130", marginBottom: 14 }}>
-            Registered Manufacturing Units ({unitList.length})
           </div>
 
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-              <thead>
-                <tr style={{ background: "#F8FAFC", borderBottom: "2px solid #E2E8F0", textAlign: "left" }}>
-                  <th style={{ padding: "10px 12px", color: "#475569" }}>Code</th>
-                  <th style={{ padding: "10px 12px", color: "#475569" }}>Unit Name</th>
-                  <th style={{ padding: "10px 12px", color: "#475569" }}>Location</th>
-                  <th style={{ padding: "10px 12px", color: "#475569" }}>Lines</th>
-                  <th style={{ padding: "10px 12px", color: "#475569" }}>Contact</th>
-                  <th style={{ padding: "10px 12px", color: "#475569" }}>Status</th>
-                  <th style={{ padding: "10px 12px", color: "#475569", textAlign: "right" }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {unitList.map(u => (
-                  <tr key={u.id} style={{ borderBottom: "1px solid #F1F5F9" }}>
-                    <td style={{ padding: "10px 12px", fontWeight: 700, color: "#4F46E5" }}>{u.code}</td>
-                    <td style={{ padding: "10px 12px", fontWeight: 600, color: "#1E293B" }}>{u.name}</td>
-                    <td style={{ padding: "10px 12px", color: "#64748B" }}>
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                        <MapPin size={13} color="#94A3B8" /> {u.location || "—"}
-                      </span>
-                    </td>
-                    <td style={{ padding: "10px 12px", fontWeight: 600, color: "#334155" }}>{u.lines || 1} Lines</td>
-                    <td style={{ padding: "10px 12px", color: "#475569" }}>
-                      {u.contactPerson ? `${u.contactPerson} (${u.mobile || ""})` : "—"}
-                    </td>
-                    <td style={{ padding: "10px 12px" }}>
-                      <span style={{
-                        padding: "3px 8px", borderRadius: 12, fontSize: 11, fontWeight: 700,
-                        background: u.status === "Active" ? "#DCFCE7" : "#F1F5F9",
-                        color: u.status === "Active" ? "#15803D" : "#64748B"
-                      }}>
-                        {u.status || "Active"}
-                      </span>
-                    </td>
-                    <td style={{ padding: "10px 12px", textAlign: "right" }}>
-                      <div style={{ display: "inline-flex", gap: 6 }}>
-                        <button
-                          type="button"
-                          onClick={() => startEditUnit(u)}
-                          style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid #CBD5E1", background: "#FFFFFF", color: "#334155", fontSize: 11, fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 3 }}
-                        >
-                          <Edit2 size={12} /> Edit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteUnit(u.id)}
-                          style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid #FECACA", background: "#FEF2F2", color: "#DC2626", fontSize: 11, fontWeight: 600, cursor: "pointer" }}
-                        >
-                          <Trash2 size={12} />
-                        </button>
+          {/* Transfer / Split to Another Unit Modal */}
+          {transferModal.isOpen && transferModal.order && (
+            <div style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(15, 23, 42, 0.6)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 9999
+            }}>
+              <div style={{
+                background: "#FFFFFF",
+                borderRadius: 14,
+                padding: 22,
+                width: 480,
+                maxWidth: "92vw",
+                boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)"
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: "#0F172A", display: "flex", alignItems: "center", gap: 6 }}>
+                    <ArrowRightLeft size={16} color="#6366F1" />
+                    <span>Transfer / Split Order to Another Unit</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setTransferModal({ isOpen: false, order: null, sourceUnitId: null, targetUnitId: "", transferQty: 0, maxQty: 0, stageName: "Production", notes: "" })}
+                    style={{ border: "none", background: "transparent", color: "#94A3B8", cursor: "pointer", fontSize: 16 }}
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 8, padding: "10px 12px", marginBottom: 14, fontSize: 12 }}>
+                  <div style={{ fontWeight: 700, color: "#0F172A" }}>
+                    Order: {transferModal.order.id} · {transferModal.order.style}
+                  </div>
+                  <div style={{ color: "#64748B", marginTop: 2 }}>
+                    Buyer: {transferModal.order.buyer || "Direct"} · Available Qty in this unit: <strong style={{ color: "#0F172A" }}>{transferModal.maxQty.toLocaleString()} pcs</strong>
+                  </div>
+                </div>
+
+                <form onSubmit={handleExecuteTransfer}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: "#334155" }}>
+                      Target Unit (Transfer To) *
+                      <select
+                        required
+                        value={transferModal.targetUnitId}
+                        onChange={e => setTransferModal({ ...transferModal, targetUnitId: e.target.value })}
+                        style={{ ...inputStyle, width: "100%", marginTop: 4, background: "#fff" }}
+                      >
+                        <option value="">Select Target Manufacturing Unit</option>
+                        {unitList.map(u => (
+                          <option key={u.id} value={u.id} disabled={u.id === transferModal.sourceUnitId}>
+                            {u.code} - {u.name} ({u.lines || 1} Lines)
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label style={{ fontSize: 12, fontWeight: 600, color: "#334155" }}>
+                      Transfer Quantity (pcs) *
+                      <input
+                        type="number"
+                        min="1"
+                        max={transferModal.maxQty || 999999}
+                        required
+                        value={transferModal.transferQty}
+                        onChange={e => setTransferModal({ ...transferModal, transferQty: Math.max(1, Number(e.target.value) || 1) })}
+                        style={{ ...inputStyle, width: "100%", marginTop: 4 }}
+                      />
+                      <div style={{ fontSize: 10.5, color: "#64748B", marginTop: 3 }}>
+                        Remaining in source unit: {Math.max(0, transferModal.maxQty - transferModal.transferQty).toLocaleString()} pcs
                       </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </label>
+
+                    <label style={{ fontSize: 12, fontWeight: 600, color: "#334155" }}>
+                      Transfer Notes / Reason
+                      <input
+                        type="text"
+                        placeholder="e.g. Transferred 50% balance sewing to Unit 2 for faster delivery"
+                        value={transferModal.notes}
+                        onChange={e => setTransferModal({ ...transferModal, notes: e.target.value })}
+                        style={{ ...inputStyle, width: "100%", marginTop: 4 }}
+                      />
+                    </label>
+                  </div>
+
+                  <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => setTransferModal({ isOpen: false, order: null, sourceUnitId: null, targetUnitId: "", transferQty: 0, maxQty: 0, stageName: "Production", notes: "" })}
+                      style={{ ...secondaryButtonStyle, marginTop: 0 }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      style={{
+                        ...primaryButtonStyle,
+                        marginTop: 0,
+                        background: "#6366F1",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6
+                      }}
+                    >
+                      <ArrowRightLeft size={13} /> Confirm Transfer
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
         </div>
-      </div>
-    )}
+      );
+    })()}
 
     {tab === "display" && (
       <div style={panelStyle}>
