@@ -162,18 +162,35 @@ export function analyzeCuttingDelayForOrder(order) {
   return null;
 }
 
+// Helper to check if current device/viewport is mobile app or mobile screen
+function isMobileContext() {
+  if (typeof window === "undefined") return false;
+  const isNative = Boolean(window.Capacitor?.isNativePlatform?.() || window.location.protocol === "capacitor:");
+  const isNarrowScreen = window.innerWidth <= 768;
+  const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || "");
+  return isNative || isNarrowScreen || isMobileUA;
+}
+
 /**
  * Persistent warning banner for Admin & MD Dashboard
  */
 export function CuttingDelayDashboardBanner({ delayedOrders = [], onOpenAlert, snoozedUntil }) {
   const [now, setNow] = useState(Date.now());
+  const [isMobile, setIsMobile] = useState(() => isMobileContext());
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(isMobileContext());
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  if (!delayedOrders || delayedOrders.length === 0) return null;
+  // Do not render red warning banner on mobile app / mobile devices
+  if (isMobile || !delayedOrders || delayedOrders.length === 0) return null;
 
   const isSnoozed = snoozedUntil && now < snoozedUntil;
   const remainingSec = isSnoozed ? Math.max(0, Math.ceil((snoozedUntil - now) / 1000)) : 0;
@@ -359,7 +376,7 @@ export default function CuttingDelayAlertModal({
 
   // Recurring 5-minute check
   useEffect(() => {
-    if (!isMDOrAdmin) {
+    if (!isMDOrAdmin || isMobileContext()) {
       setIsOpen(false);
       return;
     }
@@ -457,7 +474,7 @@ export default function CuttingDelayAlertModal({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, delayedOrders.length, handleAcknowledgeAndSnooze]);
 
-  if (!isMDOrAdmin || !isOpen || delayedOrders.length === 0) {
+  if (!isMDOrAdmin || isMobileContext() || !isOpen || delayedOrders.length === 0) {
     return null;
   }
 

@@ -5677,12 +5677,14 @@ export default function LoomPLM() {
         </div>
       </div>
       <ProjectChatbot orders={visibleOrders} onOpenOrder={openOrder} userId={activeUser.id} />
-      <CuttingDelayAlertModal
-        orders={visibleOrders}
-        role={role}
-        activeUser={activeUser}
-        onOpenOrder={openOrder}
-      />
+      {!isMobileScreen && (
+        <CuttingDelayAlertModal
+          orders={visibleOrders}
+          role={role}
+          activeUser={activeUser}
+          onOpenOrder={openOrder}
+        />
+      )}
     </div>
   );
 }
