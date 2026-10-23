@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { Card, CardHeader, PageHeader } from "../common/CommonUI.jsx";
 import { computeDynamicOrderRisk, parseShipDateSafe } from "../../constants/loomData.js";
+import { computeOrderStageSchedules } from "../order/OrderWorkspace.jsx";
 
 /**
  * Enhanced ReportsPage implementing the 6 Garment PLM Executive Reports
@@ -87,7 +88,7 @@ export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = 
     // Helper: find stage matching regex
     const findStage = (regex) => stages.find(stg => regex.test((stg.name || "").toLowerCase()));
 
-    // Cut Qty
+    // Cut Qty: can never exceed orderQty
     let cutQty = order.cutQty !== undefined && order.cutQty !== "" ? Number(order.cutQty) : null;
     if (cutQty === null) {
       const cutStg = findStage(/cut|cutting/);
@@ -95,35 +96,44 @@ export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = 
       else if (cutStg?.status === "in_progress") cutQty = Math.round(orderQty * 0.75);
       else cutQty = 0;
     }
+    cutQty = Math.min(orderQty, Math.max(0, cutQty));
 
-    // Sewn Qty
+    // Sewn Qty: physical rule in garment factory - cannot sew more than cutQty!
     let sewnQty = order.sewnQty !== undefined && order.sewnQty !== "" ? Number(order.sewnQty) : null;
     if (sewnQty === null) {
       const sewnStg = findStage(/sew|sewing|production/);
-      if (sewnStg?.status === "done") sewnQty = cutQty || orderQty;
-      else if (sewnStg?.status === "in_progress") sewnQty = Math.round((cutQty || orderQty) * 0.6);
+      if (sewnStg?.status === "done") sewnQty = cutQty;
+      else if (sewnStg?.status === "in_progress") sewnQty = Math.round(cutQty * 0.7);
       else sewnQty = 0;
     }
+    // Hard constraint: Sewn cannot exceed Cut
+    sewnQty = Math.min(cutQty, Math.max(0, sewnQty));
 
-    // Finished Qty
+    // Finished Qty: cannot exceed sewnQty
     let finishedQty = order.finishedQty !== undefined && order.finishedQty !== "" ? Number(order.finishedQty) : null;
     if (finishedQty === null) {
       const finStg = findStage(/finish|finishing/);
-      if (finStg?.status === "done") finishedQty = sewnQty || orderQty;
-      else if (finStg?.status === "in_progress") finishedQty = Math.round((sewnQty || orderQty) * 0.6);
+      if (finStg?.status === "done") finishedQty = sewnQty;
+      else if (finStg?.status === "in_progress") finishedQty = Math.round(sewnQty * 0.7);
       else finishedQty = 0;
     }
+    // Hard constraint: Finished cannot exceed Sewn
+    finishedQty = Math.min(sewnQty, Math.max(0, finishedQty));
 
-    // Packed Qty
+    // Packed Qty: cannot exceed finishedQty
     let packedQty = order.packedQty !== undefined && order.packedQty !== "" ? Number(order.packedQty) : null;
     if (packedQty === null) {
       const packStg = findStage(/pack|packing|final audit/);
-      if (packStg?.status === "done") packedQty = finishedQty || orderQty;
-      else if (packStg?.status === "in_progress") packedQty = Math.round((finishedQty || orderQty) * 0.5);
+      if (packStg?.status === "done") packedQty = finishedQty;
+      else if (packStg?.status === "in_progress") packedQty = Math.round(finishedQty * 0.6);
       else packedQty = 0;
     }
+    // Hard constraint: Packed cannot exceed Finished
+    packedQty = Math.min(finishedQty, Math.max(0, packedQty));
 
-    const balanceQty = Math.max(0, orderQty - shippedQty);
+    // Shipped Qty: cannot exceed packedQty (or orderQty)
+    const validShipped = Math.min(packedQty > 0 ? packedQty : orderQty, shippedQty);
+    const balanceQty = Math.max(0, orderQty - validShipped);
     const packedPct = orderQty > 0 ? (packedQty / orderQty) * 100 : 0;
     const daysToShip = computeDaysToShip(order);
 
@@ -143,7 +153,7 @@ export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = 
       sewnQty,
       finishedQty,
       packedQty,
-      shippedQty,
+      shippedQty: validShipped,
       balanceQty,
       packedPct,
       daysToShip,
@@ -374,37 +384,67 @@ export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = 
     });
   }, [orderDetailedRows]);
 
-  // 5. T&A MILESTONE TRACKER (Task-Level with delay days)
-  const milestoneTrackerData = useMemo(() => {
+  // 5. T&A MILESTONE TRACKER (Task-Level with real schedule delay days)
+  const allMilestoneTasks = useMemo(() => {
     const list = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
     orderDetailedRows.forEach((r) => {
       const stages = r.stages || [];
-      stages.forEach((stg) => {
-        // Sample or real planned/actual logic
-        const plannedDate = stg.planned || "Day 15";
-        const actualDate = stg.completedAt ? stg.completedAt.split("T")[0] : (stg.status === "done" ? "Completed" : "—");
-        
+      const orderStartDate = r.shipDate ? null : null; // computeOrderStageSchedules handles null by defaulting
+      const schedules = computeOrderStageSchedules(stages, orderStartDate);
+
+      stages.forEach((stg, sIdx) => {
+        const sch = schedules[sIdx] || {};
+        const plannedStr = stg.planned || (sch.origEndDate ? sch.origEndDate.toISOString().slice(0, 10) : "—");
+        const actualDate = stg.completedAt
+          ? stg.completedAt.split("T")[0]
+          : (stg.status === "done" ? (stg.completedOn || "Done") : "—");
+
+        const isDone = stg.status === "done";
+        const hasReason = Boolean(stg.reason && stg.reason.trim() !== "" && stg.reason !== "No delay flagged");
+        const shiftDays = sch.shiftDays || sch.doneDelayDays || Number(stg.delayDays) || 0;
+
+        // Check if overdue: pending/in_progress and past planned target
+        let isOverdue = false;
+        let overdueDays = 0;
+        if (!isDone && sch.origEndDate) {
+          const target = new Date(sch.origEndDate);
+          target.setHours(0, 0, 0, 0);
+          if (today > target) {
+            isOverdue = true;
+            overdueDays = Math.round((today.getTime() - target.getTime()) / (1000 * 60 * 60 * 24));
+          }
+        }
+
         let status = "Pending";
         let delayDays = 0;
 
-        if (stg.status === "done") {
-          status = stg.reason ? "Done Late" : "Done On Time";
-          delayDays = stg.reason ? (stg.delayDays || 2) : 0;
-        } else if (stg.status === "delayed" || (r.daysToShip < 5 && stg.status !== "done")) {
+        if (isDone) {
+          if (hasReason || shiftDays > 0) {
+            status = "Done Late";
+            delayDays = Math.max(1, shiftDays);
+          } else {
+            status = "Done On Time";
+            delayDays = 0;
+          }
+        } else if (stg.status === "delayed" || isOverdue || hasReason) {
           status = "Delayed";
-          delayDays = Math.abs(r.daysToShip < 0 ? Math.abs(r.daysToShip) : 3);
+          delayDays = Math.max(1, overdueDays || shiftDays || 3);
         } else if (stg.status === "in_progress") {
           status = "In Progress";
+          delayDays = 0;
         }
 
         list.push({
           taNo: r.taNo,
           orderId: r.orderId,
           buyer: r.buyer,
-          milestone: stg.name || "Stage",
+          milestone: stg.name || `Stage ${sIdx + 1}`,
           department: stg.dept || "Production",
-          owner: stg.completedBy || stg.updatedBy || stg.assignee || "Assigned",
-          plannedDate,
+          owner: stg.completedBy || stg.updatedBy || stg.assignee || r.merchandiser || "Assigned",
+          plannedDate: plannedStr,
           actualDate,
           taskQty: r.orderQty,
           delayDays,
@@ -412,14 +452,19 @@ export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = 
         });
       });
     });
-    // Return sample top 100 items if too large
-    return list.slice(0, 150);
+
+    return list;
   }, [orderDetailedRows]);
 
-  // 6. DEPARTMENT-WISE DELAY SUMMARY (Root-Cause View)
+  // Display top 300 milestone rows for table performance while retaining full dataset for summary
+  const milestoneTrackerData = useMemo(() => {
+    return allMilestoneTasks.slice(0, 300);
+  }, [allMilestoneTasks]);
+
+  // 6. DEPARTMENT-WISE DELAY SUMMARY (Root-Cause View from ALL milestone tasks)
   const departmentDelaySummary = useMemo(() => {
     const map = {};
-    milestoneTrackerData.forEach(item => {
+    allMilestoneTasks.forEach(item => {
       const dept = item.department || "Other";
       if (!map[dept]) {
         map[dept] = {
@@ -456,7 +501,7 @@ export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = 
     // Rank by total delay days descending
     rows.sort((a, b) => b.totalDelayDays - a.totalDelayDays);
     return rows.map((r, i) => ({ ...r, rank: i + 1 }));
-  }, [milestoneTrackerData]);
+  }, [allMilestoneTasks]);
 
   // Export current table as CSV
   const handleExportCSV = () => {
@@ -595,7 +640,7 @@ export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = 
           { key: "activeTna", label: "2. Active T&A Status", count: filteredOrderRows.length },
           { key: "stageFunnel", label: "3. Quantity Funnel", count: "WIP" },
           { key: "buyerSummary", label: "4. Buyer-wise Summary", count: buyerSummaryData.length },
-          { key: "milestoneTracker", label: "5. Milestone Tracker", count: milestoneTrackerData.length },
+          { key: "milestoneTracker", label: "5. Milestone Tracker", count: allMilestoneTasks.length },
           { key: "deptDelaySummary", label: "6. Department Delay", count: departmentDelaySummary.length }
         ].map(t => {
           const isActive = activeTab === t.key;
