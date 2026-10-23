@@ -3101,14 +3101,16 @@ export function EmployeePerformancePanel({ orders = [], buyers = [], roster = []
 
         const employeeOrderSet = new Set(visibleOrdersForUser.map(o => o.id));
 
-        // Department tasks on the user's visible orders (matches collectTasks(visibleOrders, role.dept) on user's dashboard)
+        // Department tasks on the user's visible orders:
+        // Must match what the employee sees on their personal dashboard: collectTasks(visibleOrders, role.dept)
+        const primaryDept = cleanName(person.dept);
         const deptTnaRows = [];
         visibleOrdersForUser.forEach(o => {
           if (!Array.isArray(o.stages)) return;
           o.stages.forEach(s => {
             if (!s || typeof s !== "object") return;
             const stageDept = cleanName(s.dept);
-            if (userDepts.some(ud => cleanName(ud) === stageDept) || stageDept === userDept) {
+            if (stageDept === primaryDept) {
               deptTnaRows.push({ ...s, orderId: o.id });
             }
           });
@@ -3119,7 +3121,7 @@ export function EmployeePerformancePanel({ orders = [], buyers = [], roster = []
         const completedDeptTnaRows = deptTnaRows.filter(s => isDone(s.status));
         const delayedDeptTnaRows = deptTnaRows.filter(s => s.reason || s.status === "Delayed");
 
-        // Custom tasks assigned to user (or unassigned in their department)
+        // Custom tasks assigned to user (or unassigned in their primary department)
         const openCustomTasks = assignedTasks.filter(task => !isDone(task.status));
         const completedCustomTasks = assignedTasks.filter(task => isDone(task.status));
 
@@ -4184,14 +4186,16 @@ export function ExecutiveOverviewPage({ orders, buyers = [], attendance, userSes
 
         const employeeOrderIds = visibleOrdersForUser.map(o => o.id);
 
-        // Department tasks on the user's visible orders (matches collectTasks(visibleOrders, role.dept) on user's dashboard)
+        // Department tasks on the user's visible orders:
+        // Must match what the employee sees on their personal dashboard: collectTasks(visibleOrders, role.dept)
+        const primaryDept = cleanName(person.dept);
         const deptTnaRows = [];
         visibleOrdersForUser.forEach(o => {
           if (!Array.isArray(o.stages)) return;
           o.stages.forEach(s => {
             if (!s || typeof s !== "object") return;
             const stageDept = cleanName(s.dept);
-            if (userDepts.some(ud => cleanName(ud) === stageDept) || stageDept === userDept) {
+            if (stageDept === primaryDept) {
               deptTnaRows.push({ ...s, orderId: o.id, style: o.style, buyer: o.buyer });
             }
           });

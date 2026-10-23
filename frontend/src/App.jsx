@@ -4696,7 +4696,16 @@ export default function LoomPLM() {
       />
     );
   } else if (view === "reports" && canAccess("reports")) {
-    content = <ReportsPage orders={visibleOrders} />;
+    content = (
+      <ReportsPage
+        orders={visibleOrders}
+        capas={capas}
+        debitNotes={debitNotes}
+        users={users}
+        buyers={buyers}
+        onOpenOrder={openOrder}
+      />
+    );
   } else if (view === "insights" && canSeeAll) {
     content = <InsightsPage orders={visibleOrders} />;
   } else if (view === "supplierPerformance" && canSeeAll) {

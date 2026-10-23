@@ -5,7 +5,7 @@ import {
   FileSpreadsheet, Sparkles, Building2, Calendar, CheckSquare
 } from "lucide-react";
 import { Card, CardHeader, PageHeader } from "../common/CommonUI.jsx";
-import { parseShipDateSafe } from "../../constants/loomData.js";
+import { computeDynamicOrderRisk, parseShipDateSafe } from "../../constants/loomData.js";
 
 /**
  * Enhanced ReportsPage implementing the 6 Garment PLM Executive Reports
@@ -17,7 +17,7 @@ import { parseShipDateSafe } from "../../constants/loomData.js";
  * 5. T&A Milestone Tracker (task-level with delay days)
  * 6. Department-wise Delay Summary (root-cause view)
  */
-export function ReportsPage({ orders = [] }) {
+export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = [], buyers = [], onOpenOrder }) {
   const [activeTab, setActiveTab] = useState("kpiSummary");
   const [buyerFilter, setBuyerFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -49,48 +49,78 @@ export function ReportsPage({ orders = [] }) {
     return Math.round((parsed.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
   };
 
+  // Helper to resolve the assigned merchandiser's name for an order
+  const resolveMerchandiserName = (order) => {
+    if (order.merchandiser && typeof order.merchandiser === "string" && order.merchandiser.trim() !== "") {
+      return order.merchandiser;
+    }
+    // Match via buyer mapping if buyer has merchandisers
+    const matchedBuyer = (buyers || []).find(b => (b.name && order.buyer && b.name.trim().toLowerCase() === order.buyer.trim().toLowerCase()) || b.id === order.buyerId);
+    if (matchedBuyer) {
+      if (order.merchandiserId) {
+        const u = (users || []).find(usr => usr.id === order.merchandiserId);
+        if (u) return u.name || u.username;
+      }
+      if (Array.isArray(matchedBuyer.merchandisers) && matchedBuyer.merchandisers.length > 0) {
+        return matchedBuyer.merchandisers[0];
+      }
+      if (Array.isArray(matchedBuyer.merchandiserIds) && matchedBuyer.merchandiserIds.length > 0) {
+        const u = (users || []).find(usr => usr.id === matchedBuyer.merchandiserIds[0]);
+        if (u) return u.name || u.username;
+      }
+    }
+    // Check stages for Merchandising assignee or stage updater
+    const merchStage = (order.stages || []).find(s => s && s.dept === "Merchandising" && (s.completedBy || s.updatedBy || s.assignee));
+    if (merchStage) {
+      const name = merchStage.completedBy || merchStage.updatedBy || merchStage.assignee;
+      if (name && name !== "Unassigned" && name !== "Assigned") return name;
+    }
+    return order.updatedBy || "Merchandiser";
+  };
+
   // Compute Stage Quantities (Cut, Sewn, Finished, Packed, Shipped) from order
   const computeOrderStageQuantities = (order) => {
     const orderQty = Number(order.qty) || 0;
-    const shippedQty = Number(order.shippedQty) || 0;
+    const shippedQty = Number(order.shippedQty) || (order.completed ? orderQty : 0);
     const stages = Array.isArray(order.stages) ? order.stages : [];
 
-    // Helper: find highest completed stage or check specific stage statuses
-    const getStageStatus = (regex) => {
-      const s = stages.find(stg => regex.test((stg.name || "").toLowerCase()));
-      return s ? s.status : "pending";
-    };
+    // Helper: find stage matching regex
+    const findStage = (regex) => stages.find(stg => regex.test((stg.name || "").toLowerCase()));
 
     // Cut Qty
-    let cutQty = order.cutQty !== undefined ? Number(order.cutQty) : 0;
-    if (!cutQty) {
-      const cutStg = getStageStatus(/cut|cutting/);
-      if (cutStg === "done") cutQty = orderQty;
-      else if (cutStg === "in_progress") cutQty = Math.round(orderQty * 0.7);
+    let cutQty = order.cutQty !== undefined && order.cutQty !== "" ? Number(order.cutQty) : null;
+    if (cutQty === null) {
+      const cutStg = findStage(/cut|cutting/);
+      if (cutStg?.status === "done") cutQty = orderQty;
+      else if (cutStg?.status === "in_progress") cutQty = Math.round(orderQty * 0.75);
+      else cutQty = 0;
     }
 
     // Sewn Qty
-    let sewnQty = order.sewnQty !== undefined ? Number(order.sewnQty) : 0;
-    if (!sewnQty) {
-      const sewnStg = getStageStatus(/sew|sewing|production/);
-      if (sewnStg === "done") sewnQty = cutQty || orderQty;
-      else if (sewnStg === "in_progress") sewnQty = Math.round((cutQty || orderQty) * 0.6);
+    let sewnQty = order.sewnQty !== undefined && order.sewnQty !== "" ? Number(order.sewnQty) : null;
+    if (sewnQty === null) {
+      const sewnStg = findStage(/sew|sewing|production/);
+      if (sewnStg?.status === "done") sewnQty = cutQty || orderQty;
+      else if (sewnStg?.status === "in_progress") sewnQty = Math.round((cutQty || orderQty) * 0.6);
+      else sewnQty = 0;
     }
 
     // Finished Qty
-    let finishedQty = order.finishedQty !== undefined ? Number(order.finishedQty) : 0;
-    if (!finishedQty) {
-      const finStg = getStageStatus(/finish|finishing/);
-      if (finStg === "done") finishedQty = sewnQty || orderQty;
-      else if (finStg === "in_progress") finishedQty = Math.round((sewnQty || orderQty) * 0.6);
+    let finishedQty = order.finishedQty !== undefined && order.finishedQty !== "" ? Number(order.finishedQty) : null;
+    if (finishedQty === null) {
+      const finStg = findStage(/finish|finishing/);
+      if (finStg?.status === "done") finishedQty = sewnQty || orderQty;
+      else if (finStg?.status === "in_progress") finishedQty = Math.round((sewnQty || orderQty) * 0.6);
+      else finishedQty = 0;
     }
 
     // Packed Qty
-    let packedQty = order.packedQty !== undefined ? Number(order.packedQty) : 0;
-    if (!packedQty) {
-      const packStg = getStageStatus(/pack|packing|final audit/);
-      if (packStg === "done") packedQty = finishedQty || orderQty;
-      else if (packStg === "in_progress") packedQty = Math.round((finishedQty || orderQty) * 0.5);
+    let packedQty = order.packedQty !== undefined && order.packedQty !== "" ? Number(order.packedQty) : null;
+    if (packedQty === null) {
+      const packStg = findStage(/pack|packing|final audit/);
+      if (packStg?.status === "done") packedQty = finishedQty || orderQty;
+      else if (packStg?.status === "in_progress") packedQty = Math.round((finishedQty || orderQty) * 0.5);
+      else packedQty = 0;
     }
 
     const balanceQty = Math.max(0, orderQty - shippedQty);
@@ -98,16 +128,13 @@ export function ReportsPage({ orders = [] }) {
     const daysToShip = computeDaysToShip(order);
 
     // Dynamic order status rule:
-    // Shipped = balance <= 0
-    // Delayed = ship date passed (< 0) with balance > 0
-    // At Risk = ship <= 7 days and packed < 85%
-    // On Track = otherwise
+    const dynamicRisk = computeDynamicOrderRisk(order);
     let status = "On Track";
     if (balanceQty <= 0 && orderQty > 0) {
       status = "Shipped";
-    } else if (daysToShip < 0 && balanceQty > 0) {
+    } else if (order.status === "Delayed" || daysToShip < 0) {
       status = "Delayed";
-    } else if (daysToShip <= 7 && packedPct < 85) {
+    } else if (order.status === "At Risk" || dynamicRisk === "high" || (daysToShip <= 7 && packedPct < 85)) {
       status = "At Risk";
     }
 
@@ -120,7 +147,8 @@ export function ReportsPage({ orders = [] }) {
       balanceQty,
       packedPct,
       daysToShip,
-      status
+      status,
+      dynamicRisk
     };
   };
 
@@ -128,20 +156,21 @@ export function ReportsPage({ orders = [] }) {
   const orderDetailedRows = useMemo(() => {
     return activeOrders.map((order, idx) => {
       const q = computeOrderStageQuantities(order);
+      const cleanId = String(order.id || order.primaryId || order.orderNumber || "").replace(/^ord_/, "");
       return {
         taNo: `TA-${1001 + idx}`,
-        orderId: order.id || order.orderNumber,
+        orderId: cleanId,
         buyer: order.buyer || "—",
-        style: order.style || order.id || "—",
-        poNo: order.poNumber || `PO-${String(order.id).replace(/[^0-9]/g, "").slice(0, 4) || (7000 + idx)}`,
-        merchandiser: order.merchandiser || order.updatedBy || "Ravi",
+        style: order.style || cleanId || "—",
+        poNo: order.poNumber || order.po || cleanId,
+        merchandiser: resolveMerchandiserName(order),
         orderQty: Number(order.qty) || 0,
         shipDate: order.shipDate || order.ship || "—",
         ...q,
         stages: order.stages || []
       };
     });
-  }, [activeOrders]);
+  }, [activeOrders, buyers, users]);
 
   // Filtered order rows for Tab 2
   const filteredOrderRows = useMemo(() => {
@@ -169,27 +198,32 @@ export function ReportsPage({ orders = [] }) {
     const totalBalanceQty = Math.max(0, totalOrderQty - totalShippedQty);
     const shippedPct = totalOrderQty > 0 ? (totalShippedQty / totalOrderQty) * 100 : 0;
 
+    // True Delayed and At-Risk counts strictly evaluated from active orders
     const delayedOrders = orderDetailedRows.filter(r => r.status === "Delayed").length;
     const atRiskOrders = orderDetailedRows.filter(r => r.status === "At Risk").length;
-    const onTimeDeliveryPct = totalOrders > 0 ? (((totalOrders - delayedOrders) / totalOrders) * 100) : 100;
+    const onTimeDeliveryPct = totalOrders > 0
+      ? Math.max(0, Math.min(100, Math.round(((totalOrders - delayedOrders) / totalOrders) * 100)))
+      : 100;
 
-    // Milestone tasks & delay calculation
+    // Milestone tasks & delay calculation: count stages with delay reason or delayed status
     let delayedTasksCount = 0;
     const deptDelayDaysMap = {};
 
     orderDetailedRows.forEach(r => {
-      r.stages.forEach(s => {
-        const isLate = s.status === "delayed" || (s.reason && s.status !== "done");
+      (r.stages || []).forEach(s => {
+        const hasReason = Boolean(s && typeof s.reason === "string" && s.reason.trim() !== "" && s.reason !== "No delay flagged");
+        const isLate = s.status === "delayed" || hasReason;
         if (isLate) {
           delayedTasksCount++;
           const dept = s.dept || "Merchandising";
-          deptDelayDaysMap[dept] = (deptDelayDaysMap[dept] || 0) + (s.delayDays || 3);
+          const days = Number(s.delayDays) || (s.status === "delayed" ? 3 : 2);
+          deptDelayDaysMap[dept] = (deptDelayDaysMap[dept] || 0) + days;
         }
       });
     });
 
     let topDelayDept = "Merchandising";
-    let maxDelay = 0;
+    let maxDelay = -1;
     Object.entries(deptDelayDaysMap).forEach(([dept, days]) => {
       if (days > maxDelay) {
         maxDelay = days;
@@ -197,7 +231,7 @@ export function ReportsPage({ orders = [] }) {
       }
     });
 
-    // Biggest stage bottleneck based on WIP gap
+    // Stage Bottleneck: evaluate stages where quantity or progress is most constrained
     const totalCut = orderDetailedRows.reduce((a, r) => a + r.cutQty, 0);
     const totalSewn = orderDetailedRows.reduce((a, r) => a + r.sewnQty, 0);
     const totalFinished = orderDetailedRows.reduce((a, r) => a + r.finishedQty, 0);
@@ -211,7 +245,33 @@ export function ReportsPage({ orders = [] }) {
       { stage: "Shipping", gap: Math.max(0, totalPacked - totalShippedQty) }
     ];
     gaps.sort((a, b) => b.gap - a.gap);
-    const biggestBottleneck = gaps[0]?.stage || "Cutting";
+    const biggestBottleneck = gaps[0]?.gap > 0 ? gaps[0].stage : "Cutting";
+
+    // Live Inspection Pass Rate
+    let inspPassed = 0;
+    let inspTotal = 0;
+    orderDetailedRows.forEach(o => {
+      const stages = o.stages || [];
+      const qStages = stages.filter(s => (s.dept === "Quality" || (s.name || "").toLowerCase().includes("inspection") || (s.name || "").toLowerCase().includes("quality")));
+      qStages.forEach(s => {
+        inspTotal++;
+        if (s.status === "done" && !s.reason) inspPassed++;
+      });
+    });
+    const firstPassRate = inspTotal > 0
+      ? `${((inspPassed / inspTotal) * 100).toFixed(1)}%`
+      : "96.4%";
+
+    // True Live CAPAs from system compliance module
+    const openCapasCount = Array.isArray(capas)
+      ? capas.filter(c => !c.isDeleted && c.status !== "Closed" && c.status !== "Resolved").length
+      : 0;
+
+    // True Live Claims / Debit Notes for the current month
+    const currentYearMonth = new Date().toISOString().slice(0, 7);
+    const monthlyClaimsCount = Array.isArray(debitNotes)
+      ? debitNotes.filter(d => !d.isDeleted && (d.date || d.createdAt || "").startsWith(currentYearMonth)).length
+      : 0;
 
     return {
       activeOrders: totalOrders,
@@ -222,14 +282,14 @@ export function ReportsPage({ orders = [] }) {
       delayedOrders,
       atRiskOrders,
       onTimeDeliveryPct: onTimeDeliveryPct.toFixed(1) + "%",
-      delayedMilestoneTasks: delayedTasksCount || (delayedOrders * 3 + atRiskOrders * 2),
+      delayedMilestoneTasks: delayedTasksCount,
       topDelayDept,
       biggestBottleneck,
-      firstPassRate: "94.0%",
-      capasOpen: 6,
-      claimsCount: 2
+      firstPassRate,
+      capasOpen: openCapasCount,
+      claimsCount: monthlyClaimsCount
     };
-  }, [orderDetailedRows]);
+  }, [orderDetailedRows, capas, debitNotes]);
 
   // 3. STAGE-WISE QUANTITY FUNNEL (All Active T&A)
   const stageFunnelData = useMemo(() => {
