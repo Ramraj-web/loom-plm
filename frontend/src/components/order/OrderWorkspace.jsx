@@ -1258,29 +1258,32 @@ function StageNode({ stage: rawStage, idx, onCycle, onUndo, canUndo = false, onR
         <div style={{ marginTop: 5 }}>
           <button
             type="button"
+            disabled={locked}
             onClick={(e) => {
               e.stopPropagation();
+              if (locked) return;
               onOpenColourways && onOpenColourways(idx);
             }}
             style={{
-              background: doneColourwaysCount === totalColourwaysCount && totalColourwaysCount > 0 ? "#ECFDF5" : doneColourwaysCount > 0 ? "#FEF3C7" : "#EEF2FF",
-              color: doneColourwaysCount === totalColourwaysCount && totalColourwaysCount > 0 ? "#047857" : doneColourwaysCount > 0 ? "#B45309" : "#4338CA",
-              border: `1px solid ${doneColourwaysCount === totalColourwaysCount && totalColourwaysCount > 0 ? "#A7F3D0" : doneColourwaysCount > 0 ? "#FDE68A" : "#C7D2FE"}`,
+              background: locked ? "#F3F4F6" : doneColourwaysCount === totalColourwaysCount && totalColourwaysCount > 0 ? "#ECFDF5" : doneColourwaysCount > 0 ? "#FEF3C7" : "#EEF2FF",
+              color: locked ? "#9CA3AF" : doneColourwaysCount === totalColourwaysCount && totalColourwaysCount > 0 ? "#047857" : doneColourwaysCount > 0 ? "#B45309" : "#4338CA",
+              border: `1px solid ${locked ? "#E5E7EB" : doneColourwaysCount === totalColourwaysCount && totalColourwaysCount > 0 ? "#A7F3D0" : doneColourwaysCount > 0 ? "#FDE68A" : "#C7D2FE"}`,
               borderRadius: 999,
               padding: "2.5px 8px",
               fontSize: 10,
               fontWeight: 600,
-              cursor: "pointer",
+              cursor: locked ? "not-allowed" : "pointer",
+              opacity: locked ? 0.65 : 1,
               display: "inline-flex",
               alignItems: "center",
               gap: 3,
               whiteSpace: "nowrap",
-              boxShadow: "0 1px 2px rgba(0,0,0,0.04)"
+              boxShadow: locked ? "none" : "0 1px 2px rgba(0,0,0,0.04)"
             }}
-            title="Click to view & update colorway pieces, status, and delay reasons"
+            title={locked ? `Stage locked until ${lockedBy} is approved` : "Click to view & update colorway pieces, status, and delay reasons"}
           >
             {doneColourwaysCount === totalColourwaysCount && totalColourwaysCount > 0 ? (
-              <CheckCircle2 size={10} color="#047857" />
+              <CheckCircle2 size={10} color={locked ? "#9CA3AF" : "#047857"} />
             ) : (
               <Layers size={10} />
             )}
@@ -3261,6 +3264,11 @@ export function OrderWorkspace({
   const handleUpdateStageColourways = (stageIdx, updatedColourways) => {
     const currentStage = orderStages[stageIdx];
     if (!currentStage) return;
+
+    // Safety guard: If stage is currently locked by a previous approval/stage, DO NOT allow marking it done!
+    if (gatingApproval(orderStages, stageIdx)) {
+      return;
+    }
 
     const allDone = updatedColourways.length > 0 && updatedColourways.every(c => c.status === "done");
     const anyInProgress = updatedColourways.some(c => c.status === "in_progress" || c.status === "done");

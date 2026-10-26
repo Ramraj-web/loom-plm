@@ -88,47 +88,73 @@ export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = 
     // Helper: find stage matching regex
     const findStage = (regex) => stages.find(stg => regex.test((stg.name || "").toLowerCase()));
 
-    // Cut Qty: can never exceed orderQty
+    // Helper to calculate real completed pieces from a stage's colourways:
+    // When user enters pcs or clicks "Mark All Done", completedQty is stored in stage.colourways
+    const getStageCompletedPieces = (stg) => {
+      if (!stg) return null;
+      if (Array.isArray(stg.colourways) && stg.colourways.length > 0) {
+        return stg.colourways.reduce((sum, c) => sum + (Number(c.completedQty) || 0), 0);
+      }
+      return null;
+    };
+
+    // 1. Cut Qty:
     let cutQty = order.cutQty !== undefined && order.cutQty !== "" ? Number(order.cutQty) : null;
-    if (cutQty === null) {
-      const cutStg = findStage(/cut|cutting/);
+    const cutStg = findStage(/cut|cutting/);
+    const colourwayCut = getStageCompletedPieces(cutStg);
+
+    if (colourwayCut !== null) {
+      cutQty = colourwayCut;
+    } else if (cutQty === null) {
       if (cutStg?.status === "done") cutQty = orderQty;
       else if (cutStg?.status === "in_progress") cutQty = Math.round(orderQty * 0.75);
       else cutQty = 0;
     }
     cutQty = Math.min(orderQty, Math.max(0, cutQty));
 
-    // Sewn Qty: physical rule in garment factory - cannot sew more than cutQty!
+    // 2. Sewn Qty:
     let sewnQty = order.sewnQty !== undefined && order.sewnQty !== "" ? Number(order.sewnQty) : null;
-    if (sewnQty === null) {
-      const sewnStg = findStage(/sew|sewing|production/);
+    const sewnStg = findStage(/sew|sewing|production/);
+    const colourwaySewn = getStageCompletedPieces(sewnStg);
+
+    if (colourwaySewn !== null) {
+      sewnQty = colourwaySewn;
+    } else if (sewnQty === null) {
       if (sewnStg?.status === "done") sewnQty = cutQty;
       else if (sewnStg?.status === "in_progress") sewnQty = Math.round(cutQty * 0.7);
       else sewnQty = 0;
     }
-    // Hard constraint: Sewn cannot exceed Cut
+    // Physical rule: Sewn cannot exceed Cut
     sewnQty = Math.min(cutQty, Math.max(0, sewnQty));
 
-    // Finished Qty: cannot exceed sewnQty
+    // 3. Finished Qty:
     let finishedQty = order.finishedQty !== undefined && order.finishedQty !== "" ? Number(order.finishedQty) : null;
-    if (finishedQty === null) {
-      const finStg = findStage(/finish|finishing/);
+    const finStg = findStage(/finish|finishing/);
+    const colourwayFin = getStageCompletedPieces(finStg);
+
+    if (colourwayFin !== null) {
+      finishedQty = colourwayFin;
+    } else if (finishedQty === null) {
       if (finStg?.status === "done") finishedQty = sewnQty;
       else if (finStg?.status === "in_progress") finishedQty = Math.round(sewnQty * 0.7);
       else finishedQty = 0;
     }
-    // Hard constraint: Finished cannot exceed Sewn
+    // Physical rule: Finished cannot exceed Sewn
     finishedQty = Math.min(sewnQty, Math.max(0, finishedQty));
 
-    // Packed Qty: cannot exceed finishedQty
+    // 4. Packed Qty:
     let packedQty = order.packedQty !== undefined && order.packedQty !== "" ? Number(order.packedQty) : null;
-    if (packedQty === null) {
-      const packStg = findStage(/pack|packing|final audit/);
+    const packStg = findStage(/pack|packing|final audit/);
+    const colourwayPack = getStageCompletedPieces(packStg);
+
+    if (colourwayPack !== null) {
+      packedQty = colourwayPack;
+    } else if (packedQty === null) {
       if (packStg?.status === "done") packedQty = finishedQty;
       else if (packStg?.status === "in_progress") packedQty = Math.round(finishedQty * 0.6);
       else packedQty = 0;
     }
-    // Hard constraint: Packed cannot exceed Finished
+    // Physical rule: Packed cannot exceed Finished
     packedQty = Math.min(finishedQty, Math.max(0, packedQty));
 
     // Shipped Qty: cannot exceed packedQty (or orderQty)
@@ -870,12 +896,19 @@ export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = 
                   filteredOrderRows.map((r, idx) => (
                     <tr
                       key={r.orderId}
+                      onClick={() => onOpenOrder && onOpenOrder(r.orderId)}
                       style={{
                         borderBottom: "1px solid #E5E7EB",
-                        background: idx % 2 === 0 ? "#FFFFFF" : "#F9FAFB"
+                        background: idx % 2 === 0 ? "#FFFFFF" : "#F9FAFB",
+                        cursor: onOpenOrder ? "pointer" : "default",
+                        transition: "background 0.15s ease"
                       }}
+                      onMouseEnter={e => e.currentTarget.style.background = "#EFF6FF"}
+                      onMouseLeave={e => e.currentTarget.style.background = idx % 2 === 0 ? "#FFFFFF" : "#F9FAFB"}
                     >
-                      <td style={{ padding: "9px 12px", fontWeight: 600, color: "#1E3A5F" }}>{r.taNo}</td>
+                      <td style={{ padding: "9px 12px", fontWeight: 700, color: "#2563EB" }}>
+                        {r.taNo}
+                      </td>
                       <td style={{ padding: "9px 12px", fontWeight: 600, color: "#111827" }}>{r.buyer}</td>
                       <td style={{ padding: "9px 12px", color: "#374151" }} title={r.style}>
                         {r.style.length > 18 ? r.style.slice(0, 18) + "..." : r.style}
