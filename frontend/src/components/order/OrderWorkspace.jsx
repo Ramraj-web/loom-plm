@@ -3175,12 +3175,18 @@ export function OrderWorkspace({
   const [showAlignModal, setShowAlignModal] = useState(false);
   const [disputeModalData, setDisputeModalData] = useState(null);
   const [colourwayModalStageIdx, setColourwayModalStageIdx] = useState(null);
+  const [localStages, setLocalStages] = useState(order?.stages || []);
+
+  useEffect(() => {
+    setLocalStages(order?.stages || []);
+  }, [order?.stages]);
 
   // Normalize order stages so Print / Emb / Outsource (23) and Print / Emb / IH (24) are always guaranteed
   const orderStages = useMemo(() => {
-    if (!Array.isArray(order?.stages)) return [];
+    const rawStages = localStages.length > 0 ? localStages : (order?.stages || []);
+    if (!Array.isArray(rawStages)) return [];
     const is120 = order?.template === "120";
-    return order.stages.map((s) => {
+    return rawStages.map((s) => {
       if (
         s.name === "Print / Emb / Hotfix Complete" ||
         s.name === "Print/emb/out source" ||
@@ -3219,7 +3225,7 @@ export function OrderWorkspace({
       }
       return s;
     });
-  }, [order?.stages, order?.template]);
+  }, [localStages, order?.stages, order?.template]);
 
   const cuttingIdx = orderStages.findIndex(s => s.name === "Cutting");
   const bulkGateOpen = allPreProdApproved(order);
@@ -3619,7 +3625,7 @@ export function OrderWorkspace({
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
         <div style={{ background: "#F7F7F9", borderRadius: 10, padding: "14px 16px" }}>
           <div style={{ fontSize: 12, color: "#8A8D98" }}>Stage progress</div>
-          <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4 }}>{doneCount}/{(order.stages || []).length} done</div>
+          <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4 }}>{doneCount}/{(orderStages || []).length} done</div>
         </div>
         <div style={{ background: "#F7F7F9", borderRadius: 10, padding: "14px 16px" }}>
           <div style={{ fontSize: 12, color: "#8A8D98" }}>Risk level</div>
@@ -3677,6 +3683,7 @@ export function OrderWorkspace({
           onClose={() => setShowAlignModal(false)}
           teams={teams}
           onSaveStages={(orderId, updatedStages, tmpl) => {
+            setLocalStages(updatedStages);
             if (onSetTemplate && tmpl !== order.template) {
               onSetTemplate(orderId, tmpl);
             }

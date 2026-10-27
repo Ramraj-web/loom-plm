@@ -3246,10 +3246,17 @@ export default function LoomPLM() {
   };
 
   const updateStages = (id, stages, explicitStatus = null) => {
+    const cleanId = (v) => String(v || "").trim().replace(/^\./, "").replace(/^ord_/, "").replace(/_[a-z0-9]{4,12}$/i, "").toUpperCase();
+    const targetKey = cleanId(id);
     setOrders(prev => prev.map(o => {
-      const match = String(id).match(/^ord_(.+)_[a-z0-9]{4,8}$/);
-      const baseId = match ? match[1] : null;
-      const isTarget = (o.primaryId && o.primaryId === id) || (o._id && o._id === id) || o.id === id || (baseId && (o.id === baseId || o.primaryId === baseId));
+      const isTarget = (
+        (o.primaryId && o.primaryId === id) ||
+        (o._id && String(o._id) === String(id)) ||
+        o.id === id ||
+        (o.id && cleanId(o.id) === targetKey) ||
+        (o.primaryId && cleanId(o.primaryId) === targetKey) ||
+        (o.orderId && cleanId(o.orderId) === targetKey)
+      );
       if (!isTarget) return o;
       const doneCount = stages.filter(s => s.status === "done").length;
       const allDone = stages.length > 0 && doneCount === stages.length;
