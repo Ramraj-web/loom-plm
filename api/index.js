@@ -715,12 +715,15 @@ export default async function handler(req, res) {
                 if (!map.has(baseKey)) {
                   map.set(baseKey, o);
                 } else {
-                  // Merge stages if necessary
+                  // Merge stages if necessary by stage name
                   const existing = map.get(baseKey);
                   if (Array.isArray(o.stages) && Array.isArray(existing.stages)) {
-                    o.stages.forEach((s, idx) => {
-                      if (s.status === "done" && existing.stages[idx] && existing.stages[idx].status !== "done") {
-                        existing.stages[idx] = { ...s };
+                    existing.stages.forEach(mStage => {
+                      const dStage = o.stages.find(os => os.name === mStage.name);
+                      if (dStage && dStage.status === "done" && mStage.status !== "done") {
+                        mStage.status = "done";
+                        mStage.completedAt = dStage.completedAt || mStage.completedAt;
+                        mStage.completedBy = dStage.completedBy || mStage.completedBy;
                       }
                     });
                   }

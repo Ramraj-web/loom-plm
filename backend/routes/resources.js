@@ -303,10 +303,12 @@ function deduplicateOrders(ordersList, collection, db) {
     for (let i = 1; i < sorted.length; i++) {
       const other = sorted[i];
       if (Array.isArray(other.stages) && Array.isArray(canonical.stages)) {
-        other.stages.forEach((dStage, idx) => {
-          const cStage = canonical.stages[idx];
-          if (dStage.status === "done" && cStage && cStage.status !== "done") {
-            canonical.stages[idx] = { ...dStage };
+        canonical.stages.forEach(cStage => {
+          const dStage = other.stages.find(os => os.name === cStage.name);
+          if (dStage && dStage.status === "done" && cStage.status !== "done") {
+            cStage.status = "done";
+            cStage.completedAt = dStage.completedAt || cStage.completedAt;
+            cStage.completedBy = dStage.completedBy || cStage.completedBy;
           }
         });
       }

@@ -330,10 +330,12 @@ export const normalizeAndDeduplicateOrders = (rawOrders, prev = []) => {
     for (let i = 1; i < sorted.length; i++) {
       const other = sorted[i];
       if (Array.isArray(other.stages) && Array.isArray(mergedOrder.stages)) {
-        other.stages.forEach((dStage, idx) => {
-          const mStage = mergedOrder.stages[idx];
-          if (dStage.status === "done" && mStage && mStage.status !== "done") {
-            mergedOrder.stages[idx] = { ...dStage };
+        mergedOrder.stages.forEach((mStage) => {
+          const dStage = other.stages.find(os => os.name === mStage.name);
+          if (dStage && dStage.status === "done" && mStage.status !== "done") {
+            mStage.status = "done";
+            mStage.completedAt = dStage.completedAt || mStage.completedAt;
+            mStage.completedBy = dStage.completedBy || mStage.completedBy;
           }
         });
       }
@@ -378,8 +380,8 @@ export const normalizeAndDeduplicateOrders = (rawOrders, prev = []) => {
       plannedCost: mergedOrder.plannedCost ?? existing?.plannedCost ?? 0,
       actualCost: mergedOrder.actualCost ?? existing?.actualCost ?? 0,
       stages: sourceStages.map((s, sIdx) => {
-        // Find matching existing stage by name, falling back to same index
-        const existingStage = (existing?.stages || []).find(es => es.name === s.name) || existing?.stages?.[sIdx];
+        // Find matching existing stage strictly by name
+        const existingStage = (existing?.stages || []).find(es => es.name === s.name);
         // Mark as custom if explicitly set or beyond template stages
         const isCustomStage = s.isCustom === true;
 
@@ -3453,6 +3455,23 @@ export default function LoomPLM() {
         resourcesApi.update("orders", primId, updated).catch(err => {
           console.warn("Error updating order stages:", err.message);
         });
+      } catch (e) { }
+
+      // Immediate local cache update so browser refresh retains the changes instantly
+      try {
+        const cachedStr = localStorage.getItem("loom_orders_cache");
+        if (cachedStr) {
+          const cachedOrders = JSON.parse(cachedStr);
+          if (Array.isArray(cachedOrders)) {
+            const nextCached = cachedOrders.map(item => {
+              if (item.id === o.id || item.primaryId === o.id || item._id === o._id) {
+                return { ...item, stages: updatedStages, status, completed: isCompleted, completedAt };
+              }
+              return item;
+            });
+            localStorage.setItem("loom_orders_cache", JSON.stringify(nextCached));
+          }
+        }
       } catch (e) { }
 
       // Stage changes only apply to this particular order and do not overwrite master settings
