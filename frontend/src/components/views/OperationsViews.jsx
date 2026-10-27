@@ -200,7 +200,24 @@ export function OrdersPage({
     return () => window.removeEventListener("loom_orders_drilldown_filter_change", handleFilterChange);
   }, []);
 
-  const [buyerFilter, setBuyerFilter] = useState("all");
+  const [buyerFilter, setBuyerFilterState] = useState(() => {
+    try {
+      return sessionStorage.getItem("loom_orders_buyer_filter") || "all";
+    } catch (e) {
+      return "all";
+    }
+  });
+
+  const setBuyerFilter = (val) => {
+    setBuyerFilterState(val);
+    try {
+      if (!val || val === "all") {
+        sessionStorage.removeItem("loom_orders_buyer_filter");
+      } else {
+        sessionStorage.setItem("loom_orders_buyer_filter", val);
+      }
+    } catch (e) { }
+  };
 
   const getOrderDeliveryTime = (order) => {
     if (!order) return Infinity;
@@ -5818,6 +5835,54 @@ export function OrderStageAlignmentModal({
     setDragOverIdx(null);
   };
 
+  const [stageEditingIdx, setStageEditingIdx] = useState(null);
+  const [stageEditData, setStageEditData] = useState({
+    name: "",
+    dept: "Merchandising",
+    startDay: 0,
+    endDay: 2,
+    isParallel: true
+  });
+
+  const startEditStage = (idx) => {
+    const stg = stages[idx];
+    setStageEditingIdx(idx);
+    const sDay = typeof stg.startDay === "number" ? stg.startDay : 0;
+    const eDay = typeof stg.endDay === "number" ? stg.endDay : (sDay + (stg.days || 2));
+    setStageEditData({
+      name: stg.name || "",
+      dept: stg.dept || "Merchandising",
+      startDay: sDay,
+      endDay: eDay,
+      isParallel: stg.isParallel !== false
+    });
+  };
+
+  const cancelEditStage = () => {
+    setStageEditingIdx(null);
+  };
+
+  const saveEditStage = (idx) => {
+    if (!stageEditData.name.trim()) return;
+    const start = Math.max(0, Number(stageEditData.startDay) || 0);
+    const end = Math.max(start, Number(stageEditData.endDay) || start);
+    const daysNum = Math.max(1, end - start);
+    const nextStages = [...stages];
+    nextStages[idx] = {
+      ...nextStages[idx],
+      name: stageEditData.name.trim(),
+      dept: stageEditData.dept,
+      startDay: start,
+      endDay: end,
+      days: daysNum,
+      planned: `Day ${start}-${end}`,
+      isParallel: stageEditData.isParallel !== false,
+      assignee: firstNamedAssignee(stageEditData.dept) || nextStages[idx].assignee
+    };
+    setStages(nextStages);
+    setStageEditingIdx(null);
+  };
+
   const [customStageName, setCustomStageName] = useState("");
   const [customStageDept, setCustomStageDept] = useState("Merchandising");
   const [customStageStartDay, setCustomStageStartDay] = useState(0);
@@ -5993,48 +6058,56 @@ export function OrderStageAlignmentModal({
             <span style={{ fontSize: 11, color: "#7C3AED", fontWeight: 600 }}>Up / Down buttons also supported</span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {stages.map((stage, idx) => (
+            {stages.map((stage, idx) => {
+              const isEditing = stageEditingIdx === idx;
+              const sDay = typeof stage.startDay === "number" ? stage.startDay : 0;
+              const eDay = typeof stage.endDay === "number" ? stage.endDay : (sDay + (stage.days || 2));
+              const isParallel = stage.isParallel !== false;
+
+              return (
               <div
                 key={`${stage.name}-${idx}`}
-                draggable
-                onDragStart={(e) => handleDragStart(e, idx)}
-                onDragOver={(e) => handleDragOver(e, idx)}
-                onDragLeave={(e) => handleDragLeave(e, idx)}
-                onDrop={(e) => handleDrop(e, idx)}
+                draggable={!isEditing}
+                onDragStart={(e) => !isEditing && handleDragStart(e, idx)}
+                onDragOver={(e) => !isEditing && handleDragOver(e, idx)}
+                onDragLeave={(e) => !isEditing && handleDragLeave(e, idx)}
+                onDrop={(e) => !isEditing && handleDrop(e, idx)}
                 onDragEnd={handleDragEnd}
                 style={{
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
                   padding: "10px 14px",
-                  background: draggedIdx === idx ? "#EDE9FE" : dragOverIdx === idx ? "#F3E8FF" : (idx % 2 === 0 ? "#F9FAFB" : "#FFFFFF"),
-                  border: dragOverIdx === idx ? "2px dashed #7C3AED" : draggedIdx === idx ? "2px dashed #A78BFA" : "1px solid #E5E7EB",
+                  background: isEditing ? "#F5F3FF" : draggedIdx === idx ? "#EDE9FE" : dragOverIdx === idx ? "#F3E8FF" : (idx % 2 === 0 ? "#F9FAFB" : "#FFFFFF"),
+                  border: isEditing ? "1.5px solid #7C3AED" : dragOverIdx === idx ? "2px dashed #7C3AED" : draggedIdx === idx ? "2px dashed #A78BFA" : "1px solid #E5E7EB",
                   borderRadius: 8,
                   gap: 12,
                   opacity: draggedIdx === idx ? 0.45 : 1,
                   transform: dragOverIdx === idx ? "scale(1.01)" : "none",
                   transition: "background 0.15s ease, border 0.15s ease, transform 0.15s ease",
-                  boxShadow: dragOverIdx === idx ? "0 4px 12px rgba(124, 58, 237, 0.15)" : "none"
+                  boxShadow: isEditing ? "0 4px 14px rgba(124, 58, 237, 0.12)" : dragOverIdx === idx ? "0 4px 12px rgba(124, 58, 237, 0.15)" : "none"
                 }}
               >
                 {/* Priority / Order Index & Drag Handle */}
                 <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
-                  <div
-                    title="Drag to reorder"
-                    style={{
-                      cursor: "grab",
-                      color: "#9CA3AF",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      padding: "2px 4px",
-                      borderRadius: 4
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.color = "#534AB7"}
-                    onMouseLeave={e => e.currentTarget.style.color = "#9CA3AF"}
-                  >
-                    <GripVertical size={17} />
-                  </div>
+                  {!isEditing && (
+                    <div
+                      title="Drag to reorder"
+                      style={{
+                        cursor: "grab",
+                        color: "#9CA3AF",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        padding: "2px 4px",
+                        borderRadius: 4
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.color = "#534AB7"}
+                      onMouseLeave={e => e.currentTarget.style.color = "#9CA3AF"}
+                    >
+                      <GripVertical size={17} />
+                    </div>
+                  )}
                   <div
                     style={{
                       width: 28,
@@ -6052,120 +6125,203 @@ export function OrderStageAlignmentModal({
                   >
                     {idx + 1}
                   </div>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "#111827", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                      <span>{stage.name}</span>
-                      {stage.isCustom && (
-                        <span style={{ fontSize: 10, background: "#EDE9FE", color: "#534AB7", padding: "1px 6px", borderRadius: 4, fontWeight: 700, border: "1px solid #C4B8F5" }}>
-                          CUSTOM
+
+                  {isEditing ? (
+                    <div style={{ display: "flex", gap: 8, flex: 1, alignItems: "center", flexWrap: "wrap" }}>
+                      <input
+                        type="text"
+                        value={stageEditData.name}
+                        onChange={e => setStageEditData({ ...stageEditData, name: e.target.value })}
+                        placeholder="Stage Name"
+                        style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #C4B8F5", fontSize: 12, flex: 2, minWidth: 140, background: "#fff", outline: "none" }}
+                      />
+                      <select
+                        value={stageEditData.dept}
+                        onChange={e => setStageEditData({ ...stageEditData, dept: e.target.value })}
+                        style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #C4B8F5", fontSize: 12, flex: 1.5, minWidth: 120, background: "#fff", cursor: "pointer" }}
+                      >
+                        {availableDepartments.map(d => (
+                          <option key={d} value={d}>{d}</option>
+                        ))}
+                      </select>
+                      <span style={{ fontSize: 11, color: "#6B7280", fontWeight: 600 }}>Start Day:</span>
+                      <input
+                        type="number"
+                        min="0"
+                        value={stageEditData.startDay}
+                        onChange={e => setStageEditData({ ...stageEditData, startDay: e.target.value })}
+                        style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #C4B8F5", fontSize: 12, width: 60, background: "#fff" }}
+                      />
+                      <span style={{ fontSize: 11, color: "#6B7280", fontWeight: 600 }}>End Day:</span>
+                      <input
+                        type="number"
+                        min="0"
+                        value={stageEditData.endDay}
+                        onChange={e => setStageEditData({ ...stageEditData, endDay: e.target.value })}
+                        style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #C4B8F5", fontSize: 12, width: 60, background: "#fff" }}
+                      />
+                      <select
+                        value={stageEditData.isParallel ? "parallel" : "sequential"}
+                        onChange={e => setStageEditData({ ...stageEditData, isParallel: e.target.value === "parallel" })}
+                        style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #C4B8F5", fontSize: 12, width: 140, background: "#fff", cursor: "pointer" }}
+                      >
+                        <option value="parallel">⚡ Parallel</option>
+                        <option value="sequential">🔒 Sequential</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => saveEditStage(idx)}
+                        style={{ padding: "6px 14px", borderRadius: 6, background: "#10B981", color: "#fff", border: "none", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={cancelEditStage}
+                        style={{ padding: "6px 10px", borderRadius: 6, background: "#E5E7EB", color: "#374151", border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#111827", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        <span>{stage.name}</span>
+                        {stage.isCustom && (
+                          <span style={{ fontSize: 10, background: "#EDE9FE", color: "#534AB7", padding: "1px 6px", borderRadius: 4, fontWeight: 700, border: "1px solid #C4B8F5" }}>
+                            CUSTOM
+                          </span>
+                        )}
+                        <span style={{
+                          fontSize: 10,
+                          fontWeight: 600,
+                          padding: "1px 6px",
+                          borderRadius: 12,
+                          background: isParallel ? "#ECFDF5" : "#EFF6FF",
+                          color: isParallel ? "#047857" : "#1D4ED8",
+                          border: `1px solid ${isParallel ? "#A7F3D0" : "#BFDBFE"}`
+                        }}>
+                          {isParallel ? "⚡ Parallel (Always Open)" : "🔒 Sequential"}
                         </span>
-                      )}
-                      <span style={{
-                        fontSize: 10,
-                        fontWeight: 600,
-                        padding: "1px 6px",
-                        borderRadius: 12,
-                        background: stage.isParallel !== false ? "#ECFDF5" : "#EFF6FF",
-                        color: stage.isParallel !== false ? "#047857" : "#1D4ED8",
-                        border: `1px solid ${stage.isParallel !== false ? "#A7F3D0" : "#BFDBFE"}`
-                      }}>
-                        {stage.isParallel !== false ? "⚡ Parallel (Always Open)" : "🔒 Sequential"}
-                      </span>
+                      </div>
+                      <div style={{ fontSize: 11.5, color: "#6B7280", marginTop: 2, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                          Department:
+                          <select
+                            value={stage.dept || "Merchandising"}
+                            onChange={e => updateStageDept(idx, e.target.value)}
+                            onClick={e => e.stopPropagation()}
+                            style={{
+                              padding: "2px 6px",
+                              borderRadius: 4,
+                              border: "1px solid #D1D5DB",
+                              fontSize: 11.5,
+                              fontWeight: 600,
+                              color: "#374151",
+                              background: "#F9FAFB",
+                              cursor: "pointer"
+                            }}
+                          >
+                            {availableDepartments.map(dept => (
+                              <option key={dept} value={dept}>{dept}</option>
+                            ))}
+                          </select>
+                        </span>
+                        <span>Target Range: <b style={{ color: "#374151" }}>{typeof stage.startDay === "number" ? `${stage.startDay}-${stage.endDay} Days` : (stage.planned || `Day ${idx + 1}`)}</b></span>
+                      </div>
                     </div>
-                    <div style={{ fontSize: 11.5, color: "#6B7280", marginTop: 2, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                        Department:
-                        <select
-                          value={stage.dept || "Merchandising"}
-                          onChange={e => updateStageDept(idx, e.target.value)}
-                          onClick={e => e.stopPropagation()}
-                          style={{
-                            padding: "2px 6px",
-                            borderRadius: 4,
-                            border: "1px solid #D1D5DB",
-                            fontSize: 11.5,
-                            fontWeight: 600,
-                            color: "#374151",
-                            background: "#F9FAFB",
-                            cursor: "pointer"
-                          }}
-                        >
-                          {availableDepartments.map(dept => (
-                            <option key={dept} value={dept}>{dept}</option>
-                          ))}
-                        </select>
-                      </span>
-                      <span>Target Range: <b style={{ color: "#374151" }}>{typeof stage.startDay === "number" ? `${stage.startDay}-${stage.endDay} Days` : (stage.planned || `Day ${idx + 1}`)}</b></span>
-                    </div>
-                  </div>
+                  )}
                 </div>
 
-                {/* Reorder Buttons (Move Up / Down / Remove) */}
-                <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                  <button
-                    type="button"
-                    disabled={idx === 0}
-                    onClick={() => moveStage(idx, -1)}
-                    title="Prioritize higher (Move Up)"
-                    style={{
-                      padding: "5px 8px",
-                      borderRadius: 6,
-                      border: "1px solid #D1D5DB",
-                      background: idx === 0 ? "#F3F4F6" : "#FFFFFF",
-                      color: idx === 0 ? "#9CA3AF" : "#374151",
-                      cursor: idx === 0 ? "not-allowed" : "pointer",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 2,
-                      fontSize: 11,
-                      fontWeight: 600
-                    }}
-                  >
-                    <ArrowUp size={13} /> Up
-                  </button>
-                  <button
-                    type="button"
-                    disabled={idx === stages.length - 1}
-                    onClick={() => moveStage(idx, 1)}
-                    title="Prioritize lower (Move Down)"
-                    style={{
-                      padding: "5px 8px",
-                      borderRadius: 6,
-                      border: "1px solid #D1D5DB",
-                      background: idx === stages.length - 1 ? "#F3F4F6" : "#FFFFFF",
-                      color: idx === stages.length - 1 ? "#9CA3AF" : "#374151",
-                      cursor: idx === stages.length - 1 ? "not-allowed" : "pointer",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 2,
-                      fontSize: 11,
-                      fontWeight: 600
-                    }}
-                  >
-                    <ArrowDown size={13} /> Down
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => removeStage(idx)}
-                    title="Remove stage from this order"
-                    style={{
-                      padding: "5px 8px",
-                      borderRadius: 6,
-                      border: "1px solid #FECACA",
-                      background: "#FEF2F2",
-                      color: "#DC2626",
-                      cursor: "pointer",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      fontSize: 11,
-                      fontWeight: 600
-                    }}
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
+                {/* Reorder Buttons (Move Up / Down / Edit / Remove) */}
+                {!isEditing && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                    <button
+                      type="button"
+                      disabled={idx === 0}
+                      onClick={() => moveStage(idx, -1)}
+                      title="Prioritize higher (Move Up)"
+                      style={{
+                        padding: "5px 8px",
+                        borderRadius: 6,
+                        border: "1px solid #D1D5DB",
+                        background: idx === 0 ? "#F3F4F6" : "#FFFFFF",
+                        color: idx === 0 ? "#9CA3AF" : "#374151",
+                        cursor: idx === 0 ? "not-allowed" : "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 2,
+                        fontSize: 11,
+                        fontWeight: 600
+                      }}
+                    >
+                      <ArrowUp size={13} /> Up
+                    </button>
+                    <button
+                      type="button"
+                      disabled={idx === stages.length - 1}
+                      onClick={() => moveStage(idx, 1)}
+                      title="Prioritize lower (Move Down)"
+                      style={{
+                        padding: "5px 8px",
+                        borderRadius: 6,
+                        border: "1px solid #D1D5DB",
+                        background: idx === stages.length - 1 ? "#F3F4F6" : "#FFFFFF",
+                        color: idx === stages.length - 1 ? "#9CA3AF" : "#374151",
+                        cursor: idx === stages.length - 1 ? "not-allowed" : "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 2,
+                        fontSize: 11,
+                        fontWeight: 600
+                      }}
+                    >
+                      <ArrowDown size={13} /> Down
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => startEditStage(idx)}
+                      title="Edit stage details"
+                      style={{
+                        padding: "5px 8px",
+                        borderRadius: 6,
+                        border: "1px solid #CBD5E1",
+                        background: "#FFFFFF",
+                        color: "#475569",
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 3,
+                        fontSize: 11,
+                        fontWeight: 600
+                      }}
+                    >
+                      <Edit size={12} /> Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeStage(idx)}
+                      title="Remove stage from this order"
+                      style={{
+                        padding: "5px 8px",
+                        borderRadius: 6,
+                        border: "1px solid #FECACA",
+                        background: "#FEF2F2",
+                        color: "#DC2626",
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        fontSize: 11,
+                        fontWeight: 600
+                      }}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                )}
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Add custom stage */}

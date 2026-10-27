@@ -352,17 +352,13 @@ export const normalizeAndDeduplicateOrders = (rawOrders, prev = []) => {
     const templateStages = TA_TEMPLATES[resolvedTemplate] || TA_STAGES_90;
     const expectedStageCount = templateStages.length;
 
-    // Accept custom-stage arrays (length >= expected) — do NOT strip extra custom stages.
-    // Only fall back to default template when we have NO stages at all.
-    const sourceStages = (mergedOrder.stages && mergedOrder.stages.length >= expectedStageCount)
+    // Use order's stages if present (even if stages were deleted / reduced in number).
+    // Only fall back to default template when stages are completely empty / missing.
+    const sourceStages = (mergedOrder.stages && Array.isArray(mergedOrder.stages) && mergedOrder.stages.length > 0)
       ? mergedOrder.stages
-      : (existing?.stages && existing.stages.length >= expectedStageCount)
+      : (existing?.stages && Array.isArray(existing.stages) && existing.stages.length > 0)
         ? existing.stages
-        : (mergedOrder.stages && mergedOrder.stages.length > 0)
-          ? mergedOrder.stages
-          : (existing?.stages && existing.stages.length > 0)
-            ? existing.stages
-            : makeStages(resolvedTemplate, 0, null);
+        : makeStages(resolvedTemplate, 0, null);
 
     mergedList.push({
       ...existing,
@@ -384,10 +380,8 @@ export const normalizeAndDeduplicateOrders = (rawOrders, prev = []) => {
       stages: sourceStages.map((s, sIdx) => {
         // Find matching existing stage by name, falling back to same index
         const existingStage = (existing?.stages || []).find(es => es.name === s.name) || existing?.stages?.[sIdx];
-        // tmplStage is only available for standard-template indices — custom stages (sIdx >= expectedStageCount) won't have one
-        const tmplStage = sIdx < expectedStageCount ? templateStages[sIdx] : null;
-        // Mark extra stages (beyond template count) as custom so the tracker can badge them
-        const isCustomStage = sIdx >= expectedStageCount || s.isCustom === true;
+        // Mark as custom if explicitly set or beyond template stages
+        const isCustomStage = s.isCustom === true;
 
         let stageName = s.name;
         let stageDept = s.dept;
@@ -417,9 +411,6 @@ export const normalizeAndDeduplicateOrders = (rawOrders, prev = []) => {
           ) {
             stageName = "Fabric Inspection Report";
             stageDept = "Quality";
-          } else if (tmplStage && (s.name.toLowerCase() === tmplStage.name.toLowerCase())) {
-            stageName = tmplStage.name;
-            stageDept = tmplStage.dept;
           }
         }
 
@@ -427,7 +418,7 @@ export const normalizeAndDeduplicateOrders = (rawOrders, prev = []) => {
           ...s,
           name: stageName,
           dept: stageDept,
-          planned: stagePlanned || s.planned || tmplStage?.day,
+          planned: stagePlanned || s.planned || `Day ${sIdx + 1}`,
           isCustom: isCustomStage,
           status: s.status || existingStage?.status || "pending",
           reason: s.reason !== undefined ? s.reason : (existingStage?.reason || null),
@@ -3287,13 +3278,10 @@ export default function LoomPLM() {
       const is120 = o.template === "120";
       const tmplList = TA_TEMPLATES[o.template || "90"] || TA_STAGES_90;
       const updatedStages = stages.map((s, idx) => {
-        const prevStage = o.stages?.[idx];
-        const tmpl = tmplList[idx];
+        const prevStage = (o.stages || []).find(ps => ps.name === s.name) || o.stages?.[idx];
         const res = { ...s };
-        // Never override custom stages (extra stages the user added beyond the template)
-        const isCustomStage = s.isCustom === true || idx >= tmplList.length;
+        const isCustomStage = s.isCustom === true;
         if (!isCustomStage) {
-          res.isCustom = false;
           if (
             s.name === "Print / Emb / Hotfix Complete" ||
             s.name === "Print/emb/out source" ||
@@ -3319,8 +3307,6 @@ export default function LoomPLM() {
             res.name = "Fabric Inspection Report";
             res.dept = "Quality";
           }
-        } else {
-          res.isCustom = true;
         }
         if (s.status === "done") {
           res.completedAt = s.completedAt || prevStage?.completedAt || nowIso;
@@ -3341,7 +3327,7 @@ export default function LoomPLM() {
       let nextStageIdx = -1;
 
       updatedStages.forEach((s, idx) => {
-        const prevStage = o.stages?.[idx];
+        const prevStage = (o.stages || []).find(ps => ps.name === s.name);
         if (s.status === "done" && prevStage?.status !== "done") {
           logEvent({
             eventType: "STAGE",
