@@ -1736,6 +1736,19 @@ export default function LoomPLM() {
         setSelectedId(parsed.selectedId);
         setSelectedDept(parsed.selectedDept);
         loadViewData(parsed.view);
+        if (parsed.view === "order" && parsed.selectedId) {
+          resourcesApi.get("orders", parsed.selectedId).then(fullOrder => {
+            if (fullOrder && (fullOrder.id || fullOrder.primaryId)) {
+              setOrders(prev => prev.map(o => {
+                const targetKey = String(parsed.selectedId || "").trim().replace(/^\./, "").replace(/^ord_/, "").replace(/_[a-z0-9]{4,12}$/i, "").toUpperCase();
+                const oKey = String(o.id || o.primaryId || "").trim().replace(/^\./, "").replace(/^ord_/, "").replace(/_[a-z0-9]{4,12}$/i, "").toUpperCase();
+                return (oKey === targetKey || o.id === fullOrder.id || (fullOrder.primaryId && o.primaryId === fullOrder.primaryId))
+                  ? { ...o, ...fullOrder }
+                  : o;
+              }));
+            }
+          }).catch(() => { });
+        }
       } else if (!window.location.hash || window.location.hash === "#" || window.location.hash === "#/") {
         const defaultView = (role?.dept === "Executive" || role?.dept === "Executive (MD)") ? "executiveOverview" : "dashboard";
         setView(defaultView);
@@ -3471,7 +3484,8 @@ export default function LoomPLM() {
           const cachedOrders = JSON.parse(cachedStr);
           if (Array.isArray(cachedOrders)) {
             const nextCached = cachedOrders.map(item => {
-              if (item.id === o.id || item.primaryId === o.id || item._id === o._id) {
+              const itemKey = cleanId(item.id || item.primaryId);
+              if (itemKey === targetKey || item.id === o.id || item.primaryId === o.id || item._id === o._id) {
                 return { ...item, stages: updatedStages, status, completed: isCompleted, completedAt };
               }
               return item;
