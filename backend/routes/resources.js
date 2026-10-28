@@ -686,6 +686,36 @@ router.patch("/:resource/:id(*)", async (req, res, next) => {
       delete record._id;
       // Strictly update by unique MongoDB _id so other orders sharing the same id (e.g. PO-123) are never overwritten!
       await collection.replaceOne({ resource, _id: existing._id }, { resource, ...record }, { upsert: false });
+
+      // Cascade update to orders if buyer name changed
+      if (resource === "buyers" && record.name && existing.name && record.name !== existing.name) {
+        const targetBuyerId = record.id || existing.id;
+        const oldBuyerName = existing.name;
+        const newBuyerName = record.name;
+        try {
+          await collection.updateMany(
+            {
+              resource: "orders",
+              $or: [
+                { buyerId: targetBuyerId },
+                { buyer: oldBuyerName },
+                { buyer: { $regex: new RegExp(`^${oldBuyerName.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&")}$`, "i") } }
+              ]
+            },
+            {
+              $set: {
+                buyer: newBuyerName,
+                buyerId: targetBuyerId,
+                updatedAt: new Date().toISOString()
+              }
+            }
+          );
+          invalidateResourceCache("orders");
+        } catch (e) {
+          console.warn("Cascade buyer update error:", e.message);
+        }
+      }
+
       return res.json(record);
     } else {
       const db = readDB();

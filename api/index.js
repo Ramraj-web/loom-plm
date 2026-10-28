@@ -928,6 +928,34 @@ export default async function handler(req, res) {
             delete updated._id;
             if (existing) {
               await mongoCols.resources.updateOne({ resource, _id: existing._id }, { $set: updated });
+              // Cascade update orders when buyer name is edited
+              if (resource === "buyers" && updated.name && existing.name && updated.name !== existing.name) {
+                const targetBuyerId = updated.id || existing.id;
+                const oldBuyerName = existing.name;
+                const newBuyerName = updated.name;
+                try {
+                  await mongoCols.resources.updateMany(
+                    {
+                      resource: "orders",
+                      $or: [
+                        { buyerId: targetBuyerId },
+                        { buyer: oldBuyerName },
+                        { buyer: { $regex: new RegExp(`^${oldBuyerName.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&")}$`, "i") } }
+                      ]
+                    },
+                    {
+                      $set: {
+                        buyer: newBuyerName,
+                        buyerId: targetBuyerId,
+                        updatedAt: new Date().toISOString()
+                      }
+                    }
+                  );
+                  invalidateResourceCache("orders");
+                } catch (err) {
+                  console.warn("Cascade buyer update error in serverless:", err.message);
+                }
+              }
             } else if (resource !== "notifications") {
               await mongoCols.resources.insertOne({ resource, id: realId, ...updated });
             }

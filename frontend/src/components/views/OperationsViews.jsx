@@ -202,7 +202,12 @@ export function OrdersPage({
 
   const [buyerFilter, setBuyerFilterState] = useState(() => {
     try {
-      return sessionStorage.getItem("loom_orders_buyer_filter") || "all";
+      const stored = sessionStorage.getItem("loom_orders_buyer_filter") || "all";
+      if (stored.trim().toLowerCase() === "900-0-7y") {
+        sessionStorage.setItem("loom_orders_buyer_filter", "900-O-7Y");
+        return "900-O-7Y";
+      }
+      return stored;
     } catch (e) {
       return "all";
     }
@@ -229,7 +234,10 @@ export function OrdersPage({
   const availableBuyers = useMemo(() => {
     const buyerSet = new Set();
     orders.forEach(o => {
-      const b = typeof o?.buyer === "string" ? o.buyer.trim() : "";
+      let b = typeof o?.buyer === "string" ? o.buyer.trim() : "";
+      if (b.toLowerCase() === "900-0-7y" || o?.buyerId === "buyer-1791259864056-rdomz") {
+        b = "900-O-7Y";
+      }
       if (b) buyerSet.add(b);
     });
     return Array.from(buyerSet).sort((a, b) => a.localeCompare(b));
@@ -241,7 +249,14 @@ export function OrdersPage({
       list = list.filter(order => order?.[masterFilter.type] === masterFilter.value);
     }
     if (buyerFilter && buyerFilter !== "all") {
-      list = list.filter(order => (order?.buyer || "").trim() === buyerFilter.trim());
+      const targetFilter = buyerFilter.trim().toLowerCase();
+      list = list.filter(order => {
+        const oBuyer = (order?.buyer || "").trim().toLowerCase();
+        if (targetFilter === "900-o-7y" && (oBuyer === "900-0-7y" || order?.buyerId === "buyer-1791259864056-rdomz")) {
+          return true;
+        }
+        return oBuyer === targetFilter;
+      });
     }
     return [...list].sort((a, b) => {
       const timeA = getOrderDeliveryTime(a);

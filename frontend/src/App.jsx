@@ -362,12 +362,25 @@ export const normalizeAndDeduplicateOrders = (rawOrders, prev = []) => {
         ? existing.stages
         : makeStages(resolvedTemplate, 0, null);
 
+    // Auto-migrate legacy typo: map buyerId buyer-1791259864056-rdomz or buyer 900-0-7y to 900-O-7Y
+    let normalizedBuyer = mergedOrder.buyer || existing?.buyer;
+    let normalizedBuyerId = mergedOrder.buyerId || existing?.buyerId;
+    if (
+      normalizedBuyerId === "buyer-1791259864056-rdomz" ||
+      (typeof normalizedBuyer === "string" && normalizedBuyer.trim().toLowerCase() === "900-0-7y")
+    ) {
+      normalizedBuyer = "900-O-7Y";
+      normalizedBuyerId = "buyer-1791259864056-rdomz";
+    }
+
     mergedList.push({
       ...existing,
       ...mergedOrder,
       id: mergedOrder.id,
       primaryId: mergedOrder.id,
       orderId: mergedOrder.id,
+      buyer: normalizedBuyer,
+      buyerId: normalizedBuyerId,
       completed: mergedOrder.completed ?? existing?.completed ?? false,
       isDeleted: mergedOrder.isDeleted ?? existing?.isDeleted ?? false,
       completedAt: mergedOrder.completedAt || existing?.completedAt || null,
@@ -2716,8 +2729,12 @@ export default function LoomPLM() {
   };
 
   const updateBuyer = (buyerId, changes) => {
+    const oldBuyer = buyers.find(b => b.id === buyerId);
+    const oldName = oldBuyer?.name?.trim();
+    const newName = changes.name.trim();
+
     const patch = {
-      name: changes.name.trim(),
+      name: newName,
       merchandiserIds: changes.merchandiserIds || [],
       fabricManagerIds: changes.fabricManagerIds || [],
       trimsManagerIds: changes.trimsManagerIds || [],
@@ -2728,6 +2745,22 @@ export default function LoomPLM() {
     resourcesApi.patch("buyers", buyerId, patch).catch(err => {
       console.warn("Error updating buyer:", err.message);
     });
+
+    // Cascade update: If buyer name changed, update all orders linked to this buyerId or oldName
+    if (oldName && newName && oldName !== newName) {
+      setOrders(prev => prev.map(o => {
+        const matches = (o.buyerId && o.buyerId === buyerId) ||
+          (o.buyer && o.buyer.trim().toLowerCase() === oldName.toLowerCase());
+        if (!matches) return o;
+        const updatedOrder = { ...o, buyer: newName, buyerId };
+        const primId = o.id || o.primaryId || o._id;
+        try {
+          resourcesApi.update("orders", primId, updatedOrder).catch(() => {});
+        } catch (e) {}
+        return updatedOrder;
+      }));
+    }
+
     logEvent({
       eventType: "BUYER",
       action: `Updated buyer ${patch.name}`,
