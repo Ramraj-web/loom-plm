@@ -3329,7 +3329,8 @@ export default function LoomPLM() {
 
       // Detect stage completions / delays and attach timestamps
       const nowIso = new Date().toISOString();
-      const currentUserName = role?.label || activeUser?.name || "User";
+      const rawUser = activeUser?.name || activeUser?.username || role?.label || "User";
+      const currentUserName = rawUser.split(" (")[0].trim() || "User";
       const is120 = o.template === "120";
       const tmplList = TA_TEMPLATES[o.template || "90"] || TA_STAGES_90;
       const updatedStages = stages.map((s, idx) => {
@@ -3364,8 +3365,9 @@ export default function LoomPLM() {
           }
         }
         if (s.status === "done") {
-          res.completedAt = s.completedAt || prevStage?.completedAt || nowIso;
-          res.completedBy = res.completedBy || prevStage?.completedBy || currentUserName;
+          const wasAlreadyDone = prevStage?.status === "done";
+          res.completedAt = wasAlreadyDone ? (s.completedAt || prevStage?.completedAt || nowIso) : (s.completedAt || nowIso);
+          res.completedBy = wasAlreadyDone ? (s.completedBy || prevStage?.completedBy || currentUserName) : (s.completedBy || currentUserName);
         }
         if (s.reason && (!prevStage || prevStage.reason !== s.reason)) {
           res.flaggedAt = s.flaggedAt || nowIso;
@@ -4465,6 +4467,7 @@ export default function LoomPLM() {
         onBack={() => navigate(previousView === "order" ? "orders" : previousView || "orders")}
         onUpdateStages={updateStages}
         role={role}
+        activeUser={activeUser}
         certifications={certifications}
         compliances={compliances}
         onNavigate={navigate}
@@ -4475,6 +4478,7 @@ export default function LoomPLM() {
         onBack={() => navigate(previousView === "order" ? "orders" : previousView || "orders")}
         onUpdateStages={updateStages}
         role={role}
+        activeUser={activeUser}
         onSetTemplate={setOrderTemplate}
         onSetCostingTemplate={setOrderCostingTemplate}
         onUpdateCostingRow={updateCostingRow}
@@ -4916,6 +4920,7 @@ export default function LoomPLM() {
         buyers={buyers}
         units={units}
         role={role}
+        activeUser={activeUser}
         onUpdateStages={updateStages}
         onOpenOrder={openOrder}
         onNavigate={navigate}

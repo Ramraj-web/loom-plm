@@ -234,10 +234,14 @@ export function MobileTasksScreen({
         const nextStatus = isDone ? "pending" : "done";
         const nextActual = isDone ? null : new Date().toISOString().split("T")[0];
 
+        const rawUser = activeUser?.name || activeUser?.username || role?.label || "User";
+        const currentUserName = String(rawUser).split(" (")[0].trim() || "User";
         currentStages[targetIdx] = {
           ...currentStage,
           status: nextStatus,
-          actual: nextActual
+          actual: nextActual,
+          completedAt: nextStatus === "done" ? new Date().toISOString() : null,
+          completedBy: nextStatus === "done" ? currentUserName : currentStage.completedBy
         };
 
         await Promise.resolve(onUpdateStages(order.primaryId || order.id, currentStages));

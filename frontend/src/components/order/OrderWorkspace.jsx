@@ -1,3 +1,13 @@
+function cleanDisplayCompletedBy(completedBy, dept) {
+  if (!completedBy) return "";
+  const clean = String(completedBy).split(" (")[0].trim();
+  if (["managing director", "md"].includes(clean.toLowerCase()) && dept && !["executive", "executive (md)"].includes(dept.toLowerCase())) {
+    // If it was wrongly tagged as MD on a department stage, show department lead or fallback cleanly
+    return dept;
+  }
+  return clean;
+}
+
 import React, { useState, useEffect, useMemo } from "react";
 import {
   Calendar, CheckCircle2, Clock, Circle, Lock, ChevronDown, Upload, Send, Zap,
@@ -1337,7 +1347,7 @@ function StageNode({ stage: rawStage, idx, onCycle, onUndo, canUndo = false, onR
               }}
               title={`Completed by ${stage.completedBy}${displayDoneDate ? ` on ${displayDoneDate}` : ""}${schedule?.doneDelayDays > 0 ? ` (+${schedule.doneDelayDays}d late)` : ""}`}
             >
-              <span>by {stage.completedBy}</span>
+              <span>by {cleanDisplayCompletedBy(stage.completedBy, stage.dept)}</span>
               {schedule?.doneDelayDays > 0 && (
                 <span style={{ color: "#DC2626", fontWeight: 600 }}>
                   (+{schedule.doneDelayDays}d late)
@@ -3161,7 +3171,7 @@ function DocumentsPanel({
 }
 
 export function OrderWorkspace({
-  order, onBack, onUpdateStages, role, onSetTemplate, onSetCostingTemplate,
+  order, onBack, onUpdateStages, role, activeUser, onSetTemplate, onSetCostingTemplate,
   onUpdateCostingRow, onAddCostingRow, onUpdateShippedQty, onPreProdField,
   onPreProdSubmit, onPreProdApprove, onUpdateQuotation, onSubmitQuotation,
   onApproveQuotation, onRejectQuotation, onSubmitCosting, onApproveCosting, onRejectCosting,
@@ -3267,6 +3277,11 @@ export function OrderWorkspace({
     return [];
   }, [order.colorBreakdown, order.colors, order.qty]);
 
+  const resolveCurrentUserDisplayName = () => {
+    const raw = activeUser?.name || activeUser?.username || role?.label || "User";
+    return String(raw).split(" (")[0].trim() || "User";
+  };
+
   const handleUpdateStageColourways = (stageIdx, updatedColourways) => {
     const currentStage = orderStages[stageIdx];
     if (!currentStage) return;
@@ -3303,8 +3318,8 @@ export function OrderWorkspace({
         status: nextStatus,
         assignee: assignee || s.assignee,
         reason: nextReason,
-        completedBy: allDone ? (s.completedBy || role?.label || "User") : (nextStatus === "done" ? s.completedBy : null),
-        completedAt: allDone ? (s.completedAt || new Date().toISOString()) : (nextStatus === "done" ? s.completedAt : null)
+        completedBy: allDone ? (s.status === "done" && s.completedBy ? s.completedBy : resolveCurrentUserDisplayName()) : (nextStatus === "done" ? s.completedBy : null),
+        completedAt: allDone ? (s.status === "done" && s.completedAt ? s.completedAt : new Date().toISOString()) : (nextStatus === "done" ? s.completedAt : null)
       };
     });
 
@@ -3371,14 +3386,14 @@ export function OrderWorkspace({
         assignee = found !== "Unassigned" ? found : "Assigned";
       }
       const nowIso = new Date().toISOString();
-      const currentUserName = role?.label || "User";
+      const currentUserName = resolveCurrentUserDisplayName();
       return {
         ...s,
         status: next,
         assignee: assignee || s.assignee,
         reason: next === "done" ? null : s.reason,
-        completedAt: next === "done" ? (s.completedAt || nowIso) : s.completedAt,
-        completedBy: next === "done" ? (s.completedBy || currentUserName) : s.completedBy
+        completedAt: next === "done" ? nowIso : s.completedAt,
+        completedBy: next === "done" ? currentUserName : s.completedBy
       };
     });
     onUpdateStages(order.id, stages);

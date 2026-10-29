@@ -19,6 +19,7 @@ export default function ActiveLineItemsView({
   buyers = [],
   units = [],
   role = {},
+  activeUser = null,
   onUpdateStages,
   onOpenOrder,
   onNavigate,
@@ -341,10 +342,13 @@ export default function ActiveLineItemsView({
     const stages = [...(order.stages || [])];
     if (!stages[stageIdx]) return;
 
+    const rawUser = activeUser?.name || activeUser?.username || role?.label || "User";
+    const currentUserName = String(rawUser).split(" (")[0].trim() || "User";
     stages[stageIdx] = {
       ...stages[stageIdx],
       status: nextStatus,
       completedAt: nextStatus === "done" ? new Date().toISOString() : null,
+      completedBy: nextStatus === "done" ? currentUserName : stages[stageIdx].completedBy,
       reason: nextStatus === "done" ? null : stages[stageIdx].reason
     };
 
