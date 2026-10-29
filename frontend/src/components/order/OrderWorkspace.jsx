@@ -1,10 +1,6 @@
 function cleanDisplayCompletedBy(completedBy, dept) {
   if (!completedBy) return "";
   const clean = String(completedBy).split(" (")[0].trim();
-  if (["managing director", "md"].includes(clean.toLowerCase()) && dept && !["executive", "executive (md)"].includes(dept.toLowerCase())) {
-    // If it was wrongly tagged as MD on a department stage, show department lead or fallback cleanly
-    return dept;
-  }
   return clean;
 }
 

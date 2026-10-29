@@ -3366,8 +3366,8 @@ export default function LoomPLM() {
         }
         if (s.status === "done") {
           const wasAlreadyDone = prevStage?.status === "done";
-          res.completedAt = wasAlreadyDone ? (s.completedAt || prevStage?.completedAt || nowIso) : (s.completedAt || nowIso);
-          res.completedBy = wasAlreadyDone ? (s.completedBy || prevStage?.completedBy || currentUserName) : (s.completedBy || currentUserName);
+          res.completedAt = s.completedAt || (wasAlreadyDone ? prevStage?.completedAt : null) || nowIso;
+          res.completedBy = s.completedBy || (wasAlreadyDone ? prevStage?.completedBy : null) || currentUserName;
         }
         if (s.reason && (!prevStage || prevStage.reason !== s.reason)) {
           res.flaggedAt = s.flaggedAt || nowIso;
