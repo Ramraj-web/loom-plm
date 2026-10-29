@@ -97,7 +97,9 @@ export function MobileOrderDetailScreen({
         ...s,
         status: nextStatus,
         actual: actualDate,
-        completedBy: nextStatus === "done" ? (role?.label || "User").split(" (")[0] : s.completedBy
+        completedAt: nextStatus === "done" ? new Date().toISOString() : null,
+        completedOn: nextStatus === "done" ? new Date().toLocaleDateString() : null,
+        completedBy: nextStatus === "done" ? (role?.label || "User").split(" (")[0] : (nextStatus === "pending" ? null : s.completedBy)
       };
     });
 

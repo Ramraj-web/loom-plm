@@ -3368,6 +3368,9 @@ export default function LoomPLM() {
           const wasAlreadyDone = prevStage?.status === "done";
           res.completedAt = s.completedAt || (wasAlreadyDone ? prevStage?.completedAt : null) || nowIso;
           res.completedBy = s.completedBy || (wasAlreadyDone ? prevStage?.completedBy : null) || currentUserName;
+        } else {
+          res.completedAt = null;
+          res.completedOn = null;
         }
         if (s.reason && (!prevStage || prevStage.reason !== s.reason)) {
           res.flaggedAt = s.flaggedAt || nowIso;

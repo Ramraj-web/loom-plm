@@ -431,7 +431,7 @@ export function computeOrderStageSchedules(stages = [], orderStartDate) {
     let doneDelayDays = 0;
 
     if (isDone) {
-      const rawDone = stage.completedAt || stage.completedOn || stage.doneDate || stage.updatedAt ||
+      const rawDone = stage.completedAt || stage.completedOn || stage.doneDate ||
         (Array.isArray(stage.colourways) ? stage.colourways.find(c => c.completedAt)?.completedAt : null);
 
       if (rawDone) {
@@ -1152,7 +1152,7 @@ function StageNode({ stage: rawStage, idx, onCycle, onUndo, canUndo = false, onR
   // Colourways breakdown: ONLY for the 16 stages specified!
   const hasColourways = Array.isArray(orderColourways) && orderColourways.length > 0 && isColourwayStage(stage.name);
   const displayPlannedDate = formatStagePlannedDate(stage.planned, orderStartDate);
-  const rawDoneDate = stage.completedAt || stage.completedOn || stage.doneDate || stage.updatedAt || (Array.isArray(stage.colourways) ? stage.colourways.find(c => c.completedAt)?.completedAt : null);
+  const rawDoneDate = stage.completedAt || stage.completedOn || stage.doneDate || (Array.isArray(stage.colourways) ? stage.colourways.find(c => c.completedAt)?.completedAt : null);
   const displayDoneDate = formatStageDoneDate(rawDoneDate);
   const currentColourways = (Array.isArray(stage.colourways) && stage.colourways.length > 0)
     ? stage.colourways
