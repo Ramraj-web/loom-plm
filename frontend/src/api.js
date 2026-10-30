@@ -59,6 +59,19 @@ async function request(path, options = {}) {
     }
   }
 
+  // Pre-mutation cache invalidation: purge immediately so concurrent/subsequent GETs do not read stale cache
+  if (method !== "GET") {
+    const resourceMatch = path.match(/\/api\/resources\/([^/?]+)/);
+    if (resourceMatch && resourceMatch[1]) {
+      const resource = decodeURIComponent(resourceMatch[1]);
+      clearApiCache(resource);
+      if (resource === "compliances") clearApiCache("tasks");
+      if (resource === "buyers") clearApiCache("orders");
+    } else {
+      clearApiCache();
+    }
+  }
+
   // 2. If a GET request to the exact same URL is already in-flight, return the existing Promise
   if (method === "GET" && pendingRequests.has(url)) {
     return pendingRequests.get(url);

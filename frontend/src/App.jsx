@@ -429,16 +429,42 @@ export const normalizeAndDeduplicateOrders = (rawOrders, prev = []) => {
           }
         }
 
+        const isLocalDone = String(existingStage?.status || "").toLowerCase().trim() === "done" || !!existingStage?.completedAt;
+        const isBackendDone = String(s?.status || "").toLowerCase().trim() === "done" || !!s?.completedAt;
+
+        let resolvedStatus = s.status || existingStage?.status || "pending";
+        let resolvedReason = s.reason !== undefined ? s.reason : (existingStage?.reason || null);
+        let resolvedCompletedAt = s.completedAt || existingStage?.completedAt;
+        let resolvedCompletedBy = s.completedBy || existingStage?.completedBy;
+
+        if (isLocalDone && !isBackendDone) {
+          const localCompletedTime = existingStage?.completedAt ? new Date(existingStage.completedAt).getTime() : 0;
+          const backendUpdateTime = s.updatedAt ? new Date(s.updatedAt).getTime() : 0;
+          const backendExplicitlyUndid = backendUpdateTime > 0 && localCompletedTime > 0 && backendUpdateTime > localCompletedTime;
+
+          if (!backendExplicitlyUndid) {
+            resolvedStatus = "done";
+            resolvedReason = null;
+            resolvedCompletedAt = existingStage.completedAt || new Date().toISOString();
+            resolvedCompletedBy = existingStage.completedBy;
+          }
+        } else if (isBackendDone) {
+          resolvedStatus = "done";
+          resolvedReason = null;
+          resolvedCompletedAt = s.completedAt || existingStage?.completedAt || new Date().toISOString();
+          resolvedCompletedBy = s.completedBy || existingStage?.completedBy;
+        }
+
         return {
           ...s,
           name: stageName,
           dept: stageDept,
           planned: stagePlanned || s.planned || `Day ${sIdx + 1}`,
           isCustom: isCustomStage,
-          status: s.status || existingStage?.status || "pending",
-          reason: s.reason !== undefined ? s.reason : (existingStage?.reason || null),
-          completedAt: s.completedAt || existingStage?.completedAt || (s.status === "done" ? (existingStage?.completedAt || new Date().toISOString()) : undefined),
-          completedBy: s.completedBy || existingStage?.completedBy || undefined,
+          status: resolvedStatus,
+          reason: resolvedReason,
+          completedAt: resolvedCompletedAt || undefined,
+          completedBy: resolvedCompletedBy || undefined,
           updatedAt: s.updatedAt || existingStage?.updatedAt || undefined,
           updatedBy: s.updatedBy || existingStage?.updatedBy || undefined,
           flaggedAt: s.flaggedAt || existingStage?.flaggedAt || undefined,
@@ -1482,18 +1508,25 @@ export default function LoomPLM() {
 
       // 3. Handle live order stage updates
       if (event.type === "ORDER_STAGE_UPDATE" && event.orderId) {
-        invalidateOrdersCache();
+        const cleanTarget = String(event.orderId || "").trim().replace(/^\.+/, "").replace(/^ord_/, "").replace(/_[a-z0-9]{4,12}$/i, "").toUpperCase();
         setOrders(prev => prev.map(o => {
-          if (o.id === event.orderId || o.primaryId === event.orderId) {
+          const match = (
+            o.id === event.orderId ||
+            o.primaryId === event.orderId ||
+            String(o.id || "").trim().replace(/^\.+/, "").replace(/^ord_/, "").replace(/_[a-z0-9]{4,12}$/i, "").toUpperCase() === cleanTarget ||
+            String(o.primaryId || "").trim().replace(/^\.+/, "").replace(/^ord_/, "").replace(/_[a-z0-9]{4,12}$/i, "").toUpperCase() === cleanTarget
+          );
+          if (match) {
             return {
               ...o,
               stages: event.stages || o.stages,
               status: event.status || o.status,
-              completed: event.completed !== undefined ? event.completed : o.completed
+              completed: event.completed !== undefined ? event.completed : o.completed,
+              completedAt: event.completedAt !== undefined ? event.completedAt : o.completedAt
             };
           }
           return o;
-        }));
+        }), true);
       }
     });
 
@@ -2592,7 +2625,7 @@ export default function LoomPLM() {
       const updated = { ...c, status: next };
       try { resourcesApi.update("capas", c.id, updated); } catch (e) { }
       return updated;
-    }));
+    }), true);
   };
 
   const addTask = (task) => {
@@ -3292,8 +3325,10 @@ export default function LoomPLM() {
   };
 
   const updateStages = (id, stages, explicitStatus = null) => {
-    const cleanId = (v) => String(v || "").trim().replace(/^\./, "").replace(/^ord_/, "").replace(/_[a-z0-9]{4,12}$/i, "").toUpperCase();
+    const cleanId = (v) => String(v || "").trim().replace(/^\.+/, "").replace(/^ord_/, "").replace(/_[a-z0-9]{4,12}$/i, "").toUpperCase();
     const targetKey = cleanId(id);
+    lastOrdersFetchTimeRef.current = Date.now();
+    try { clearApiCache("orders"); } catch (e) {}
     setOrders(prev => prev.map(o => {
       const isTarget = (
         (o.primaryId && o.primaryId === id) ||
@@ -3510,7 +3545,9 @@ export default function LoomPLM() {
 
       const primId = o.id || o.primaryId || o._id;
       try {
-        resourcesApi.update("orders", primId, updated).catch(err => {
+        resourcesApi.update("orders", primId, updated).then(() => {
+          lastOrdersFetchTimeRef.current = Date.now();
+        }).catch(err => {
           console.warn("Error updating order stages:", err.message);
         });
       } catch (e) { }

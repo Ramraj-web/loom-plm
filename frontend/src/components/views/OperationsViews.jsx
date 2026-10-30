@@ -1296,7 +1296,8 @@ export function MyTasksPage({
       : [(role?.dept || "").toLowerCase()];
 
     return collectTasks(safeOrders, null).filter(r => {
-      if (r.stage.status === "done") return false;
+      const sStatus = String(r?.stage?.status || "").toLowerCase().trim();
+      if (sStatus === "done" || sStatus === "completed" || !!r?.stage?.completedAt) return false;
       if (role?.fullAccess || role?.dept === "Administrators" || role?.dept === "Executive") return true;
       return r.dept && userDeptList.includes(r.dept.toLowerCase());
     });
@@ -1375,7 +1376,10 @@ export function MyTasksPage({
   const filteredTnaRows = useMemo(() => {
     let rows = tnaRows;
     if (statusFilter === "open") {
-      rows = rows.filter(r => r.stage.status !== "done");
+      rows = rows.filter(r => {
+        const sStatus = String(r?.stage?.status || "").toLowerCase().trim();
+        return sStatus !== "done" && sStatus !== "completed" && !r?.stage?.completedAt;
+      });
     } else if (statusFilter === "overdue") {
       rows = rows.filter(r => isRowOverdue(r));
     }
@@ -5236,7 +5240,10 @@ export function DepartmentsPage({ orders, onOpenDept, orgStructure, deptDescript
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 14 }}>
         {deptNames.map(deptName => {
           const roles = orgStructure[deptName] || [];
-          const taskCount = stageLinkedDepts.has(deptName) ? collectTasks(orders, deptName).filter(r => r.stage.status !== "done").length : null;
+          const taskCount = stageLinkedDepts.has(deptName) ? collectTasks(orders, deptName).filter(r => {
+            const sStatus = String(r?.stage?.status || "").toLowerCase().trim();
+            return sStatus !== "done" && sStatus !== "completed" && !r?.stage?.completedAt;
+          }).length : null;
           const Icon = DEPT_ICONS[deptName] || CheckCircle2;
           const linkedStages = TA_STAGES.filter(s => s.dept === deptName).map(s => s.name);
           const description = deptDescriptions?.[deptName] || DEFAULT_DEPT_DESCRIPTIONS[deptName] || "";

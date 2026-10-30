@@ -3361,6 +3361,7 @@ export function OrderWorkspace({
       };
     });
 
+    setLocalStages(stages);
     onUpdateStages(order.id, stages);
   };
 
@@ -3392,6 +3393,7 @@ export function OrderWorkspace({
         completedBy: next === "done" ? currentUserName : s.completedBy
       };
     });
+    setLocalStages(stages);
     onUpdateStages(order.id, stages);
   };
 

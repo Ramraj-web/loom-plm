@@ -460,9 +460,14 @@ router.get("/:resource/:id(*)", async (req, res, next) => {
   if (!validResource(resource)) return res.status(404).json({ error: "Unknown resource" });
   try {
     const collection = getResourceCollection();
+    const cleanId = String(id || "").trim().replace(/^\.+/, "");
+    const queryOr = [{ primaryId: id }, { id }];
+    if (cleanId && cleanId !== id) {
+      queryOr.push({ primaryId: cleanId }, { id: cleanId });
+    }
     const record = collection
-      ? await collection.findOne({ resource, $or: [{ primaryId: id }, { id }] }, { projection: { _id: 0 } })
-      : readDB()[resource]?.find(item => String(item.primaryId) === id || String(item.id) === id);
+      ? await collection.findOne({ resource, $or: queryOr }, { projection: { _id: 0 } })
+      : readDB()[resource]?.find(item => String(item.primaryId) === id || String(item.id) === id || (cleanId && (String(item.primaryId) === cleanId || String(item.id) === cleanId)));
     if (!record) return res.status(404).json({ error: "Record not found" });
     if (SOFT_DELETE_RESOURCES.includes(resource) && req.query.all !== "true" && req.query.trash !== "true" && record.isDeleted === true) {
       return res.status(404).json({ error: "Record not found" });
@@ -557,6 +562,7 @@ router.put("/:resource/:id(*)", async (req, res, next) => {
       const cleanCandidate = (cid) => {
         let str = String(cid || "").trim();
         while (str.startsWith("ord_")) str = str.replace(/^ord_/, "");
+        str = str.replace(/^\.+/, "");
         str = str.replace(/_[a-z0-9]{4,12}$/i, "");
         return str.trim();
       };
@@ -649,6 +655,7 @@ router.patch("/:resource/:id(*)", async (req, res, next) => {
       const cleanCandidate = (cid) => {
         let str = String(cid || "").trim();
         while (str.startsWith("ord_")) str = str.replace(/^ord_/, "");
+        str = str.replace(/^\.+/, "");
         str = str.replace(/_[a-z0-9]{4,12}$/i, "");
         return str.trim();
       };

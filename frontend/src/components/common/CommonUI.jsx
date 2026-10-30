@@ -187,13 +187,17 @@ function groupRows(rows) {
   buckets["Completed"] = [];
   (Array.isArray(rows) ? rows : []).forEach(r => {
     const stage = r?.stage || {};
-    const bucket = stage.reason
-      ? `Delayed — ${stage.reason}`
-      : stage.status === "in_progress"
-        ? "Awaiting action"
-        : stage.status === "pending"
-          ? "Not started yet"
-          : "Completed";
+    const sStatus = String(stage.status || "").toLowerCase().trim();
+    const isDone = sStatus === "done" || sStatus === "completed" || !!stage.completedAt;
+    const bucket = isDone
+      ? "Completed"
+      : stage.reason
+        ? `Delayed — ${stage.reason}`
+        : sStatus === "in_progress"
+          ? "Awaiting action"
+          : sStatus === "pending"
+            ? "Not started yet"
+            : "Completed";
     (buckets[bucket] ??= []).push(r);
   });
   return Object.entries(buckets).filter(([, v]) => v.length > 0);
