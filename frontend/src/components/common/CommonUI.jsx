@@ -95,10 +95,22 @@ export function renderWithMentions(text) {
   );
 }
 
+export function isStageCompleted(stage) {
+  const status = String(stage?.status || "").toLowerCase().trim();
+  return status === "done" || status === "completed" || Boolean(stage?.completedAt);
+}
+
+export function isTaskCompleted(task) {
+  const status = String(task?.status || "").toLowerCase().trim();
+  return status === "done" || status === "completed" || Boolean(task?.completedAt);
+}
+
 export function collectTasks(orders, deptFilter) {
   const rows = [];
   (orders || []).forEach(o => {
     if (!o || o.isDeleted === true || o.isDeleted === "true" || !!o.deletedAt) return;
+    const orderId = o.id || o.orderId || o.primaryId;
+    if (!orderId || typeof o.style !== "string" || !o.style.trim()) return;
     if (!Array.isArray(o.stages)) return;
     o.stages.forEach((s, idx) => {
       // Guard: skip null/undefined stage entries (can occur with corrupted backend data)
@@ -210,14 +222,14 @@ function groupColor(label) {
   return "#1F9E8D";
 }
 
-export function GroupedTaskList({ rows, onOpenOrder, emptyText }) {
+export function GroupedTaskList({ rows, onOpenOrder, emptyText, completedDefaultOpen = false }) {
   const safeRows = Array.isArray(rows) ? rows : [];
   const groups = useMemo(() => groupRows(safeRows), [safeRows]);
   const [openMap, setOpenMap] = useState({});
   if (safeRows.length === 0) {
     return <div style={{ fontSize: 12.5, color: "#B0B2BA", padding: "12px 4px" }}>{emptyText}</div>;
   }
-  const isOpen = (label) => (openMap[label] !== undefined ? openMap[label] : label !== "Completed");
+  const isOpen = (label) => (openMap[label] !== undefined ? openMap[label] : label !== "Completed" || completedDefaultOpen);
   const toggle = (label) => setOpenMap(m => ({ ...m, [label]: !isOpen(label) }));
 
   return (
@@ -355,4 +367,3 @@ export function gatingApproval(stages, idx) {
   }
   return null;
 }
-

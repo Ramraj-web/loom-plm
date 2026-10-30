@@ -12,7 +12,7 @@ import {
   DEFAULT_DEPT_DESCRIPTIONS, firstNamedAssignee, parseShipDateSafe
 } from "../../constants/loomData.js";
 import {
-  Card, CardHeader, PageHeader, BackLink, statusPill, riskDot, collectTasks, GroupedTaskList, OrgChain, TaskTable
+  Card, CardHeader, PageHeader, BackLink, statusPill, riskDot, collectTasks, isStageCompleted, isTaskCompleted, GroupedTaskList, OrgChain, TaskTable
 } from "../common/CommonUI.jsx";
 import { AssignWorkModal } from "./InsightsViews.jsx";
 import { sanitizeLocationString } from "../../utils/deviceLocation.js";
@@ -1266,6 +1266,7 @@ export function OrdersPage({
 export function MyTasksPage({
   orders = [],
   role,
+  activeUser,
   tasks = [],
   suppliers = [],
   onAddTask,
@@ -1290,20 +1291,26 @@ export function MyTasksPage({
     notes: ""
   });
 
-  const tnaRows = useMemo(() => {
+  const visibleTnaRows = useMemo(() => {
     const userDeptList = Array.isArray(role?.departments) && role.departments.length > 0
       ? role.departments.map(d => d.toLowerCase())
       : [(role?.dept || "").toLowerCase()];
+    const userNames = [activeUser?.name, activeUser?.username, role?.label]
+      .map(name => String(name || "").split(" (")[0].trim().toLowerCase())
+      .filter(Boolean);
 
     return collectTasks(safeOrders, null).filter(r => {
-      const sStatus = String(r?.stage?.status || "").toLowerCase().trim();
-      if (sStatus === "done" || sStatus === "completed" || !!r?.stage?.completedAt) return false;
       if (role?.fullAccess || role?.dept === "Administrators" || role?.dept === "Executive") return true;
-      return r.dept && userDeptList.includes(r.dept.toLowerCase());
+      if (!r.dept || !userDeptList.includes(r.dept.toLowerCase())) return false;
+      const assignee = String(r.stage?.assignee || "").replace(/^@/, "").split(" (")[0].trim().toLowerCase();
+      const isDepartmentAssigned = !assignee || ["unassigned", "assigned", "department", "all"].includes(assignee);
+      return isDepartmentAssigned || userNames.includes(assignee);
     });
-  }, [safeOrders, role]);
+  }, [safeOrders, role, activeUser]);
+  const tnaRows = useMemo(() => visibleTnaRows.filter(r => !isStageCompleted(r.stage)), [visibleTnaRows]);
+  const completedTnaRows = useMemo(() => visibleTnaRows.filter(r => isStageCompleted(r.stage)), [visibleTnaRows]);
 
-  const roleCustomTasks = useMemo(() => {
+  const visibleCustomTasks = useMemo(() => {
     const userDeptList = Array.isArray(role?.departments) && role.departments.length > 0
       ? role.departments
       : [role?.dept || ""];
@@ -1322,6 +1329,8 @@ export function MyTasksPage({
       return userDeptList.includes(t.dept) || t.dept === "All";
     });
   }, [safeTasks, role, safeOrders]);
+  const roleCustomTasks = useMemo(() => visibleCustomTasks.filter(t => !isTaskCompleted(t)), [visibleCustomTasks]);
+  const completedCustomTasks = useMemo(() => visibleCustomTasks.filter(isTaskCompleted), [visibleCustomTasks]);
 
   const [deptFilter, setDeptFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState(() => {
@@ -1397,6 +1406,14 @@ export function MyTasksPage({
     if (deptFilter === "all") return tasks;
     return tasks.filter(t => (t.dept || "").toLowerCase() === deptFilter.toLowerCase() || t.dept === "All");
   }, [roleCustomTasks, deptFilter, statusFilter]);
+  const filteredCompletedTnaRows = useMemo(() => {
+    if (deptFilter === "all") return completedTnaRows;
+    return completedTnaRows.filter(r => (r.dept || "").toLowerCase() === deptFilter.toLowerCase());
+  }, [completedTnaRows, deptFilter]);
+  const filteredCompletedCustomTasks = useMemo(() => {
+    if (deptFilter === "all") return completedCustomTasks;
+    return completedCustomTasks.filter(t => (t.dept || "").toLowerCase() === deptFilter.toLowerCase() || t.dept === "All");
+  }, [completedCustomTasks, deptFilter]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -1432,6 +1449,7 @@ export function MyTasksPage({
   };
 
   const totalVisibleTasks = filteredTnaRows.length + filteredCustomTasks.length;
+  const totalCompletedTasks = filteredCompletedTnaRows.length + filteredCompletedCustomTasks.length;
 
   return (
     <div>
@@ -1476,7 +1494,8 @@ export function MyTasksPage({
         {[
           { key: "all", label: `All Tasks (${totalVisibleTasks})` },
           { key: "custom", label: `Custom & Assigned Tasks (${filteredCustomTasks.length})` },
-          { key: "tna", label: `T&A Stage Tasks (${filteredTnaRows.length})` }
+          { key: "tna", label: `T&A Stage Tasks (${filteredTnaRows.length})` },
+          { key: "completed", label: `Completed Tasks (${totalCompletedTasks})` }
         ].map(tab => (
           <button
             key={tab.key}
@@ -1756,6 +1775,29 @@ export function MyTasksPage({
           <CardHeader title={`${role?.dept || "Department"} — T&A stage schedule tasks`} sub="Auto-synced from active order stage trackers" />
           <GroupedTaskList rows={filteredTnaRows} onOpenOrder={onOpenOrder} emptyText="No open stage tasks for this role right now." />
         </Card>
+      )}
+
+      {taskTab === "completed" && (
+        <>
+          <Card style={{ marginBottom: 20 }}>
+            <CardHeader title="Completed T&A stage tasks" sub="Completed stages remain available from their order history" />
+            <GroupedTaskList rows={filteredCompletedTnaRows} onOpenOrder={onOpenOrder} emptyText="No completed stage tasks found." completedDefaultOpen />
+          </Card>
+          <Card>
+            <CardHeader title="Completed action items" sub="Completed assigned tasks and action items" />
+            {filteredCompletedCustomTasks.length === 0 ? (
+              <div style={{ padding: "20px 0", textAlign: "center", color: "#8A8D98", fontSize: 13 }}>No completed action items found.</div>
+            ) : filteredCompletedCustomTasks.map(t => (
+              <div key={t.id} style={{ padding: "10px 4px", borderBottom: "1px solid #F5F5F7" }}>
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: "#6B7280", textDecoration: "line-through" }}>{t.title}</div>
+                <div style={{ marginTop: 3, fontSize: 11.5, color: "#8A8D98" }}>
+                  {t.orderId ? `Order ${t.orderId} · ` : ""}{t.dept || "General"} · {t.assignee || "Unassigned"}
+                </div>
+                {t.notes && <div style={{ marginTop: 3, fontSize: 11, color: "#8A8D98" }}>{t.notes}</div>}
+              </div>
+            ))}
+          </Card>
+        </>
       )}
 
       {/* Add Task Modal */}

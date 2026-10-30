@@ -3327,7 +3327,6 @@ export default function LoomPLM() {
   const updateStages = (id, stages, explicitStatus = null) => {
     const cleanId = (v) => String(v || "").trim().replace(/^\.+/, "").replace(/^ord_/, "").replace(/_[a-z0-9]{4,12}$/i, "").toUpperCase();
     const targetKey = cleanId(id);
-    lastOrdersFetchTimeRef.current = Date.now();
     try { clearApiCache("orders"); } catch (e) {}
     setOrders(prev => prev.map(o => {
       const isTarget = (
@@ -3586,7 +3585,8 @@ export default function LoomPLM() {
       } catch (err) { }
 
       return updated;
-    }));
+    }), true);
+    lastOrdersFetchTimeRef.current = Date.now();
   };
 
   const setOrderTemplate = (id, tmpl) => {
@@ -4723,6 +4723,7 @@ export default function LoomPLM() {
       <MyTasksPage
         orders={visibleOrders}
         role={role}
+        activeUser={activeUser}
         tasks={customTasks}
         suppliers={suppliers}
         onAddTask={addTask}

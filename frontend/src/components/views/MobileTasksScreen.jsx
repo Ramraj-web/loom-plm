@@ -5,7 +5,7 @@ import {
   ArrowUpDown, Layers, Plus, X, RefreshCw, Home, Package,
   ClipboardCheck, Bell, Info
 } from "lucide-react";
-import { statusPill, collectTasks } from "../common/CommonUI.jsx";
+import { statusPill, collectTasks, isStageCompleted, isTaskCompleted } from "../common/CommonUI.jsx";
 import { formatTimeAgo } from "../../constants/loomData.js";
 import { MobileBottomNav } from "./MobileBottomNav.jsx";
 
@@ -28,7 +28,7 @@ export function MobileTasksScreen({
   isDarkMode = false
 }) {
   const [activeTab, setActiveTab] = useState("all"); // 'all', 'custom', 'tna'
-  const [statusFilter, setStatusFilter] = useState("all"); // 'all', 'open', 'completed', 'overdue'
+  const [statusFilter, setStatusFilter] = useState("open"); // 'all', 'open', 'completed', 'overdue'
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTaskDetail, setSelectedTaskDetail] = useState(null); // When a task card is tapped
   const [isUpdating, setIsUpdating] = useState(false);
@@ -55,6 +55,7 @@ export function MobileTasksScreen({
   // Current user identifiers
   const cleanUser = String(activeUser?.name || role?.label || "").split(" (")[0].trim().toLowerCase();
   const cleanUsername = String(activeUser?.username || "").trim().toLowerCase();
+  const currentUserNames = [cleanUser, cleanUsername].filter(Boolean);
   const userDeptList = useMemo(() => {
     return Array.isArray(role?.departments) && role.departments.length > 0
       ? role.departments.map(d => d.toLowerCase())
@@ -87,9 +88,12 @@ export function MobileTasksScreen({
   const userTnaTasks = useMemo(() => {
     return collectTasks(safeOrders, null).filter(r => {
       if (role?.fullAccess || role?.dept === "Administrators" || role?.dept === "Executive") return true;
-      return r.dept && userDeptList.includes(r.dept.toLowerCase());
+      if (!r.dept || !userDeptList.includes(r.dept.toLowerCase())) return false;
+      const assignee = String(r.stage?.assignee || "").replace(/^@/, "").split(" (")[0].trim().toLowerCase();
+      const isDepartmentAssigned = !assignee || ["unassigned", "assigned", "department", "all"].includes(assignee);
+      return isDepartmentAssigned || currentUserNames.includes(assignee);
     });
-  }, [safeOrders, role, userDeptList]);
+  }, [safeOrders, role, userDeptList, currentUserNames.join("|")]);
 
   // Normalized list of all tasks for mobile view
   const allNormalizedTasks = useMemo(() => {
@@ -97,7 +101,7 @@ export function MobileTasksScreen({
 
     // Custom Tasks
     userCustomTasks.forEach(t => {
-      const isDone = t.status === "done";
+      const isDone = isTaskCompleted(t);
       let isOverdue = false;
       if (!isDone && t.dueDate) {
         const parsed = new Date(t.dueDate);
@@ -126,7 +130,7 @@ export function MobileTasksScreen({
     userTnaTasks.forEach(r => {
       const stage = r.stage || {};
       const order = r.order || {};
-      const isDone = stage.status === "done";
+      const isDone = isStageCompleted(stage);
       const isOverdue = Boolean(stage.reason || stage.status === "Delayed" || stage.status === "delayed");
 
       list.push({
@@ -161,7 +165,7 @@ export function MobileTasksScreen({
       if (activeTab === "tna" && item.type !== "tna") return false;
 
       // Status filter
-      if (statusFilter === "open" && item.status === "done") return false;
+      if (statusFilter === "open" && (item.status === "done" || isTaskCompleted(item.raw?.stage || item.raw))) return false;
       if (statusFilter === "completed" && item.status !== "done") return false;
       if (statusFilter === "overdue" && !item.isOverdue) return false;
 
@@ -299,7 +303,7 @@ export function MobileTasksScreen({
   };
 
   // Counts for tabs
-  const openCount = useMemo(() => allNormalizedTasks.filter(t => t.status !== "done").length, [allNormalizedTasks]);
+  const openCount = useMemo(() => allNormalizedTasks.filter(t => !isTaskCompleted(t.raw?.stage || t.raw)).length, [allNormalizedTasks]);
   const overdueCount = useMemo(() => allNormalizedTasks.filter(t => t.isOverdue).length, [allNormalizedTasks]);
   const completedCount = useMemo(() => allNormalizedTasks.filter(t => t.status === "done").length, [allNormalizedTasks]);
 
