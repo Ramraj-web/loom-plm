@@ -44,6 +44,23 @@ function getWebSocketUrl() {
   return null;
 }
 
+let activeSyncPoller = null;
+
+export function startBackgroundSync(syncFn, intervalMs = 15000) {
+  if (typeof window === "undefined") return () => {};
+  if (activeSyncPoller) clearInterval(activeSyncPoller);
+  activeSyncPoller = setInterval(() => {
+    if (typeof document !== "undefined" && document.hidden) return;
+    try { syncFn(); } catch (e) {}
+  }, intervalMs);
+  return () => {
+    if (activeSyncPoller) {
+      clearInterval(activeSyncPoller);
+      activeSyncPoller = null;
+    }
+  };
+}
+
 export function connectWebSocket() {
   if (typeof window === "undefined") return;
   if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {

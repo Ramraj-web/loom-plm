@@ -1,4 +1,4 @@
-import { subscribeLiveSync, broadcastLiveUpdate } from "./utils/liveSync.js";
+import { subscribeLiveSync, broadcastLiveUpdate, startBackgroundSync } from "./utils/liveSync.js";
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   LayoutDashboard, Package, CheckSquare, BarChart3, Settings as SettingsIcon,
@@ -1598,14 +1598,14 @@ export default function LoomPLM() {
     // Throttle: don't reload the same view data if loaded in the last 30 seconds
     const now = Date.now();
     const lastFetch = lastViewFetchRef.current[targetView] || 0;
-    if (now - lastFetch < 30000) {
+    if (now - lastFetch < 4000) {
       return;
     }
     lastViewFetchRef.current[targetView] = now;
 
     try {
       if (["dashboard", "orders", "order", "tasks", "approvals", "departments", "calendar", "reports", "compliance", "supplierPerformance", "finance", "myDepartment", "executiveOverview"].includes(targetView)) {
-        const shouldFetchOrders = (now - lastOrdersFetchTimeRef.current >= 30000) || orders.length === 0;
+        const shouldFetchOrders = (now - lastOrdersFetchTimeRef.current >= 8000) || orders.length === 0;
 
         const [backendOrders, backendBuyers] = await Promise.allSettled([
           shouldFetchOrders ? resourcesApi.list("orders", "?all=true") : Promise.resolve(null),
