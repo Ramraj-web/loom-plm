@@ -3020,6 +3020,8 @@ const BUYER_SCOPED_DEPTS = {
   "Purchase – Fabric": "fabricManagerIds",
   "Purchase – Trims": "trimsManagerIds",
   "Artwork": "artworkManagerIds",
+  "Testing 1": "testing1Ids",
+  "Testing 2": "testing2Ids",
 };
 
 const getPerformanceOrderIdentifiers = order => [order?.id, order?.orderId, order?.primaryId]
@@ -3039,6 +3041,8 @@ export function EmployeePerformancePanel({ orders = [], buyers = [], roster = []
   const [showBuyerPerformance, setShowBuyerPerformance] = useState(false);
   const [buyerFilter, setBuyerFilter] = useState("all");
   const [departmentFilter, setDepartmentFilter] = useState("all");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [expandedBuyerEmployee, setExpandedBuyerEmployee] = useState(null);
 
   const employeeRows = useMemo(() => {
@@ -3094,7 +3098,7 @@ export function EmployeePerformancePanel({ orders = [], buyers = [], roster = []
         // Determine accessible/visible orders exactly like canSeeOrder in App.jsx
         let visibleOrdersForUser;
         if (scopedFields.length > 0 && person.id) {
-          // Buyer-scoped departments (Merchandising, Purchase – Fabric, Purchase – Trims, Artwork):
+          // Buyer-scoped departments:
           // User only sees orders whose buyer is explicitly mapped to their user ID
           visibleOrdersForUser = activeOrders.filter(order => {
             const b = findBuyerForOrder(order);
@@ -3247,6 +3251,27 @@ export function EmployeePerformancePanel({ orders = [], buyers = [], roster = []
         ? { id: String(buyer?.id || order?.buyerId || buyerName.toLowerCase()), name: buyer?.name || buyerName }
         : null;
     };
+    const resolveDate = item => {
+      const dateValues = [
+        item?.actualCompletionDate, item?.completedAt, item?.updatedAt, item?.createdAt,
+        item?.date, item?.targetDate, item?.dueDate, item?.plannedDate,
+        item?.orderDate, item?.createdDate, item?.poDate, item?.orderReceivedDate,
+      ];
+      for (const value of dateValues) {
+        if (!value) continue;
+        const parsedDate = new Date(value);
+        if (!Number.isNaN(parsedDate.getTime())) return parsedDate;
+      }
+      return null;
+    };
+    const isInDateRange = (item, order) => {
+      if (!startDate && !endDate) return true;
+      const date = resolveDate(item) || resolveDate(order);
+      if (!date) return false;
+      if (startDate && date < new Date(`${startDate}T00:00:00`)) return false;
+      if (endDate && date > new Date(`${endDate}T23:59:59.999`)) return false;
+      return true;
+    };
     const matchesPerson = (value, name, username) => {
       const target = cleanName(value);
       return Boolean(target && ((name && (target === name || target.includes(name) || name.includes(target))) ||
@@ -3297,31 +3322,40 @@ export function EmployeePerformancePanel({ orders = [], buyers = [], roster = []
           orderGroups.set(key, { buyerId: buyer.id, buyer: buyer.name, orders: [], stages: [], tasks: [], qualifiedOrders: new Map() });
         }
         const group = orderGroups.get(key);
-        group.orders.push(order);
         const canonicalOrderId = getPerformanceCanonicalOrderId(order);
-        group.qualifiedOrders.set(canonicalOrderId, order);
+        const isOrderInRange = isInDateRange({}, order);
+        if (!startDate && !endDate || isOrderInRange) {
+          group.qualifiedOrders.set(canonicalOrderId, order);
+        }
         (order.stages || []).forEach(stage => {
           if (!stage || typeof stage !== "object") return;
           if (cleanName(stage.dept) !== cleanName(primaryDepartment)) return;
+          if (!isInDateRange(stage, order)) return;
           group.stages.push({ ...stage, orderId: identifiers[0] || "", orderCanonicalId: canonicalOrderId, orderStyle: order.style, buyer: buyer.name });
+          group.qualifiedOrders.set(canonicalOrderId, order);
         });
         assignedTasks.forEach(task => {
           if (!identifiers.includes(getPerformanceTaskOrderId(task))) return;
           if (cleanName(task.dept || task.department) !== cleanName(primaryDepartment) &&
             cleanName(task.dept || task.department) !== "all") return;
+          if (!isInDateRange(task, order)) return;
           group.tasks.push(task);
+          group.qualifiedOrders.set(canonicalOrderId, order);
         });
+        if (group.qualifiedOrders.has(canonicalOrderId)) group.orders.push(order);
       });
 
       return Array.from(orderGroups.values()).flatMap(group => {
         const qualifiedOrders = Array.from(group.qualifiedOrders.values());
+        if (qualifiedOrders.length === 0) return [];
         const orderIds = new Set(qualifiedOrders.flatMap(getPerformanceOrderIdentifiers));
         const employeeComplaints = (complaints || []).filter(complaint => {
           if (!matchesPerson(complaint.taggedUser, name, username) &&
             !matchesPerson(complaint.completedBy, name, username)) return false;
           const complaintOrderId = String(complaint.orderId || complaint.relatedOrderId || "");
           if (!complaintOrderId || !orderIds.has(complaintOrderId)) return false;
-          return true;
+          const complaintOrder = qualifiedOrders.find(order => getPerformanceOrderIdentifiers(order).includes(complaintOrderId));
+          return isInDateRange(complaint, complaintOrder);
         });
         const completedStages = group.stages.filter(isDone);
         const completedTasks = group.tasks.filter(isDone);
@@ -3377,7 +3411,7 @@ export function EmployeePerformancePanel({ orders = [], buyers = [], roster = []
         }];
       });
     });
-  }, [orders, buyers, roster, users, teams, customTasks, complaints]);
+  }, [orders, buyers, roster, users, teams, customTasks, complaints, startDate, endDate]);
 
   const buyerOptions = useMemo(() => {
     const options = new Map();
@@ -3422,6 +3456,8 @@ export function EmployeePerformancePanel({ orders = [], buyers = [], roster = []
     const clearBuyerFilters = () => {
       setBuyerFilter("all");
       setDepartmentFilter("all");
+      setStartDate("");
+      setEndDate("");
       setExpandedBuyerEmployee(null);
     };
     const controlStyle = {
@@ -3492,12 +3528,11 @@ export function EmployeePerformancePanel({ orders = [], buyers = [], roster = []
               Clear filters
             </button>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 10 }}>
             <label style={{ fontSize: 10.5, color: "#64748B", fontWeight: 650 }}>
               Buyer
               <select value={buyerFilter} onChange={event => {
                 setBuyerFilter(event.target.value);
-                setEmployeeFilter("all");
                 setExpandedBuyerEmployee(null);
               }} style={{ ...controlStyle, marginTop: 4 }}>
                 <option value="all">All Buyers</option>
@@ -3511,6 +3546,26 @@ export function EmployeePerformancePanel({ orders = [], buyers = [], roster = []
                 {departmentOptions.map(department => <option key={department} value={department}>{department}</option>)}
               </select>
             </label>
+            <label style={{ fontSize: 10.5, color: "#64748B", fontWeight: 650 }}>
+              Start date
+              <input
+                type="date"
+                value={startDate}
+                max={endDate || undefined}
+                onChange={event => setStartDate(event.target.value)}
+                style={{ ...controlStyle, marginTop: 4 }}
+              />
+            </label>
+            <label style={{ fontSize: 10.5, color: "#64748B", fontWeight: 650 }}>
+              End date
+              <input
+                type="date"
+                value={endDate}
+                min={startDate || undefined}
+                onChange={event => setEndDate(event.target.value)}
+                style={{ ...controlStyle, marginTop: 4 }}
+              />
+            </label>
           </div>
         </Card>
 
@@ -3523,7 +3578,9 @@ export function EmployeePerformancePanel({ orders = [], buyers = [], roster = []
           ))}
         </div>
 
-        {buyerGroups.length === 0 ? (
+        {startDate && endDate && startDate > endDate ? (
+          <Card style={{ color: "#B91C1C", fontSize: 12.5 }}>Start date must be on or before the end date.</Card>
+        ) : buyerGroups.length === 0 ? (
           <Card style={{ padding: "34px 18px", textAlign: "center" }}>
             <div style={{ color: "#334155", fontSize: 14, fontWeight: 700 }}>No performance records match these filters</div>
             <div style={{ color: "#64748B", fontSize: 12, marginTop: 5 }}>Try changing the buyer, employee, department, date range, or search.</div>

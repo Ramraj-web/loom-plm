@@ -500,6 +500,18 @@ export function UserAccessPage({
           map[uId].push({ buyerName: bName, role: "artwork" });
         }
       });
+      (b.testing1Ids || []).forEach(uId => {
+        if (!map[uId]) map[uId] = [];
+        if (!map[uId].some(item => item.buyerName === bName)) {
+          map[uId].push({ buyerName: bName, role: "Testing 1" });
+        }
+      });
+      (b.testing2Ids || []).forEach(uId => {
+        if (!map[uId]) map[uId] = [];
+        if (!map[uId].some(item => item.buyerName === bName)) {
+          map[uId].push({ buyerName: bName, role: "Testing 2" });
+        }
+      });
     });
     return map;
   }, [buyers]);

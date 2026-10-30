@@ -48,6 +48,8 @@ const BUYER_SCOPED_DEPTS = {
   "Purchase – Fabric": "fabricManagerIds",
   "Purchase – Trims": "trimsManagerIds",
   "Artwork": "artworkManagerIds",
+  "Testing 1": "testing1Ids",
+  "Testing 2": "testing2Ids",
 };
 
 function roleForUser(user, teams, activeDeptOverride = null) {
@@ -818,7 +820,7 @@ export default function LoomPLM() {
     return buyers.find(b => (order.buyerId && b.id === order.buyerId) || String(b.name || "").trim().toLowerCase() === buyerName) || null;
   }, [buyers]);
 
-  // Users in Merchandising, Purchase – Fabric, Purchase – Trims, and Artwork ONLY see orders of buyers they are explicitly mapped to.
+  // Buyer-scoped departments ONLY see orders of buyers they are explicitly mapped to.
   // If a user in these departments is not mapped to any buyer, or not mapped to this order's buyer, they will NOT see the order.
   // Other departments (Planning, Quality, Cutting, Production, Admin, MD, etc.) are completely unaffected and see all orders.
   const canSeeOrder = useCallback(order => {
@@ -829,8 +831,7 @@ export default function LoomPLM() {
     // If user does not belong to any buyer-scoped department, they can see ALL orders as usual.
     if (scopedFields.length === 0) return true;
 
-    // For Merchandising, Purchase – Fabric, Purchase – Trims, and Artwork:
-    // They must be explicitly assigned to this order's buyer.
+    // Buyer-scoped users must be explicitly assigned to this order's buyer.
     const buyer = findBuyerForOrder(order);
     if (!buyer) return false;
 
@@ -2737,6 +2738,8 @@ export default function LoomPLM() {
       fabricManagerIds: newBuyer.fabricManagerIds || [],
       trimsManagerIds: newBuyer.trimsManagerIds || [],
       artworkManagerIds: newBuyer.artworkManagerIds || [],
+      testing1Ids: newBuyer.testing1Ids || [],
+      testing2Ids: newBuyer.testing2Ids || [],
       createdAt: new Date().toISOString()
     };
     setBuyers(prev => [...prev, buyerObj]);
@@ -2752,7 +2755,9 @@ export default function LoomPLM() {
         merchandiserIds: buyerObj.merchandiserIds,
         fabricManagerIds: buyerObj.fabricManagerIds,
         trimsManagerIds: buyerObj.trimsManagerIds,
-        artworkManagerIds: buyerObj.artworkManagerIds
+        artworkManagerIds: buyerObj.artworkManagerIds,
+        testing1Ids: buyerObj.testing1Ids,
+        testing2Ids: buyerObj.testing2Ids
       }
     });
   };
@@ -2768,6 +2773,8 @@ export default function LoomPLM() {
       fabricManagerIds: changes.fabricManagerIds || [],
       trimsManagerIds: changes.trimsManagerIds || [],
       artworkManagerIds: changes.artworkManagerIds || [],
+      testing1Ids: changes.testing1Ids || [],
+      testing2Ids: changes.testing2Ids || [],
       updatedAt: new Date().toISOString()
     };
     setBuyers(prev => prev.map(b => b.id === buyerId ? { ...b, ...patch } : b));
@@ -2902,7 +2909,9 @@ export default function LoomPLM() {
         ...(matchedBuyer.merchandiserIds || []),
         ...(matchedBuyer.fabricManagerIds || []),
         ...(matchedBuyer.trimsManagerIds || []),
-        ...(matchedBuyer.artworkManagerIds || [])
+        ...(matchedBuyer.artworkManagerIds || []),
+        ...(matchedBuyer.testing1Ids || []),
+        ...(matchedBuyer.testing2Ids || [])
       ]))
       : [];
 
@@ -2913,6 +2922,8 @@ export default function LoomPLM() {
         if ((matchedBuyer.fabricManagerIds || []).includes(userId)) roles.push("fabric manager");
         if ((matchedBuyer.trimsManagerIds || []).includes(userId)) roles.push("trims in-charge");
         if ((matchedBuyer.artworkManagerIds || []).includes(userId)) roles.push("artwork designer");
+        if ((matchedBuyer.testing1Ids || []).includes(userId)) roles.push("Testing 1");
+        if ((matchedBuyer.testing2Ids || []).includes(userId)) roles.push("Testing 2");
         const roleStr = roles.length > 0 ? roles.join(" / ") : "in-charge";
 
         pushNotification({
@@ -3979,6 +3990,30 @@ export default function LoomPLM() {
   };
 
   const visibleOrders = useMemo(() => orders.filter(canSeeOrder), [orders, canSeeOrder]);
+  const visibleCustomTasks = useMemo(() => {
+    if (isOrderSuperUser || !activeUser) return customTasks;
+    const userDepts = Array.isArray(role?.departments) && role.departments.length > 0 ? role.departments : [role?.dept];
+    const scopedFields = userDepts.map(dept => BUYER_SCOPED_DEPTS[dept]).filter(Boolean);
+    if (scopedFields.length === 0) return customTasks;
+
+    const visibleOrderIds = new Set(visibleOrders.flatMap(order =>
+      [order.id, order.primaryId, order._id, order.orderId]
+        .filter(value => value !== undefined && value !== null && String(value).trim())
+        .map(value => String(value).trim().toUpperCase())
+    ));
+    const mappedBuyers = buyers.filter(buyer =>
+      scopedFields.some(field => Array.isArray(buyer[field]) && buyer[field].includes(activeUser.id))
+    );
+    const mappedBuyerIds = new Set(mappedBuyers.map(buyer => String(buyer.id)));
+    const mappedBuyerNames = new Set(mappedBuyers.map(buyer => String(buyer.name || "").trim().toLowerCase()));
+
+    return customTasks.filter(task => {
+      const orderId = task.orderId || task.order_id || task.relatedOrderId;
+      if (orderId) return visibleOrderIds.has(String(orderId).trim().toUpperCase());
+      if (task.buyerId && mappedBuyerIds.has(String(task.buyerId))) return true;
+      return Boolean(task.buyer && mappedBuyerNames.has(String(task.buyer).trim().toLowerCase()));
+    });
+  }, [customTasks, isOrderSuperUser, activeUser, role, visibleOrders, buyers]);
 
   const selectedOrderRaw = visibleOrders.find(o =>
     selectedId && ((o.primaryId && o.primaryId === selectedId) || (o._id && o._id === selectedId))
@@ -4547,7 +4582,7 @@ export default function LoomPLM() {
             userSessions={userSessions}
             financials={financials}
             roster={roster}
-            customTasks={customTasks}
+            customTasks={visibleCustomTasks}
             leaveRequests={leaveRequests}
             users={users}
             teams={teams}
@@ -4572,7 +4607,7 @@ export default function LoomPLM() {
           deptName={selectedDept}
           orders={visibleOrders}
           buyers={buyers}
-          customTasks={customTasks}
+          customTasks={visibleCustomTasks}
           complaints={stageComplaints}
           onBack={() => navigate(previousView === "departmentDetail" ? "departments" : previousView || "departments")}
           onOpenOrder={openOrder}
@@ -4598,7 +4633,7 @@ export default function LoomPLM() {
           userSessions={userSessions}
           financials={financials}
           roster={roster}
-          customTasks={customTasks}
+          customTasks={visibleCustomTasks}
           leaveRequests={leaveRequests}
           users={users}
           teams={teams}
@@ -4622,7 +4657,7 @@ export default function LoomPLM() {
           deptName={role.dept}
           orders={visibleOrders}
           buyers={buyers}
-          customTasks={customTasks}
+          customTasks={visibleCustomTasks}
           complaints={stageComplaints}
           onBack={() => navigate("dashboard")}
           onOpenOrder={openOrder}
@@ -4673,7 +4708,7 @@ export default function LoomPLM() {
     content = isMobileScreen ? (
       <MobileTasksScreen
         orders={visibleOrders}
-        customTasks={customTasks}
+        customTasks={visibleCustomTasks}
         role={role}
         activeUser={activeUser}
         onAddTask={addTask}
@@ -4689,7 +4724,7 @@ export default function LoomPLM() {
         orders={visibleOrders}
         role={role}
         activeUser={activeUser}
-        tasks={customTasks}
+        tasks={visibleCustomTasks}
         suppliers={suppliers}
         onAddTask={addTask}
         onUpdateTask={updateTask}
@@ -4783,7 +4818,7 @@ export default function LoomPLM() {
         orders={visibleOrders}
         suppliers={suppliers}
         supplierWork={supplierWork}
-        tasks={customTasks}
+        tasks={visibleCustomTasks}
         onAddSupplier={handleAddSupplier}
         onUpdateSupplier={handleUpdateSupplier}
         onDeleteSupplier={handleDeleteSupplier}
@@ -4878,7 +4913,7 @@ export default function LoomPLM() {
         roster={roster}
         attendance={attendance}
         userSessions={userSessions}
-        customTasks={customTasks}
+        customTasks={visibleCustomTasks}
         leaveRequests={leaveRequests}
         users={users}
         teams={teams}
@@ -4898,7 +4933,7 @@ export default function LoomPLM() {
         userSessions={userSessions}
         financials={financials}
         roster={roster}
-        customTasks={customTasks}
+        customTasks={visibleCustomTasks}
         leaveRequests={leaveRequests}
         users={users}
         teams={teams}
@@ -4984,7 +5019,7 @@ export default function LoomPLM() {
     content = (
       <MobileHomeDashboard
         orders={visibleOrders}
-        customTasks={customTasks}
+        customTasks={visibleCustomTasks}
         notifications={notifications}
         role={role}
         activeUser={activeUser}
@@ -5002,7 +5037,7 @@ export default function LoomPLM() {
         userSessions={userSessions}
         financials={financials}
         roster={roster}
-        customTasks={customTasks}
+        customTasks={visibleCustomTasks}
         leaveRequests={leaveRequests}
         users={users}
         teams={teams}
@@ -5030,7 +5065,7 @@ export default function LoomPLM() {
         attendance={attendance}
         roster={roster}
         selectedDate={selectedDate}
-        customTasks={customTasks}
+        customTasks={visibleCustomTasks}
         compliances={compliances}
         certifications={certifications}
         supplierWork={supplierWork}
@@ -5056,7 +5091,7 @@ export default function LoomPLM() {
         onOpenOrder={openOrder}
         onNavigate={navigate}
         selectedDate={selectedDate}
-        customTasks={customTasks}
+        customTasks={visibleCustomTasks}
         compliances={compliances}
         certifications={certifications}
         supplierWork={supplierWork}

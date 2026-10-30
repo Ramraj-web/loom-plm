@@ -131,10 +131,14 @@ export function computeEmployeeKPIMetrics(employee, orders = [], tasks = [], com
        (Array.isArray(order?.fabricManagerIds) && order.fabricManagerIds.includes(employeeId)) ||
        (Array.isArray(order?.trimsManagerIds) && order.trimsManagerIds.includes(employeeId)) ||
        (Array.isArray(order?.artworkManagerIds) && order.artworkManagerIds.includes(employeeId)) ||
+       (Array.isArray(order?.testing1Ids) && order.testing1Ids.includes(employeeId)) ||
+       (Array.isArray(order?.testing2Ids) && order.testing2Ids.includes(employeeId)) ||
        (buyerObj && Array.isArray(buyerObj.merchandiserIds) && buyerObj.merchandiserIds.includes(employeeId)) ||
        (buyerObj && Array.isArray(buyerObj.fabricManagerIds) && buyerObj.fabricManagerIds.includes(employeeId)) ||
        (buyerObj && Array.isArray(buyerObj.trimsManagerIds) && buyerObj.trimsManagerIds.includes(employeeId)) ||
        (buyerObj && Array.isArray(buyerObj.artworkManagerIds) && buyerObj.artworkManagerIds.includes(employeeId)) ||
+       (buyerObj && Array.isArray(buyerObj.testing1Ids) && buyerObj.testing1Ids.includes(employeeId)) ||
+       (buyerObj && Array.isArray(buyerObj.testing2Ids) && buyerObj.testing2Ids.includes(employeeId)) ||
        matchesEmployee(order?.merchandiser) ||
        matchesEmployee(order?.fabricManager) ||
        matchesEmployee(order?.trimsManager) ||

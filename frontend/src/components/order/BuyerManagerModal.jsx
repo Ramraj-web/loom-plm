@@ -5,6 +5,8 @@ export const MERCHANDISING_DEPT = "Merchandising";
 export const FABRIC_DEPT = "Purchase – Fabric";
 export const TRIMS_DEPT = "Purchase – Trims";
 export const ARTWORK_DEPT = "Artwork";
+export const TESTING_1_DEPT = "Testing 1";
+export const TESTING_2_DEPT = "Testing 2";
 
 // Active users belonging to the team (department) with the given name
 export function usersInDept(users = [], teams = [], deptName) {
@@ -26,7 +28,7 @@ export function userNames(ids = [], users = []) {
   });
 }
 
-const EMPTY_FORM = { id: null, name: "", merchandiserIds: [], fabricManagerIds: [], trimsManagerIds: [], artworkManagerIds: [] };
+const EMPTY_FORM = { id: null, name: "", merchandiserIds: [], fabricManagerIds: [], trimsManagerIds: [], artworkManagerIds: [], testing1Ids: [], testing2Ids: [] };
 
 const labelStyle = { display: "block", fontSize: 11.5, fontWeight: 600, color: "#475569", marginBottom: 6 };
 const inputStyle = { width: "100%", boxSizing: "border-box", padding: "8px 12px", borderRadius: 7, border: "1px solid #CBD5E1", fontSize: 13, outline: "none", background: "#FFFFFF" };
@@ -102,6 +104,8 @@ export function BuyerManagerModal({ buyers = [], users = [], teams = [], onAdd, 
   const fabricManagers = useMemo(() => usersInDept(users, teams, FABRIC_DEPT), [users, teams]);
   const trimsManagers = useMemo(() => usersInDept(users, teams, TRIMS_DEPT), [users, teams]);
   const artworkManagers = useMemo(() => usersInDept(users, teams, ARTWORK_DEPT), [users, teams]);
+  const testing1Users = useMemo(() => usersInDept(users, teams, TESTING_1_DEPT), [users, teams]);
+  const testing2Users = useMemo(() => usersInDept(users, teams, TESTING_2_DEPT), [users, teams]);
 
   const resetForm = () => { setForm(EMPTY_FORM); setError(""); };
 
@@ -119,7 +123,9 @@ export function BuyerManagerModal({ buyers = [], users = [], teams = [], onAdd, 
       merchandiserIds: form.merchandiserIds,
       fabricManagerIds: form.fabricManagerIds,
       trimsManagerIds: form.trimsManagerIds,
-      artworkManagerIds: form.artworkManagerIds
+      artworkManagerIds: form.artworkManagerIds,
+      testing1Ids: form.testing1Ids,
+      testing2Ids: form.testing2Ids
     };
     if (isEditing) onUpdate?.(form.id, payload);
     else onAdd?.(payload);
@@ -145,7 +151,7 @@ export function BuyerManagerModal({ buyers = [], users = [], teams = [], onAdd, 
           <div>
             <h3 style={{ fontSize: 18, fontWeight: 700, color: "#151B2E", margin: 0 }}>Buyers</h3>
             <p style={{ fontSize: 12.5, color: "#8A8D98", margin: "4px 0 0" }}>
-              Orders and tasks of a buyer are shown only to its assigned users from Merchandising, Purchase – Fabric, Purchase – Trims, and Artwork.
+              Orders and tasks of a buyer are shown only to its assigned users from the listed departments.
             </p>
           </div>
           <button type="button" onClick={onClose} style={{ background: "none", border: "none", color: "#8A8D98", cursor: "pointer", padding: 4 }}>
@@ -199,6 +205,20 @@ export function BuyerManagerModal({ buyers = [], users = [], teams = [], onAdd, 
               onChange={ids => setForm(prev => ({ ...prev, artworkManagerIds: ids }))}
               emptyText={`No users in the ${ARTWORK_DEPT} department.`}
             />
+            <MultiSelect
+              label={TESTING_1_DEPT}
+              options={testing1Users}
+              selectedIds={form.testing1Ids}
+              onChange={ids => setForm(prev => ({ ...prev, testing1Ids: ids }))}
+              emptyText={`No users in the ${TESTING_1_DEPT} department.`}
+            />
+            <MultiSelect
+              label={TESTING_2_DEPT}
+              options={testing2Users}
+              selectedIds={form.testing2Ids}
+              onChange={ids => setForm(prev => ({ ...prev, testing2Ids: ids }))}
+              emptyText={`No users in the ${TESTING_2_DEPT} department.`}
+            />
           </div>
 
           {error && <div style={{ color: "#DC2626", fontSize: 12, marginBottom: 10 }}>{error}</div>}
@@ -226,19 +246,21 @@ export function BuyerManagerModal({ buyers = [], users = [], teams = [], onAdd, 
                 <th style={thStyle}>Fabric Managers</th>
                 <th style={thStyle}>Purchase – Trims</th>
                 <th style={thStyle}>Artwork</th>
+                <th style={thStyle}>{TESTING_1_DEPT}</th>
+                <th style={thStyle}>{TESTING_2_DEPT}</th>
                 <th style={{ ...thStyle, textAlign: "right" }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {buyers.length === 0 && (
                 <tr>
-                  <td colSpan={6} style={{ padding: "18px 14px", textAlign: "center", color: "#94A3B8" }}>No buyers added yet.</td>
+                  <td colSpan={8} style={{ padding: "18px 14px", textAlign: "center", color: "#94A3B8" }}>No buyers added yet.</td>
                 </tr>
               )}
               {buyers.map(buyer => (
                 <tr key={buyer.id} style={{ borderBottom: "1px solid #F1F5F9", background: form.id === buyer.id ? "#F0F9FF" : "#FFFFFF" }}>
                   <td style={{ padding: "10px 14px", fontWeight: 600, color: "#0F172A" }}>{buyer.name}</td>
-                  {[buyer.merchandiserIds, buyer.fabricManagerIds, buyer.trimsManagerIds, buyer.artworkManagerIds].map((ids, i) => (
+                  {[buyer.merchandiserIds, buyer.fabricManagerIds, buyer.trimsManagerIds, buyer.artworkManagerIds, buyer.testing1Ids, buyer.testing2Ids].map((ids, i) => (
                     <td key={i} style={{ padding: "10px 14px" }}>
                       {Array.isArray(ids) && ids.length > 0 ? (
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
@@ -260,7 +282,9 @@ export function BuyerManagerModal({ buyers = [], users = [], teams = [], onAdd, 
                           merchandiserIds: [...(buyer.merchandiserIds || [])],
                           fabricManagerIds: [...(buyer.fabricManagerIds || [])],
                           trimsManagerIds: [...(buyer.trimsManagerIds || [])],
-                          artworkManagerIds: [...(buyer.artworkManagerIds || [])]
+                          artworkManagerIds: [...(buyer.artworkManagerIds || [])],
+                          testing1Ids: [...(buyer.testing1Ids || [])],
+                          testing2Ids: [...(buyer.testing2Ids || [])]
                         });
                         setError("");
                       }}

@@ -1060,6 +1060,12 @@ export const ORG_STRUCTURE = {
     { title: "Junior", name: "—" },
     { title: "Data Entry", name: "—", bullets: ["PO raising", "ERP entries"] },
   ],
+  "Testing 1": [
+    { title: "Staff", name: "—" },
+  ],
+  "Testing 2": [
+    { title: "Staff", name: "—" },
+  ],
   "Warehouse": [
     { title: "Senior", name: "—", bullets: ["Fabric inhouse", "Inspection", "CSV check", "Lot card & cutting app", "Merch req app", "Delivery"] },
     { title: "Assistant", name: "—", bullets: ["Fabric GRN & location", "ERP entries"] },
@@ -1150,6 +1156,8 @@ export const DEFAULT_DEPT_DESCRIPTIONS = {
   "Costing": "Responsible for pre-budget cost estimation, fabric/trim consumption analysis, costing sheets, and pricing closure.",
   "Purchase – Fabric": "Responsible for fabric requirement planning, yarn planning, supplier rate closure, and lab dips acquisition.",
   "Purchase – Trims": "Responsible for BOM verification, trims & accessories planning, supplier rate closure, and PO generation.",
+  "Testing 1": "Buyer-scoped testing department for assigned orders and related tasks.",
+  "Testing 2": "Buyer-scoped testing department for assigned orders and related tasks.",
   "Warehouse": "Responsible for fabric in-house receipt, inspection, CSV checking, lot cards, and stock delivery.",
   "Testing": "Responsible for fabric testing, shrinkage checks, CSV verification, and test report approvals.",
   "Store": "Responsible for raw material storage, inventory tracking, and material issuance.",
@@ -1601,5 +1609,4 @@ export const INITIAL_DEPARTMENT_CHECKLISTS = {
     { id: "chk-exec-2", title: "Approve fabric supplier credit limit revision", dueDate: "12/9/26", done: false },
   ],
 };
-
 

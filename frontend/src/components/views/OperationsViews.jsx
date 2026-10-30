@@ -1027,9 +1027,11 @@ export function OrdersPage({
                     const fabric = userNames(selected.fabricManagerIds || [], users);
                     const trims = userNames(selected.trimsManagerIds || [], users);
                     const artwork = userNames(selected.artworkManagerIds || [], users);
+                    const testing1 = userNames(selected.testing1Ids || [], users);
+                    const testing2 = userNames(selected.testing2Ids || [], users);
                     return (
                       <div style={{ fontSize: 11, color: "#6B7280", marginTop: 4 }}>
-                        Merchandiser: {merch.join(", ") || "—"} · Fabric: {fabric.join(", ") || "—"} · Trims: {trims.join(", ") || "—"} · Artwork: {artwork.join(", ") || "—"}
+                        Merchandiser: {merch.join(", ") || "—"} · Fabric: {fabric.join(", ") || "—"} · Trims: {trims.join(", ") || "—"} · Artwork: {artwork.join(", ") || "—"} · Testing 1: {testing1.join(", ") || "—"} · Testing 2: {testing2.join(", ") || "—"}
                       </div>
                     );
                   })()}
