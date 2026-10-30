@@ -24,6 +24,7 @@ console.log("📡 API Base URL:", API_BASE_URL);
 
 // In-flight GET request deduplication map to prevent multiple parallel calls to same endpoint
 const pendingRequests = new Map();
+const resourceCacheEpochs = new Map();
 
 // Short-lived in-memory cache for GET requests to make screen transitions instant (0ms)
 // Guarded with authEpoch to ensure no in-flight requests leak across logout/login
@@ -35,13 +36,16 @@ export function clearApiCache(resourceName = null) {
   if (!resourceName) {
     currentAuthEpoch++; // Invalidates any pending in-flight responses from previous session
     responseCache.clear();
+    pendingRequests.clear();
     return;
   }
   const prefix = `/api/resources/${resourceName}`;
+  resourceCacheEpochs.set(resourceName, (resourceCacheEpochs.get(resourceName) || 0) + 1);
   for (const url of responseCache.keys()) {
-    if (url.includes(prefix)) {
-      responseCache.delete(url);
-    }
+    if (url.includes(prefix)) responseCache.delete(url);
+  }
+  for (const url of pendingRequests.keys()) {
+    if (url.includes(prefix)) pendingRequests.delete(url);
   }
 }
 
@@ -49,6 +53,9 @@ async function request(path, options = {}) {
   const method = (options.method || "GET").toUpperCase();
   const url = `${API_BASE_URL}${path}`;
   const requestEpoch = currentAuthEpoch;
+  const resourceMatch = path.match(/\/api\/resources\/([^/?]+)/);
+  const resource = resourceMatch?.[1] ? decodeURIComponent(resourceMatch[1]) : null;
+  const requestResourceEpoch = resource ? (resourceCacheEpochs.get(resource) || 0) : 0;
   const timeoutMs = options.timeout || (method === "GET" ? 60000 : 30000);
 
   // 1. Check in-memory cache for GET requests (URL includes complete query parameters)
@@ -77,6 +84,7 @@ async function request(path, options = {}) {
     return pendingRequests.get(url);
   }
 
+  let reqPromise;
   const executeRequest = async () => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -92,7 +100,7 @@ async function request(path, options = {}) {
       const payload = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        if (response.status === 404) {
+        if (response.status === 404 && method === "GET") {
           return [];
         }
         const errorMsg = payload.error || `HTTP ${response.status}: ${response.statusText || "Request failed"}`;
@@ -115,7 +123,11 @@ async function request(path, options = {}) {
       }
 
       // 4. Cache ONLY successful GETs and ONLY if user/session has not changed mid-flight
-      if (method === "GET" && requestEpoch === currentAuthEpoch) {
+      if (
+        method === "GET" &&
+        requestEpoch === currentAuthEpoch &&
+        (!resource || requestResourceEpoch === (resourceCacheEpochs.get(resource) || 0))
+      ) {
         responseCache.set(url, {
           timestamp: Date.now(),
           data: payload,
@@ -130,13 +142,13 @@ async function request(path, options = {}) {
       throw err;
     } finally {
       clearTimeout(timer);
-      if (method === "GET") {
+      if (method === "GET" && pendingRequests.get(url) === reqPromise) {
         pendingRequests.delete(url);
       }
     }
   };
 
-  const reqPromise = executeRequest();
+  reqPromise = executeRequest();
   if (method === "GET") {
     pendingRequests.set(url, reqPromise);
   }

@@ -283,8 +283,6 @@ export const normalizeAndDeduplicateOrders = (rawOrders, prev = []) => {
 
   // Group raw orders by their canonical uppercase base ID
   const groups = new Map();
-  const phantomIdsToDelete = [];
-
   realOrders.forEach(bo => {
     const rawId = String(bo.id || bo.orderId || bo.primaryId || "");
     const baseKey = cleanBaseId(rawId).toUpperCase();
@@ -295,17 +293,7 @@ export const normalizeAndDeduplicateOrders = (rawOrders, prev = []) => {
     }
     groups.get(baseKey).push(bo);
 
-    if (rawId.startsWith("ord_") || /_[a-z0-9]{4,12}$/i.test(rawId)) {
-      phantomIdsToDelete.push(rawId);
-    }
   });
-
-  // Permanently clean phantom duplicate documents from backend asynchronously
-  if (phantomIdsToDelete.length > 0) {
-    phantomIdsToDelete.forEach(dId => {
-      resourcesApi.delete("orders", dId, "?permanent=true").catch(() => { });
-    });
-  }
 
   const mergedList = [];
   groups.forEach((orderList, baseKey) => {
@@ -500,6 +488,7 @@ export default function LoomPLM() {
   });
 
   const lastOrdersFetchTimeRef = useRef(0);
+  const ordersMutationVersionRef = useRef(0);
   const invalidateOrdersCache = useCallback(() => {
     lastOrdersFetchTimeRef.current = 0;
     try { clearApiCache("orders"); } catch (e) { }
@@ -1235,8 +1224,9 @@ export default function LoomPLM() {
       ]);
 
       // 2. Fetch large datasets (orders and notifications) concurrently and apply as each arrives
-      const ordersPromise = resourcesApi.list("orders", "?all=true").then(val => {
-        if (Array.isArray(val)) {
+      const ordersFetchVersion = ordersMutationVersionRef.current;
+      const ordersPromise = resourcesApi.list("orders", "?all=true", { skipCache: true }).then(val => {
+        if (Array.isArray(val) && ordersFetchVersion === ordersMutationVersionRef.current) {
           lastOrdersFetchTimeRef.current = Date.now();
           setOrders(prev => {
             const next = normalizeAndDeduplicateOrders(val, prev);
@@ -1638,14 +1628,20 @@ export default function LoomPLM() {
 
     try {
       if (["dashboard", "orders", "order", "tasks", "approvals", "departments", "calendar", "reports", "compliance", "supplierPerformance", "finance", "myDepartment", "executiveOverview"].includes(targetView)) {
-        const shouldFetchOrders = (now - lastOrdersFetchTimeRef.current >= 8000) || orders.length === 0;
+        const shouldFetchOrders = targetView === "orders" || (now - lastOrdersFetchTimeRef.current >= 8000) || orders.length === 0;
+        const ordersFetchVersion = ordersMutationVersionRef.current;
 
         const [backendOrders, backendBuyers] = await Promise.allSettled([
-          shouldFetchOrders ? resourcesApi.list("orders", "?all=true") : Promise.resolve(null),
+          shouldFetchOrders ? resourcesApi.list("orders", "?all=true", { skipCache: true }) : Promise.resolve(null),
           targetView === "orders" ? resourcesApi.list("buyers") : Promise.resolve([])
         ]);
 
-        if (shouldFetchOrders && backendOrders.status === "fulfilled" && Array.isArray(backendOrders.value)) {
+        if (
+          shouldFetchOrders &&
+          ordersFetchVersion === ordersMutationVersionRef.current &&
+          backendOrders.status === "fulfilled" &&
+          Array.isArray(backendOrders.value)
+        ) {
           lastOrdersFetchTimeRef.current = now;
           setOrders(prev => {
             const next = normalizeAndDeduplicateOrders(backendOrders.value, prev);
@@ -2816,7 +2812,7 @@ export default function LoomPLM() {
     });
   };
 
-  const addOrder = (newOrder) => {
+  const addOrder = async (newOrder) => {
     const primaryId = newOrder.id || newOrder.primaryId;
 
     // Resolve master pipeline:
@@ -2881,22 +2877,23 @@ export default function LoomPLM() {
       deletedAt: null,
     };
 
+    const savedOrder = await resourcesApi.create("orders", fullOrder);
+    if (!savedOrder || !(savedOrder.id || savedOrder.primaryId)) {
+      throw new Error("The server did not confirm that the order was saved.");
+    }
+
+    ordersMutationVersionRef.current++;
     setOrders(prev => {
-      const cleanTargetId = String(primaryId).trim().toUpperCase();
+      const cleanTargetId = String(savedOrder.id || savedOrder.primaryId).trim().toUpperCase();
       const existsIdx = prev.findIndex(o => String(o.id || o.primaryId).trim().toUpperCase() === cleanTargetId);
       if (existsIdx >= 0) {
         const next = [...prev];
-        next[existsIdx] = { ...next[existsIdx], ...fullOrder };
+        next[existsIdx] = { ...next[existsIdx], ...savedOrder };
         return next;
       }
-      return [fullOrder, ...prev];
+      return [savedOrder, ...prev];
     });
     invalidateOrdersCache();
-    try {
-      resourcesApi.create("orders", fullOrder).catch(err => {
-        console.warn("Error creating order:", err.message);
-      });
-    } catch (e) { }
 
     // Order-created notification goes only to the users mapped to this buyer in supported depts
     const matchedBuyer = findBuyerForOrder(fullOrder);
@@ -2993,6 +2990,7 @@ export default function LoomPLM() {
       targetId: fullOrder.id,
       metadata: { orderId: fullOrder.id, buyer: fullOrder.buyer, style: fullOrder.style, qty: fullOrder.qty }
     });
+    return savedOrder;
   };
 
   const completeOrder = (primaryKey) => {
@@ -3034,10 +3032,10 @@ export default function LoomPLM() {
     });
   };
 
-  const deleteOrder = (primaryKey) => {
+  const deleteOrder = async (primaryKey) => {
     if (!isAdmin) {
       alert("Permission denied: Only Administrators can delete orders.");
-      return;
+      return false;
     }
     const deletedAt = new Date().toISOString();
     // Match target order by primaryId, _id, or id
@@ -3045,63 +3043,29 @@ export default function LoomPLM() {
     const primId = targetOrder?.primaryId || targetOrder?._id || primaryKey;
     const orderNum = targetOrder?.id || targetOrder?.orderId || primaryKey;
 
-    // 1. Soft-delete ALL orders matching this order name or primaryId so NO order in that name is displayed in the app!
-    setOrders(prev => {
-      const updated = prev.map(o => {
-        const isTarget = Boolean(
-          (primId && (o.primaryId === primId || o._id === primId)) ||
-          (orderNum && (o.id === orderNum || o.orderId === orderNum))
-        );
-        return isTarget ? { ...o, isDeleted: true, deletedAt } : o;
-      });
-      if (window.storage) window.storage.set("orders", JSON.stringify(updated), true);
-      return updated;
-    });
-
-    // 2. Automatically delete/cleanup all tasks related to this order!
-    setCustomTasks(prev => {
-      const remainingTasks = prev.filter(t =>
-        t.orderId !== primId &&
-        t.orderId !== orderNum &&
-        t.order !== primId &&
-        t.order !== orderNum &&
-        t.relatedOrderId !== primId &&
-        t.relatedOrderId !== orderNum
-      );
-      if (window.storage) window.storage.set("custom_tasks", JSON.stringify(remainingTasks), true);
-      return remainingTasks;
-    });
-
-    // 3. Cascade remove any notifications related to this order
-    setNotifications(prev => {
-      const remainingNotifs = prev.filter(n =>
-        n.relatedId !== primId &&
-        n.relatedId !== orderNum &&
-        n.orderId !== primId &&
-        n.orderId !== orderNum &&
-        (!n.eventKey || (!n.eventKey.includes(primId) && !n.eventKey.includes(orderNum)))
-      );
-      if (window.storage) window.storage.set("notifications", JSON.stringify(remainingNotifs), true);
-      return remainingNotifs;
-    });
-
-    // 4. If user is currently inside this deleted order view, navigate back to orders list
-    if (selectedId === primId || selectedId === orderNum) {
-      setSelectedId(null);
-      setView("orders");
-      window.location.hash = getRouteHash("orders");
-    }
-
     try {
-      if (primId) {
-        resourcesApi.remove("orders", primId).catch(err => {
-          console.warn("Error deleting order:", err.message);
-        });
+      const result = await resourcesApi.remove("orders", primId);
+      if (!result?.deleted || !result?.isDeleted) {
+        throw new Error("The server did not confirm that the order was deleted.");
       }
-      if (orderNum && orderNum !== primId) {
-        resourcesApi.remove("orders", orderNum).catch(() => { });
+      ordersMutationVersionRef.current++;
+      setOrders(prev => prev.map(o => (
+        (o.primaryId === primId || o._id === primId || o.id === orderNum || o.orderId === orderNum)
+          ? { ...o, isDeleted: true, deletedAt }
+          : o
+      )));
+      invalidateOrdersCache();
+
+      if (selectedId === primId || selectedId === orderNum) {
+        setSelectedId(null);
+        setView("orders");
+        window.location.hash = getRouteHash("orders");
       }
-    } catch (e) { }
+    } catch (err) {
+      console.error("Error deleting order:", err);
+      alert(`Could not delete order ${orderNum}: ${err.message}`);
+      return false;
+    }
 
     logEvent({
       eventType: "ORDER",
@@ -3109,6 +3073,7 @@ export default function LoomPLM() {
       targetId: orderNum,
       metadata: { orderId: orderNum, primaryId: primId }
     });
+    return true;
   };
 
   const permanentDeleteOrder = async (primaryKey) => {

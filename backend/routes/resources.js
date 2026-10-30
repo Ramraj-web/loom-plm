@@ -255,7 +255,7 @@ export function normalizeOrderStages(record) {
   return record;
 }
 
-function deduplicateOrders(ordersList, collection, db) {
+function deduplicateOrders(ordersList) {
   if (!Array.isArray(ordersList)) return ordersList;
 
   const cleanBaseId = (idStr) => {
@@ -268,8 +268,6 @@ function deduplicateOrders(ordersList, collection, db) {
   };
 
   const groups = new Map();
-  const phantomIdsToDelete = [];
-
   ordersList.forEach(order => {
     const rawId = String(order.id || order.orderId || order.primaryId || "");
     const baseKey = cleanBaseId(rawId).toUpperCase();
@@ -280,9 +278,6 @@ function deduplicateOrders(ordersList, collection, db) {
     }
     groups.get(baseKey).push(order);
 
-    if (rawId.startsWith("ord_") || /_[a-z0-9]{4,12}$/i.test(rawId)) {
-      phantomIdsToDelete.push(rawId);
-    }
   });
 
   const mergedList = [];
@@ -327,15 +322,6 @@ function deduplicateOrders(ordersList, collection, db) {
 
     mergedList.push(canonical);
   });
-
-  if (phantomIdsToDelete.length > 0) {
-    if (collection) {
-      collection.deleteMany({ resource: "orders", id: { $in: phantomIdsToDelete } }).catch(() => {});
-    } else if (db && Array.isArray(db.orders)) {
-      db.orders = db.orders.filter(o => !phantomIdsToDelete.includes(o.id));
-      writeDB(db);
-    }
-  }
 
   // Prune bloated internal logs and empty template costingRows for list transmission
   return mergedList.map(order => {
@@ -423,7 +409,7 @@ router.get("/:resource", async (req, res, next) => {
     if (collection) {
       const records = await collection.find(filter).project({ _id: 0 }).toArray();
       if (resource === "orders") {
-        const result = deduplicateOrders(records, collection);
+        const result = deduplicateOrders(records);
         setCachedResource(cacheKey, result);
         return res.json(result);
       }
@@ -434,7 +420,7 @@ router.get("/:resource", async (req, res, next) => {
     const db = readDB();
     const records = (db[resource] || []).filter(record => !isSoftDelete || showAll || (isTrash ? record.isDeleted === true : record.isDeleted !== true));
     if (resource === "orders") {
-      const result = deduplicateOrders(records, null, db);
+      const result = deduplicateOrders(records);
       setCachedResource(cacheKey, result);
       return res.json(result);
     }

@@ -308,7 +308,7 @@ export function OrdersPage({
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (isSubmittingOrder) return;
     if (!form.id.trim() || !form.style.trim()) return;
@@ -370,28 +370,33 @@ export function OrdersPage({
       : undefined;
 
     const orderToSubmit = seedStages ? { ...newOrder, stages: seedStages } : newOrder;
-    if (onAddOrder) onAddOrder(orderToSubmit);
+    try {
+      const savedOrder = onAddOrder ? await onAddOrder(orderToSubmit) : null;
+      if (!savedOrder) throw new Error("The server did not confirm that the order was saved.");
 
-    // Open T&A Stage Alignment Dialog for this newly created order.
-    setAlignModalOrder(orderToSubmit);
-
-    setForm({
-      id: "",
-      style: "",
-      buyer: "",
-      country: "Spain",
-      season: "AW26",
-      qty: "",
-      orderDate: new Date().toISOString().split("T")[0],
-      ship: new Date(Date.now() + 90 * 86400000).toISOString().split("T")[0],
-      risk: "low",
-      status: "On Track",
-      colorBreakdown: [
-        { color: "", size: "M", qty: "" }
-      ]
-    });
-    setIsSubmittingOrder(false);
-    setShowAddModal(false);
+      setAlignModalOrder(savedOrder);
+      setForm({
+        id: "",
+        style: "",
+        buyer: "",
+        country: "Spain",
+        season: "AW26",
+        qty: "",
+        orderDate: new Date().toISOString().split("T")[0],
+        ship: new Date(Date.now() + 90 * 86400000).toISOString().split("T")[0],
+        risk: "low",
+        status: "On Track",
+        colorBreakdown: [
+          { color: "", size: "M", qty: "" }
+        ]
+      });
+      setShowAddModal(false);
+    } catch (error) {
+      console.error("Could not create order:", error);
+      alert(`Could not create order: ${error.message}`);
+    } finally {
+      setIsSubmittingOrder(false);
+    }
   };
 
   return (

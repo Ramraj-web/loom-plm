@@ -639,6 +639,12 @@ export default async function handler(req, res) {
       }
 
       const mongoCols = await getMongoCollections();
+      if (resource === "orders") {
+        res.setHeader("Cache-Control", "no-store");
+        if (!mongoCols?.resources) {
+          return res.status(503).json({ error: "Order storage is unavailable; the order was not read or changed." });
+        }
+      }
       const isSoftDelete = SOFT_DELETE_RESOURCES.includes(resource);
       const showAll = url.searchParams.get("all") === "true";
 
@@ -649,7 +655,7 @@ export default async function handler(req, res) {
         }
 
         const cacheKey = `${resource}:${showAll}:${isTrash}:${url.searchParams.get("limit") || "default"}`;
-        if (!id) {
+        if (!id && resource !== "orders") {
           const cached = getCachedResource(cacheKey);
           if (cached) {
             res.setHeader("Cache-Control", "public, s-maxage=30, stale-while-revalidate=120");
@@ -702,12 +708,9 @@ export default async function handler(req, res) {
               };
 
               const map = new Map();
-              const phantomIdsToDelete = [];
-
               items.forEach(o => {
                 const rawId = String(o.id || o.orderId || o.primaryId || "");
                 if (rawId.startsWith("ord_ord_") || /_C0\d_[a-z0-9]+/i.test(rawId)) {
-                  phantomIdsToDelete.push(rawId);
                   return;
                 }
                 const baseKey = cleanBaseId(rawId).toUpperCase();
@@ -729,17 +732,8 @@ export default async function handler(req, res) {
                   }
                   if (o.status && o.status !== "On Track") existing.status = o.status;
                   if (o.completed) existing.completed = true;
-                  phantomIdsToDelete.push(rawId);
                 }
               });
-
-              // Clean up phantom duplicate order records in MongoDB
-              if (phantomIdsToDelete.length > 0) {
-                mongoCols.resources.deleteMany({
-                  resource: "orders",
-                  id: { $in: phantomIdsToDelete }
-                }).catch(() => {});
-              }
 
               // Prune bloated internal colourway edit logs and empty template costingRows for list transmission
               const ordersList = Array.from(map.values()).map(order => {
@@ -779,7 +773,7 @@ export default async function handler(req, res) {
               });
 
               setCachedResource(cacheKey, ordersList);
-              res.setHeader("Cache-Control", "public, s-maxage=30, stale-while-revalidate=120");
+              res.setHeader("Cache-Control", "no-store");
               return res.status(200).json(ordersList);
             }
             setCachedResource(cacheKey, items);
@@ -787,6 +781,9 @@ export default async function handler(req, res) {
             return res.status(200).json(items);
           } catch (e) {
             console.error("Mongo resource GET error:", e.message);
+            if (resource === "orders") {
+              return res.status(503).json({ error: "Unable to retrieve orders from persistent storage." });
+            }
           }
         }
 
@@ -857,17 +854,16 @@ export default async function handler(req, res) {
                 ]
               });
               if (existingOrder) {
-                await mongoCols.resources.updateOne(
-                  { _id: existingOrder._id },
-                  { $set: { ...record, _id: existingOrder._id } }
-                );
-                return res.status(200).json({ ...existingOrder, ...record });
+                return res.status(409).json({ error: `Order ${cleanId} already exists.` });
               }
             }
             await mongoCols.resources.insertOne({ resource, ...record });
             return res.status(201).json(record);
           } catch (e) {
             console.error("Mongo resource POST error:", e.message);
+            if (resource === "orders") {
+              return res.status(503).json({ error: "Unable to save order to persistent storage." });
+            }
           }
         }
 
@@ -962,6 +958,9 @@ export default async function handler(req, res) {
             return res.status(200).json(updated);
           } catch (e) {
             console.error("Mongo resource PUT/PATCH error:", e.message);
+            if (resource === "orders") {
+              return res.status(503).json({ error: "Unable to update order in persistent storage." });
+            }
           }
         }
 
@@ -1007,7 +1006,7 @@ export default async function handler(req, res) {
             if (isSoftDelete && !isPermanent) {
               const update = { $set: { isDeleted: true, deletedAt: new Date().toISOString() } };
               if (resource === "orders") {
-                await mongoCols.resources.updateMany({
+                const updateResult = await mongoCols.resources.updateMany({
                   resource: "orders",
                   $or: [
                     { id: { $in: targetIdentifiers } },
@@ -1015,24 +1014,11 @@ export default async function handler(req, res) {
                     { orderId: { $in: targetIdentifiers } }
                   ]
                 }, update);
+                if (!updateResult.matchedCount) {
+                  return res.status(409).json({ error: "Order was found but could not be marked deleted." });
+                }
               } else {
                 await mongoCols.resources.updateOne(query, update);
-              }
-
-              // Cascade soft-delete related tasks
-              if (resource === "orders") {
-                try {
-                  await mongoCols.resources.updateMany({
-                    resource: "tasks",
-                    $or: [
-                      { orderId: { $in: targetIdentifiers } },
-                      { order: { $in: targetIdentifiers } },
-                      { relatedOrderId: { $in: targetIdentifiers } }
-                    ]
-                  }, update);
-                } catch (taskErr) {
-                  console.warn("Cascade soft-delete tasks error:", taskErr.message);
-                }
               }
 
               return res.status(200).json({ id, deleted: true, isDeleted: true });
@@ -1126,6 +1112,9 @@ export default async function handler(req, res) {
             return res.status(200).json({ id, deleted: result.deletedCount > 0, permanent: true });
           } catch (e) {
             console.error("Mongo resource DELETE error:", e.message);
+            if (resource === "orders") {
+              return res.status(503).json({ error: "Unable to delete order from persistent storage." });
+            }
           }
         }
 
