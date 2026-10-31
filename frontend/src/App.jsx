@@ -1,4 +1,5 @@
 import { subscribeLiveSync, broadcastLiveUpdate, startBackgroundSync } from "./utils/liveSync.js";
+import { normalizeDepartmentName } from "./utils/departments.js";
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   LayoutDashboard, Package, CheckSquare, BarChart3, Settings as SettingsIcon,
@@ -51,6 +52,8 @@ const BUYER_SCOPED_DEPTS = {
   "Testing 1": "testing1Ids",
   "Testing 2": "testing2Ids",
 };
+const getBuyerScopedDepartmentField = department => Object.entries(BUYER_SCOPED_DEPTS)
+  .find(([name]) => normalizeDepartmentName(name) === normalizeDepartmentName(department))?.[1];
 
 function roleForUser(user, teams, activeDeptOverride = null) {
   const userTeamIds = Array.isArray(user.teamIds) && user.teamIds.length > 0
@@ -826,7 +829,7 @@ export default function LoomPLM() {
   const canSeeOrder = useCallback(order => {
     if (isOrderSuperUser || !activeUser) return true;
     const userDepts = Array.isArray(role?.departments) && role.departments.length > 0 ? role.departments : [role?.dept];
-    const scopedFields = userDepts.map(dept => BUYER_SCOPED_DEPTS[dept]).filter(Boolean);
+    const scopedFields = userDepts.map(getBuyerScopedDepartmentField).filter(Boolean);
 
     // If user does not belong to any buyer-scoped department, they can see ALL orders as usual.
     if (scopedFields.length === 0) return true;
@@ -3993,7 +3996,7 @@ export default function LoomPLM() {
   const visibleCustomTasks = useMemo(() => {
     if (isOrderSuperUser || !activeUser) return customTasks;
     const userDepts = Array.isArray(role?.departments) && role.departments.length > 0 ? role.departments : [role?.dept];
-    const scopedFields = userDepts.map(dept => BUYER_SCOPED_DEPTS[dept]).filter(Boolean);
+    const scopedFields = userDepts.map(getBuyerScopedDepartmentField).filter(Boolean);
     if (scopedFields.length === 0) return customTasks;
 
     const visibleOrderIds = new Set(visibleOrders.flatMap(order =>

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, Edit, Plus, Trash2, X } from "lucide-react";
+import { normalizeDepartmentName } from "../../utils/departments.js";
 
 export const MERCHANDISING_DEPT = "Merchandising";
 export const FABRIC_DEPT = "Purchase – Fabric";
@@ -10,7 +11,8 @@ export const TESTING_2_DEPT = "Testing 2";
 
 // Active users belonging to the team (department) with the given name
 export function usersInDept(users = [], teams = [], deptName) {
-  const teamIds = new Set(teams.filter(t => t?.name === deptName).map(t => t.id));
+  const normalizedDeptName = normalizeDepartmentName(deptName);
+  const teamIds = new Set(teams.filter(t => normalizeDepartmentName(t?.name) === normalizedDeptName).map(t => t.id));
   return users
     .filter(u => {
       if (!u || u.active === false) return false;

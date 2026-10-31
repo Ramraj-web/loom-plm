@@ -18,6 +18,7 @@ import {
 } from "../common/CommonUI.jsx";
 import { analyzeCuttingDelayForOrder, CuttingDelayDashboardBanner } from "../CuttingDelayAlertModal.jsx";
 import { OrderDeliveryCalendarWidget } from "./DashboardView.jsx";
+import { normalizeDepartmentName } from "../../utils/departments.js";
 
 /**
  * Helper function to compute category-level planned vs actual variance breakdown
@@ -3023,6 +3024,12 @@ const BUYER_SCOPED_DEPTS = {
   "Testing 1": "testing1Ids",
   "Testing 2": "testing2Ids",
 };
+const BUYER_SCOPED_FIELD_DEPTS = Object.fromEntries(
+  Object.entries(BUYER_SCOPED_DEPTS).map(([department, field]) => [field, department])
+);
+
+const getBuyerScopedDepartmentField = department => Object.entries(BUYER_SCOPED_DEPTS)
+  .find(([name]) => normalizeDepartmentName(name) === normalizeDepartmentName(department))?.[1];
 
 const getPerformanceOrderIdentifiers = order => [order?.id, order?.orderId, order?.primaryId]
   .filter(value => value !== undefined && value !== null && String(value).trim())
@@ -3040,10 +3047,9 @@ const getPerformanceTaskOrderId = item => {
 export function EmployeePerformancePanel({ orders = [], buyers = [], roster = [], attendance = {}, userSessions = [], customTasks = [], leaveRequests = [], users = [], teams = [], complaints = [], onResolveComplaint, isAdmin = false, onNavigate, onBack }) {
   const [showBuyerPerformance, setShowBuyerPerformance] = useState(false);
   const [buyerFilter, setBuyerFilter] = useState("all");
+  const [employeeFilter, setEmployeeFilter] = useState("all");
   const [departmentFilter, setDepartmentFilter] = useState("all");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [expandedBuyerEmployee, setExpandedBuyerEmployee] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const employeeRows = useMemo(() => {
     const activeOrders = orders.filter(order => order.isDeleted !== true);
@@ -3093,7 +3099,7 @@ export function EmployeePerformancePanel({ orders = [], buyers = [], roster = []
         const userDepts = person.teamIds && person.teamIds.length > 0
           ? person.teamIds.map(tId => teamMap.get(tId)).filter(Boolean)
           : [person.dept];
-        const scopedFields = Array.from(new Set(userDepts.map(d => BUYER_SCOPED_DEPTS[d]).filter(Boolean)));
+        const scopedFields = Array.from(new Set(userDepts.map(getBuyerScopedDepartmentField).filter(Boolean)));
 
         // Determine accessible/visible orders exactly like canSeeOrder in App.jsx
         let visibleOrdersForUser;
@@ -3229,17 +3235,24 @@ export function EmployeePerformancePanel({ orders = [], buyers = [], roster = []
   const buyerEmployeeRows = useMemo(() => {
     const activeOrders = (orders || []).filter(order => order && order.isDeleted !== true && order.isDeleted !== "true" && !order.deletedAt);
     const cleanName = value => String(value || "").replace(/^@/, "").split("(")[0].trim().toLowerCase();
-    const isDone = item => ["done", "completed", "complete", "closed"].includes(String(item?.status || "").toLowerCase());
+    const isDone = item => ["done", "completed", "complete", "closed"].includes(String(item?.status || "").trim().toLowerCase());
     const teamMap = new Map((teams || []).map(team => [team.id, team.name]));
-    const candidates = users && users.length > 0
-      ? users.filter(user => user.active !== false && !user.isMD).map(user => ({
-        id: user.id,
-        name: user.name,
-        username: user.username,
-        dept: teamMap.get(user.teamId) || user.dept || "Merchandising",
-        teamIds: Array.isArray(user.teamIds) ? user.teamIds : (user.teamId ? [user.teamId] : []),
-      }))
-      : (roster || []).filter(person => person.name && person.name !== "—");
+    const candidates = (users || [])
+      .filter(user => user?.id && user.active !== false && !user.isMD && (String(user.name || "").trim() || String(user.username || "").trim()))
+      .map(user => {
+        const teamIds = Array.isArray(user.teamIds) && user.teamIds.length > 0
+          ? user.teamIds
+          : (user.teamId ? [user.teamId] : []);
+        const departments = teamIds.map(id => teamMap.get(id)).filter(Boolean);
+        return {
+          id: user.id,
+          name: String(user.name || "").trim() || user.username,
+          username: user.username,
+          dept: teamMap.get(user.teamId) || String(user.dept || "").trim() || departments[0] || "",
+          teamIds,
+        };
+      })
+      .filter(user => user.dept);
 
     const resolveBuyer = order => {
       const buyerName = String(order?.buyer || "").trim();
@@ -3251,47 +3264,35 @@ export function EmployeePerformancePanel({ orders = [], buyers = [], roster = []
         ? { id: String(buyer?.id || order?.buyerId || buyerName.toLowerCase()), name: buyer?.name || buyerName }
         : null;
     };
-    const resolveDate = item => {
-      const dateValues = [
-        item?.actualCompletionDate, item?.completedAt, item?.updatedAt, item?.createdAt,
-        item?.date, item?.targetDate, item?.dueDate, item?.plannedDate,
-        item?.orderDate, item?.createdDate, item?.poDate, item?.orderReceivedDate,
-      ];
-      for (const value of dateValues) {
-        if (!value) continue;
-        const parsedDate = new Date(value);
-        if (!Number.isNaN(parsedDate.getTime())) return parsedDate;
-      }
-      return null;
-    };
-    const isInDateRange = (item, order) => {
-      if (!startDate && !endDate) return true;
-      const date = resolveDate(item) || resolveDate(order);
-      if (!date) return false;
-      if (startDate && date < new Date(`${startDate}T00:00:00`)) return false;
-      if (endDate && date > new Date(`${endDate}T23:59:59.999`)) return false;
-      return true;
-    };
-    const matchesPerson = (value, name, username) => {
-      const target = cleanName(value);
-      return Boolean(target && ((name && (target === name || target.includes(name) || name.includes(target))) ||
-        (username && (target === username || target.includes(username) || username.includes(target)))));
+    const matchesPerson = (value, person) => {
+      const values = Array.isArray(value) ? value : [value];
+      const identities = new Set([person.id, person.name, person.username].map(cleanName).filter(Boolean));
+      return values.some(item => {
+        const valuesToMatch = item && typeof item === "object"
+          ? [item.id, item.userId, item.name, item.username]
+          : [item];
+        return valuesToMatch.some(candidate => {
+          const target = cleanName(candidate);
+          return target && identities.has(target);
+        });
+      });
     };
     return candidates.flatMap(person => {
-      const name = cleanName(person.name);
-      const username = cleanName(person.username);
       const personDepartments = (person.teamIds?.length
         ? person.teamIds.map(id => teamMap.get(id)).filter(Boolean)
         : [person.dept]).filter(Boolean);
       const primaryDepartment = person.dept || personDepartments[0] || "";
-      const scopedFields = Array.from(new Set(personDepartments.map(department => BUYER_SCOPED_DEPTS[department]).filter(Boolean)));
+      const scopedFields = Array.from(new Set(personDepartments.map(getBuyerScopedDepartmentField).filter(Boolean)));
       const assignedTasks = (customTasks || []).filter(task =>
-        task && task.isDeleted !== true && (
-          matchesPerson(task.assignee, name, username) ||
-          matchesPerson(task.assignedTo, name, username) ||
-          matchesPerson(task.userName, name, username) ||
-          (cleanName(task.dept || task.department) === cleanName(primaryDepartment) &&
-            !task.assignee && !task.assignedTo && !task.userName)
+        task && task.isDeleted !== true &&
+        task.isDeleted !== "true" &&
+        !task.deletedAt &&
+        (
+          [task.assigneeId, task.assignedUserId, task.userId, ...(Array.isArray(task.assigneeIds) ? task.assigneeIds : [])]
+            .some(id => id !== undefined && id !== null && String(id) === String(person.id)) ||
+          matchesPerson(task.assignee, person) ||
+          matchesPerson(task.assignedTo, person) ||
+          matchesPerson(task.userName, person)
         )
       );
 
@@ -3308,37 +3309,55 @@ export function EmployeePerformancePanel({ orders = [], buyers = [], roster = []
             (Array.isArray(order?.[field]) && order[field].map(String).includes(String(person.id)))
           )
         ));
-        const orderTouchesDepartment = (order.stages || []).some(stage =>
-          stage && personDepartments.some(department => cleanName(stage.dept) === cleanName(department))
+        const buyerDepartments = Object.entries(BUYER_SCOPED_FIELD_DEPTS)
+          .filter(([field]) => scopedFields.includes(field) && (
+            (Array.isArray(buyerRecord?.[field]) && buyerRecord[field].map(String).includes(String(person.id))) ||
+            (Array.isArray(order?.[field]) && order[field].map(String).includes(String(person.id)))
+          ))
+          .map(([, department]) => department);
+        const departmentsWithWork = buyerDepartments.length > 0 ? buyerDepartments : personDepartments;
+        const assignedStages = (Array.isArray(order.stages) ? order.stages : []).filter(stage =>
+          stage &&
+          departmentsWithWork.some(department => normalizeDepartmentName(stage.dept) === normalizeDepartmentName(department)) &&
+          (buyerDepartments.length > 0 || matchesPerson(stage.assignee, person))
+        );
+        const assignedOrderTasks = assignedTasks.filter(task =>
+          identifiers.includes(getPerformanceTaskOrderId(task)) &&
+          (departmentsWithWork.some(department =>
+            normalizeDepartmentName(task.dept || task.department) === normalizeDepartmentName(department)
+          ) ||
+            normalizeDepartmentName(task.dept || task.department) === "all")
         );
         if (scopedFields.length > 0 && person.id) {
           if (!mappedToEmployee) return;
-        } else if (!orderTouchesDepartment) {
+        } else if (assignedStages.length === 0 && assignedOrderTasks.length === 0) {
           return;
         }
 
         const key = buyer.id;
         if (!orderGroups.has(key)) {
-          orderGroups.set(key, { buyerId: buyer.id, buyer: buyer.name, orders: [], stages: [], tasks: [], qualifiedOrders: new Map() });
+          orderGroups.set(key, {
+            buyerId: buyer.id,
+            buyer: buyer.name,
+            departments: new Set(),
+            orders: [],
+            stages: [],
+            tasks: [],
+            qualifiedOrders: new Map(),
+          });
         }
         const group = orderGroups.get(key);
+        buyerDepartments.forEach(department => group.departments.add(department));
         const canonicalOrderId = getPerformanceCanonicalOrderId(order);
-        const isOrderInRange = isInDateRange({}, order);
-        if (!startDate && !endDate || isOrderInRange) {
-          group.qualifiedOrders.set(canonicalOrderId, order);
-        }
-        (order.stages || []).forEach(stage => {
-          if (!stage || typeof stage !== "object") return;
-          if (cleanName(stage.dept) !== cleanName(primaryDepartment)) return;
-          if (!isInDateRange(stage, order)) return;
+        group.qualifiedOrders.set(canonicalOrderId, order);
+        assignedStages.forEach(stage => {
+          if (!departmentsWithWork.some(department =>
+            normalizeDepartmentName(stage.dept) === normalizeDepartmentName(department)
+          )) return;
           group.stages.push({ ...stage, orderId: identifiers[0] || "", orderCanonicalId: canonicalOrderId, orderStyle: order.style, buyer: buyer.name });
           group.qualifiedOrders.set(canonicalOrderId, order);
         });
-        assignedTasks.forEach(task => {
-          if (!identifiers.includes(getPerformanceTaskOrderId(task))) return;
-          if (cleanName(task.dept || task.department) !== cleanName(primaryDepartment) &&
-            cleanName(task.dept || task.department) !== "all") return;
-          if (!isInDateRange(task, order)) return;
+        assignedOrderTasks.forEach(task => {
           group.tasks.push(task);
           group.qualifiedOrders.set(canonicalOrderId, order);
         });
@@ -3350,23 +3369,16 @@ export function EmployeePerformancePanel({ orders = [], buyers = [], roster = []
         if (qualifiedOrders.length === 0) return [];
         const orderIds = new Set(qualifiedOrders.flatMap(getPerformanceOrderIdentifiers));
         const employeeComplaints = (complaints || []).filter(complaint => {
-          if (!matchesPerson(complaint.taggedUser, name, username) &&
-            !matchesPerson(complaint.completedBy, name, username)) return false;
+          if (!matchesPerson(complaint.taggedUser, person)) return false;
           const complaintOrderId = String(complaint.orderId || complaint.relatedOrderId || "");
           if (!complaintOrderId || !orderIds.has(complaintOrderId)) return false;
-          const complaintOrder = qualifiedOrders.find(order => getPerformanceOrderIdentifiers(order).includes(complaintOrderId));
-          return isInDateRange(complaint, complaintOrder);
+          return true;
         });
         const completedStages = group.stages.filter(isDone);
         const completedTasks = group.tasks.filter(isDone);
         const delayedStages = group.stages.filter(stage =>
           Boolean(stage.reason && String(stage.reason).trim() && stage.reason !== "No delay flagged") ||
-          String(stage.status || "").toLowerCase() === "delayed"
-        );
-        const today = new Date();
-        const delayedTasks = group.tasks.filter(task =>
-          String(task.status || "").toLowerCase() === "delayed" ||
-          (!isDone(task) && task.dueDate && new Date(task.dueDate) < today)
+          String(stage.status || "").trim().toLowerCase() === "delayed"
         );
         const totalWork = group.stages.length + group.tasks.length;
         const completed = completedStages.length + completedTasks.length;
@@ -3375,22 +3387,13 @@ export function EmployeePerformancePanel({ orders = [], buyers = [], roster = []
         )).size;
         const score = totalWork > 0
           ? Math.max(0, Math.round((completed / totalWork) * 100 - delayedStages.length * 5 - complaintsCount * 10))
-          : 0;
-        const completedWithTarget = completedStages.filter(stage => {
-          const target = stage.targetDate || stage.dueDate || stage.plannedDate;
-          if (!target) return true;
-          const actual = stage.actualCompletionDate || stage.completedAt || stage.updatedAt;
-          return !actual || new Date(actual) <= new Date(target);
-        });
-        const onTimeRate = completedStages.length > 0
-          ? Math.round((completedWithTarget.length / completedStages.length) * 100)
-          : 0;
+          : null;
 
         return [{
           key: `${group.buyerId}:${person.id || person.username || person.name}`,
           personId: String(person.id || person.username || person.name),
           name: person.name,
-          department: primaryDepartment,
+          department: group.departments.size > 0 ? Array.from(group.departments).join(", ") : primaryDepartment,
           buyerId: group.buyerId,
           buyer: group.buyer,
           orders: qualifiedOrders,
@@ -3400,18 +3403,13 @@ export function EmployeePerformancePanel({ orders = [], buyers = [], roster = []
           completedStages: completedStages.length,
           completedTasks: completedTasks.length,
           completed,
-          pending: totalWork - completed,
-          delayed: delayedStages.length + delayedTasks.length,
-          delayedStages: delayedStages.length,
-          delayedTasks: delayedTasks.length,
-          onTimeRate,
           complaintsCount,
           score,
           totalWork,
         }];
       });
     });
-  }, [orders, buyers, roster, users, teams, customTasks, complaints, startDate, endDate]);
+  }, [orders, buyers, users, teams, customTasks, complaints]);
 
   const buyerOptions = useMemo(() => {
     const options = new Map();
@@ -3428,10 +3426,24 @@ export function EmployeePerformancePanel({ orders = [], buyers = [], roster = []
     (customTasks || []).forEach(task => (task.dept || task.department) && departments.add(task.dept || task.department));
     return Array.from(departments).sort((a, b) => a.localeCompare(b));
   }, [buyerEmployeeRows, teams, orders, customTasks]);
+  const employeeOptions = useMemo(() => {
+    const employees = new Map();
+    buyerEmployeeRows.forEach(row => employees.set(row.personId, { id: row.personId, name: row.name }));
+    return Array.from(employees.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [buyerEmployeeRows]);
   const filteredBuyerEmployeeRows = useMemo(() => buyerEmployeeRows.filter(row =>
     (buyerFilter === "all" || row.buyerId === buyerFilter) &&
-    (departmentFilter === "all" || row.department === departmentFilter)
-  ), [buyerEmployeeRows, buyerFilter, departmentFilter]);
+    (employeeFilter === "all" || row.personId === employeeFilter) &&
+    (departmentFilter === "all" || normalizeDepartmentName(row.department) === normalizeDepartmentName(departmentFilter)) &&
+    (!searchQuery.trim() || [
+      row.buyer,
+      row.name,
+      row.department,
+      ...row.orders.flatMap(order => [order.id, order.orderId, order.primaryId, order.style]),
+      ...row.stages.flatMap(stage => [stage.name, stage.stageName, stage.status]),
+      ...row.tasks.flatMap(task => [task.title, task.name, task.status]),
+    ].filter(Boolean).join(" ").toLowerCase().includes(searchQuery.trim().toLowerCase()))
+  ), [buyerEmployeeRows, buyerFilter, employeeFilter, departmentFilter, searchQuery]);
   const buyerGroups = useMemo(() => {
     const groups = new Map();
     filteredBuyerEmployeeRows.forEach(row => {
@@ -3445,9 +3457,10 @@ export function EmployeePerformancePanel({ orders = [], buyers = [], roster = []
   const buyerSummary = useMemo(() => {
     const totalOrders = new Set(buyerGroups.flatMap(group => Array.from(group.orders))).size;
     const completedTasks = filteredBuyerEmployeeRows.reduce((sum, row) => sum + row.completedTasks, 0);
-    const averageScore = filteredBuyerEmployeeRows.length
-      ? Math.round(filteredBuyerEmployeeRows.reduce((sum, row) => sum + row.score, 0) / filteredBuyerEmployeeRows.length)
-      : 0;
+    const measuredRows = filteredBuyerEmployeeRows.filter(row => row.score !== null);
+    const averageScore = measuredRows.length
+      ? Math.round(measuredRows.reduce((sum, row) => sum + row.score, 0) / measuredRows.length)
+      : null;
     const employees = new Set(filteredBuyerEmployeeRows.map(row => row.personId)).size;
     return { buyers: buyerGroups.length, employees, orders: totalOrders, completedTasks, averageScore };
   }, [buyerGroups, filteredBuyerEmployeeRows]);
@@ -3455,10 +3468,9 @@ export function EmployeePerformancePanel({ orders = [], buyers = [], roster = []
   if (showBuyerPerformance) {
     const clearBuyerFilters = () => {
       setBuyerFilter("all");
+      setEmployeeFilter("all");
       setDepartmentFilter("all");
-      setStartDate("");
-      setEndDate("");
-      setExpandedBuyerEmployee(null);
+      setSearchQuery("");
     };
     const controlStyle = {
       width: "100%",
@@ -3476,7 +3488,7 @@ export function EmployeePerformancePanel({ orders = [], buyers = [], roster = []
       ["Employees Tracked", buyerSummary.employees, "#378ADD"],
       ["Total Orders", buyerSummary.orders, "#1F9E8D"],
       ["Completed Tasks", buyerSummary.completedTasks, "#059669"],
-      ["Overall Buyer-Wise Performance", `${buyerSummary.averageScore}%`, "#D97706"],
+      ["Overall Buyer-Wise Performance", buyerSummary.averageScore === null ? "—" : `${buyerSummary.averageScore}%`, "#D97706"],
     ];
 
     return (
@@ -3528,15 +3540,21 @@ export function EmployeePerformancePanel({ orders = [], buyers = [], roster = []
               Clear filters
             </button>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 10 }}>
             <label style={{ fontSize: 10.5, color: "#64748B", fontWeight: 650 }}>
               Buyer
               <select value={buyerFilter} onChange={event => {
                 setBuyerFilter(event.target.value);
-                setExpandedBuyerEmployee(null);
               }} style={{ ...controlStyle, marginTop: 4 }}>
                 <option value="all">All Buyers</option>
                 {buyerOptions.map(buyer => <option key={buyer.id} value={buyer.id}>{buyer.name}</option>)}
+              </select>
+            </label>
+            <label style={{ fontSize: 10.5, color: "#64748B", fontWeight: 650 }}>
+              Employee
+              <select value={employeeFilter} onChange={event => setEmployeeFilter(event.target.value)} style={{ ...controlStyle, marginTop: 4 }}>
+                <option value="all">All Employees</option>
+                {employeeOptions.map(employee => <option key={employee.id} value={employee.id}>{employee.name}</option>)}
               </select>
             </label>
             <label style={{ fontSize: 10.5, color: "#64748B", fontWeight: 650 }}>
@@ -3547,22 +3565,12 @@ export function EmployeePerformancePanel({ orders = [], buyers = [], roster = []
               </select>
             </label>
             <label style={{ fontSize: 10.5, color: "#64748B", fontWeight: 650 }}>
-              Start date
+              Search
               <input
-                type="date"
-                value={startDate}
-                max={endDate || undefined}
-                onChange={event => setStartDate(event.target.value)}
-                style={{ ...controlStyle, marginTop: 4 }}
-              />
-            </label>
-            <label style={{ fontSize: 10.5, color: "#64748B", fontWeight: 650 }}>
-              End date
-              <input
-                type="date"
-                value={endDate}
-                min={startDate || undefined}
-                onChange={event => setEndDate(event.target.value)}
+                type="search"
+                value={searchQuery}
+                onChange={event => setSearchQuery(event.target.value)}
+                placeholder="Buyer, employee, order..."
                 style={{ ...controlStyle, marginTop: 4 }}
               />
             </label>
@@ -3578,19 +3586,22 @@ export function EmployeePerformancePanel({ orders = [], buyers = [], roster = []
           ))}
         </div>
 
-        {startDate && endDate && startDate > endDate ? (
-          <Card style={{ color: "#B91C1C", fontSize: 12.5 }}>Start date must be on or before the end date.</Card>
-        ) : buyerGroups.length === 0 ? (
+        {buyerGroups.length === 0 ? (
           <Card style={{ padding: "34px 18px", textAlign: "center" }}>
             <div style={{ color: "#334155", fontSize: 14, fontWeight: 700 }}>No performance records match these filters</div>
-            <div style={{ color: "#64748B", fontSize: 12, marginTop: 5 }}>Try changing the buyer, employee, department, date range, or search.</div>
+            <div style={{ color: "#64748B", fontSize: 12, marginTop: 5 }}>Try changing the buyer, employee, department, or search.</div>
           </Card>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {buyerGroups.map(group => {
               const groupPerformance = group.employees.length
-                ? Math.round(group.employees.reduce((sum, employee) => sum + employee.score, 0) / group.employees.length)
-                : 0;
+                ? (() => {
+                  const measuredEmployees = group.employees.filter(employee => employee.score !== null);
+                  return measuredEmployees.length
+                    ? Math.round(measuredEmployees.reduce((sum, employee) => sum + employee.score, 0) / measuredEmployees.length)
+                    : null;
+                })()
+                : null;
               return (
                 <Card key={group.id} style={{ padding: "16px 18px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
@@ -3602,72 +3613,33 @@ export function EmployeePerformancePanel({ orders = [], buyers = [], roster = []
                     </div>
                     <div style={{
                       padding: "5px 10px", borderRadius: 999, fontSize: 12, fontWeight: 750,
-                      background: groupPerformance >= 80 ? "#DCFCE7" : groupPerformance >= 60 ? "#FEF3C7" : "#FEE2E2",
-                      color: groupPerformance >= 80 ? "#15803D" : groupPerformance >= 60 ? "#B45309" : "#B91C1C",
+                      background: groupPerformance === null ? "#F1F5F9" : groupPerformance >= 80 ? "#DCFCE7" : groupPerformance >= 60 ? "#FEF3C7" : "#FEE2E2",
+                      color: groupPerformance === null ? "#64748B" : groupPerformance >= 80 ? "#15803D" : groupPerformance >= 60 ? "#B45309" : "#B91C1C",
                     }}>
-                      Buyer performance {groupPerformance}%
+                      Buyer performance {groupPerformance === null ? "—" : `${groupPerformance}%`}
                     </div>
                   </div>
                   <div style={{ overflowX: "auto" }}>
-                    <table style={{ width: "100%", minWidth: 850, borderCollapse: "collapse", fontSize: 11.5 }}>
+                    <table style={{ width: "100%", minWidth: 650, borderCollapse: "collapse", fontSize: 11.5 }}>
                       <thead>
                         <tr style={{ color: "#64748B", textAlign: "left", borderBottom: "1px solid #E2E8F0" }}>
-                          {["Employee", "Department", "Orders", "Completed", "Pending", "Delayed", "Complaints", "Performance"].map(heading => (
+                          {["Employee", "Department", "Orders", "Completed", "Complaints", "Performance"].map(heading => (
                             <th key={heading} style={{ padding: "8px 7px", fontSize: 10, whiteSpace: "nowrap" }}>{heading}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
                         {group.employees.map(employee => {
-                          const isExpanded = expandedBuyerEmployee === employee.key;
-                          const performanceColor = employee.score >= 80 ? "#059669" : employee.score >= 60 ? "#D97706" : "#DC2626";
+                          const performanceColor = employee.score === null ? "#64748B" : employee.score >= 80 ? "#059669" : employee.score >= 60 ? "#D97706" : "#DC2626";
                           return (
-                            <React.Fragment key={employee.key}>
-                              <tr
-                                onClick={() => setExpandedBuyerEmployee(isExpanded ? null : employee.key)}
-                                style={{ borderBottom: "1px solid #F1F5F9", cursor: "pointer" }}
-                                title="Click to view this employee's buyer-specific work"
-                              >
-                                <td style={{ padding: "9px 7px", color: "#1E293B", fontWeight: 700 }}>{employee.name}</td>
-                                <td style={{ padding: "9px 7px", color: "#64748B" }}>{employee.department}</td>
-                                <td style={{ padding: "9px 7px" }}>{employee.orderCount}</td>
-                                <td style={{ padding: "9px 7px", color: "#059669", fontWeight: 700 }}>
-                                  {employee.completed}<div style={{ color: "#94A3B8", fontSize: 9.5, fontWeight: 400 }}>tasks {employee.completedTasks} · stages {employee.completedStages}</div>
-                                </td>
-                                <td style={{ padding: "9px 7px", color: "#64748B" }}>{employee.pending}</td>
-                                <td style={{ padding: "9px 7px", color: employee.delayed ? "#DC2626" : "#059669", fontWeight: 650 }}>
-                                  {employee.delayed}<div style={{ color: "#94A3B8", fontSize: 9.5, fontWeight: 400 }}>tasks {employee.delayedTasks} · stages {employee.delayedStages}</div>
-                                </td>
-                                <td style={{ padding: "9px 7px", color: employee.complaintsCount ? "#DC2626" : "#64748B" }}>{employee.complaintsCount}</td>
-                                <td style={{ padding: "9px 7px", color: performanceColor, fontWeight: 800 }}>{employee.score}%</td>
-                              </tr>
-                              {isExpanded && (
-                                <tr>
-                                  <td colSpan={8} style={{ padding: "10px 12px 13px", background: "#F8FAFC" }}>
-                                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
-                                      <span style={{ fontSize: 10.5, color: "#475569" }}>On-time stage completion: <b>{employee.onTimeRate}%</b></span>
-                                      <span style={{ fontSize: 10.5, color: "#475569" }}>Assigned custom tasks: <b>{employee.tasks.length}</b></span>
-                                      <span style={{ fontSize: 10.5, color: "#475569" }}>Assigned T&amp;A stages: <b>{employee.stages.length}</b></span>
-                                    </div>
-                                    <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                                      {employee.stages.map((stage, index) => (
-                                        <div key={`stage-${stage.orderId}-${stage.name}-${index}`} style={{ fontSize: 10.5, color: "#334155" }}>
-                                          <b>T&amp;A:</b> {stage.name || stage.stageName || "Stage"} · {stage.orderId} ({stage.orderStyle || "Style"}) · {stage.status || "pending"}
-                                        </div>
-                                      ))}
-                                      {employee.tasks.map((task, index) => (
-                                        <div key={`task-${task.id || task._id || index}`} style={{ fontSize: 10.5, color: "#334155" }}>
-                                          <b>Task:</b> {task.title || task.name || "Task"} · {getPerformanceTaskOrderId(task)} · {task.status || "pending"}
-                                        </div>
-                                      ))}
-                                      {employee.stages.length === 0 && employee.tasks.length === 0 && (
-                                        <div style={{ fontSize: 10.5, color: "#64748B" }}>No dated task or stage activity in the selected range. Buyer-mapped order assignment is present.</div>
-                                      )}
-                                    </div>
-                                  </td>
-                                </tr>
-                              )}
-                            </React.Fragment>
+                            <tr key={employee.key} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                              <td style={{ padding: "9px 7px", color: "#1E293B", fontWeight: 700 }}>{employee.name}</td>
+                              <td style={{ padding: "9px 7px", color: "#64748B" }}>{employee.department}</td>
+                              <td style={{ padding: "9px 7px" }}>{employee.orderCount}</td>
+                              <td style={{ padding: "9px 7px", color: "#059669", fontWeight: 700 }}>{employee.completed}</td>
+                              <td style={{ padding: "9px 7px", color: employee.complaintsCount ? "#DC2626" : "#64748B" }}>{employee.complaintsCount}</td>
+                              <td style={{ padding: "9px 7px", color: performanceColor, fontWeight: 800 }}>{employee.score === null ? "—" : `${employee.score}%`}</td>
+                            </tr>
                           );
                         })}
                       </tbody>
@@ -4656,7 +4628,7 @@ export function ExecutiveOverviewPage({ orders, buyers = [], attendance, userSes
         const userDepts = person.teamIds && person.teamIds.length > 0
           ? person.teamIds.map(tId => teamMap.get(tId)).filter(Boolean)
           : [person.dept];
-        const scopedFields = Array.from(new Set(userDepts.map(d => BUYER_SCOPED_DEPTS[d]).filter(Boolean)));
+        const scopedFields = Array.from(new Set(userDepts.map(getBuyerScopedDepartmentField).filter(Boolean)));
 
         // Determine accessible/visible orders exactly like canSeeOrder in App.jsx
         let visibleOrdersForUser;
