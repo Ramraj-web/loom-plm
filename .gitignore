@@ -4,6 +4,7 @@ node_modules/
 !.env.example
 dist/
 backend/data/storage.json
+backend/data/push_subscriptions.json
 .DS_Store
 *.traineddata
 *.jks
