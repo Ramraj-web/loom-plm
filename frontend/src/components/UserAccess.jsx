@@ -2067,6 +2067,7 @@ export function UserAccessPage({
                                 <th style={{ padding: "8px 10px" }}>Date & Time</th>
                                 <th style={{ padding: "8px 10px" }}>Order ID</th>
                                 <th style={{ padding: "8px 10px" }}>Transfer Route</th>
+                                <th style={{ padding: "8px 10px" }}>Stages Shifted</th>
                                 <th style={{ padding: "8px 10px" }}>Quantity</th>
                                 <th style={{ padding: "8px 10px" }}>Notes</th>
                               </tr>
@@ -2084,6 +2085,11 @@ export function UserAccessPage({
                                     <span style={{ fontWeight: 600, color: "#DC2626" }}>{m.fromUnitName}</span>
                                     <span style={{ margin: "0 6px", color: "#94A3B8" }}>→</span>
                                     <span style={{ fontWeight: 600, color: "#16A34A" }}>{m.toUnitName}</span>
+                                  </td>
+                                  <td style={{ padding: "8px 10px", color: "#0F172A", fontWeight: 600 }}>
+                                    <span style={{ fontSize: 10.5, background: "#EFF6FF", color: "#2563EB", border: "1px solid #DBEAFE", padding: "2px 7px", borderRadius: 4 }}>
+                                      {m.stageScope || "All Remaining Stages"}
+                                    </span>
                                   </td>
                                   <td style={{ padding: "8px 10px", fontWeight: 700, color: "#7C3AED" }}>
                                     {(Number(m.qty) || 0).toLocaleString()} pcs

@@ -4,7 +4,7 @@ import {
   ShieldCheck, Award, FileText, AlertTriangle, Clock, Eye, Edit,
   Search, Filter, ExternalLink, ChevronRight, CheckCircle, AlertCircle,
   HelpCircle, Calendar, RefreshCw, ArrowUp, ArrowDown, Layers, GripVertical, Laptop, Smartphone, MapPin, Activity, Download,
-  Users, ChevronDown
+  Users, ChevronDown, Factory
 } from "lucide-react";
 import {
   TA_STAGES, TA_STAGES_90, TA_STAGES_120, makeStages, DEPT_ICONS, ORG_STRUCTURE, ATTENDANCE_STATUS_STYLE, CERT_STATUS_STYLE,
@@ -59,6 +59,7 @@ export function OrdersPage({
   orders = [],
   isAdmin = false,
   buyers = [],
+  units = [],
   onAddBuyer,
   onUpdateBuyer,
   onDeleteBuyer,
@@ -231,6 +232,36 @@ export function OrdersPage({
     return parsed ? parsed.getTime() : Infinity;
   };
 
+  const availableUnits = useMemo(() => {
+    if (Array.isArray(units) && units.length > 0) {
+      return units;
+    }
+    return [
+      { id: "unit-1", name: "Unit 1 - Main Apparel Factory", code: "UNT-01" },
+      { id: "unit-2", name: "Unit 2 - Knits & Outerwear", code: "UNT-02" },
+      { id: "unit-3", name: "Unit 3 - Printing & VAP Facility", code: "UNT-03" }
+    ];
+  }, [units]);
+
+  const [unitFilter, setUnitFilterState] = useState(() => {
+    try {
+      return sessionStorage.getItem("loom_orders_unit_filter") || "all";
+    } catch (e) {
+      return "all";
+    }
+  });
+
+  const setUnitFilter = (val) => {
+    setUnitFilterState(val);
+    try {
+      if (!val || val === "all") {
+        sessionStorage.removeItem("loom_orders_unit_filter");
+      } else {
+        sessionStorage.setItem("loom_orders_unit_filter", val);
+      }
+    } catch (e) { }
+  };
+
   const availableBuyers = useMemo(() => {
     const buyerSet = new Set();
     orders.forEach(o => {
@@ -258,13 +289,58 @@ export function OrdersPage({
         return oBuyer === targetFilter;
       });
     }
+    if (unitFilter && unitFilter !== "all") {
+      const targetUnitObj = availableUnits.find(u => u.id === unitFilter);
+      const targetId = unitFilter.toLowerCase();
+      const targetCode = (targetUnitObj?.code || "").toLowerCase();
+      const targetName = (targetUnitObj?.name || "").toLowerCase();
+
+      list = list.filter(order => {
+        const oUnitId = (order?.unitId || "").toLowerCase();
+        const oUnitCode = (order?.unitCode || "").toLowerCase();
+        const oUnitName = (order?.unitName || "").toLowerCase();
+
+        // Default: If order has no unit assigned, consider it at Unit 1 (Main Unit)
+        const isDefaultUnit1 = !order?.unitId && !order?.unitCode && !order?.unitName;
+        if (isDefaultUnit1 && (targetId === "unit-1" || targetCode === "unt-01")) {
+          return true;
+        }
+
+        // Check order-level unit
+        if (oUnitId === targetId || (targetCode && oUnitCode === targetCode) || (targetName && oUnitName.includes(targetName))) {
+          return true;
+        }
+
+        // Check if any stages are shifted to this unit
+        if (Array.isArray(order?.stages)) {
+          const hasStageInUnit = order.stages.some(s => {
+            const sId = (s?.unitId || "").toLowerCase();
+            const sCode = (s?.unitCode || "").toLowerCase();
+            return sId === targetId || (targetCode && sCode === targetCode);
+          });
+          if (hasStageInUnit) return true;
+        }
+
+        // Check unit allocations if present
+        if (Array.isArray(order?.unitAllocations)) {
+          const hasAlloc = order.unitAllocations.some(a => {
+            const aId = (a?.unitId || "").toLowerCase();
+            const aCode = (a?.unitCode || "").toLowerCase();
+            return aId === targetId || (targetCode && aCode === targetCode);
+          });
+          if (hasAlloc) return true;
+        }
+
+        return false;
+      });
+    }
     return [...list].sort((a, b) => {
       const timeA = getOrderDeliveryTime(a);
       const timeB = getOrderDeliveryTime(b);
       if (timeA !== timeB) return timeA - timeB;
       return (a.id || "").localeCompare(b.id || "");
     });
-  }, [activeOrders, masterFilter, buyerFilter]);
+  }, [activeOrders, masterFilter, buyerFilter, unitFilter, availableUnits]);
 
   const addColorBreakdownRow = () => {
     setForm(prev => ({
@@ -410,6 +486,59 @@ export function OrdersPage({
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          {/* Unit Filter Dropdown */}
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#FFFFFF", padding: "3px 4px 3px 10px", borderRadius: 8, border: "1px solid #D1D5DB", boxShadow: "0 1px 2px rgba(0,0,0,0.03)" }}>
+            <Factory size={14} color="#0D9488" />
+            <label htmlFor="orders-unit-filter" style={{ fontSize: 12, fontWeight: 600, color: "#4B5563", whiteSpace: "nowrap" }}>Unit:</label>
+            <select
+              id="orders-unit-filter"
+              value={unitFilter}
+              onChange={e => setUnitFilter(e.target.value)}
+              style={{
+                padding: "5px 8px",
+                borderRadius: 6,
+                border: "none",
+                fontSize: 13,
+                fontWeight: 500,
+                color: "#1F2937",
+                background: "transparent",
+                cursor: "pointer",
+                outline: "none"
+              }}
+            >
+              <option value="all">All Units ({availableUnits.length})</option>
+              {availableUnits.map(u => (
+                <option key={u.id} value={u.id}>{u.code ? `${u.code} · ${u.name}` : u.name}</option>
+              ))}
+            </select>
+            {unitFilter !== "all" && (
+              <button
+                type="button"
+                onClick={() => setUnitFilter("all")}
+                title="Clear unit filter"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 3,
+                  border: "none",
+                  borderRadius: 6,
+                  background: "#F3F4F6",
+                  color: "#4B5563",
+                  padding: "4px 8px",
+                  fontSize: 11.5,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  marginLeft: 2
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = "#E5E7EB"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "#F3F4F6"; }}
+              >
+                <X size={12} />
+                Clear
+              </button>
+            )}
+          </div>
+
           {/* Buyer Filter Dropdown before Add Buyer & Add Order buttons */}
           <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#FFFFFF", padding: "3px 4px 3px 10px", borderRadius: 8, border: "1px solid #D1D5DB", boxShadow: "0 1px 2px rgba(0,0,0,0.03)" }}>
             <label htmlFor="orders-buyer-filter" style={{ fontSize: 12, fontWeight: 600, color: "#4B5563", whiteSpace: "nowrap" }}>Buyer:</label>
@@ -434,6 +563,11 @@ export function OrdersPage({
                 <option key={b} value={b}>{b}</option>
               ))}
             </select>
+            {unitFilter !== "all" && (
+              <span style={{ fontSize: 11, fontWeight: 600, background: "#CCFBF1", color: "#0F766E", padding: "2px 8px", borderRadius: 999, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                <Factory size={11} /> Unit: {availableUnits.find(u => u.id === unitFilter)?.code || unitFilter}
+              </span>
+            )}
             {buyerFilter !== "all" && (
               <button
                 type="button"

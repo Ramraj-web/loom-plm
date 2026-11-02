@@ -179,7 +179,7 @@ export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = 
     return new Date();
   };
 
-    // Compute Stage Quantities (Cut, Sewn, Finished, Packed, Shipped) from order
+  // Compute Stage Quantities (Cut, Sewn, Finished, Packed, Shipped) from order
   const computeOrderStageQuantities = (order) => {
     const orderQty = Number(order.qty) || 0;
     const shippedQty = Number(order.shippedQty) || (order.completed ? orderQty : 0);
@@ -762,23 +762,23 @@ export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = 
       <div style={{ paddingBottom: 48, maxWidth: 1400, margin: "0 auto" }}>
         {/* Hub Header */}
         <div style={{
-          background: "linear-gradient(135deg, #0F172A 0%, #1E293B 100%)",
+          background: "linear-gradient(135deg, #E0F2FE 0%, #BAE6FD 100%)",
           borderRadius: 16,
           padding: "24px 28px",
-          color: "#FFFFFF",
           marginBottom: 24,
-          boxShadow: "0 4px 20px -2px rgba(15, 23, 42, 0.12)"
+          border: "1px solid #7DD3FC",
+          boxShadow: "0 2px 12px -2px rgba(2, 132, 199, 0.15)"
         }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16 }}>
             <div>
-              <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(31, 158, 141, 0.2)", color: "#2DD4BF", padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>
-                <Sparkles size={13} />
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#FFFFFF", color: "#0284C7", border: "1px solid #7DD3FC", padding: "4px 12px", borderRadius: 20, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10, boxShadow: "0 1px 2px rgba(2, 132, 199, 0.08)" }}>
+                <Sparkles size={13} color="#0284C7" />
                 Live PLM Intelligence
               </div>
-              <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: -0.3 }}>
+              <h1 style={{ fontSize: 25, fontWeight: 800, color: "#0C4A6E", margin: 0, letterSpacing: -0.3 }}>
                 Executive Reports & Analytics Hub
               </h1>
-              <p style={{ fontSize: 13.5, color: "#94A3B8", margin: "6px 0 0", maxWidth: 650 }}>
+              <p style={{ fontSize: 13.5, color: "hsla(239, 95%, 30%, 1.00)", margin: "6px 0 0", maxWidth: 680, lineHeight: 1.5, fontWeight: 500 }}>
                 Select a specialized report module to inspect manufacturing stage quantities, order health, milestone schedules, and root-cause department delays.
               </p>
             </div>
@@ -790,7 +790,7 @@ export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = 
                   display: "inline-flex",
                   alignItems: "center",
                   gap: 8,
-                  background: "#1F9E8D",
+                  background: "#0284C7",
                   color: "#FFFFFF",
                   border: "none",
                   borderRadius: 8,
@@ -798,9 +798,11 @@ export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = 
                   fontSize: 13,
                   fontWeight: 600,
                   cursor: "pointer",
-                  boxShadow: "0 2px 4px rgba(0,0,0,0.15)",
+                  boxShadow: "0 2px 6px rgba(2, 132, 199, 0.3)",
                   transition: "all 0.2s"
                 }}
+                onMouseEnter={e => e.currentTarget.style.background = "#0369A1"}
+                onMouseLeave={e => e.currentTarget.style.background = "#0284C7"}
               >
                 <Download size={15} />
                 Export Active Report
@@ -815,27 +817,27 @@ export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = 
             gap: 12,
             marginTop: 22,
             paddingTop: 20,
-            borderTop: "1px solid rgba(255, 255, 255, 0.1)"
+            borderTop: "1px solid #7DD3FC"
           }}>
-            <div>
-              <div style={{ fontSize: 11.5, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.4 }}>Active Orders</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: "#FFFFFF", marginTop: 2 }}>{kpiSummary.activeOrders}</div>
+            <div style={{ background: "#FFFFFF", borderRadius: 10, padding: "12px 14px", border: "1px solid #BAE6FD", boxShadow: "0 1px 3px rgba(2, 132, 199, 0.05)" }}>
+              <div style={{ fontSize: 11, color: "#0369A1", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4 }}>Active Orders</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: "#0C4A6E", marginTop: 2 }}>{kpiSummary.activeOrders}</div>
             </div>
-            <div>
-              <div style={{ fontSize: 11.5, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.4 }}>Total Order Qty</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: "#FFFFFF", marginTop: 2 }}>{kpiSummary.totalOrderQty.toLocaleString()} <span style={{ fontSize: 12, fontWeight: 500, color: "#94A3B8" }}>pcs</span></div>
+            <div style={{ background: "#FFFFFF", borderRadius: 10, padding: "12px 14px", border: "1px solid #BAE6FD", boxShadow: "0 1px 3px rgba(2, 132, 199, 0.05)" }}>
+              <div style={{ fontSize: 11, color: "#0369A1", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4 }}>Total Order Qty</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: "#0C4A6E", marginTop: 2 }}>{kpiSummary.totalOrderQty.toLocaleString()} <span style={{ fontSize: 12, fontWeight: 500, color: "#0369A1" }}>pcs</span></div>
             </div>
-            <div>
-              <div style={{ fontSize: 11.5, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.4 }}>Orders At Risk</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: "#F59E0B", marginTop: 2 }}>{kpiSummary.atRiskOrders}</div>
+            <div style={{ background: "#FFFBEB", borderRadius: 10, padding: "12px 14px", border: "1px solid #FDE68A", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
+              <div style={{ fontSize: 11, color: "#92400E", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4 }}>Orders At Risk</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: "#D97706", marginTop: 2 }}>{kpiSummary.atRiskOrders}</div>
             </div>
-            <div>
-              <div style={{ fontSize: 11.5, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.4 }}>Delayed Orders</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: kpiSummary.delayedOrders > 0 ? "#EF4444" : "#10B981", marginTop: 2 }}>{kpiSummary.delayedOrders}</div>
+            <div style={{ background: kpiSummary.delayedOrders > 0 ? "#FEF2F2" : "#F0FDF4", borderRadius: 10, padding: "12px 14px", border: kpiSummary.delayedOrders > 0 ? "1px solid #FECACA" : "1px solid #BBF7D0", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
+              <div style={{ fontSize: 11, color: kpiSummary.delayedOrders > 0 ? "#991B1B" : "#166534", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4 }}>Delayed Orders</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: kpiSummary.delayedOrders > 0 ? "#DC2626" : "#15803D", marginTop: 2 }}>{kpiSummary.delayedOrders}</div>
             </div>
-            <div>
-              <div style={{ fontSize: 11.5, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.4 }}>On-Time Delivery</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: "#10B981", marginTop: 2 }}>{kpiSummary.onTimeDeliveryPct}</div>
+            <div style={{ background: "#F0FDF4", borderRadius: 10, padding: "12px 14px", border: "1px solid #BBF7D0", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
+              <div style={{ fontSize: 11, color: "#166534", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4 }}>On-Time Delivery</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: "#15803D", marginTop: 2 }}>{kpiSummary.onTimeDeliveryPct}</div>
             </div>
           </div>
         </div>
@@ -1661,12 +1663,12 @@ export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = 
                         fontWeight: 700,
                         background:
                           m.status === "Done On Time" ? "#ECFDF5" :
-                          m.status === "Done Late" ? "#FEF3C7" :
-                          m.status === "Delayed" ? "#FEF2F2" : "#F1F5F9",
+                            m.status === "Done Late" ? "#FEF3C7" :
+                              m.status === "Delayed" ? "#FEF2F2" : "#F1F5F9",
                         color:
                           m.status === "Done On Time" ? "#047857" :
-                          m.status === "Done Late" ? "#B45309" :
-                          m.status === "Delayed" ? "#B91C1C" : "#475569",
+                            m.status === "Done Late" ? "#B45309" :
+                              m.status === "Delayed" ? "#B91C1C" : "#475569",
                         display: "inline-block"
                       }}>
                         {m.status}

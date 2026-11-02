@@ -4540,6 +4540,22 @@ export default function LoomPLM() {
         certifications={certifications}
         compliances={compliances}
         suppliers={suppliers}
+        units={units}
+        onUpdateOrder={(orderId, updatedFields) => {
+          setOrders(prev => {
+            const list = Array.isArray(prev) ? prev : [];
+            const updated = list.map(o => {
+              if (String(o.id) === String(orderId) || String(o.primaryId) === String(orderId)) {
+                const merged = { ...o, ...updatedFields };
+                const primId = o.id || o.primaryId || o._id;
+                try { resourcesApi.update("orders", primId, merged).catch(() => {}); } catch (e) {}
+                return merged;
+              }
+              return o;
+            });
+            return updated;
+          });
+        }}
         onAssignSupplier={handleAssignSupplier}
         onAssignWork={handleAssignWork}
         onAddProductionLog={addOrderProductionLog}
@@ -4690,6 +4706,7 @@ export default function LoomPLM() {
         orders={visibleOrders}
         isAdmin={isAdmin}
         buyers={buyers}
+        units={units}
         onAddBuyer={addBuyer}
         onUpdateBuyer={updateBuyer}
         onDeleteBuyer={deleteBuyer}

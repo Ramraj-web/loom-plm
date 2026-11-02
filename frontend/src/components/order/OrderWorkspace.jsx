@@ -6,7 +6,7 @@ function cleanDisplayCompletedBy(completedBy, dept) {
 
 import React, { useState, useEffect, useMemo } from "react";
 import {
-  Calendar, CheckCircle2, Clock, Circle, Lock, ChevronDown, Upload, Send, Zap,
+  Calendar, CheckCircle2, Clock, Circle, Lock, ChevronDown, Upload, Send, Zap, ArrowRightLeft,
   AlertTriangle, FileText, ClipboardList, Package, Layers, ShieldCheck, Factory, Truck, TrendingUp,
   Eye, Trash2, X, Download, Check, RotateCcw
 } from "lucide-react";
@@ -1133,7 +1133,7 @@ export function StageColourwayModal({
   );
 }
 
-function StageNode({ stage: rawStage, idx, onCycle, onUndo, canUndo = false, onReason, onSupplierChange, onOpenDispute, lockedBy, suppliers = [], canEdit = true, roleDept = "", orderColourways = [], onOpenColourways, orderStartDate, schedule = {} }) {
+function StageNode({ stage: rawStage, idx, currentOrderUnit, onCycle, onUndo, canUndo = false, onReason, onSupplierChange, onOpenDispute, lockedBy, suppliers = [], canEdit = true, roleDept = "", orderColourways = [], onOpenColourways, orderStartDate, schedule = {} }) {
   const stage = useMemo(() => {
     if (!rawStage) return rawStage;
     if (String(rawStage.name || "").trim().toLowerCase() === "lot card approval") {
@@ -1255,8 +1255,17 @@ function StageNode({ stage: rawStage, idx, onCycle, onUndo, canUndo = false, onR
         )}
       </div>
 
-      <div style={{ fontSize: 10, color: canEdit ? "#1F9E8D" : "#B0B2BA", marginTop: 2, fontWeight: canEdit ? 600 : 400 }}>
-        {stage.dept} {!canEdit && "(Read-only)"}
+      <div style={{ fontSize: 10, color: canEdit ? "#1F9E8D" : "#B0B2BA", marginTop: 2, fontWeight: canEdit ? 600 : 400, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 2 }}>
+        <span>{stage.dept} {!canEdit && "(Read-only)"}</span>
+        {stage.unitCode && stage.unitCode !== currentOrderUnit?.code ? (
+          <span style={{ fontSize: 9, fontWeight: 800, background: "#FEF3C7", color: "#B45309", border: "1px solid #FDE68A", padding: "1px 4px", borderRadius: 3 }}>
+            📍 {stage.unitCode}
+          </span>
+        ) : (
+          <span style={{ fontSize: 8.5, fontWeight: 700, color: "#94A3B8" }}>
+            {currentOrderUnit?.code || "UNT-01"}
+          </span>
+        )}
       </div>
 
       {/* Prominent Colorway Badge button */}
@@ -3166,6 +3175,406 @@ function DocumentsPanel({
   );
 }
 
+
+export function OrderUnitTransferModal({
+  isOpen,
+  onClose,
+  order,
+  stages = [],
+  units = [],
+  currentUnit,
+  onConfirmTransfer
+}) {
+  const [targetUnitId, setTargetUnitId] = useState("");
+  const [scope, setScope] = useState("all_remaining"); // 'all_remaining' | 'selected' | 'entire'
+  const [selectedStageIndices, setSelectedStageIndices] = useState(() => {
+    return stages
+      .map((s, idx) => ({ ...s, idx }))
+      .filter(s => s.status !== "done")
+      .map(s => s.idx);
+  });
+  const [transferQty, setTransferQty] = useState(order?.qty || 0);
+  const [notes, setNotes] = useState("");
+
+  if (!isOpen) return null;
+
+  const otherUnits = (units || []).filter(u => u.id !== currentUnit?.id && u.code !== currentUnit?.code);
+
+  const incompleteStagesCount = stages.filter(s => s.status !== "done").length;
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!targetUnitId) return;
+    const targetUnit = (units || []).find(u => u.id === targetUnitId);
+    if (!targetUnit) return;
+
+    let targetIndices = [];
+    if (scope === "entire") {
+      targetIndices = stages.map((_, i) => i);
+    } else if (scope === "all_remaining") {
+      let foundFirst = false;
+      stages.forEach((s, i) => {
+        if (!foundFirst && s.status !== "done") foundFirst = true;
+        if (foundFirst) targetIndices.push(i);
+      });
+      if (targetIndices.length === 0) targetIndices = stages.map((_, i) => i);
+    } else {
+      targetIndices = selectedStageIndices;
+    }
+
+    onConfirmTransfer({
+      targetUnit,
+      targetIndices,
+      scope,
+      transferQty: Number(transferQty) || Number(order.qty) || 0,
+      notes: notes.trim()
+    });
+  };
+
+  const toggleStage = (idx) => {
+    setSelectedStageIndices(prev =>
+      prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx]
+    );
+  };
+
+  return (
+    <div style={{
+      position: "fixed",
+      inset: 0,
+      zIndex: 9999,
+      background: "rgba(15, 23, 42, 0.6)",
+      backdropFilter: "blur(4px)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 16
+    }}>
+      <div style={{
+        background: "#FFFFFF",
+        borderRadius: 16,
+        maxWidth: 580,
+        width: "100%",
+        maxHeight: "90vh",
+        display: "flex",
+        flexDirection: "column",
+        boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+        overflow: "hidden"
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: "18px 24px",
+          borderBottom: "1px solid #E2E8F0",
+          background: "linear-gradient(135deg, #F0FDFA 0%, #EFF6FF 100%)",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center"
+        }}>
+          <div>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "#0D9488", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>
+              <Factory size={13} /> Inter-Unit Order Shift
+            </div>
+            <h2 style={{ fontSize: 18, fontWeight: 800, color: "#0F172A", margin: "4px 0 0" }}>
+              Shift Order / Stages to Another Unit
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "#64748B", padding: 4 }}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Form Body */}
+        <form onSubmit={handleSubmit} style={{ overflowY: "auto", padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* Order Info Summary */}
+          <div style={{
+            background: "#F8FAFC",
+            borderRadius: 10,
+            padding: "12px 16px",
+            border: "1px solid #E2E8F0",
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+            gap: 10
+          }}>
+            <div>
+              <div style={{ fontSize: 10.5, color: "#64748B", textTransform: "uppercase", fontWeight: 700 }}>Order / Style</div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: "#0F172A", marginTop: 2 }}>{order?.style || order?.id}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 10.5, color: "#64748B", textTransform: "uppercase", fontWeight: 700 }}>Buyer</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", marginTop: 2 }}>{order?.buyer || "Direct"}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 10.5, color: "#64748B", textTransform: "uppercase", fontWeight: 700 }}>Current Unit</div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: "#0D9488", marginTop: 2 }}>{currentUnit?.code || "UNT-01"} - {currentUnit?.name?.split("-")[0] || "Unit 1"}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 10.5, color: "#64748B", textTransform: "uppercase", fontWeight: 700 }}>Order Qty</div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: "#2563EB", marginTop: 2 }}>{(Number(order?.qty) || 0).toLocaleString()} pcs</div>
+            </div>
+          </div>
+
+          {/* Target Unit Dropdown */}
+          <div>
+            <label style={{ fontSize: 12.5, fontWeight: 700, color: "#0F172A", display: "block", marginBottom: 6 }}>
+              Select Destination Unit (Transfer To) *
+            </label>
+            <select
+              required
+              value={targetUnitId}
+              onChange={e => setTargetUnitId(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "9px 12px",
+                borderRadius: 8,
+                border: "1.5px solid #CBD5E1",
+                fontSize: 13,
+                fontWeight: 600,
+                color: "#0F172A",
+                background: "#FFFFFF",
+                outline: "none"
+              }}
+            >
+              <option value="">-- Choose Factory Unit --</option>
+              {otherUnits.map(u => (
+                <option key={u.id} value={u.id}>
+                  {u.code} - {u.name} ({u.location || "Tirupur"} · {u.lines || 1} Lines)
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Scope Options */}
+          <div>
+            <label style={{ fontSize: 12.5, fontWeight: 700, color: "#0F172A", display: "block", marginBottom: 8 }}>
+              Which Stages to Shift?
+            </label>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {/* Option 1: All Remaining Pending Stages */}
+              <label style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 10,
+                padding: "10px 14px",
+                borderRadius: 8,
+                border: scope === "all_remaining" ? "1.5px solid #0D9488" : "1px solid #E2E8F0",
+                background: scope === "all_remaining" ? "#F0FDFA" : "#FFFFFF",
+                cursor: "pointer"
+              }}>
+                <input
+                  type="radio"
+                  name="shiftScope"
+                  value="all_remaining"
+                  checked={scope === "all_remaining"}
+                  onChange={() => setScope("all_remaining")}
+                  style={{ marginTop: 2 }}
+                />
+                <div>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: "#0F172A" }}>
+                    All Remaining Pending Stages (Recommended)
+                  </div>
+                  <div style={{ fontSize: 11.5, color: "#64748B", marginTop: 2 }}>
+                    Shifts from the current running stage to the final stage ({incompleteStagesCount} incomplete stages). Past done stages remain in the source unit.
+                  </div>
+                </div>
+              </label>
+
+              {/* Option 2: Specific Stages */}
+              <label style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 10,
+                padding: "10px 14px",
+                borderRadius: 8,
+                border: scope === "selected" ? "1.5px solid #0D9488" : "1px solid #E2E8F0",
+                background: scope === "selected" ? "#F0FDFA" : "#FFFFFF",
+                cursor: "pointer"
+              }}>
+                <input
+                  type="radio"
+                  name="shiftScope"
+                  value="selected"
+                  checked={scope === "selected"}
+                  onChange={() => setScope("selected")}
+                  style={{ marginTop: 2 }}
+                />
+                <div style={{ width: "100%" }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: "#0F172A" }}>
+                    Specific Selected Stages
+                  </div>
+                  <div style={{ fontSize: 11.5, color: "#64748B", marginTop: 2 }}>
+                    Pick individual stages (e.g. Sewing line or Printing/Embroidery only).
+                  </div>
+
+                  {scope === "selected" && (
+                    <div style={{
+                      marginTop: 10,
+                      maxHeight: 160,
+                      overflowY: "auto",
+                      border: "1px solid #CBD5E1",
+                      borderRadius: 6,
+                      background: "#FFFFFF",
+                      padding: 6
+                    }}>
+                      {stages.map((stg, sIdx) => {
+                        const isChecked = selectedStageIndices.includes(sIdx);
+                        return (
+                          <label
+                            key={sIdx}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 8,
+                              padding: "4px 8px",
+                              borderRadius: 4,
+                              background: isChecked ? "#EFF6FF" : "transparent",
+                              cursor: "pointer",
+                              fontSize: 11.5
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => toggleStage(sIdx)}
+                            />
+                            <span style={{ fontWeight: 600, color: "#0F172A" }}>#{sIdx + 1} {stg.name}</span>
+                            <span style={{ fontSize: 10.5, color: "#64748B", marginLeft: "auto" }}>{stg.dept}</span>
+                            {stg.status === "done" && (
+                              <span style={{ fontSize: 9.5, color: "#16A34A", background: "#DCFCE7", padding: "1px 5px", borderRadius: 4 }}>Done</span>
+                            )}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </label>
+
+              {/* Option 3: Entire Order */}
+              <label style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 10,
+                padding: "10px 14px",
+                borderRadius: 8,
+                border: scope === "entire" ? "1.5px solid #0D9488" : "1px solid #E2E8F0",
+                background: scope === "entire" ? "#F0FDFA" : "#FFFFFF",
+                cursor: "pointer"
+              }}>
+                <input
+                  type="radio"
+                  name="shiftScope"
+                  value="entire"
+                  checked={scope === "entire"}
+                  onChange={() => setScope("entire")}
+                  style={{ marginTop: 2 }}
+                />
+                <div>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: "#0F172A" }}>
+                    Entire Order (All {stages.length} Stages)
+                  </div>
+                  <div style={{ fontSize: 11.5, color: "#64748B", marginTop: 2 }}>
+                    Reassigns the whole order from Stage 1 to End completely to the new unit.
+                  </div>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          {/* Transfer Quantity */}
+          <div>
+            <label style={{ fontSize: 12.5, fontWeight: 700, color: "#0F172A", display: "block", marginBottom: 6 }}>
+              Batch Quantity (pcs)
+            </label>
+            <input
+              type="number"
+              min="1"
+              max={order?.qty || 999999}
+              value={transferQty}
+              onChange={e => setTransferQty(Math.max(1, Number(e.target.value) || 1))}
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                padding: "8px 12px",
+                borderRadius: 8,
+                border: "1.5px solid #CBD5E1",
+                fontSize: 13,
+                fontWeight: 600
+              }}
+            />
+            <div style={{ fontSize: 11, color: "#64748B", marginTop: 3 }}>
+              Total Order Qty: {(Number(order?.qty) || 0).toLocaleString()} pcs
+            </div>
+          </div>
+
+          {/* Reason / Transfer Notes */}
+          <div>
+            <label style={{ fontSize: 12.5, fontWeight: 700, color: "#0F172A", display: "block", marginBottom: 6 }}>
+              Shift Reason / Management Notes
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. Moved remaining sewing & packing stages to Unit 2 due to line capacity constraint"
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                padding: "8px 12px",
+                borderRadius: 8,
+                border: "1.5px solid #CBD5E1",
+                fontSize: 12.5
+              }}
+            />
+          </div>
+
+          {/* Footer Buttons */}
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8 }}>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                padding: "8px 16px",
+                borderRadius: 8,
+                border: "1px solid #CBD5E1",
+                background: "#FFFFFF",
+                color: "#475569",
+                fontSize: 12.5,
+                fontWeight: 600,
+                cursor: "pointer"
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!targetUnitId}
+              style={{
+                padding: "8px 18px",
+                borderRadius: 8,
+                border: "none",
+                background: targetUnitId ? "#0D9488" : "#94A3B8",
+                color: "#FFFFFF",
+                fontSize: 12.5,
+                fontWeight: 700,
+                cursor: targetUnitId ? "pointer" : "not-allowed",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                boxShadow: targetUnitId ? "0 2px 4px rgba(13, 148, 136, 0.25)" : "none"
+              }}
+            >
+              <ArrowRightLeft size={13} /> Confirm Unit Shift
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export function OrderWorkspace({
   order, onBack, onUpdateStages, role, activeUser, onSetTemplate, onSetCostingTemplate,
   onUpdateCostingRow, onAddCostingRow, onUpdateShippedQty, onPreProdField,
@@ -3175,13 +3584,105 @@ export function OrderWorkspace({
   suppliers = [], onAssignSupplier, onAssignWork, onAddProductionLog, onDeleteProductionLog, onUpdateInspectionData, onUpdateCertificates, allOrders = [], people = [],
   teams = [],
   onReportComplaint,
-  onPushNotification
+  onPushNotification,
+  units = [],
+  onUpdateOrder = null
 }) {
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showAlignModal, setShowAlignModal] = useState(false);
   const [disputeModalData, setDisputeModalData] = useState(null);
   const [colourwayModalStageIdx, setColourwayModalStageIdx] = useState(null);
+  const [showUnitTransferModal, setShowUnitTransferModal] = useState(false);
   const [localStages, setLocalStages] = useState(order?.stages || []);
+
+  // Determine current unit assigned to this order
+  const currentUnit = useMemo(() => {
+    if (order?.unitId) {
+      const found = (units || []).find(u => u.id === order.unitId || u.code === order.unitId);
+      if (found) return found;
+    }
+    if (order?.unitName) {
+      const found = (units || []).find(u => u.name === order.unitName);
+      if (found) return found;
+    }
+    return (units && units[0]) || { id: "unit-1", name: "Unit 1 - Main Apparel Factory", code: "UNT-01" };
+  }, [order?.unitId, order?.unitName, units]);
+
+  // Execute Unit Shift
+  const handleConfirmUnitTransfer = ({ targetUnit, targetIndices, scope, transferQty, notes }) => {
+    if (!targetUnit) return;
+
+    const targetIndicesSet = new Set(targetIndices);
+    const updatedStages = (orderStages || []).map((s, i) => {
+      if (targetIndicesSet.has(i)) {
+        return {
+          ...s,
+          unitId: targetUnit.id,
+          unitName: targetUnit.name,
+          unitCode: targetUnit.code,
+          unitShiftedAt: new Date().toISOString()
+        };
+      }
+      return s;
+    });
+
+    setLocalStages(updatedStages);
+    if (onUpdateStages) {
+      onUpdateStages(order.id, updatedStages);
+    }
+
+    const updatedOrderFields = {
+      unitId: targetUnit.id,
+      unitName: targetUnit.name,
+      unitCode: targetUnit.code,
+      stages: updatedStages
+    };
+
+    if (onUpdateOrder) {
+      onUpdateOrder(order.id, updatedOrderFields);
+    }
+
+    // Record movement in ledger
+    try {
+      const existingLedger = JSON.parse(localStorage.getItem("loom_unit_movement_ledger") || "[]");
+      const targetStageNames = targetIndices.map(i => orderStages[i]?.name).filter(Boolean);
+      const stageScopeLabel =
+        scope === "all_remaining"
+          ? `Remaining Stages (${targetIndices.length} stages from current)`
+          : scope === "entire"
+          ? `Entire Order (${targetIndices.length} stages)`
+          : `Selected (${targetIndices.length}): ${targetStageNames.slice(0, 2).join(", ")}${targetStageNames.length > 2 ? "..." : ""}`;
+
+      const newEntry = {
+        id: `mov-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        timestamp: new Date().toISOString(),
+        orderId: order.id,
+        style: order.style,
+        buyer: order.buyer,
+        qty: transferQty || Number(order.qty) || 0,
+        fromUnitId: currentUnit.id,
+        fromUnitName: currentUnit.name,
+        toUnitId: targetUnit.id,
+        toUnitName: targetUnit.name,
+        stageScope: stageScopeLabel,
+        stageCount: targetIndices.length,
+        notes: notes || `Shifted ${stageScopeLabel} to ${targetUnit.name}`,
+        shiftedBy: role?.label || activeUser?.name || "Merchandiser"
+      };
+
+      const updatedLedger = [newEntry, ...existingLedger];
+      localStorage.setItem("loom_unit_movement_ledger", JSON.stringify(updatedLedger));
+    } catch (e) {}
+
+    if (onPushNotification) {
+      onPushNotification(
+        `Order #${order.id} (${order.style}) shifted to ${targetUnit.name} (${targetIndices.length} stages)`,
+        "info"
+      );
+    }
+
+    setShowUnitTransferModal(false);
+  };
 
   useEffect(() => {
     setLocalStages(order?.stages || []);
@@ -3508,6 +4009,7 @@ export function OrderWorkspace({
               key={i}
               stage={s}
               idx={i}
+              currentOrderUnit={currentUnit}
               onCycle={cycle}
               onUndo={undoStage}
               canUndo={isMDOrAdmin}
@@ -3610,7 +4112,35 @@ export function OrderWorkspace({
             ) : null}
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          {/* Assigned Unit Button (matching Assign to Supplier button in size) */}
+          <button
+            type="button"
+            onClick={() => setShowUnitTransferModal(true)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              background: "#0D9488",
+              color: "#FFFFFF",
+              border: "none",
+              borderRadius: 8,
+              padding: "7px 14px",
+              fontSize: 12.5,
+              fontWeight: 600,
+              cursor: "pointer",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+              transition: "all 0.15s ease"
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = "#0F766E"}
+            onMouseLeave={e => e.currentTarget.style.background = "#0D9488"}
+            title="Shift running stages or entire order to another manufacturing unit"
+          >
+            <Factory size={14} />
+            <span>{currentUnit.code || "UNT-01"} {currentUnit.name?.split("-")[0]?.trim() || "Unit 1"} · Shift Unit</span>
+            <ArrowRightLeft size={12} />
+          </button>
+
           <button
             onClick={() => setShowAssignModal(true)}
             style={{
@@ -3678,6 +4208,18 @@ export function OrderWorkspace({
         onPushNotification={onPushNotification}
         onPreProdField={onPreProdField}
       />
+
+      {showUnitTransferModal && (
+        <OrderUnitTransferModal
+          isOpen={showUnitTransferModal}
+          onClose={() => setShowUnitTransferModal(false)}
+          order={order}
+          stages={orderStages}
+          units={units}
+          currentUnit={currentUnit}
+          onConfirmTransfer={handleConfirmUnitTransfer}
+        />
+      )}
 
       {showAssignModal && (
         <AssignWorkModal
