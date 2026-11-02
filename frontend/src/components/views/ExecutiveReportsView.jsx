@@ -2,7 +2,7 @@ import React, { useState, useMemo } from "react";
 import {
   BarChart3, Download, Search, Filter, Layers, CheckCircle2, Clock,
   AlertTriangle, ArrowUpRight, ArrowDownRight, TrendingUp, Users, ChevronRight,
-  FileSpreadsheet, Sparkles, Building2, Calendar, CheckSquare
+  FileSpreadsheet, Sparkles, Building2, Calendar, CheckSquare, ArrowLeft, Award, Activity
 } from "lucide-react";
 import { Card, CardHeader, PageHeader } from "../common/CommonUI.jsx";
 import { computeDynamicOrderRisk, parseShipDateSafe } from "../../constants/loomData.js";
@@ -19,10 +19,80 @@ import { computeOrderStageSchedules } from "../order/OrderWorkspace.jsx";
  * 6. Department-wise Delay Summary (root-cause view)
  */
 export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = [], buyers = [], onOpenOrder }) {
+  const [selectedReport, setSelectedReport] = useState("menu");
   const [activeTab, setActiveTab] = useState("kpiSummary");
   const [buyerFilter, setBuyerFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+
+  const reportModules = [
+    {
+      key: "kpiSummary",
+      number: "1",
+      title: "Executive KPI Summary",
+      desc: "High-level management scorecard with live order health, on-time delivery %, claims & compliance.",
+      metric: "13 Core KPIs",
+      color: "#0D9488",
+      bg: "#F0FDFA",
+      border: "#CCFBF1",
+      icon: Award
+    },
+    {
+      key: "activeTna",
+      number: "2",
+      title: "Active T&A Order Status",
+      desc: "Complete order-level manufacturing pipeline with Cut, Sewn, Finished, Packed, Shipped & Balance pcs.",
+      metric: `${orders.filter(o => !o.isDeleted).length} Orders`,
+      color: "#2563EB",
+      bg: "#EFF6FF",
+      border: "#DBEAFE",
+      icon: FileSpreadsheet
+    },
+    {
+      key: "stageFunnel",
+      number: "3",
+      title: "Stage-wise Quantity Funnel",
+      desc: "Visual manufacturing WIP inventory across stages with intelligent production bottleneck detection.",
+      metric: "WIP Funnel",
+      color: "#7C3AED",
+      bg: "#F5F3FF",
+      border: "#EDE9FE",
+      icon: Filter
+    },
+    {
+      key: "buyerSummary",
+      number: "4",
+      title: "Buyer-wise Summary",
+      desc: "Comprehensive performance overview grouped by buyer brand with on-time delivery rates and balance.",
+      metric: "Buyer Portfolio",
+      color: "#D97706",
+      bg: "#FFFBEB",
+      border: "#FEF3C7",
+      icon: Building2
+    },
+    {
+      key: "milestoneTracker",
+      number: "5",
+      title: "T&A Milestone Tracker",
+      desc: "Task-level schedule tracker with real calendar date ranges (D/M/YY), owner tracking & delay days.",
+      metric: "Schedule Dates",
+      color: "#DB2777",
+      bg: "#FDF2F8",
+      border: "#FCE7F3",
+      icon: Calendar
+    },
+    {
+      key: "deptDelaySummary",
+      number: "6",
+      title: "Department Delay Analysis",
+      desc: "Root-cause delay ranking across all departments with total delay days, pending tasks & late percentages.",
+      metric: "Root Cause",
+      color: "#DC2626",
+      bg: "#FEF2F2",
+      border: "#FEE2E2",
+      icon: Clock
+    }
+  ];
 
   // Base list of non-deleted active orders
   const activeOrders = useMemo(() => {
@@ -79,7 +149,37 @@ export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = 
     return order.updatedBy || "Merchandiser";
   };
 
-  // Compute Stage Quantities (Cut, Sewn, Finished, Packed, Shipped) from order
+  const formatScheduleDateRange = (d1, d2) => {
+    if (!d1 || isNaN(d1.getTime())) return "—";
+    const f = (d) => `${d.getDate()}/${d.getMonth() + 1}/${String(d.getFullYear()).slice(-2)}`;
+    if (!d2 || isNaN(d2.getTime()) || d1.getTime() === d2.getTime()) {
+      return f(d1);
+    }
+    return `${f(d1)} - ${f(d2)}`;
+  };
+
+  const resolveOrderStartDate = (order) => {
+    if (order.orderDate) {
+      const d = new Date(order.orderDate);
+      if (!isNaN(d.getTime())) return d;
+    }
+    if (order.createdAt) {
+      const d = new Date(order.createdAt);
+      if (!isNaN(d.getTime())) return d;
+    }
+    const rawShip = order.shipDate || order.ship;
+    if (rawShip) {
+      const shipD = parseShipDateSafe(rawShip);
+      if (shipD && !isNaN(shipD.getTime())) {
+        const startD = new Date(shipD);
+        startD.setDate(startD.getDate() - 90);
+        return startD;
+      }
+    }
+    return new Date();
+  };
+
+    // Compute Stage Quantities (Cut, Sewn, Finished, Packed, Shipped) from order
   const computeOrderStageQuantities = (order) => {
     const orderQty = Number(order.qty) || 0;
     const shippedQty = Number(order.shippedQty) || (order.completed ? orderQty : 0);
@@ -142,36 +242,50 @@ export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = 
     // Physical rule: Finished cannot exceed Sewn
     finishedQty = Math.min(sewnQty, Math.max(0, finishedQty));
 
+    // Check if order is completely finished (Mark All Done or completed flag)
+    const isAllStagesDone = stages.length > 0 && stages.every(s => s.status === "done");
+    const isOrderCompleted = Boolean(order.completed || isAllStagesDone);
+
     // 4. Packed Qty:
     let packedQty = order.packedQty !== undefined && order.packedQty !== "" ? Number(order.packedQty) : null;
     const packStg = findStage(/pack|packing|final audit/);
     const colourwayPack = getStageCompletedPieces(packStg);
 
-    if (colourwayPack !== null) {
+    if (isOrderCompleted) {
+      cutQty = orderQty;
+      sewnQty = orderQty;
+      finishedQty = orderQty;
+      packedQty = orderQty;
+    } else if (colourwayPack !== null) {
       packedQty = colourwayPack;
     } else if (packedQty === null) {
       if (packStg?.status === "done") packedQty = finishedQty;
-      else if (packStg?.status === "in_progress") packedQty = Math.round(finishedQty * 0.6);
-      else packedQty = 0;
+      else packedQty = 0; // Currently zero when not explicitly packed/done
     }
     // Physical rule: Packed cannot exceed Finished
     packedQty = Math.min(finishedQty, Math.max(0, packedQty));
 
-    // Shipped Qty: cannot exceed packedQty (or orderQty)
-    const validShipped = Math.min(packedQty > 0 ? packedQty : orderQty, shippedQty);
-    const balanceQty = Math.max(0, orderQty - validShipped);
-    const packedPct = orderQty > 0 ? (packedQty / orderQty) * 100 : 0;
+    // Shipped Qty: When order is marked all done / completed, full qty moves to shipped
+    const validShipped = isOrderCompleted
+      ? orderQty
+      : Math.min(packedQty > 0 ? packedQty : orderQty, shippedQty);
+    const balanceQty = isOrderCompleted ? 0 : Math.max(0, orderQty - validShipped);
+    const packedPct = isOrderCompleted ? 100 : (orderQty > 0 ? (packedQty / orderQty) * 100 : 0);
     const daysToShip = computeDaysToShip(order);
 
-    // Dynamic order status rule:
+    // Order status strictly matches Dashboard status:
     const dynamicRisk = computeDynamicOrderRisk(order);
     let status = "On Track";
-    if (balanceQty <= 0 && orderQty > 0) {
+    if (isOrderCompleted || (balanceQty <= 0 && orderQty > 0)) {
       status = "Shipped";
-    } else if (order.status === "Delayed" || daysToShip < 0) {
+    } else if (order.status === "Delayed") {
       status = "Delayed";
-    } else if (order.status === "At Risk" || dynamicRisk === "high" || (daysToShip <= 7 && packedPct < 85)) {
+    } else if (order.status === "At Risk") {
       status = "At Risk";
+    } else if (order.status === "On Track") {
+      status = "On Track";
+    } else if (daysToShip < 0) {
+      status = "Delayed";
     }
 
     return {
@@ -202,6 +316,7 @@ export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = 
         merchandiser: resolveMerchandiserName(order),
         orderQty: Number(order.qty) || 0,
         shipDate: order.shipDate || order.ship || "—",
+        orderDate: order.orderDate || order.createdAt || null,
         ...q,
         stages: order.stages || []
       };
@@ -241,19 +356,41 @@ export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = 
       ? Math.max(0, Math.min(100, Math.round(((totalOrders - delayedOrders) / totalOrders) * 100)))
       : 100;
 
-    // Milestone tasks & delay calculation: count stages with delay reason or delayed status
+    // Milestone tasks & delay calculation: unified with Milestone Tracker
     let delayedTasksCount = 0;
     const deptDelayDaysMap = {};
 
     orderDetailedRows.forEach(r => {
-      (r.stages || []).forEach(s => {
-        const hasReason = Boolean(s && typeof s.reason === "string" && s.reason.trim() !== "" && s.reason !== "No delay flagged");
-        const isLate = s.status === "delayed" || hasReason;
-        if (isLate) {
+      const stages = r.stages || [];
+      const orderStartDate = resolveOrderStartDate(r);
+      const schedules = computeOrderStageSchedules(stages, orderStartDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      stages.forEach((stg, sIdx) => {
+        const sch = schedules[sIdx] || {};
+        const isDone = stg.status === "done";
+        const hasReason = Boolean(stg.reason && typeof stg.reason === "string" && stg.reason.trim() !== "" && stg.reason !== "No delay flagged");
+        const shiftDays = sch.shiftDays || sch.doneDelayDays || Number(stg.delayDays) || 0;
+        let isOverdue = false;
+        let overdueDays = 0;
+        if (!isDone && sch.origEndDate) {
+          const target = new Date(sch.origEndDate);
+          target.setHours(0, 0, 0, 0);
+          if (today > target) {
+            isOverdue = true;
+            overdueDays = Math.round((today.getTime() - target.getTime()) / (1000 * 60 * 60 * 24));
+          }
+        }
+        const isDelayed = !isDone && (stg.status === "delayed" || isOverdue || hasReason);
+        if (isDelayed) {
           delayedTasksCount++;
-          const dept = s.dept || "Merchandising";
-          const days = Number(s.delayDays) || (s.status === "delayed" ? 3 : 2);
+          const dept = stg.dept || "Merchandising";
+          const days = Math.max(1, overdueDays || shiftDays || Number(stg.delayDays) || 3);
           deptDelayDaysMap[dept] = (deptDelayDaysMap[dept] || 0) + days;
+        } else if (isDone && (hasReason || shiftDays > 0)) {
+          const dept = stg.dept || "Merchandising";
+          deptDelayDaysMap[dept] = (deptDelayDaysMap[dept] || 0) + Math.max(1, shiftDays);
         }
       });
     });
@@ -273,12 +410,12 @@ export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = 
     const totalFinished = orderDetailedRows.reduce((a, r) => a + r.finishedQty, 0);
     const totalPacked = orderDetailedRows.reduce((a, r) => a + r.packedQty, 0);
 
+    // Production stage bottlenecks: Cutting, Sewing, Finishing, Packing (Shipping is logistics, not manufacturing bottleneck)
     const gaps = [
       { stage: "Cutting", gap: Math.max(0, totalOrderQty - totalCut) },
       { stage: "Sewing", gap: Math.max(0, totalCut - totalSewn) },
       { stage: "Finishing", gap: Math.max(0, totalSewn - totalFinished) },
-      { stage: "Packing", gap: Math.max(0, totalFinished - totalPacked) },
-      { stage: "Shipping", gap: Math.max(0, totalPacked - totalShippedQty) }
+      { stage: "Packing", gap: Math.max(0, totalFinished - totalPacked) }
     ];
     gaps.sort((a, b) => b.gap - a.gap);
     const biggestBottleneck = gaps[0]?.gap > 0 ? gaps[0].stage : "Cutting";
@@ -349,7 +486,8 @@ export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = 
     let maxGap = -1;
     let bottleneckStage = "";
     stages.forEach((stg, i) => {
-      if (i > 0) {
+      // Evaluate production stage bottlenecks (skip Shipped as it is logistics)
+      if (i > 0 && stg.name !== "Shipped") {
         const gap = Math.max(0, stg.prevQty - stg.qty);
         if (gap > maxGap) {
           maxGap = gap;
@@ -418,12 +556,18 @@ export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = 
 
     orderDetailedRows.forEach((r) => {
       const stages = r.stages || [];
-      const orderStartDate = r.shipDate ? null : null; // computeOrderStageSchedules handles null by defaulting
+      const orderStartDate = resolveOrderStartDate(r);
       const schedules = computeOrderStageSchedules(stages, orderStartDate);
 
       stages.forEach((stg, sIdx) => {
         const sch = schedules[sIdx] || {};
-        const plannedStr = stg.planned || (sch.origEndDate ? sch.origEndDate.toISOString().slice(0, 10) : "—");
+        // Convert relative day range to calendar date range like 5/7/26 - 10/7/26
+        let plannedStr = "—";
+        if (sch.origStartDate && sch.origEndDate) {
+          plannedStr = formatScheduleDateRange(sch.origStartDate, sch.origEndDate);
+        } else if (stg.planned) {
+          plannedStr = stg.planned;
+        }
         const actualDate = stg.completedAt
           ? stg.completedAt.split("T")[0]
           : (stg.status === "done" ? (stg.completedOn || "Done") : "—");
@@ -570,7 +714,6 @@ export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = 
       csvContent += `"Delayed milestone tasks","${kpiSummary.delayedMilestoneTasks}","From Milestone Tracker"\n`;
       csvContent += `"Department with most delay days","${kpiSummary.topDelayDept}","Top bottleneck department"\n`;
       csvContent += `"Biggest stage bottleneck","${kpiSummary.biggestBottleneck}","Stage with largest qty gap"\n`;
-      csvContent += `"First pass rate %","${kpiSummary.firstPassRate}","Quality module metric"\n`;
       csvContent += `"CAPAs registered (open)","${kpiSummary.capasOpen}","Compliance module"\n`;
       csvContent += `"Claims this month","${kpiSummary.claimsCount}","Compliance module"\n`;
     }
@@ -613,180 +756,437 @@ export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = 
     );
   };
 
-  return (
-    <div style={{ paddingBottom: 40 }}>
-      {/* Top Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
-        <div>
-          <h1 style={{ fontSize: 24, fontWeight: 700, color: "#151B2E", margin: 0, display: "flex", alignItems: "center", gap: 10 }}>
-            <BarChart3 size={24} color="#1F9E8D" />
-            Executive Management Reports
-          </h1>
-          <div style={{ fontSize: 13, color: "#6B7280", marginTop: 4 }}>
-            Auto-calculated real-time tracking across 131 Live Production Orders & T&A Workflows
+  // When in main menu, render the sleek Report Directory Hub
+  if (selectedReport === "menu") {
+    return (
+      <div style={{ paddingBottom: 48, maxWidth: 1400, margin: "0 auto" }}>
+        {/* Hub Header */}
+        <div style={{
+          background: "linear-gradient(135deg, #0F172A 0%, #1E293B 100%)",
+          borderRadius: 16,
+          padding: "24px 28px",
+          color: "#FFFFFF",
+          marginBottom: 24,
+          boxShadow: "0 4px 20px -2px rgba(15, 23, 42, 0.12)"
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16 }}>
+            <div>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(31, 158, 141, 0.2)", color: "#2DD4BF", padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>
+                <Sparkles size={13} />
+                Live PLM Intelligence
+              </div>
+              <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: -0.3 }}>
+                Executive Reports & Analytics Hub
+              </h1>
+              <p style={{ fontSize: 13.5, color: "#94A3B8", margin: "6px 0 0", maxWidth: 650 }}>
+                Select a specialized report module to inspect manufacturing stage quantities, order health, milestone schedules, and root-cause department delays.
+              </p>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <button
+                onClick={handleExportCSV}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                  background: "#1F9E8D",
+                  color: "#FFFFFF",
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "9px 16px",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  boxShadow: "0 2px 4px rgba(0,0,0,0.15)",
+                  transition: "all 0.2s"
+                }}
+              >
+                <Download size={15} />
+                Export Active Report
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Metrics Bar inside Header */}
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+            gap: 12,
+            marginTop: 22,
+            paddingTop: 20,
+            borderTop: "1px solid rgba(255, 255, 255, 0.1)"
+          }}>
+            <div>
+              <div style={{ fontSize: 11.5, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.4 }}>Active Orders</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: "#FFFFFF", marginTop: 2 }}>{kpiSummary.activeOrders}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11.5, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.4 }}>Total Order Qty</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: "#FFFFFF", marginTop: 2 }}>{kpiSummary.totalOrderQty.toLocaleString()} <span style={{ fontSize: 12, fontWeight: 500, color: "#94A3B8" }}>pcs</span></div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11.5, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.4 }}>Orders At Risk</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: "#F59E0B", marginTop: 2 }}>{kpiSummary.atRiskOrders}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11.5, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.4 }}>Delayed Orders</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: kpiSummary.delayedOrders > 0 ? "#EF4444" : "#10B981", marginTop: 2 }}>{kpiSummary.delayedOrders}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11.5, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.4 }}>On-Time Delivery</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: "#10B981", marginTop: 2 }}>{kpiSummary.onTimeDeliveryPct}</div>
+            </div>
           </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <button
-            onClick={handleExportCSV}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              background: "#1F9E8D",
-              color: "#FFFFFF",
-              border: "none",
-              borderRadius: 8,
-              padding: "8px 14px",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: "pointer",
-              boxShadow: "0 1px 2px rgba(0,0,0,0.06)"
-            }}
-          >
-            <Download size={14} />
-            Export to Excel / CSV
-          </button>
+        {/* Section Title */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <div>
+            <h2 style={{ fontSize: 17, fontWeight: 700, color: "#0F172A", margin: 0 }}>Report Modules</h2>
+            <div style={{ fontSize: 12.5, color: "#64748B", marginTop: 2 }}>Choose any category below to view detailed analytics and download data</div>
+          </div>
+        </div>
+
+        {/* 6 Report Cards Grid */}
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
+          gap: 16
+        }}>
+          {reportModules.map(mod => {
+            const Icon = mod.icon;
+            return (
+              <div
+                key={mod.key}
+                onClick={() => {
+                  setActiveTab(mod.key);
+                  setSelectedReport(mod.key);
+                }}
+                style={{
+                  background: "#FFFFFF",
+                  border: "1px solid #E2E8F0",
+                  borderRadius: 14,
+                  padding: "22px",
+                  cursor: "pointer",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                  transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.transform = "translateY(-3px)";
+                  e.currentTarget.style.boxShadow = "0 8px 24px -4px rgba(15, 23, 42, 0.08)";
+                  e.currentTarget.style.borderColor = mod.color;
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.04)";
+                  e.currentTarget.style.borderColor = "#E2E8F0";
+                }}
+              >
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+                    <div style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 12,
+                      background: mod.bg,
+                      border: `1px solid ${mod.border}`,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: mod.color
+                    }}>
+                      <Icon size={22} />
+                    </div>
+
+                    <span style={{
+                      fontSize: 11.5,
+                      fontWeight: 700,
+                      background: mod.bg,
+                      color: mod.color,
+                      padding: "3px 10px",
+                      borderRadius: 999,
+                      border: `1px solid ${mod.border}`
+                    }}>
+                      {mod.metric}
+                    </span>
+                  </div>
+
+                  <div style={{ fontSize: 11, fontWeight: 700, color: mod.color, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 }}>
+                    Report #{mod.number}
+                  </div>
+                  <h3 style={{ fontSize: 16.5, fontWeight: 700, color: "#0F172A", margin: "0 0 6px 0" }}>
+                    {mod.title}
+                  </h3>
+                  <p style={{ fontSize: 13, color: "#64748B", margin: 0, lineHeight: 1.5 }}>
+                    {mod.desc}
+                  </p>
+                </div>
+
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginTop: 20,
+                  paddingTop: 14,
+                  borderTop: "1px solid #F1F5F9"
+                }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 600, color: "#0F172A" }}>
+                    Open Module
+                  </span>
+                  <div style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 8,
+                    background: mod.bg,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: mod.color
+                  }}>
+                    <ChevronRight size={16} />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
+    );
+  }
 
-      {/* Navigation Sub-Tabs */}
+  // Dedicated Detailed Report View
+  const currentModule = reportModules.find(m => m.key === activeTab) || reportModules[0];
+  const CurrentIcon = currentModule.icon;
+
+  return (
+    <div style={{ paddingBottom: 48, maxWidth: 1400, margin: "0 auto" }}>
+      {/* Navigation & Header Banner */}
       <div style={{
-        display: "flex",
-        gap: 6,
-        background: "#F3F4F6",
-        padding: "4px 6px",
-        borderRadius: 10,
+        background: "#FFFFFF",
+        border: "1px solid #E2E8F0",
+        borderRadius: 14,
+        padding: "16px 20px",
         marginBottom: 20,
-        overflowX: "auto"
+        boxShadow: "0 1px 3px rgba(0,0,0,0.04)"
       }}>
-        {[
-          { key: "kpiSummary", label: "1. KPI Summary", count: null },
-          { key: "activeTna", label: "2. Active T&A Status", count: filteredOrderRows.length },
-          { key: "stageFunnel", label: "3. Quantity Funnel", count: "WIP" },
-          { key: "buyerSummary", label: "4. Buyer-wise Summary", count: buyerSummaryData.length },
-          { key: "milestoneTracker", label: "5. Milestone Tracker", count: allMilestoneTasks.length },
-          { key: "deptDelaySummary", label: "6. Department Delay", count: departmentDelaySummary.length }
-        ].map(t => {
-          const isActive = activeTab === t.key;
-          return (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+          {/* Back button & Title */}
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             <button
-              key={t.key}
-              onClick={() => setActiveTab(t.key)}
+              onClick={() => setSelectedReport("menu")}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
                 gap: 6,
-                padding: "8px 14px",
+                background: "#F8FAFC",
+                color: "#1E293B",
+                border: "1px solid #CBD5E1",
                 borderRadius: 8,
-                border: "none",
-                background: isActive ? "#FFFFFF" : "transparent",
-                color: isActive ? "#151B2E" : "#4B5563",
-                fontSize: 13,
-                fontWeight: isActive ? 700 : 500,
+                padding: "7px 12px",
+                fontSize: 12.5,
+                fontWeight: 600,
                 cursor: "pointer",
-                boxShadow: isActive ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
-                whiteSpace: "nowrap",
                 transition: "all 0.15s ease"
               }}
+              onMouseEnter={e => { e.currentTarget.style.background = "#E2E8F0"; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "#F8FAFC"; }}
             >
-              {t.label}
-              {t.count !== null && (
-                <span style={{
-                  fontSize: 11,
-                  background: isActive ? "#E1F5EE" : "#E5E7EB",
-                  color: isActive ? "#085041" : "#6B7280",
-                  padding: "1px 6px",
-                  borderRadius: 999,
-                  fontWeight: 600
-                }}>
-                  {t.count}
-                </span>
-              )}
+              <ArrowLeft size={14} />
+              Back to Reports Menu
             </button>
-          );
-        })}
+
+            <div style={{ height: 24, width: 1, background: "#E2E8F0" }} />
+
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{
+                width: 34,
+                height: 34,
+                borderRadius: 10,
+                background: currentModule.bg,
+                border: `1px solid ${currentModule.border}`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: currentModule.color
+              }}>
+                <CurrentIcon size={18} />
+              </div>
+              <div>
+                <h1 style={{ fontSize: 18, fontWeight: 700, color: "#0F172A", margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                  {currentModule.title}
+                  <span style={{ fontSize: 11.5, fontWeight: 700, background: currentModule.bg, color: currentModule.color, padding: "2px 8px", borderRadius: 999, border: `1px solid ${currentModule.border}` }}>
+                    {currentModule.metric}
+                  </span>
+                </h1>
+                <div style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>{currentModule.desc}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Action buttons */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button
+              onClick={handleExportCSV}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                background: "#1F9E8D",
+                color: "#FFFFFF",
+                border: "none",
+                borderRadius: 8,
+                padding: "8px 14px",
+                fontSize: 12.5,
+                fontWeight: 600,
+                cursor: "pointer",
+                boxShadow: "0 1px 2px rgba(0,0,0,0.06)"
+              }}
+            >
+              <Download size={14} />
+              Export to Excel / CSV
+            </button>
+          </div>
+        </div>
+
+
       </div>
 
       {/* ============================================================== */}
-      {/* TAB 1: MANAGEMENT KPI SUMMARY */}
+      {/* TAB 1: MANAGEMENT KPI SUMMARY (Modern Executive Grid) */}
       {/* ============================================================== */}
       {activeTab === "kpiSummary" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          {/* Section 1: Core Order & Fulfillment Volume */}
           <div style={{
             background: "#FFFFFF",
-            borderRadius: 12,
-            border: "1px solid #E5E7EB",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-            overflow: "hidden"
+            borderRadius: 14,
+            border: "1px solid #E2E8F0",
+            padding: "20px 24px",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.03)"
           }}>
-            <div style={{
-              background: "#1E3A5F",
-              color: "#FFFFFF",
-              padding: "14px 20px",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center"
-            }}>
-              <div>
-                <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Management KPI Summary</h2>
-                <div style={{ fontSize: 12, color: "#93C5FD", marginTop: 2 }}>
-                  Auto-calculated from live T&A orders and quality/compliance modules
-                </div>
-              </div>
-              <span style={{ fontSize: 12, background: "rgba(255,255,255,0.15)", padding: "4px 10px", borderRadius: 6 }}>
-                Live Production Metrics
-              </span>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+              <span style={{ width: 8, height: 8, borderRadius: 999, background: "#0D9488" }} />
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: "#0F172A", margin: 0, textTransform: "uppercase", letterSpacing: 0.4 }}>
+                1. Order Fulfillment & Volume Health
+              </h3>
             </div>
 
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5 }}>
-              <thead>
-                <tr style={{ background: "#F8FAFC", borderBottom: "1px solid #E2E8F0", color: "#475569", textAlign: "left" }}>
-                  <th style={{ padding: "12px 20px", fontWeight: 700, width: "38%" }}>KPI</th>
-                  <th style={{ padding: "12px 20px", fontWeight: 700, width: "24%", textAlign: "right" }}>Value</th>
-                  <th style={{ padding: "12px 20px", fontWeight: 700, width: "38%" }}>Basis / Formula</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[
-                  ["Active T&A orders", kpiSummary.activeOrders, "Count of rows in Active T&A", false],
-                  ["Total order qty (pcs)", kpiSummary.totalOrderQty.toLocaleString(), "Sum of order qty", false],
-                  ["Total shipped qty (pcs)", kpiSummary.totalShippedQty.toLocaleString(), "Sum of shipped qty", false],
-                  ["Balance qty to ship (pcs)", kpiSummary.totalBalanceQty.toLocaleString(), "Order - shipped", false],
-                  ["Shipped % of order qty", kpiSummary.shippedPct, "Shipped / order", false],
-                  ["Delayed orders", kpiSummary.delayedOrders, "Ship date passed, balance remaining", kpiSummary.delayedOrders > 0],
-                  ["At-risk orders", kpiSummary.atRiskOrders, "Ship <=7 days and packed <85%", kpiSummary.atRiskOrders > 0],
-                  ["On-time delivery % (orders)", kpiSummary.onTimeDeliveryPct, "(Orders - delayed) / orders", false],
-                  ["Delayed milestone tasks", kpiSummary.delayedMilestoneTasks, "From Milestone Tracker", false],
-                  ["Department with most delay days", kpiSummary.topDelayDept, "Top bottleneck department", true],
-                  ["Biggest stage bottleneck", kpiSummary.biggestBottleneck, "Stage with largest qty gap", true],
-                  ["First pass rate %", kpiSummary.firstPassRate, "Quality module live inspection score", false, true],
-                  ["CAPAs registered (open)", kpiSummary.capasOpen, "Compliance module open issues", false, true],
-                  ["Claims this month (count)", kpiSummary.claimsCount, "Compliance debit / claim notes", false, true]
-                ].map(([label, val, basis, isWarning, isBlue], idx) => (
-                  <tr
-                    key={label}
-                    style={{
-                      borderBottom: "1px solid #F1F5F9",
-                      background: idx % 2 === 0 ? "#FFFFFF" : "#F8FAFC"
-                    }}
-                  >
-                    <td style={{ padding: "12px 20px", color: "#1E293B", fontWeight: 500 }}>{label}</td>
-                    <td style={{
-                      padding: "12px 20px",
-                      textAlign: "right",
-                      fontWeight: 700,
-                      color: isBlue ? "#2563EB" : isWarning ? "#DC2626" : "#0F172A",
-                      fontSize: 14
-                    }}>
-                      {val}
-                    </td>
-                    <td style={{ padding: "12px 20px", color: "#64748B", fontSize: 12.5 }}>{basis}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
+              <div style={{ background: "#F8FAFC", borderRadius: 10, padding: "14px 16px", border: "1px solid #EDF2F7" }}>
+                <div style={{ fontSize: 11.5, color: "#64748B", fontWeight: 600, textTransform: "uppercase" }}>Active T&A Orders</div>
+                <div style={{ fontSize: 24, fontWeight: 800, color: "#0F172A", marginTop: 4 }}>{kpiSummary.activeOrders}</div>
+                <div style={{ fontSize: 11.5, color: "#94A3B8", marginTop: 2 }}>Live manufacturing orders</div>
+              </div>
+
+              <div style={{ background: "#F8FAFC", borderRadius: 10, padding: "14px 16px", border: "1px solid #EDF2F7" }}>
+                <div style={{ fontSize: 11.5, color: "#64748B", fontWeight: 600, textTransform: "uppercase" }}>Total Order Volume</div>
+                <div style={{ fontSize: 24, fontWeight: 800, color: "#0F172A", marginTop: 4 }}>{kpiSummary.totalOrderQty.toLocaleString()} <span style={{ fontSize: 12, fontWeight: 500, color: "#64748B" }}>pcs</span></div>
+                <div style={{ fontSize: 11.5, color: "#94A3B8", marginTop: 2 }}>Total units across all styles</div>
+              </div>
+
+              <div style={{ background: "#F0FDF4", borderRadius: 10, padding: "14px 16px", border: "1px solid #DCFCE7" }}>
+                <div style={{ fontSize: 11.5, color: "#166534", fontWeight: 600, textTransform: "uppercase" }}>Shipped / Dispatched</div>
+                <div style={{ fontSize: 24, fontWeight: 800, color: "#15803D", marginTop: 4 }}>{kpiSummary.totalShippedQty.toLocaleString()} <span style={{ fontSize: 12, fontWeight: 500 }}>pcs</span></div>
+                <div style={{ fontSize: 11.5, color: "#16A34A", marginTop: 2 }}>{kpiSummary.shippedPct} of total order qty</div>
+              </div>
+
+              <div style={{ background: "#EFF6FF", borderRadius: 10, padding: "14px 16px", border: "1px solid #DBEAFE" }}>
+                <div style={{ fontSize: 11.5, color: "#1E40AF", fontWeight: 600, textTransform: "uppercase" }}>Balance Pending</div>
+                <div style={{ fontSize: 24, fontWeight: 800, color: "#1D4ED8", marginTop: 4 }}>{kpiSummary.totalBalanceQty.toLocaleString()} <span style={{ fontSize: 12, fontWeight: 500 }}>pcs</span></div>
+                <div style={{ fontSize: 11.5, color: "#3B82F6", marginTop: 2 }}>Units currently in pipeline</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 2: Delivery Schedule & Reliability */}
+          <div style={{
+            background: "#FFFFFF",
+            borderRadius: 14,
+            border: "1px solid #E2E8F0",
+            padding: "20px 24px",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.03)"
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+              <span style={{ width: 8, height: 8, borderRadius: 999, background: "#2563EB" }} />
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: "#0F172A", margin: 0, textTransform: "uppercase", letterSpacing: 0.4 }}>
+                2. On-Time Delivery & Schedule Risk
+              </h3>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 14 }}>
+              <div style={{ background: "#F0FDF4", borderRadius: 10, padding: "16px", border: "1px solid #DCFCE7" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 12, color: "#166534", fontWeight: 700, textTransform: "uppercase" }}>On-Time Delivery Rate</span>
+                  <span style={{ background: "#DCFCE7", color: "#15803D", padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 700 }}>Benchmark: &gt;95%</span>
+                </div>
+                <div style={{ fontSize: 28, fontWeight: 800, color: "#15803D", marginTop: 6 }}>{kpiSummary.onTimeDeliveryPct}</div>
+                <div style={{ fontSize: 12, color: "#166534", marginTop: 4 }}>Calculated from orders meeting promised ship dates</div>
+              </div>
+
+              <div style={{ background: kpiSummary.delayedOrders > 0 ? "#FEF2F2" : "#F8FAFC", borderRadius: 10, padding: "16px", border: kpiSummary.delayedOrders > 0 ? "1px solid #FEE2E2" : "1px solid #EDF2F7" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 12, color: kpiSummary.delayedOrders > 0 ? "#991B1B" : "#64748B", fontWeight: 700, textTransform: "uppercase" }}>Delayed Orders</span>
+                  <span style={{ background: kpiSummary.delayedOrders > 0 ? "#FEE2E2" : "#E2E8F0", color: kpiSummary.delayedOrders > 0 ? "#991B1B" : "#475569", padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 700 }}>Past Ship Date</span>
+                </div>
+                <div style={{ fontSize: 28, fontWeight: 800, color: kpiSummary.delayedOrders > 0 ? "#DC2626" : "#0F172A", marginTop: 6 }}>{kpiSummary.delayedOrders}</div>
+                <div style={{ fontSize: 12, color: kpiSummary.delayedOrders > 0 ? "#B91C1C" : "#64748B", marginTop: 4 }}>Orders with passed ship dates and pending balance</div>
+              </div>
+
+              <div style={{ background: "#FFFBEB", borderRadius: 10, padding: "16px", border: "1px solid #FEF3C7" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 12, color: "#92400E", fontWeight: 700, textTransform: "uppercase" }}>Orders At Risk</span>
+                  <span style={{ background: "#FEF3C7", color: "#B45309", padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 700 }}>Monitor Closely</span>
+                </div>
+                <div style={{ fontSize: 28, fontWeight: 800, color: "#D97706", marginTop: 6 }}>{kpiSummary.atRiskOrders}</div>
+                <div style={{ fontSize: 12, color: "#B45309", marginTop: 4 }}>Orders requiring priority merchandising follow-up</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 3: Bottleneck & Quality Compliance */}
+          <div style={{
+            background: "#FFFFFF",
+            borderRadius: 14,
+            border: "1px solid #E2E8F0",
+            padding: "20px 24px",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.03)"
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+              <span style={{ width: 8, height: 8, borderRadius: 999, background: "#8B5CF6" }} />
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: "#0F172A", margin: 0, textTransform: "uppercase", letterSpacing: 0.4 }}>
+                3. Bottleneck Analysis & Quality Compliance
+              </h3>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
+              <div style={{ background: "#F8FAFC", borderRadius: 10, padding: "14px 16px", border: "1px solid #EDF2F7" }}>
+                <div style={{ fontSize: 11.5, color: "#64748B", fontWeight: 600, textTransform: "uppercase" }}>Top Bottleneck Dept</div>
+                <div style={{ fontSize: 19, fontWeight: 800, color: "#7C3AED", marginTop: 6 }}>{kpiSummary.topDelayDept}</div>
+                <div style={{ fontSize: 11.5, color: "#94A3B8", marginTop: 3 }}>Department with most accumulated delay</div>
+              </div>
+
+              <div style={{ background: "#F8FAFC", borderRadius: 10, padding: "14px 16px", border: "1px solid #EDF2F7" }}>
+                <div style={{ fontSize: 11.5, color: "#64748B", fontWeight: 600, textTransform: "uppercase" }}>Critical Stage Bottleneck</div>
+                <div style={{ fontSize: 19, fontWeight: 800, color: "#C026D3", marginTop: 6 }}>{kpiSummary.biggestBottleneck}</div>
+                <div style={{ fontSize: 11.5, color: "#94A3B8", marginTop: 3 }}>Stage with highest production WIP gap</div>
+              </div>
+
+              <div style={{ background: "#F8FAFC", borderRadius: 10, padding: "14px 16px", border: "1px solid #EDF2F7" }}>
+                <div style={{ fontSize: 11.5, color: "#64748B", fontWeight: 600, textTransform: "uppercase" }}>Delayed Milestone Tasks</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: kpiSummary.delayedMilestoneTasks > 0 ? "#DC2626" : "#059669", marginTop: 4 }}>{kpiSummary.delayedMilestoneTasks}</div>
+                <div style={{ fontSize: 11.5, color: "#94A3B8", marginTop: 2 }}>Tasks currently delayed in milestone tracker</div>
+              </div>
+
+              <div style={{ background: "#F8FAFC", borderRadius: 10, padding: "14px 16px", border: "1px solid #EDF2F7" }}>
+                <div style={{ fontSize: 11.5, color: "#64748B", fontWeight: 600, textTransform: "uppercase" }}>Open CAPAs & Claims</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: "#0F172A", marginTop: 4 }}>{kpiSummary.capasOpen} <span style={{ fontSize: 12, fontWeight: 500, color: "#64748B" }}>CAPAs · {kpiSummary.claimsCount} claims</span></div>
+                <div style={{ fontSize: 11.5, color: "#94A3B8", marginTop: 2 }}>From compliance & debit notes register</div>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -797,7 +1197,7 @@ export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = 
       {activeTab === "activeTna" && (
         <div style={{ background: "#FFFFFF", borderRadius: 12, border: "1px solid #E5E7EB", overflow: "hidden" }}>
           {/* Controls Bar */}
-          <div style={{ padding: "14px 18px", borderBottom: "1px solid #E5E7EB", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, background: "#F8FAFC" }}>
+          <div style={{ padding: "16px 20px", borderBottom: "1px solid #E2E8F0", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, background: "#FFFFFF" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               {/* Search */}
               <div style={{ position: "relative" }}>
@@ -865,24 +1265,24 @@ export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = 
 
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-              <thead>
-                <tr style={{ background: "#1E3A5F", color: "#FFFFFF", textAlign: "left" }}>
-                  <th style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>T&A No</th>
-                  <th style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>Buyer</th>
-                  <th style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>Style</th>
-                  <th style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>PO No</th>
-                  <th style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>Merchandiser</th>
-                  <th style={{ padding: "10px 12px", textAlign: "right", whiteSpace: "nowrap" }}>Order Qty</th>
-                  <th style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>Ship Date</th>
-                  <th style={{ padding: "10px 12px", textAlign: "right", whiteSpace: "nowrap" }}>Cut Qty</th>
-                  <th style={{ padding: "10px 12px", textAlign: "right", whiteSpace: "nowrap" }}>Sewn Qty</th>
-                  <th style={{ padding: "10px 12px", textAlign: "right", whiteSpace: "nowrap" }}>Finished</th>
-                  <th style={{ padding: "10px 12px", textAlign: "right", whiteSpace: "nowrap" }}>Packed</th>
-                  <th style={{ padding: "10px 12px", textAlign: "right", whiteSpace: "nowrap" }}>Shipped</th>
-                  <th style={{ padding: "10px 12px", textAlign: "right", whiteSpace: "nowrap" }}>Balance</th>
-                  <th style={{ padding: "10px 12px", textAlign: "right", whiteSpace: "nowrap" }}>Packed %</th>
-                  <th style={{ padding: "10px 12px", textAlign: "center", whiteSpace: "nowrap" }}>Days to Ship</th>
-                  <th style={{ padding: "10px 12px", textAlign: "center", whiteSpace: "nowrap" }}>Status</th>
+              <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
+                <tr style={{ background: "#F8FAFC", color: "#475569", borderBottom: "1px solid #E2E8F0", textAlign: "left", whiteSpace: "nowrap", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.4 }}>
+                  <th style={{ padding: "11px 14px", fontWeight: 700 }}>T&A No</th>
+                  <th style={{ padding: "11px 14px", fontWeight: 700 }}>Buyer</th>
+                  <th style={{ padding: "11px 14px", fontWeight: 700 }}>Style</th>
+                  <th style={{ padding: "11px 14px", fontWeight: 700 }}>PO No</th>
+                  <th style={{ padding: "11px 14px", fontWeight: 700 }}>Merchandiser</th>
+                  <th style={{ padding: "11px 14px", fontWeight: 700, textAlign: "right" }}>Order Qty</th>
+                  <th style={{ padding: "11px 14px", fontWeight: 700 }}>Ship Date</th>
+                  <th style={{ padding: "11px 14px", fontWeight: 700, textAlign: "right" }}>Cut</th>
+                  <th style={{ padding: "11px 14px", fontWeight: 700, textAlign: "right" }}>Sewn</th>
+                  <th style={{ padding: "11px 14px", fontWeight: 700, textAlign: "right" }}>Finished</th>
+                  <th style={{ padding: "11px 14px", fontWeight: 700, textAlign: "right" }}>Packed</th>
+                  <th style={{ padding: "11px 14px", fontWeight: 700, textAlign: "right" }}>Shipped</th>
+                  <th style={{ padding: "11px 14px", fontWeight: 700, textAlign: "right" }}>Balance</th>
+                  <th style={{ padding: "11px 14px", fontWeight: 700, textAlign: "right" }}>Packed %</th>
+                  <th style={{ padding: "11px 14px", fontWeight: 700, textAlign: "center" }}>Days</th>
+                  <th style={{ padding: "11px 14px", fontWeight: 700, textAlign: "center" }}>Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -980,185 +1380,248 @@ export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = 
       )}
 
       {/* ============================================================== */}
-      {/* TAB 3: STAGE-WISE QUANTITY FUNNEL */}
+      {/* TAB 3: STAGE-WISE QUANTITY FUNNEL (Visual Pipeline & Diagnostics) */}
       {/* ============================================================== */}
       {activeTab === "stageFunnel" && (
-        <div style={{ background: "#FFFFFF", borderRadius: 12, border: "1px solid #E5E7EB", overflow: "hidden" }}>
-          <div style={{ background: "#1E3A5F", color: "#FFFFFF", padding: "14px 20px" }}>
-            <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Stage-wise Quantity Funnel (All Active T&A)</h2>
-            <div style={{ fontSize: 12, color: "#93C5FD", marginTop: 2 }}>
-              Shows where the quantity is stuck across the entire production pipeline. Pulls from Active T&A.
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          {/* Funnel Pipeline Visual Cards */}
+          <div style={{
+            background: "#FFFFFF",
+            borderRadius: 14,
+            border: "1px solid #E2E8F0",
+            padding: "22px 24px",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.03)"
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 10 }}>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: "#0F172A", margin: 0 }}>
+                  Manufacturing WIP Flow & Bottlenecks
+                </h3>
+                <div style={{ fontSize: 12.5, color: "#64748B", marginTop: 2 }}>
+                  Visual transition of order quantities through each factory production gate
+                </div>
+              </div>
+
+              {kpiSummary.biggestBottleneck && (
+                <div style={{ background: "#FEF2F2", border: "1px solid #FEE2E2", color: "#991B1B", padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
+                  <AlertTriangle size={14} color="#DC2626" />
+                  Primary Production Bottleneck: {kpiSummary.biggestBottleneck}
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
+              {stageFunnelData.map((stg) => {
+                const isBottle = stg.isBottleneck;
+                return (
+                  <div
+                    key={stg.stage}
+                    style={{
+                      background: isBottle ? "#FFFBEB" : "#F8FAFC",
+                      border: isBottle ? "1px solid #FCD34D" : "1px solid #E2E8F0",
+                      borderRadius: 12,
+                      padding: "16px",
+                      position: "relative"
+                    }}
+                  >
+                    {isBottle && (
+                      <span style={{ position: "absolute", top: 10, right: 10, background: "#DC2626", color: "#FFFFFF", fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 4 }}>
+                        Bottleneck
+                      </span>
+                    )}
+                    <div style={{ fontSize: 12, fontWeight: 700, color: isBottle ? "#B45309" : "#475569", textTransform: "uppercase" }}>
+                      {stg.stage}
+                    </div>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: "#0F172A", marginTop: 6 }}>
+                      {stg.qtyCompleted}
+                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: isBottle ? "#B45309" : "#64748B", marginTop: 2 }}>
+                      {stg.pctOfOrder} of total
+                    </div>
+
+                    <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(0,0,0,0.06)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: 11, color: "#64748B" }}>WIP Stuck</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: stg.qtyStuck !== "—" ? "#DC2626" : "#64748B" }}>
+                        {stg.qtyStuck}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-            <thead>
-              <tr style={{ background: "#F8FAFC", borderBottom: "1px solid #E2E8F0", color: "#475569", textAlign: "left" }}>
-                <th style={{ padding: "12px 18px", fontWeight: 700 }}>Stage</th>
-                <th style={{ padding: "12px 18px", fontWeight: 700, textAlign: "right" }}>Qty Completed</th>
-                <th style={{ padding: "12px 18px", fontWeight: 700, textAlign: "right" }}>% of Order Qty</th>
-                <th style={{ padding: "12px 18px", fontWeight: 700, textAlign: "right" }}>Qty Stuck Before This Stage (WIP gap)</th>
-                <th style={{ padding: "12px 18px", fontWeight: 700 }}>Remark</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stageFunnelData.map((r, idx) => (
-                <tr
-                  key={r.stage}
-                  style={{
-                    borderBottom: "1px solid #E5E7EB",
-                    background: r.isBottleneck ? "#FEF3C7" : idx % 2 === 0 ? "#FFFFFF" : "#F9FAFB"
-                  }}
-                >
-                  <td style={{ padding: "12px 18px", fontWeight: 600, color: "#111827" }}>{r.stage}</td>
-                  <td style={{ padding: "12px 18px", textAlign: "right", fontWeight: 700, color: "#1E3A5F" }}>{r.qtyCompleted}</td>
-                  <td style={{ padding: "12px 18px", textAlign: "right", fontWeight: 600, color: "#4B5563" }}>{r.pctOfOrder}</td>
-                  <td style={{
-                    padding: "12px 18px",
-                    textAlign: "right",
-                    fontWeight: 700,
-                    color: r.qtyStuck !== "—" ? "#DC2626" : "#6B7280"
-                  }}>
-                    {r.qtyStuck}
-                  </td>
-                  <td style={{ padding: "12px 18px" }}>
-                    {r.remark ? (
-                      <span style={{
-                        background: "#FEE2E2",
-                        color: "#991B1B",
-                        padding: "3px 10px",
-                        borderRadius: 6,
-                        fontSize: 11.5,
-                        fontWeight: 700
-                      }}>
-                        ⚠️ {r.remark}
-                      </span>
-                    ) : (
-                      <span style={{ color: "#9CA3AF" }}>—</span>
-                    )}
-                  </td>
+          {/* Clean Modern Funnel Table */}
+          <div style={{ background: "#FFFFFF", borderRadius: 14, border: "1px solid #E2E8F0", overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
+            <div style={{ padding: "16px 20px", borderBottom: "1px solid #E2E8F0" }}>
+              <h4 style={{ fontSize: 14, fontWeight: 700, color: "#0F172A", margin: 0 }}>Detailed WIP Gap Metrics</h4>
+            </div>
+
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: "#F8FAFC", borderBottom: "1px solid #E2E8F0", color: "#475569", textAlign: "left", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.4 }}>
+                  <th style={{ padding: "12px 18px", fontWeight: 700 }}>Stage</th>
+                  <th style={{ padding: "12px 18px", fontWeight: 700, textAlign: "right" }}>Qty Completed</th>
+                  <th style={{ padding: "12px 18px", fontWeight: 700, textAlign: "right" }}>% of Total</th>
+                  <th style={{ padding: "12px 18px", fontWeight: 700, textAlign: "right" }}>WIP Gap Stuck Before Stage</th>
+                  <th style={{ padding: "12px 18px", fontWeight: 700 }}>Diagnostic Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {stageFunnelData.map((r, idx) => (
+                  <tr
+                    key={r.stage}
+                    style={{
+                      borderBottom: "1px solid #F1F5F9",
+                      background: r.isBottleneck ? "#FFFBEB" : idx % 2 === 0 ? "#FFFFFF" : "#F8FAFC"
+                    }}
+                  >
+                    <td style={{ padding: "13px 18px", fontWeight: 700, color: "#0F172A" }}>{r.stage}</td>
+                    <td style={{ padding: "13px 18px", textAlign: "right", fontWeight: 700, color: "#1E3A5F" }}>{r.qtyCompleted}</td>
+                    <td style={{ padding: "13px 18px", textAlign: "right", fontWeight: 600, color: "#475569" }}>{r.pctOfOrder}</td>
+                    <td style={{ padding: "13px 18px", textAlign: "right", fontWeight: 700, color: r.qtyStuck !== "—" ? "#DC2626" : "#64748B" }}>
+                      {r.qtyStuck}
+                    </td>
+                    <td style={{ padding: "13px 18px" }}>
+                      {r.isBottleneck ? (
+                        <span style={{ background: "#FEE2E2", color: "#991B1B", padding: "3px 10px", borderRadius: 6, fontSize: 11.5, fontWeight: 700 }}>
+                          ⚠️ Critical Bottleneck
+                        </span>
+                      ) : (
+                        <span style={{ color: "#10B981", fontSize: 12, fontWeight: 600 }}>Normal Flow</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
       {/* ============================================================== */}
-      {/* TAB 4: BUYER-WISE SUMMARY */}
+      {/* TAB 4: BUYER-WISE SUMMARY (Modern Clean Portfolio & Table) */}
       {/* ============================================================== */}
       {activeTab === "buyerSummary" && (
-        <div style={{ background: "#FFFFFF", borderRadius: 12, border: "1px solid #E5E7EB", overflow: "hidden" }}>
-          <div style={{ background: "#1E3A5F", color: "#FFFFFF", padding: "14px 20px" }}>
-            <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Buyer-wise Summary</h2>
-            <div style={{ fontSize: 12, color: "#93C5FD", marginTop: 2 }}>
-              Executive performance breakdown by Buyer brand. Pulls live metrics from Active T&A.
+        <div style={{ background: "#FFFFFF", borderRadius: 14, border: "1px solid #E2E8F0", overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
+          <div style={{ padding: "18px 22px", borderBottom: "1px solid #E2E8F0", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+            <div>
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: "#0F172A", margin: 0 }}>Buyer Brand Portfolio Performance</h3>
+              <div style={{ fontSize: 12.5, color: "#64748B", marginTop: 2 }}>Breakdown of orders, fulfillment volumes, and on-time reliability by buyer</div>
             </div>
+            <span style={{ fontSize: 12, fontWeight: 700, color: "#0D9488", background: "#F0FDFA", border: "1px solid #CCFBF1", padding: "4px 10px", borderRadius: 999 }}>
+              {buyerSummaryData.length} Active Buyers
+            </span>
           </div>
 
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
-            <thead>
-              <tr style={{ background: "#F8FAFC", borderBottom: "1px solid #E2E8F0", color: "#475569", textAlign: "left" }}>
-                <th style={{ padding: "12px 16px", fontWeight: 700 }}>Buyer</th>
-                <th style={{ padding: "12px 16px", fontWeight: 700, textAlign: "right" }}>No. of Orders</th>
-                <th style={{ padding: "12px 16px", fontWeight: 700, textAlign: "right" }}>Order Qty</th>
-                <th style={{ padding: "12px 16px", fontWeight: 700, textAlign: "right" }}>Shipped Qty</th>
-                <th style={{ padding: "12px 16px", fontWeight: 700, textAlign: "right" }}>Balance Qty</th>
-                <th style={{ padding: "12px 16px", fontWeight: 700, textAlign: "right" }}>Shipped %</th>
-                <th style={{ padding: "12px 16px", fontWeight: 700, textAlign: "center" }}>Delayed Orders</th>
-                <th style={{ padding: "12px 16px", fontWeight: 700, textAlign: "center" }}>At Risk Orders</th>
-                <th style={{ padding: "12px 16px", fontWeight: 700, textAlign: "right" }}>On-Time Orders %</th>
-              </tr>
-            </thead>
-            <tbody>
-              {buyerSummaryData.map((b, idx) => (
-                <tr
-                  key={b.buyer}
-                  style={{
-                    borderBottom: "1px solid #E5E7EB",
-                    background: idx % 2 === 0 ? "#FFFFFF" : "#F9FAFB"
-                  }}
-                >
-                  <td style={{ padding: "11px 16px", fontWeight: 700, color: "#111827" }}>{b.buyer}</td>
-                  <td style={{ padding: "11px 16px", textAlign: "right", fontWeight: 600 }}>{b.noOfOrders}</td>
-                  <td style={{ padding: "11px 16px", textAlign: "right", fontWeight: 700, color: "#1E3A5F" }}>{b.orderQty.toLocaleString()}</td>
-                  <td style={{ padding: "11px 16px", textAlign: "right", color: "#10B981", fontWeight: 700 }}>{b.shippedQty.toLocaleString()}</td>
-                  <td style={{ padding: "11px 16px", textAlign: "right", color: b.balanceQty > 0 ? "#DC2626" : "#059669", fontWeight: 700 }}>
-                    {b.balanceQty.toLocaleString()}
-                  </td>
-                  <td style={{ padding: "11px 16px", textAlign: "right", fontWeight: 600 }}>{b.shippedPct}</td>
-                  <td style={{ padding: "11px 16px", textAlign: "center" }}>
-                    {b.delayedOrders > 0 ? (
-                      <span style={{ background: "#FEE2E2", color: "#991B1B", padding: "2px 8px", borderRadius: 999, fontWeight: 700 }}>
-                        {b.delayedOrders}
-                      </span>
-                    ) : (
-                      <span style={{ color: "#9CA3AF" }}>0</span>
-                    )}
-                  </td>
-                  <td style={{ padding: "11px 16px", textAlign: "center" }}>
-                    {b.atRiskOrders > 0 ? (
-                      <span style={{ background: "#FEF3C7", color: "#92400E", padding: "2px 8px", borderRadius: 999, fontWeight: 700 }}>
-                        {b.atRiskOrders}
-                      </span>
-                    ) : (
-                      <span style={{ color: "#9CA3AF" }}>0</span>
-                    )}
-                  </td>
-                  <td style={{
-                    padding: "11px 16px",
-                    textAlign: "right",
-                    fontWeight: 700,
-                    color: parseFloat(b.onTimePct) < 80 ? "#DC2626" : "#059669"
-                  }}>
-                    {b.onTimePct}
-                  </td>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: "#F8FAFC", borderBottom: "1px solid #E2E8F0", color: "#475569", textAlign: "left", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.4 }}>
+                  <th style={{ padding: "12px 16px", fontWeight: 700 }}>Buyer Brand</th>
+                  <th style={{ padding: "12px 16px", fontWeight: 700, textAlign: "right" }}>Orders</th>
+                  <th style={{ padding: "12px 16px", fontWeight: 700, textAlign: "right" }}>Total Volume</th>
+                  <th style={{ padding: "12px 16px", fontWeight: 700, textAlign: "right" }}>Shipped Qty</th>
+                  <th style={{ padding: "12px 16px", fontWeight: 700, textAlign: "right" }}>Balance Qty</th>
+                  <th style={{ padding: "12px 16px", fontWeight: 700, textAlign: "right" }}>Shipped %</th>
+                  <th style={{ padding: "12px 16px", fontWeight: 700, textAlign: "center" }}>Delayed</th>
+                  <th style={{ padding: "12px 16px", fontWeight: 700, textAlign: "center" }}>At Risk</th>
+                  <th style={{ padding: "12px 16px", fontWeight: 700, textAlign: "right" }}>On-Time Rate</th>
                 </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr style={{ background: "#F1F5F9", borderTop: "2px solid #CBD5E1", fontWeight: 700, color: "#0F172A" }}>
-                <td style={{ padding: "12px 16px" }}>TOTAL</td>
-                <td style={{ padding: "12px 16px", textAlign: "right" }}>{buyerSummaryData.reduce((a, b) => a + b.noOfOrders, 0)}</td>
-                <td style={{ padding: "12px 16px", textAlign: "right" }}>{buyerSummaryData.reduce((a, b) => a + b.orderQty, 0).toLocaleString()}</td>
-                <td style={{ padding: "12px 16px", textAlign: "right", color: "#10B981" }}>{buyerSummaryData.reduce((a, b) => a + b.shippedQty, 0).toLocaleString()}</td>
-                <td style={{ padding: "12px 16px", textAlign: "right", color: "#DC2626" }}>{buyerSummaryData.reduce((a, b) => a + b.balanceQty, 0).toLocaleString()}</td>
-                <td style={{ padding: "12px 16px", textAlign: "right" }}>{kpiSummary.shippedPct}</td>
-                <td style={{ padding: "12px 16px", textAlign: "center" }}>{buyerSummaryData.reduce((a, b) => a + b.delayedOrders, 0)}</td>
-                <td style={{ padding: "12px 16px", textAlign: "center" }}>{buyerSummaryData.reduce((a, b) => a + b.atRiskOrders, 0)}</td>
-                <td style={{ padding: "12px 16px", textAlign: "right" }}>{kpiSummary.onTimeDeliveryPct}</td>
-              </tr>
-            </tfoot>
-          </table>
+              </thead>
+              <tbody>
+                {buyerSummaryData.map((b, idx) => (
+                  <tr
+                    key={b.buyer}
+                    style={{
+                      borderBottom: "1px solid #F1F5F9",
+                      background: idx % 2 === 0 ? "#FFFFFF" : "#F8FAFC"
+                    }}
+                  >
+                    <td style={{ padding: "12px 16px", fontWeight: 700, color: "#0F172A", display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ width: 26, height: 26, borderRadius: 6, background: "#EFF6FF", color: "#2563EB", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800 }}>
+                        {b.buyer.slice(0, 2).toUpperCase()}
+                      </span>
+                      {b.buyer}
+                    </td>
+                    <td style={{ padding: "12px 16px", textAlign: "right", fontWeight: 600 }}>{b.noOfOrders}</td>
+                    <td style={{ padding: "12px 16px", textAlign: "right", fontWeight: 700, color: "#1E3A5F" }}>{b.orderQty.toLocaleString()}</td>
+                    <td style={{ padding: "12px 16px", textAlign: "right", color: "#15803D", fontWeight: 700 }}>{b.shippedQty.toLocaleString()}</td>
+                    <td style={{ padding: "12px 16px", textAlign: "right", color: b.balanceQty > 0 ? "#DC2626" : "#059669", fontWeight: 700 }}>
+                      {b.balanceQty.toLocaleString()}
+                    </td>
+                    <td style={{ padding: "12px 16px", textAlign: "right", fontWeight: 600 }}>{b.shippedPct}</td>
+                    <td style={{ padding: "12px 16px", textAlign: "center" }}>
+                      {b.delayedOrders > 0 ? (
+                        <span style={{ background: "#FEE2E2", color: "#991B1B", padding: "2px 8px", borderRadius: 999, fontWeight: 700, fontSize: 11.5 }}>
+                          {b.delayedOrders}
+                        </span>
+                      ) : (
+                        <span style={{ color: "#94A3B8" }}>0</span>
+                      )}
+                    </td>
+                    <td style={{ padding: "12px 16px", textAlign: "center" }}>
+                      {b.atRiskOrders > 0 ? (
+                        <span style={{ background: "#FEF3C7", color: "#92400E", padding: "2px 8px", borderRadius: 999, fontWeight: 700, fontSize: 11.5 }}>
+                          {b.atRiskOrders}
+                        </span>
+                      ) : (
+                        <span style={{ color: "#94A3B8" }}>0</span>
+                      )}
+                    </td>
+                    <td style={{ padding: "12px 16px", textAlign: "right", fontWeight: 700, color: parseFloat(b.onTimePct) < 90 ? "#DC2626" : "#059669" }}>
+                      {b.onTimePct}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr style={{ background: "#F8FAFC", borderTop: "2px solid #E2E8F0", fontWeight: 700, color: "#0F172A", fontSize: 12.5 }}>
+                  <td style={{ padding: "12px 16px" }}>TOTAL</td>
+                  <td style={{ padding: "12px 16px", textAlign: "right" }}>{buyerSummaryData.reduce((a, b) => a + b.noOfOrders, 0)}</td>
+                  <td style={{ padding: "12px 16px", textAlign: "right" }}>{buyerSummaryData.reduce((a, b) => a + b.orderQty, 0).toLocaleString()}</td>
+                  <td style={{ padding: "12px 16px", textAlign: "right", color: "#15803D" }}>{buyerSummaryData.reduce((a, b) => a + b.shippedQty, 0).toLocaleString()}</td>
+                  <td style={{ padding: "12px 16px", textAlign: "right", color: "#DC2626" }}>{buyerSummaryData.reduce((a, b) => a + b.balanceQty, 0).toLocaleString()}</td>
+                  <td style={{ padding: "12px 16px", textAlign: "right" }}>—</td>
+                  <td style={{ padding: "12px 16px", textAlign: "center" }}>{buyerSummaryData.reduce((a, b) => a + b.delayedOrders, 0)}</td>
+                  <td style={{ padding: "12px 16px", textAlign: "center" }}>{buyerSummaryData.reduce((a, b) => a + b.atRiskOrders, 0)}</td>
+                  <td style={{ padding: "12px 16px", textAlign: "right" }}>—</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
         </div>
       )}
 
       {/* ============================================================== */}
-      {/* TAB 5: T&A MILESTONE TRACKER */}
+      {/* TAB 5: T&A MILESTONE TRACKER (Modern Clean Schedule Board) */}
       {/* ============================================================== */}
       {activeTab === "milestoneTracker" && (
-        <div style={{ background: "#FFFFFF", borderRadius: 12, border: "1px solid #E5E7EB", overflow: "hidden" }}>
-          <div style={{ background: "#1E3A5F", color: "#FFFFFF", padding: "14px 20px" }}>
-            <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>T&A Milestone Tracker (task-level, with delay days)</h2>
-            <div style={{ fontSize: 12, color: "#93C5FD", marginTop: 2 }}>
-              Blue = from software live tasks. Delay Days = actual - planned (or today - planned if still pending).
+        <div style={{ background: "#FFFFFF", borderRadius: 14, border: "1px solid #E2E8F0", overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
+          <div style={{ padding: "18px 22px", borderBottom: "1px solid #E2E8F0", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+            <div>
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: "#0F172A", margin: 0 }}>Task Schedule & Milestone Tracker</h3>
+              <div style={{ fontSize: 12.5, color: "#64748B", marginTop: 2 }}>Task-level milestone dates with owner assignment and delay days</div>
             </div>
+            <span style={{ fontSize: 12, fontWeight: 700, color: "#DB2777", background: "#FDF2F8", border: "1px solid #FCE7F3", padding: "4px 10px", borderRadius: 999 }}>
+              {allMilestoneTasks.length} Tracked Tasks
+            </span>
           </div>
 
           <div style={{ maxHeight: 600, overflowY: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
               <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
-                <tr style={{ background: "#F8FAFC", borderBottom: "1px solid #E2E8F0", color: "#475569", textAlign: "left" }}>
-                  <th style={{ padding: "10px 14px", fontWeight: 700 }}>T&A No</th>
-                  <th style={{ padding: "10px 14px", fontWeight: 700 }}>Buyer</th>
-                  <th style={{ padding: "10px 14px", fontWeight: 700 }}>Milestone</th>
-                  <th style={{ padding: "10px 14px", fontWeight: 700 }}>Department</th>
-                  <th style={{ padding: "10px 14px", fontWeight: 700 }}>Owner</th>
-                  <th style={{ padding: "10px 14px", fontWeight: 700 }}>Planned Date</th>
-                  <th style={{ padding: "10px 14px", fontWeight: 700 }}>Actual Date</th>
-                  <th style={{ padding: "10px 14px", fontWeight: 700, textAlign: "right" }}>Task Qty</th>
-                  <th style={{ padding: "10px 14px", fontWeight: 700, textAlign: "center" }}>Delay Days</th>
-                  <th style={{ padding: "10px 14px", fontWeight: 700, textAlign: "center" }}>Status</th>
+                <tr style={{ background: "#F8FAFC", borderBottom: "1px solid #E2E8F0", color: "#475569", textAlign: "left", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.4 }}>
+                  <th style={{ padding: "11px 14px", fontWeight: 700 }}>T&A No</th>
+                  <th style={{ padding: "11px 14px", fontWeight: 700 }}>Buyer</th>
+                  <th style={{ padding: "11px 14px", fontWeight: 700 }}>Milestone Stage</th>
+                  <th style={{ padding: "11px 14px", fontWeight: 700 }}>Department</th>
+                  <th style={{ padding: "11px 14px", fontWeight: 700 }}>Owner</th>
+                  <th style={{ padding: "11px 14px", fontWeight: 700 }}>Planned Date</th>
+                  <th style={{ padding: "11px 14px", fontWeight: 700 }}>Actual / Done</th>
+                  <th style={{ padding: "11px 14px", fontWeight: 700, textAlign: "right" }}>Task Qty</th>
+                  <th style={{ padding: "11px 14px", fontWeight: 700, textAlign: "center" }}>Delay Days</th>
+                  <th style={{ padding: "11px 14px", fontWeight: 700, textAlign: "center" }}>Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -1166,40 +1629,44 @@ export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = 
                   <tr
                     key={idx}
                     style={{
-                      borderBottom: "1px solid #E5E7EB",
-                      background: idx % 2 === 0 ? "#FFFFFF" : "#F9FAFB"
+                      borderBottom: "1px solid #F1F5F9",
+                      background: idx % 2 === 0 ? "#FFFFFF" : "#F8FAFC"
                     }}
                   >
-                    <td style={{ padding: "8px 14px", fontWeight: 600, color: "#2563EB" }}>{m.taNo}</td>
-                    <td style={{ padding: "8px 14px", color: "#111827", fontWeight: 500 }}>{m.buyer}</td>
-                    <td style={{ padding: "8px 14px", color: "#1E3A5F", fontWeight: 600 }}>{m.milestone}</td>
-                    <td style={{ padding: "8px 14px", color: "#4B5563" }}>{m.department}</td>
-                    <td style={{ padding: "8px 14px", color: "#4B5563" }}>{m.owner}</td>
-                    <td style={{ padding: "8px 14px", color: "#2563EB" }}>{m.plannedDate}</td>
-                    <td style={{ padding: "8px 14px", color: "#2563EB" }}>{m.actualDate}</td>
-                    <td style={{ padding: "8px 14px", textAlign: "right", fontWeight: 600 }}>{m.taskQty.toLocaleString()}</td>
+                    <td style={{ padding: "10px 14px", fontWeight: 600, color: "#2563EB" }}>{m.taNo}</td>
+                    <td style={{ padding: "10px 14px", color: "#0F172A", fontWeight: 600 }}>{m.buyer}</td>
+                    <td style={{ padding: "10px 14px", color: "#0F172A", fontWeight: 600 }}>{m.milestone}</td>
+                    <td style={{ padding: "10px 14px" }}>
+                      <span style={{ fontSize: 11, background: "#F1F5F9", color: "#475569", padding: "2px 8px", borderRadius: 4, fontWeight: 600 }}>
+                        {m.department}
+                      </span>
+                    </td>
+                    <td style={{ padding: "10px 14px", color: "#475569", fontSize: 12 }}>{m.owner}</td>
+                    <td style={{ padding: "10px 14px", color: "#2563EB", fontWeight: 600, fontSize: 12 }}>{m.plannedDate}</td>
+                    <td style={{ padding: "10px 14px", color: m.actualDate !== "—" ? "#059669" : "#94A3B8", fontWeight: 500, fontSize: 12 }}>{m.actualDate}</td>
+                    <td style={{ padding: "10px 14px", textAlign: "right", fontWeight: 600 }}>{m.taskQty.toLocaleString()}</td>
                     <td style={{
-                      padding: "8px 14px",
+                      padding: "10px 14px",
                       textAlign: "center",
                       fontWeight: 700,
                       color: m.delayDays > 0 ? "#DC2626" : "#059669"
                     }}>
-                      {m.delayDays}
+                      {m.delayDays > 0 ? `+${m.delayDays}` : "0"}
                     </td>
-                    <td style={{ padding: "8px 14px", textAlign: "center" }}>
+                    <td style={{ padding: "10px 14px", textAlign: "center" }}>
                       <span style={{
-                        padding: "2px 8px",
+                        padding: "3px 9px",
                         borderRadius: 999,
                         fontSize: 11,
-                        fontWeight: 600,
+                        fontWeight: 700,
                         background:
-                          m.status === "Done On Time" ? "#E1F5EE" :
+                          m.status === "Done On Time" ? "#ECFDF5" :
                           m.status === "Done Late" ? "#FEF3C7" :
-                          m.status === "Delayed" ? "#FEE2E2" : "#F3F4F6",
+                          m.status === "Delayed" ? "#FEF2F2" : "#F1F5F9",
                         color:
-                          m.status === "Done On Time" ? "#085041" :
-                          m.status === "Done Late" ? "#92400E" :
-                          m.status === "Delayed" ? "#991B1B" : "#4B5563",
+                          m.status === "Done On Time" ? "#047857" :
+                          m.status === "Done Late" ? "#B45309" :
+                          m.status === "Delayed" ? "#B91C1C" : "#475569",
                         display: "inline-block"
                       }}>
                         {m.status}
@@ -1214,84 +1681,92 @@ export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = 
       )}
 
       {/* ============================================================== */}
-      {/* TAB 6: DEPARTMENT-WISE DELAY SUMMARY */}
+      {/* TAB 6: DEPARTMENT-WISE DELAY SUMMARY (Modern Root-Cause View) */}
       {/* ============================================================== */}
       {activeTab === "deptDelaySummary" && (
-        <div style={{ background: "#FFFFFF", borderRadius: 12, border: "1px solid #E5E7EB", overflow: "hidden" }}>
-          <div style={{ background: "#1E3A5F", color: "#FFFFFF", padding: "14px 20px" }}>
-            <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Department-wise Delay Summary (root-cause view)</h2>
-            <div style={{ fontSize: 12, color: "#93C5FD", marginTop: 2 }}>
-              Pulls from 'Milestone Tracker'. Highest delay days = where management should focus first.
+        <div style={{ background: "#FFFFFF", borderRadius: 14, border: "1px solid #E2E8F0", overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
+          <div style={{ padding: "18px 22px", borderBottom: "1px solid #E2E8F0", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+            <div>
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: "#0F172A", margin: 0 }}>Root-Cause Department Delay Diagnostics</h3>
+              <div style={{ fontSize: 12.5, color: "#64748B", marginTop: 2 }}>Ranked by total accumulated delay days across active milestone stages</div>
             </div>
+            <span style={{ fontSize: 12, fontWeight: 700, color: "#DC2626", background: "#FEF2F2", border: "1px solid #FEE2E2", padding: "4px 10px", borderRadius: 999 }}>
+              Top Delay: {kpiSummary.topDelayDept}
+            </span>
           </div>
 
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
-            <thead>
-              <tr style={{ background: "#F8FAFC", borderBottom: "1px solid #E2E8F0", color: "#475569", textAlign: "left" }}>
-                <th style={{ padding: "12px 16px", fontWeight: 700 }}>Department</th>
-                <th style={{ padding: "12px 16px", fontWeight: 700, textAlign: "right" }}>Total Tasks</th>
-                <th style={{ padding: "12px 16px", fontWeight: 700, textAlign: "right" }}>Completed</th>
-                <th style={{ padding: "12px 16px", fontWeight: 700, textAlign: "right" }}>Pending / Delayed</th>
-                <th style={{ padding: "12px 16px", fontWeight: 700, textAlign: "right" }}>Delayed or Late Tasks</th>
-                <th style={{ padding: "12px 16px", fontWeight: 700, textAlign: "right" }}>Total Delay Days</th>
-                <th style={{ padding: "12px 16px", fontWeight: 700, textAlign: "right" }}>Avg Delay Days</th>
-                <th style={{ padding: "12px 16px", fontWeight: 700, textAlign: "right" }}>Late %</th>
-                <th style={{ padding: "12px 16px", fontWeight: 700, textAlign: "center" }}>Rank (by delay)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {departmentDelaySummary.map((d, idx) => (
-                <tr
-                  key={d.department}
-                  style={{
-                    borderBottom: "1px solid #E5E7EB",
-                    background: idx === 0 ? "#FFF7ED" : idx % 2 === 0 ? "#FFFFFF" : "#F9FAFB"
-                  }}
-                >
-                  <td style={{ padding: "11px 16px", fontWeight: 700, color: "#111827" }}>{d.department}</td>
-                  <td style={{ padding: "11px 16px", textAlign: "right", fontWeight: 600 }}>{d.totalTasks}</td>
-                  <td style={{ padding: "11px 16px", textAlign: "right", color: "#059669", fontWeight: 600 }}>{d.completed}</td>
-                  <td style={{ padding: "11px 16px", textAlign: "right", color: "#D97706", fontWeight: 600 }}>{d.pendingOrDelayed}</td>
-                  <td style={{ padding: "11px 16px", textAlign: "right", color: "#DC2626", fontWeight: 700 }}>{d.delayedOrLateTasks}</td>
-                  <td style={{ padding: "11px 16px", textAlign: "right", fontWeight: 700, color: "#1E3A5F", fontSize: 13 }}>{d.totalDelayDays}</td>
-                  <td style={{ padding: "11px 16px", textAlign: "right", fontWeight: 600 }}>{d.avgDelayDays}</td>
-                  <td style={{
-                    padding: "11px 16px",
-                    textAlign: "right",
-                    fontWeight: 700,
-                    color: parseFloat(d.latePct) > 50 ? "#DC2626" : "#4B5563"
-                  }}>
-                    {d.latePct}
-                  </td>
-                  <td style={{ padding: "11px 16px", textAlign: "center" }}>
-                    <span style={{
-                      padding: "2px 8px",
-                      borderRadius: 6,
-                      fontSize: 12,
-                      fontWeight: 700,
-                      background: d.rank === 1 ? "#FED7AA" : "#F3F4F6",
-                      color: d.rank === 1 ? "#C2410C" : "#4B5563"
-                    }}>
-                      #{d.rank}
-                    </span>
-                  </td>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: "#F8FAFC", borderBottom: "1px solid #E2E8F0", color: "#475569", textAlign: "left", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.4 }}>
+                  <th style={{ padding: "12px 16px", fontWeight: 700 }}>Department</th>
+                  <th style={{ padding: "12px 16px", fontWeight: 700, textAlign: "right" }}>Total Tasks</th>
+                  <th style={{ padding: "12px 16px", fontWeight: 700, textAlign: "right" }}>Completed</th>
+                  <th style={{ padding: "12px 16px", fontWeight: 700, textAlign: "right" }}>Pending / Active</th>
+                  <th style={{ padding: "12px 16px", fontWeight: 700, textAlign: "right" }}>Late Tasks</th>
+                  <th style={{ padding: "12px 16px", fontWeight: 700, textAlign: "right" }}>Total Delay Days</th>
+                  <th style={{ padding: "12px 16px", fontWeight: 700, textAlign: "right" }}>Avg Delay</th>
+                  <th style={{ padding: "12px 16px", fontWeight: 700, textAlign: "right" }}>Late %</th>
+                  <th style={{ padding: "12px 16px", fontWeight: 700, textAlign: "center" }}>Delay Rank</th>
                 </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr style={{ background: "#F1F5F9", borderTop: "2px solid #CBD5E1", fontWeight: 700, color: "#0F172A" }}>
-                <td style={{ padding: "12px 16px" }}>TOTAL</td>
-                <td style={{ padding: "12px 16px", textAlign: "right" }}>{departmentDelaySummary.reduce((a, d) => a + d.totalTasks, 0)}</td>
-                <td style={{ padding: "12px 16px", textAlign: "right", color: "#059669" }}>{departmentDelaySummary.reduce((a, d) => a + d.completed, 0)}</td>
-                <td style={{ padding: "12px 16px", textAlign: "right", color: "#D97706" }}>{departmentDelaySummary.reduce((a, d) => a + d.pendingOrDelayed, 0)}</td>
-                <td style={{ padding: "12px 16px", textAlign: "right", color: "#DC2626" }}>{departmentDelaySummary.reduce((a, d) => a + d.delayedOrLateTasks, 0)}</td>
-                <td style={{ padding: "12px 16px", textAlign: "right" }}>{departmentDelaySummary.reduce((a, d) => a + d.totalDelayDays, 0)}</td>
-                <td style={{ padding: "12px 16px", textAlign: "right" }}>—</td>
-                <td style={{ padding: "12px 16px", textAlign: "right" }}>—</td>
-                <td></td>
-              </tr>
-            </tfoot>
-          </table>
+              </thead>
+              <tbody>
+                {departmentDelaySummary.map((d, idx) => (
+                  <tr
+                    key={d.department}
+                    style={{
+                      borderBottom: "1px solid #F1F5F9",
+                      background: idx === 0 ? "#FFFBEB" : idx % 2 === 0 ? "#FFFFFF" : "#F8FAFC"
+                    }}
+                  >
+                    <td style={{ padding: "12px 16px", fontWeight: 700, color: "#0F172A", display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: 999, background: idx === 0 ? "#DC2626" : idx < 3 ? "#D97706" : "#10B981" }} />
+                      {d.department}
+                    </td>
+                    <td style={{ padding: "12px 16px", textAlign: "right", fontWeight: 600 }}>{d.totalTasks}</td>
+                    <td style={{ padding: "12px 16px", textAlign: "right", color: "#15803D", fontWeight: 600 }}>{d.completed}</td>
+                    <td style={{ padding: "12px 16px", textAlign: "right", color: "#D97706", fontWeight: 600 }}>{d.pendingOrDelayed}</td>
+                    <td style={{ padding: "12px 16px", textAlign: "right", color: "#DC2626", fontWeight: 700 }}>{d.delayedOrLateTasks}</td>
+                    <td style={{ padding: "12px 16px", textAlign: "right", fontWeight: 800, color: "#0F172A", fontSize: 13.5 }}>{d.totalDelayDays} days</td>
+                    <td style={{ padding: "12px 16px", textAlign: "right", fontWeight: 600 }}>{d.avgDelayDays} d</td>
+                    <td style={{
+                      padding: "12px 16px",
+                      textAlign: "right",
+                      fontWeight: 700,
+                      color: parseFloat(d.latePct) > 50 ? "#DC2626" : "#475569"
+                    }}>
+                      {d.latePct}
+                    </td>
+                    <td style={{ padding: "12px 16px", textAlign: "center" }}>
+                      <span style={{
+                        padding: "3px 8px",
+                        borderRadius: 6,
+                        fontSize: 11.5,
+                        fontWeight: 700,
+                        background: d.rank === 1 ? "#FEE2E2" : d.rank <= 3 ? "#FEF3C7" : "#F1F5F9",
+                        color: d.rank === 1 ? "#991B1B" : d.rank <= 3 ? "#92400E" : "#475569"
+                      }}>
+                        #{d.rank}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr style={{ background: "#F8FAFC", borderTop: "2px solid #E2E8F0", fontWeight: 700, color: "#0F172A", fontSize: 12.5 }}>
+                  <td style={{ padding: "12px 16px" }}>TOTAL</td>
+                  <td style={{ padding: "12px 16px", textAlign: "right" }}>{departmentDelaySummary.reduce((a, d) => a + d.totalTasks, 0)}</td>
+                  <td style={{ padding: "12px 16px", textAlign: "right", color: "#15803D" }}>{departmentDelaySummary.reduce((a, d) => a + d.completed, 0)}</td>
+                  <td style={{ padding: "12px 16px", textAlign: "right", color: "#D97706" }}>{departmentDelaySummary.reduce((a, d) => a + d.pendingOrDelayed, 0)}</td>
+                  <td style={{ padding: "12px 16px", textAlign: "right", color: "#DC2626" }}>{departmentDelaySummary.reduce((a, d) => a + d.delayedOrLateTasks, 0)}</td>
+                  <td style={{ padding: "12px 16px", textAlign: "right", color: "#0F172A" }}>{departmentDelaySummary.reduce((a, d) => a + d.totalDelayDays, 0)} days</td>
+                  <td style={{ padding: "12px 16px", textAlign: "right" }}>—</td>
+                  <td style={{ padding: "12px 16px", textAlign: "right" }}>—</td>
+                  <td style={{ padding: "12px 16px" }}></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
         </div>
       )}
     </div>
