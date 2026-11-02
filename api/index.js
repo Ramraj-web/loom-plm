@@ -646,6 +646,111 @@ export default async function handler(req, res) {
       }
     }
 
+    // 2.5 Push Notification API
+    if (pathname === "/api/push/public-key" || pathname === "/push/public-key") {
+      return res.status(200).json({ publicKey: VAPID_PUBLIC_KEY });
+    }
+
+    if (pathname === "/api/push/subscribe" || pathname === "/push/subscribe") {
+      const { userId, username, role, subscription, userAgent } = parsedBody;
+      if (!subscription || !subscription.endpoint) {
+        return res.status(400).json({ error: "Invalid push subscription object" });
+      }
+      const mongoCols = await getMongoCollections();
+      const subRecord = {
+        id: `sub_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        userId: userId || "guest",
+        username: username || "User",
+        role: role || "",
+        subscription,
+        userAgent: userAgent || "",
+        active: true,
+        updatedAt: new Date().toISOString()
+      };
+      if (mongoCols?.resources) {
+        await mongoCols.resources.updateOne(
+          { resource: "push_subscriptions", "subscription.endpoint": subscription.endpoint },
+          { $set: { ...subRecord, resource: "push_subscriptions" } },
+          { upsert: true }
+        );
+      } else {
+        if (!Array.isArray(memoryDB.push_subscriptions)) memoryDB.push_subscriptions = [];
+        const existingIdx = memoryDB.push_subscriptions.findIndex(s => s.subscription?.endpoint === subscription.endpoint);
+        if (existingIdx >= 0) {
+          memoryDB.push_subscriptions[existingIdx] = subRecord;
+        } else {
+          memoryDB.push_subscriptions.push(subRecord);
+        }
+      }
+      return res.status(200).json({ success: true });
+    }
+
+    if (pathname === "/api/push/unsubscribe" || pathname === "/push/unsubscribe") {
+      const { userId, endpoint } = parsedBody;
+      const mongoCols = await getMongoCollections();
+      if (mongoCols?.resources) {
+        const query = { resource: "push_subscriptions" };
+        if (endpoint) query["subscription.endpoint"] = endpoint;
+        else if (userId) query.userId = userId;
+        await mongoCols.resources.deleteMany(query);
+      } else if (Array.isArray(memoryDB.push_subscriptions)) {
+        if (endpoint) {
+          memoryDB.push_subscriptions = memoryDB.push_subscriptions.filter(s => s.subscription?.endpoint !== endpoint);
+        } else if (userId) {
+          memoryDB.push_subscriptions = memoryDB.push_subscriptions.filter(s => s.userId !== userId);
+        }
+      }
+      return res.status(200).json({ success: true });
+    }
+
+    if (pathname === "/api/push/send" || pathname === "/push/send") {
+      const wp = await getWebPush();
+      const mongoCols = await getMongoCollections();
+      let activeSubs = [];
+      if (mongoCols?.resources) {
+        activeSubs = await mongoCols.resources.find({ resource: "push_subscriptions", active: true }).toArray();
+      } else {
+        activeSubs = (memoryDB.push_subscriptions || []).filter(s => s.active && s.subscription?.endpoint);
+      }
+
+      const { targetUserId, targetUsername, targetRole, title = "LOOM PLM Alert", message = "New notification received", url = "/", data = {}, priority = "medium" } = parsedBody;
+      const targets = activeSubs.filter(s => {
+        if (!targetUserId && !targetUsername && !targetRole) return true;
+        if (targetUserId && (s.userId === targetUserId || targetUserId === "all")) return true;
+        if (targetUsername && s.username?.toLowerCase() === targetUsername.toLowerCase()) return true;
+        if (targetRole && s.role?.toLowerCase() === targetRole.toLowerCase()) return true;
+        return false;
+      });
+
+      let delivered = 0;
+      if (wp && targets.length > 0) {
+        const payload = JSON.stringify({
+          title,
+          message,
+          body: message,
+          url,
+          priority,
+          icon: "/icons/icon-192.png",
+          badge: "/favicon.svg",
+          timestamp: Date.now(),
+          data: { url, ...data }
+        });
+        await Promise.all(
+          targets.map(async (target) => {
+            try {
+              await wp.sendNotification(target.subscription, payload, { TTL: 60 * 60 * 24 });
+              delivered++;
+            } catch (err) {
+              if ((err.statusCode === 404 || err.statusCode === 410) && mongoCols?.resources) {
+                await mongoCols.resources.deleteOne({ resource: "push_subscriptions", "subscription.endpoint": target.subscription?.endpoint });
+              }
+            }
+          })
+        );
+      }
+      return res.status(200).json({ success: true, delivered, targetCount: targets.length });
+    }
+
     // 3. Resources API: /api/resources/:resource/:id? (allows IDs with slashes e.g. DD/2233)
     const resourceMatch = pathname.match(/^\/(?:api\/)?resources\/([^/]+)(?:\/(.+))?\/?$/);
     if (resourceMatch) {
