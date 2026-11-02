@@ -1421,7 +1421,23 @@ export function MyTasksPage({
   const [showModal, setShowModal] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [assignPrefill, setAssignPrefill] = useState(null);
-  const [taskTab, setTaskTab] = useState("all");
+  const [taskTab, setTaskTabState] = useState(() => {
+    try {
+      return sessionStorage.getItem("loom_mytasks_tab") || "all";
+    } catch (e) {
+      return "all";
+    }
+  });
+  const setTaskTab = (val) => {
+    setTaskTabState(val);
+    try {
+      if (!val || val === "all") {
+        sessionStorage.removeItem("loom_mytasks_tab");
+      } else {
+        sessionStorage.setItem("loom_mytasks_tab", val);
+      }
+    } catch (e) {}
+  };
   const [form, setForm] = useState({
     title: "",
     orderId: "",
@@ -1473,6 +1489,41 @@ export function MyTasksPage({
   const roleCustomTasks = useMemo(() => visibleCustomTasks.filter(t => !isTaskCompleted(t)), [visibleCustomTasks]);
   const completedCustomTasks = useMemo(() => visibleCustomTasks.filter(isTaskCompleted), [visibleCustomTasks]);
 
+  const [stageAvailabilityFilter, setStageAvailabilityFilterState] = useState(() => {
+    try {
+      return sessionStorage.getItem("loom_mytasks_stage_availability") || "ready";
+    } catch (e) {
+      return "ready";
+    }
+  });
+  const setStageAvailabilityFilter = (val) => {
+    setStageAvailabilityFilterState(val);
+    try {
+      if (!val || val === "ready") {
+        sessionStorage.removeItem("loom_mytasks_stage_availability");
+      } else {
+        sessionStorage.setItem("loom_mytasks_stage_availability", val);
+      }
+    } catch (e) {}
+  };
+
+  const [stagePriorityFilter, setStagePriorityFilterState] = useState(() => {
+    try {
+      return sessionStorage.getItem("loom_mytasks_stage_priority") || "all";
+    } catch (e) {
+      return "all";
+    }
+  });
+  const setStagePriorityFilter = (val) => {
+    setStagePriorityFilterState(val);
+    try {
+      if (!val || val === "all") {
+        sessionStorage.removeItem("loom_mytasks_stage_priority");
+      } else {
+        sessionStorage.setItem("loom_mytasks_stage_priority", val);
+      }
+    } catch (e) {}
+  };
   const [deptFilter, setDeptFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState(() => {
     try {
@@ -1533,9 +1584,24 @@ export function MyTasksPage({
     } else if (statusFilter === "overdue") {
       rows = rows.filter(r => isRowOverdue(r));
     }
-    if (deptFilter === "all") return rows;
-    return rows.filter(r => (r.dept || "").toLowerCase() === deptFilter.toLowerCase());
-  }, [tnaRows, deptFilter, statusFilter]);
+    if (deptFilter !== "all") {
+      rows = rows.filter(r => (r.dept || "").toLowerCase() === deptFilter.toLowerCase());
+    }
+    if (stageAvailabilityFilter === "ready") {
+      rows = rows.filter(r => !r.isLocked);
+    } else if (stageAvailabilityFilter === "locked") {
+      rows = rows.filter(r => r.isLocked);
+    }
+    if (stagePriorityFilter !== "all") {
+      rows = rows.filter(r => r.priority === stagePriorityFilter);
+    }
+    const pWeight = { high: 3, medium: 2, low: 1 };
+    return [...rows].sort((a, b) => {
+      const pDiff = (pWeight[b.priority] || 1) - (pWeight[a.priority] || 1);
+      if (pDiff !== 0) return pDiff;
+      return (a.order?.id || "").localeCompare(b.order?.id || "");
+    });
+  }, [tnaRows, deptFilter, statusFilter, stageAvailabilityFilter, stagePriorityFilter]);
 
   const filteredCustomTasks = useMemo(() => {
     let tasks = roleCustomTasks;
@@ -1913,8 +1979,104 @@ export function MyTasksPage({
       {/* 2. T&A Schedule Stage Tasks Section */}
       {(taskTab === "all" || taskTab === "tna") && (
         <Card>
-          <CardHeader title={`${role?.dept || "Department"} — T&A stage schedule tasks`} sub="Auto-synced from active order stage trackers" />
-          <GroupedTaskList rows={filteredTnaRows} onOpenOrder={onOpenOrder} emptyText="No open stage tasks for this role right now." />
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#1B2130" }}>
+                {`${role?.dept || "Department"} — T&A stage schedule tasks`}
+              </div>
+              <div style={{ fontSize: 12, color: "#8A8D98", marginTop: 2 }}>
+                Auto-synced from active order stage trackers
+              </div>
+            </div>
+
+            {/* Stage Readiness & Priority Filters */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              {/* Readiness Toggle */}
+              <div style={{ display: "inline-flex", background: "#F1F5F9", padding: "3px", borderRadius: 8, border: "1px solid #CBD5E1" }}>
+                <button
+                  type="button"
+                  onClick={() => setStageAvailabilityFilter("ready")}
+                  style={{
+                    padding: "4px 10px",
+                    borderRadius: 6,
+                    fontSize: 12,
+                    fontWeight: stageAvailabilityFilter === "ready" ? 700 : 500,
+                    border: "none",
+                    cursor: "pointer",
+                    background: stageAvailabilityFilter === "ready" ? "#0F766E" : "transparent",
+                    color: stageAvailabilityFilter === "ready" ? "#FFFFFF" : "#475569",
+                    transition: "all 0.15s ease"
+                  }}
+                  title="Show only stages ready for action (unlocked)"
+                >
+                  ⚡ Ready to Work ({tnaRows.filter(r => !r.isLocked).length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStageAvailabilityFilter("locked")}
+                  style={{
+                    padding: "4px 10px",
+                    borderRadius: 6,
+                    fontSize: 12,
+                    fontWeight: stageAvailabilityFilter === "locked" ? 700 : 500,
+                    border: "none",
+                    cursor: "pointer",
+                    background: stageAvailabilityFilter === "locked" ? "#D97706" : "transparent",
+                    color: stageAvailabilityFilter === "locked" ? "#FFFFFF" : "#475569",
+                    transition: "all 0.15s ease"
+                  }}
+                  title="Show future stages waiting for previous departments"
+                >
+                  🔒 Locked / Waiting ({tnaRows.filter(r => r.isLocked).length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStageAvailabilityFilter("all")}
+                  style={{
+                    padding: "4px 10px",
+                    borderRadius: 6,
+                    fontSize: 12,
+                    fontWeight: stageAvailabilityFilter === "all" ? 700 : 500,
+                    border: "none",
+                    cursor: "pointer",
+                    background: stageAvailabilityFilter === "all" ? "#334155" : "transparent",
+                    color: stageAvailabilityFilter === "all" ? "#FFFFFF" : "#475569",
+                    transition: "all 0.15s ease"
+                  }}
+                >
+                  All ({tnaRows.length})
+                </button>
+              </div>
+
+              {/* Priority Filter Select */}
+              <select
+                value={stagePriorityFilter}
+                onChange={e => setStagePriorityFilter(e.target.value)}
+                style={{
+                  padding: "5px 10px",
+                  borderRadius: 8,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  border: "1px solid #CBD5E1",
+                  background: "#FFFFFF",
+                  color: "#334155",
+                  cursor: "pointer",
+                  outline: "none"
+                }}
+              >
+                <option value="all">All Priorities</option>
+                <option value="high">🔴 High Priority</option>
+                <option value="medium">🟠 Medium Priority</option>
+                <option value="low">🟢 Low Priority</option>
+              </select>
+            </div>
+          </div>
+
+          <GroupedTaskList
+            rows={filteredTnaRows}
+            onOpenOrder={onOpenOrder}
+            emptyText={stageAvailabilityFilter === "ready" ? "No unlocked stages ready to work on right now. Check 'Locked / Waiting' to see upcoming stages." : "No open stage tasks for this role right now."}
+          />
         </Card>
       )}
 

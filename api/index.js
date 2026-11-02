@@ -593,6 +593,24 @@ function makeId(resource, record) {
   return record?.id || `${resource}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "BHw7uqELw1TC4VQdG-NSVKoWFKJG1N6x-Zz-Mcf01JNbD9zOD1ETJ8Tlnpuh9PKBCOIJz2Y0abvNzL0GQ8TNbKc";
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "z3P2tqnPLTBahskghSSVAqipXkaiLqxjVzVQUmxIs4Y";
+
+let webpushInstance = null;
+async function getWebPush() {
+  if (!webpushInstance) {
+    try {
+      const wp = await import("web-push");
+      const mod = wp.default || wp;
+      mod.setVapidDetails("mailto:support@loomplm.internal", VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+      webpushInstance = mod;
+    } catch (e) {
+      console.warn("Vercel web-push init warning:", e.message);
+    }
+  }
+  return webpushInstance;
+}
+
 export default async function handler(req, res) {
   try {
     // 1. CORS Headers

@@ -4,6 +4,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { RESOURCE_SEEDS } from "../data/seed.js";
 import { getResourceCollection, getStorageCollection } from "../db/mongodb.js";
+import { sendPushNotification } from "./push.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_FILE = path.join(__dirname, "..", "data", "resources.json");
@@ -527,6 +528,24 @@ router.post("/:resource", async (req, res, next) => {
         db[resource] = [record, ...(db[resource] || [])];
       }
       writeDB(db);
+    }
+    
+    if (resource === "notifications") {
+      try {
+        sendPushNotification({
+          targetUserId: record.userId || record.targetUser || record.targetUserId || null,
+          targetUsername: record.username || record.assignee || null,
+          targetRole: record.targetRole || null,
+          title: record.title || "LOOM PLM Alert",
+          message: record.message || record.desc || "New update in LOOM PLM",
+          url: record.url || (record.orderId || record.relatedId ? `/?order=${record.orderId || record.relatedId}` : "/"),
+          priority: record.priority || "medium",
+          data: {
+            orderId: record.orderId || record.relatedId,
+            relatedModule: record.relatedModule
+          }
+        }).catch(err => console.warn("[Push] Background dispatch warning:", err.message));
+      } catch (e) { }
     }
     res.status(201).json(record);
   } catch (error) { next(error); }

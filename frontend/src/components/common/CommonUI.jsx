@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { ChevronLeft, ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronDown, ChevronRight, Lock } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 import { REASONS } from "../../constants/loomData.js";
 
@@ -105,6 +105,82 @@ export function isTaskCompleted(task) {
   return status === "done" || status === "completed" || Boolean(task?.completedAt);
 }
 
+
+export function resolveStageScheduleDates(order, stage) {
+  const plannedStr = String(stage?.planned || stage?.days || "").trim();
+  const hasMonth = /jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec/i.test(plannedStr);
+  if (hasMonth && !/^day/i.test(plannedStr)) {
+    return plannedStr;
+  }
+
+  let baseDate = new Date();
+  if (order?.orderDate) {
+    const d = new Date(order.orderDate);
+    if (!isNaN(d.getTime())) baseDate = d;
+  } else if (order?.createdAt) {
+    const d = new Date(order.createdAt);
+    if (!isNaN(d.getTime())) baseDate = d;
+  } else if (order?.shipDate || order?.ship) {
+    const d = new Date(order.shipDate || order.ship);
+    if (!isNaN(d.getTime())) {
+      baseDate = new Date(d);
+      baseDate.setDate(baseDate.getDate() - 90);
+    }
+  }
+
+  let startOffset = 0;
+  let endOffset = 0;
+  if (typeof stage?.startDay === "number" && typeof stage?.endDay === "number") {
+    startOffset = stage.startDay;
+    endOffset = stage.endDay;
+  } else {
+    const match = plannedStr.match(/(?:day\s*)?(\d+)(?:\s*-\s*(\d+))?/i);
+    if (match) {
+      startOffset = parseInt(match[1], 10);
+      endOffset = match[2] ? parseInt(match[2], 10) : startOffset;
+    }
+  }
+
+  const addDays = (d, days) => {
+    const res = new Date(d);
+    res.setDate(res.getDate() + days);
+    return res;
+  };
+
+  const startD = addDays(baseDate, startOffset);
+  const endD = addDays(baseDate, endOffset);
+
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const startDay = startD.getDate();
+  const endDay = endD.getDate();
+  const startMonth = months[startD.getMonth()];
+  const endMonth = months[endD.getMonth()];
+  const year = endD.getFullYear();
+
+  if (startMonth === endMonth && startDay !== endDay) {
+    return `${startDay} - ${endDay} ${endMonth} ${year}`;
+  } else if (startMonth !== endMonth) {
+    return `${startDay} ${startMonth} - ${endDay} ${endMonth} ${year}`;
+  }
+  return `${endDay} ${endMonth} ${year}`;
+}
+
+export function resolveTaskPriority(order, stage, isLocked, isDone) {
+  if (isDone) return "low";
+  if (stage?.priority && ["high", "critical", "medium", "low"].includes(String(stage.priority).toLowerCase())) {
+    return String(stage.priority).toLowerCase() === "critical" ? "high" : String(stage.priority).toLowerCase();
+  }
+  const isDelayed = Boolean(stage?.reason && stage?.reason !== "No delay flagged") || stage?.status === "delayed";
+  const isHighRisk = String(order?.risk || "").toLowerCase() === "high";
+  if (isDelayed || isHighRisk) {
+    return "high";
+  }
+  if (stage?.status === "in_progress" || !isLocked) {
+    return "medium";
+  }
+  return "low";
+}
+
 export function collectTasks(orders, deptFilter) {
   const rows = [];
   (orders || []).forEach(o => {
@@ -116,7 +192,21 @@ export function collectTasks(orders, deptFilter) {
       // Guard: skip null/undefined stage entries (can occur with corrupted backend data)
       if (!s || typeof s !== "object") return;
       if (!deptFilter || s.dept === deptFilter) {
-        rows.push({ order: o, stage: s, stageIdx: idx, dept: s.dept });
+        const gate = gatingApproval(o.stages, idx);
+        const isLocked = Boolean(gate);
+        const isDone = isStageCompleted(s);
+        const priority = resolveTaskPriority(o, s, isLocked, isDone);
+        const displayDue = resolveStageScheduleDates(o, s);
+        rows.push({
+          order: o,
+          stage: s,
+          stageIdx: idx,
+          dept: s.dept,
+          isLocked,
+          lockedGate: gate,
+          priority,
+          displayDue
+        });
       }
     });
   });
@@ -205,13 +295,21 @@ function groupRows(rows) {
       ? "Completed"
       : stage.reason
         ? `Delayed — ${stage.reason}`
-        : sStatus === "in_progress"
+        : sStatus === "in_progress" || (!r.isLocked && sStatus !== "pending")
           ? "Awaiting action"
-          : sStatus === "pending"
-            ? "Not started yet"
-            : "Completed";
+          : "Not started yet";
     (buckets[bucket] ??= []).push(r);
   });
+
+  const priorityWeight = { high: 3, medium: 2, low: 1 };
+  Object.keys(buckets).forEach(b => {
+    buckets[b].sort((a, b) => {
+      const pDiff = (priorityWeight[b.priority] || 1) - (priorityWeight[a.priority] || 1);
+      if (pDiff !== 0) return pDiff;
+      return (a.order?.id || "").localeCompare(b.order?.id || "");
+    });
+  });
+
   return Object.entries(buckets).filter(([, v]) => v.length > 0);
 }
 
@@ -251,18 +349,27 @@ export function GroupedTaskList({ rows, onOpenOrder, emptyText, completedDefault
           </div>
           {isOpen(label) && (
             <div>
-              <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1.3fr 0.9fr 0.9fr", fontSize: 10.5, color: "#B0B2BA", padding: "8px 10px 4px" }}>
-                <div>Order / Style</div><div>Task / stage</div><div>Due</div><div>Status</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1.3fr 0.7fr 1.1fr 0.8fr", fontSize: 10.5, color: "#8A8D98", padding: "8px 10px 4px", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.3 }}>
+                <div>Order / Style</div><div>Task / stage</div><div>Priority</div><div>Due Date</div><div>Status</div>
               </div>
-              {groupItems.map(({ order, stage, stageIdx }, itemIdx) => {
+              {groupItems.map(({ order, stage, stageIdx, isLocked, lockedGate, priority, displayDue }, itemIdx) => {
                 const orderKey = order?.primaryId || order?.id;
                 return (
                   <div
                     key={`${orderKey || "ord"}-${stage?.name || ""}-${stageIdx ?? itemIdx}-${itemIdx}`}
                     onClick={() => onOpenOrder && onOpenOrder(order.primaryId || order.id, order.primaryId)}
-                    style={{ display: "grid", gridTemplateColumns: "1.1fr 1.3fr 0.9fr 0.9fr", alignItems: "center", fontSize: 12.5, padding: "9px 10px", borderBottom: "1px solid #F5F5F7", cursor: "pointer" }}
-                    onMouseEnter={e => e.currentTarget.style.background = "#FAFAFB"}
-                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1.1fr 1.3fr 0.7fr 1.1fr 0.8fr",
+                      alignItems: "center",
+                      fontSize: 12.5,
+                      padding: "10px 10px",
+                      borderBottom: "1px solid #F5F5F7",
+                      cursor: "pointer",
+                      background: isLocked ? "#FAFAFB" : "transparent"
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = isLocked ? "#F1F5F9" : "#FAFAFB"}
+                    onMouseLeave={e => e.currentTarget.style.background = isLocked ? "#FAFAFB" : "transparent"}
                   >
                     <div>
                       <div style={{ fontFamily: "monospace", fontSize: 11, color: "#8A8D98", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
@@ -280,8 +387,34 @@ export function GroupedTaskList({ rows, onOpenOrder, emptyText, completedDefault
                       </div>
                       <div style={{ fontWeight: 600, color: "#1B2130", marginTop: 2 }}>{order.style}</div>
                     </div>
-                    <div>{stage.name} <span style={{ color: "#B0B2BA", fontSize: 10.5 }}>· {stage.dept}</span></div>
-                    <div>{stage.planned}</div>
+                    <div>
+                      <div style={{ fontWeight: 500, color: "#1B2130" }}>
+                        {stage.name} <span style={{ color: "#8A8D98", fontSize: 11 }}>· {stage.dept}</span>
+                      </div>
+                      {isLocked && lockedGate && (
+                        <div style={{ marginTop: 3, display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10, color: "#B45309", background: "#FEF3C7", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>
+                          <Lock size={10} /> Waiting for: {lockedGate.name}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      {priority === "high" ? (
+                        <span style={{ background: "#FEE2E2", color: "#991B1B", border: "1px solid #FCA5A5", fontSize: 10.5, fontWeight: 700, padding: "2px 7px", borderRadius: 6, display: "inline-flex", alignItems: "center", gap: 3 }}>
+                          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#DC2626" }} /> High
+                        </span>
+                      ) : priority === "medium" ? (
+                        <span style={{ background: "#FEF3C7", color: "#92400E", border: "1px solid #FDE68A", fontSize: 10.5, fontWeight: 700, padding: "2px 7px", borderRadius: 6, display: "inline-flex", alignItems: "center", gap: 3 }}>
+                          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#D97706" }} /> Medium
+                        </span>
+                      ) : (
+                        <span style={{ background: "#F1F5F9", color: "#475569", border: "1px solid #E2E8F0", fontSize: 10.5, fontWeight: 600, padding: "2px 7px", borderRadius: 6, display: "inline-flex", alignItems: "center", gap: 3 }}>
+                          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#94A3B8" }} /> Low
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "#334155" }}>
+                      {displayDue || stage.planned || "—"}
+                    </div>
                     <div>{statusPill(stage.status)}</div>
                   </div>
                 );

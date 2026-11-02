@@ -8,6 +8,7 @@ import { connectMongo } from "./db/mongodb.js";
 import { setStorageCollection } from "./routes/storage.js";
 import geminiRoutes from "./routes/gemini.js";
 import resourceRoutes from "./routes/resources.js";
+import pushRoutes from "./routes/push.js";
 import { seedResources, cleanExpiredNotifications } from "./routes/resources.js";
 
 dotenv.config();
@@ -35,6 +36,7 @@ app.use(express.json({ limit: "10mb" }));
 app.use("/api/storage", storageRoutes);
 app.use("/api/gemini", geminiRoutes);
 app.use("/api/resources", resourceRoutes);
+app.use("/api/push", pushRoutes);
 
 app.get("/api/health", (req, res) => res.json({ ok: true }));
 

@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from "react";
 import {
   TriangleAlert, Globe, Gauge, CheckCircle2, ClipboardList, Landmark, Clock, Truck, TrendingUp,
   Bell, Package, Calendar, CheckSquare, ClipboardCheck, Award, ShieldCheck, CheckCircle, Search, Trash2, Check,
-  Plus, Edit, X, ChevronLeft, ChevronRight, Building2, Phone, Mail, MapPin, ExternalLink, AlertCircle, Layers, RefreshCw,
+  Plus, Edit, X, ChevronLeft, ChevronRight, Building2, Phone, Smartphone, Mail, MapPin, ExternalLink, AlertCircle, Layers, RefreshCw,
   Crown, Trophy, Sparkles, Flame, Star, Zap, Target
 } from "lucide-react";
 import {
@@ -19,6 +19,7 @@ import {
 import { analyzeCuttingDelayForOrder, CuttingDelayDashboardBanner } from "../CuttingDelayAlertModal.jsx";
 import { OrderDeliveryCalendarWidget } from "./DashboardView.jsx";
 import { normalizeDepartmentName } from "../../utils/departments.js";
+import { registerPushDevice, getNotificationPermission, isPushNotificationSupported, triggerMobileDrawerAlert } from "../../utils/pushAlerts.js";
 
 /**
  * Helper function to compute category-level planned vs actual variance breakdown
@@ -2467,13 +2468,67 @@ export function SupplierPerformancePage({
 
 export function NotificationsPage({
   notifications = [],
+  activeUser = null,
   onMarkAsRead,
   onMarkAllAsRead,
   onDeleteNotification,
   onOpenOrder,
   onNavigate
 }) {
-  const [tabFilter, setTabFilter] = useState("all"); // all | unread | order | tna | task | approval | compliance | certification
+  const [pushPermission, setPushPermission] = useState(() => getNotificationPermission());
+  const [isSubscribing, setIsSubscribing] = useState(false);
+  const [testSent, setTestSent] = useState(false);
+
+  // Auto-detect when user unblocks notification in browser settings
+  useEffect(() => {
+    const checkPerm = () => {
+      const p = getNotificationPermission();
+      setPushPermission(p);
+      if (p === "granted" && activeUser) {
+        registerPushDevice(activeUser).catch(() => {});
+      }
+    };
+    window.addEventListener("focus", checkPerm);
+    return () => window.removeEventListener("focus", checkPerm);
+  }, [activeUser]);
+
+  const handleEnablePush = async () => {
+    if (typeof Notification !== "undefined" && Notification.permission === "denied") {
+      alert("Notifications are currently Blocked in your browser!\n\nHow to unblock in 5 seconds:\n1. Click the Settings / Sliders icon on the LEFT of the address bar (next to localhost:5173)\n2. Turn ON or select 'Allow' for Notifications\n3. Come back to this page and click 'Send Test Alert'!");
+      return;
+    }
+    setIsSubscribing(true);
+    try {
+      await registerPushDevice(activeUser);
+      setPushPermission(getNotificationPermission());
+    } finally {
+      setIsSubscribing(false);
+    }
+  };
+
+  const handleSendTestAlert = () => {
+    setTestSent(true);
+    triggerMobileDrawerAlert({
+      title: "LOOM PLM Alert 🔔",
+      message: `Hello ${activeUser?.name || "User"}! Mobile notification drawer alert is working perfectly.`,
+      priority: "high"
+    });
+    try {
+      fetch("/api/push/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetUserId: activeUser?.id,
+          title: "LOOM PLM Alert 🔔",
+          message: `Hello ${activeUser?.name || "User"}! Mobile notification drawer alert is working.`,
+          priority: "high"
+        })
+      }).catch(() => {});
+    } catch (e) {}
+    setTimeout(() => setTestSent(false), 3000);
+  };
+
+    const [tabFilter, setTabFilter] = useState("all"); // all | unread | order | tna | task | approval | compliance | certification
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [dateFilter, setDateFilter] = useState("all");
@@ -2554,7 +2609,55 @@ export function NotificationsPage({
             Stay updated on live order delays, T&A stage milestones, assigned tasks, approvals, and buyer compliance deadlines
           </div>
         </div>
-        <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {isPushNotificationSupported() && (
+            pushPermission !== "granted" ? (
+              <button
+                type="button"
+                onClick={handleEnablePush}
+                disabled={isSubscribing}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  background: pushPermission === "denied" ? "#DC2626" : "#2563EB",
+                  color: "#FFFFFF",
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "8px 14px",
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  boxShadow: pushPermission === "denied" ? "0 1px 3px rgba(220,38,38,0.3)" : "0 1px 3px rgba(37,99,235,0.25)"
+                }}
+              >
+                <Smartphone size={15} />
+                {pushPermission === "denied" ? "⚠️ Notifications Blocked (Click to Unblock)" : isSubscribing ? "Activating..." : "Enable Push Alerts"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleSendTestAlert}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  background: testSent ? "#059669" : "#16A34A",
+                  color: "#FFFFFF",
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "8px 14px",
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  boxShadow: "0 1px 3px rgba(22,163,74,0.25)"
+                }}
+              >
+                <Bell size={14} />
+                {testSent ? "Test Alert Sent! ✓" : "Send Test Mobile Alert"}
+              </button>
+            )
+          )}
           {unreadCount > 0 && (
             <button
               onClick={() => onMarkAllAsRead && onMarkAllAsRead()}

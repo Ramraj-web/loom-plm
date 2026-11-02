@@ -5,6 +5,8 @@ import {
 } from "lucide-react";
 import { formatTimeAgo, NOTIFICATION_PRIORITY_STYLE } from "../../constants/loomData.js";
 import { MobileBottomNav } from "./MobileBottomNav.jsx";
+import { registerPushDevice, getNotificationPermission, isPushNotificationSupported, triggerMobileDrawerAlert } from "../../utils/pushAlerts.js";
+import { Smartphone, CheckCircle2 } from "lucide-react";
 
 /**
  * MobileNotificationsScreen
@@ -12,12 +14,49 @@ import { MobileBottomNav } from "./MobileBottomNav.jsx";
  */
 export function MobileNotificationsScreen({
   notifications = [],
+  activeUser = null,
   onMarkAsRead,
   onMarkAllAsRead,
   onOpenOrder,
   onNavigate
 }) {
-  const [filterTab, setFilterTab] = useState("all"); // 'all' | 'unread' | 'tasks' | 'orders'
+  const [pushPermission, setPushPermission] = useState(() => getNotificationPermission());
+  const [isSubscribing, setIsSubscribing] = useState(false);
+
+  const [testSent, setTestSent] = useState(false);
+  const handleSendTestAlert = () => {
+    setTestSent(true);
+    triggerMobileDrawerAlert({
+      title: "LOOM PLM Alert 🔔",
+      message: `Hello ${activeUser?.name || "User"}! Mobile notification drawer alert is working perfectly.`,
+      priority: "high"
+    });
+    try {
+      fetch("/api/push/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetUserId: activeUser?.id,
+          title: "LOOM PLM Alert 🔔",
+          message: `Hello ${activeUser?.name || "User"}! Mobile notification drawer alert is working.`,
+          priority: "high"
+        })
+      }).catch(() => {});
+    } catch (e) {}
+    setTimeout(() => setTestSent(false), 3000);
+  };
+
+  const handleEnablePush = async () => {
+    setIsSubscribing(true);
+    try {
+      await registerPushDevice(activeUser);
+      setPushPermission(getNotificationPermission());
+    } finally {
+      setIsSubscribing(false);
+    }
+  };
+
+    const [filterTab, setFilterTab] = useState("all"); // 'all' | 'unread' | 'tasks' | 'orders'
 
   const safeNotifs = useMemo(() => {
     return (Array.isArray(notifications) ? notifications : []).filter(n => n && n.isDeleted !== true);
@@ -136,6 +175,89 @@ export function MobileNotificationsScreen({
 
       {/* Main Container */}
       <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
+        {/* Mobile Drawer Alert Card */}
+        {isPushNotificationSupported() && (
+          pushPermission !== "granted" ? (
+            <div style={{
+              background: "linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%)",
+              border: "1px solid #BFDBFE",
+              borderRadius: 12,
+              padding: "12px 14px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 10
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 32, height: 32, borderRadius: 8, background: "#2563EB", display: "flex", alignItems: "center", justifyContent: "center", color: "#FFFFFF", flexShrink: 0 }}>
+                  <Smartphone size={17} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#1E40AF" }}>Mobile Drawer Alerts</div>
+                  <div style={{ fontSize: 11, color: "#3B82F6", fontWeight: 500 }}>Get instant phone drawer alerts like SMS</div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleEnablePush}
+                disabled={isSubscribing}
+                style={{
+                  background: "#2563EB",
+                  color: "#FFFFFF",
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "7px 12px",
+                  fontSize: 11.5,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                  boxShadow: "0 1px 3px rgba(37,99,235,0.3)"
+                }}
+              >
+                {isSubscribing ? "Activating..." : "Enable"}
+              </button>
+            </div>
+          ) : (
+            <div style={{
+              background: "#F0FDF4",
+              border: "1px solid #BBF7D0",
+              borderRadius: 10,
+              padding: "9px 12px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 8,
+              flexWrap: "wrap"
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#166534", fontWeight: 600 }}>
+                <CheckCircle2 size={15} color="#16A34A" />
+                <span>Mobile Drawer Alerts: <strong>Active</strong></span>
+              </div>
+              <button
+                type="button"
+                onClick={handleSendTestAlert}
+                style={{
+                  background: testSent ? "#059669" : "#16A34A",
+                  color: "#FFFFFF",
+                  border: "none",
+                  borderRadius: 7,
+                  padding: "5px 11px",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 4,
+                  boxShadow: "0 1px 2px rgba(22,163,74,0.3)"
+                }}
+              >
+                <Bell size={12} />
+                {testSent ? "Alert Sent! ✓" : "Send Test Alert"}
+              </button>
+            </div>
+          )
+        )}
+
         {/* Filter Pills */}
         <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2 }}>
           {[

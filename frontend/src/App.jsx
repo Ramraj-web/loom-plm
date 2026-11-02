@@ -11,6 +11,7 @@ import {
 import { resourcesApi, clearApiCache } from "./api.js";
 import { getDeviceInfo, getLocationInfo, sanitizeLocationString } from "./utils/deviceLocation.js";
 import { playNotificationSound, isSoundEnabled, setSoundEnabled } from "./utils/soundAlert.js";
+import { registerPushDevice, unregisterPushDevice, triggerMobileDrawerAlert, isPushNotificationSupported } from "./utils/pushAlerts.js";
 import {
   ORG_STRUCTURE, ROLE_OPTIONS, STAFF_LIST, seedAttendance, INITIAL_LEAVE_REQUESTS,
   INITIAL_FINANCIALS, INITIAL_CERTIFICATIONS, INITIAL_COMPLIANCES, INITIAL_DEBIT_NOTES, INITIAL_CAPAS,
@@ -1473,7 +1474,20 @@ export default function LoomPLM() {
         } else if (event.key === "notifications" && event.value) {
           try {
             const parsed = typeof event.value === "string" ? JSON.parse(event.value) : event.value;
-            if (Array.isArray(parsed)) setNotifications(prev => applyReadStatusAndDedupe([...parsed, ...prev]));
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setNotifications(prev => applyReadStatusAndDedupe([...parsed, ...prev]));
+              const latestNotif = parsed[0];
+              if (latestNotif && !latestNotif.isRead) {
+                try {
+                  triggerMobileDrawerAlert({
+                    title: latestNotif.title,
+                    message: latestNotif.message,
+                    orderId: latestNotif.relatedId || latestNotif.orderId,
+                    priority: latestNotif.priority
+                  });
+                } catch (e) {}
+              }
+            }
           } catch (e) { }
         } else if (event.key === "attendance" && event.value) {
           try {
@@ -1890,6 +1904,14 @@ export default function LoomPLM() {
         return prev;
       }
       playNotificationSound(newNotif.priority);
+      try {
+        triggerMobileDrawerAlert({
+          title: newNotif.title,
+          message: newNotif.message,
+          orderId: newNotif.relatedId || newNotif.orderId,
+          priority: newNotif.priority
+        });
+      } catch (e) {}
       const updated = applyReadStatusAndDedupe([newNotif, ...prev]);
       if (window.storage) window.storage.set("notifications", JSON.stringify(updated.slice(0, 300)), true);
       return updated;
@@ -2302,6 +2324,10 @@ export default function LoomPLM() {
   }, [syncRotationToBackend]);
 
   const handleLogout = () => {
+    // Unsubscribe push device so NO notifications go to this phone after logout!
+    try {
+      if (activeUser) unregisterPushDevice(activeUser).catch(() => {});
+    } catch (e) {}
     const sessId = currentSessionId || (typeof sessionStorage !== "undefined" ? sessionStorage.getItem("loom_active_session_id") : null);
     const nowIso = new Date().toISOString();
     const dev = getDeviceInfo();
@@ -3979,6 +4005,28 @@ export default function LoomPLM() {
     }
   };
 
+  // Auto-register mobile push notification when user logs in
+  useEffect(() => {
+    if (activeUser && isPushNotificationSupported()) {
+      registerPushDevice(activeUser).catch(() => {});
+    }
+  }, [activeUser?.id]);
+
+  // Listen for notification click from mobile drawer to open order
+  useEffect(() => {
+    const handleSwMessage = (event) => {
+      if (event.data?.type === "LOOM_NOTIFICATION_CLICKED" && event.data?.data?.orderId) {
+        if (typeof openOrder === "function") openOrder(event.data.data.orderId);
+      }
+    };
+    if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+      navigator.serviceWorker.addEventListener("message", handleSwMessage);
+      return () => navigator.serviceWorker.removeEventListener("message", handleSwMessage);
+    }
+  }, []);
+
+
+
   const openDept = (name) => {
     setSelectedDept(name);
     setPreviousView(view);
@@ -4851,6 +4899,7 @@ export default function LoomPLM() {
   } else if (view === "notifications" && canSeeAll) {
     content = isMobileScreen ? (
       <MobileNotificationsScreen
+        activeUser={activeUser}
         notifications={notifications}
         onMarkAsRead={markNotificationAsRead}
         onMarkAllAsRead={markAllNotificationsAsRead}
@@ -4859,6 +4908,7 @@ export default function LoomPLM() {
       />
     ) : (
       <NotificationsPage
+        activeUser={activeUser}
         notifications={notifications}
         onMarkAsRead={markNotificationAsRead}
         onMarkAllAsRead={markAllNotificationsAsRead}
