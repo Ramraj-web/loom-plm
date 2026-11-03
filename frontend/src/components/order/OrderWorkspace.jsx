@@ -1200,7 +1200,7 @@ function StageNode({ stage: rawStage, idx, currentOrderUnit, onCycle, onUndo, ca
   };
 
   return (
-    <div style={{ flex: "0 0 134px", minWidth: 150, position: "relative", opacity: locked ? 0.6 : !canEdit ? 0.75 : 1 }}>
+    <div style={{ flex: "0 0 134px", minWidth: 200, position: "relative", opacity: locked ? 0.6 : !canEdit ? 0.75 : 1 }}>
       <div style={{ display: "flex", alignItems: "center" }}>
         <div
           onClick={handleStageClick}
@@ -1255,17 +1255,17 @@ function StageNode({ stage: rawStage, idx, currentOrderUnit, onCycle, onUndo, ca
         )}
       </div>
 
-      <div style={{ fontSize: 10, color: canEdit ? "#1F9E8D" : "#B0B2BA", marginTop: 2, fontWeight: canEdit ? 600 : 400, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 2 }}>
+      <div style={{ fontSize: 10, color: canEdit ? "#1F9E8D" : "#B0B2BA", marginTop: 2, fontWeight: canEdit ? 600 : 400, display: "flex", alignItems: "center", flexWrap: "wrap", gap: 2 }}>
         <span>{stage.dept} {!canEdit && "(Read-only)"}</span>
         {stage.unitCode && stage.unitCode !== currentOrderUnit?.code ? (
           <span style={{ fontSize: 9, fontWeight: 800, background: "#FEF3C7", color: "#B45309", border: "1px solid #FDE68A", padding: "1px 4px", borderRadius: 3 }}>
             📍 {stage.unitCode}
           </span>
-        ) : (
+        ) : currentOrderUnit?.code ? (
           <span style={{ fontSize: 8.5, fontWeight: 700, color: "#94A3B8" }}>
-            {currentOrderUnit?.code || "UNT-01"}
+            {currentOrderUnit.code}
           </span>
-        )}
+        ) : null}
       </div>
 
       {/* Prominent Colorway Badge button */}
@@ -3308,7 +3308,9 @@ export function OrderUnitTransferModal({
             </div>
             <div>
               <div style={{ fontSize: 10.5, color: "#64748B", textTransform: "uppercase", fontWeight: 700 }}>Current Unit</div>
-              <div style={{ fontSize: 13, fontWeight: 800, color: "#0D9488", marginTop: 2 }}>{currentUnit?.code || "UNT-01"} - {currentUnit?.name?.split("-")[0] || "Unit 1"}</div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: "#0D9488", marginTop: 2 }}>
+                {currentUnit ? `${currentUnit.code} - ${currentUnit.name?.split("-")[0]?.trim() || currentUnit.name}` : "Not Assigned"}
+              </div>
             </div>
             <div>
               <div style={{ fontSize: 10.5, color: "#64748B", textTransform: "uppercase", fontWeight: 700 }}>Order Qty</div>
@@ -3595,18 +3597,24 @@ export function OrderWorkspace({
   const [showUnitTransferModal, setShowUnitTransferModal] = useState(false);
   const [localStages, setLocalStages] = useState(order?.stages || []);
 
-  // Determine current unit assigned to this order
+  // Determine current unit assigned to this order (null if unassigned)
   const currentUnit = useMemo(() => {
     if (order?.unitId) {
       const found = (units || []).find(u => u.id === order.unitId || u.code === order.unitId);
       if (found) return found;
+      return { id: order.unitId, code: order.unitCode || order.unitId, name: order.unitName || order.unitId };
+    }
+    if (order?.unitCode) {
+      const found = (units || []).find(u => u.code === order.unitCode);
+      if (found) return found;
+      return { id: order.unitCode, code: order.unitCode, name: order.unitName || order.unitCode };
     }
     if (order?.unitName) {
       const found = (units || []).find(u => u.name === order.unitName);
       if (found) return found;
     }
-    return (units && units[0]) || { id: "unit-1", name: "Unit 1 - Main Apparel Factory", code: "UNT-01" };
-  }, [order?.unitId, order?.unitName, units]);
+    return null;
+  }, [order?.unitId, order?.unitCode, order?.unitName, units]);
 
   // Execute Unit Shift
   const handleConfirmUnitTransfer = ({ targetUnit, targetIndices, scope, transferQty, notes }) => {
@@ -3650,8 +3658,8 @@ export function OrderWorkspace({
         scope === "all_remaining"
           ? `Remaining Stages (${targetIndices.length} stages from current)`
           : scope === "entire"
-          ? `Entire Order (${targetIndices.length} stages)`
-          : `Selected (${targetIndices.length}): ${targetStageNames.slice(0, 2).join(", ")}${targetStageNames.length > 2 ? "..." : ""}`;
+            ? `Entire Order (${targetIndices.length} stages)`
+            : `Selected (${targetIndices.length}): ${targetStageNames.slice(0, 2).join(", ")}${targetStageNames.length > 2 ? "..." : ""}`;
 
       const newEntry = {
         id: `mov-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -3660,8 +3668,8 @@ export function OrderWorkspace({
         style: order.style,
         buyer: order.buyer,
         qty: transferQty || Number(order.qty) || 0,
-        fromUnitId: currentUnit.id,
-        fromUnitName: currentUnit.name,
+        fromUnitId: currentUnit?.id || null,
+        fromUnitName: currentUnit?.name || "Unassigned",
         toUnitId: targetUnit.id,
         toUnitName: targetUnit.name,
         stageScope: stageScopeLabel,
@@ -3672,7 +3680,7 @@ export function OrderWorkspace({
 
       const updatedLedger = [newEntry, ...existingLedger];
       localStorage.setItem("loom_unit_movement_ledger", JSON.stringify(updatedLedger));
-    } catch (e) {}
+    } catch (e) { }
 
     if (onPushNotification) {
       onPushNotification(
@@ -4134,10 +4142,10 @@ export function OrderWorkspace({
             }}
             onMouseEnter={e => e.currentTarget.style.background = "#0F766E"}
             onMouseLeave={e => e.currentTarget.style.background = "#0D9488"}
-            title="Shift running stages or entire order to another manufacturing unit"
+            title={currentUnit ? "Shift running stages or entire order to another manufacturing unit" : "Assign this order to a manufacturing unit"}
           >
             <Factory size={14} />
-            <span>{currentUnit.code || "UNT-01"} {currentUnit.name?.split("-")[0]?.trim() || "Unit 1"} · Shift Unit</span>
+            <span>{currentUnit ? `${currentUnit.code} · Shift Unit` : "Assign Unit"}</span>
             <ArrowRightLeft size={12} />
           </button>
 
