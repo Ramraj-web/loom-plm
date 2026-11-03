@@ -3484,13 +3484,30 @@ export function EmployeePerformancePanel({ orders = [], buyers = [], roster = []
           String(stage.status || "").trim().toLowerCase() === "delayed"
         );
         const totalWork = group.stages.length + group.tasks.length;
-        const completed = completedStages.length + completedTasks.length;
+        const stageTaskCompleted = completedStages.length + completedTasks.length;
         const complaintsCount = new Set(employeeComplaints.map((complaint, index) =>
           String(complaint.id || complaint._id || `${complaint.orderId}_${complaint.stageName || index}`)
         )).size;
         const score = totalWork > 0
-          ? Math.max(0, Math.round((completed / totalWork) * 100 - delayedStages.length * 5 - complaintsCount * 10))
+          ? Math.max(0, Math.round((stageTaskCompleted / totalWork) * 100 - delayedStages.length * 5 - complaintsCount * 10))
           : null;
+
+        // Fully completed orders check (all stages done OR order marked completed/shipped)
+        const isOrderFullyCompleted = (order) => {
+          if (!order) return false;
+          if (order.completed === true || order.completed === "true") return true;
+          const status = String(order.status || "").toLowerCase().trim();
+          if (status === "completed" || status === "shipped") return true;
+          if (Array.isArray(order.stages) && order.stages.length > 0) {
+            return order.stages.every(s => {
+              const st = String(s?.status || "").toLowerCase().trim();
+              return st === "done" || st === "completed" || Boolean(s?.completedAt);
+            });
+          }
+          return false;
+        };
+
+        const completedOrdersCount = qualifiedOrders.filter(isOrderFullyCompleted).length;
 
         return [{
           key: `${group.buyerId}:${person.id || person.username || person.name}`,
@@ -3505,7 +3522,8 @@ export function EmployeePerformancePanel({ orders = [], buyers = [], roster = []
           tasks: group.tasks,
           completedStages: completedStages.length,
           completedTasks: completedTasks.length,
-          completed,
+          completedOrdersCount,
+          completed: completedOrdersCount,
           complaintsCount,
           score,
           totalWork,
@@ -3590,7 +3608,7 @@ export function EmployeePerformancePanel({ orders = [], buyers = [], roster = []
       ["Total Buyers", buyerSummary.buyers, "#7F77DD"],
       ["Employees Tracked", buyerSummary.employees, "#378ADD"],
       ["Total Orders", buyerSummary.orders, "#1F9E8D"],
-      ["Completed Tasks", buyerSummary.completedTasks, "#059669"],
+      ["Completed Orders", filteredBuyerEmployeeRows.reduce((sum, row) => sum + (row.completedOrdersCount || 0), 0), "#059669"],
       ["Overall Buyer-Wise Performance", buyerSummary.averageScore === null ? "—" : `${buyerSummary.averageScore}%`, "#D97706"],
     ];
 

@@ -484,18 +484,17 @@ export function gatingApproval(stages, idx) {
     }
   }
 
-  // 3. Check for previous gating approval steps
+  // 3. Check ONLY the nearest preceding gating approval step
   for (let j = idx - 1; j >= 0; j--) {
     const s = stages[j];
     if (s && s.name && s.name.toLowerCase().includes("approval")) {
-      if (Array.isArray(s.colourways) && s.colourways.length > 0) {
-        const anyDone = s.colourways.some(c => c.status === "done" || (Number(c.completedQty) || 0) > 0);
-        if (!anyDone && s.status !== "done") {
-          return s;
-        }
-      } else if (s.status !== "done") {
-        return s;
-      }
+      const isDone = isStageCompleted(s) ||
+        (Array.isArray(s.colourways) && s.colourways.length > 0 && s.colourways.some(c => c.status === "done" || (Number(c.completedQty) || 0) > 0));
+
+      // Found the nearest approval milestone!
+      // If it is NOT done, this stage is locked by it.
+      // Once this exact required stage is marked done, unlock immediately (do not loop backwards to older approvals!)
+      return isDone ? null : s;
     }
   }
   return null;

@@ -2,7 +2,8 @@ import React, { useState, useMemo } from "react";
 import {
   BarChart3, Download, Search, Filter, Layers, CheckCircle2, Clock,
   AlertTriangle, ArrowUpRight, ArrowDownRight, TrendingUp, Users, ChevronRight,
-  FileSpreadsheet, Sparkles, Building2, Calendar, CheckSquare, ArrowLeft, Award, Activity
+  FileSpreadsheet, Sparkles, Building2, Calendar, CheckSquare, ArrowLeft, Award, Activity,
+  ChevronLeft, X
 } from "lucide-react";
 import { Card, CardHeader, PageHeader } from "../common/CommonUI.jsx";
 import { computeDynamicOrderRisk, parseShipDateSafe } from "../../constants/loomData.js";
@@ -21,6 +22,7 @@ import { computeOrderStageSchedules } from "../order/OrderWorkspace.jsx";
 export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = [], buyers = [], onOpenOrder }) {
   const [selectedReport, setSelectedReport] = useState("menu");
   const [activeTab, setActiveTab] = useState("kpiSummary");
+  const [isQuickNavOpen, setIsQuickNavOpen] = useState(false);
   const [buyerFilter, setBuyerFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -857,7 +859,6 @@ export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = 
           gap: 16
         }}>
           {reportModules.map(mod => {
-            const Icon = mod.icon;
             return (
               <div
                 key={mod.key}
@@ -869,7 +870,7 @@ export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = 
                   background: "#FFFFFF",
                   border: "1px solid #E2E8F0",
                   borderRadius: 14,
-                  padding: "22px",
+                  padding: "18px 20px",
                   cursor: "pointer",
                   display: "flex",
                   flexDirection: "column",
@@ -889,23 +890,13 @@ export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = 
                 }}
               >
                 <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
-                    <div style={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: 12,
-                      background: mod.bg,
-                      border: `1px solid ${mod.border}`,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: mod.color
-                    }}>
-                      <Icon size={22} />
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: mod.color, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                      Report #{mod.number}
                     </div>
 
                     <span style={{
-                      fontSize: 11.5,
+                      fontSize: 11,
                       fontWeight: 700,
                       background: mod.bg,
                       color: mod.color,
@@ -917,23 +908,17 @@ export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = 
                     </span>
                   </div>
 
-                  <div style={{ fontSize: 11, fontWeight: 700, color: mod.color, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 }}>
-                    Report #{mod.number}
-                  </div>
-                  <h3 style={{ fontSize: 16.5, fontWeight: 700, color: "#0F172A", margin: "0 0 6px 0" }}>
+                  <h3 style={{ fontSize: 16.5, fontWeight: 700, color: "#0F172A", margin: 0, lineHeight: 1.3 }}>
                     {mod.title}
                   </h3>
-                  <p style={{ fontSize: 13, color: "#64748B", margin: 0, lineHeight: 1.5 }}>
-                    {mod.desc}
-                  </p>
                 </div>
 
                 <div style={{
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  marginTop: 20,
-                  paddingTop: 14,
+                  marginTop: 18,
+                  paddingTop: 12,
                   borderTop: "1px solid #F1F5F9"
                 }}>
                   <span style={{ fontSize: 12.5, fontWeight: 600, color: "#0F172A" }}>
@@ -963,9 +948,319 @@ export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = 
   // Dedicated Detailed Report View
   const currentModule = reportModules.find(m => m.key === activeTab) || reportModules[0];
   const CurrentIcon = currentModule.icon;
+  const currentIndex = reportModules.findIndex(m => m.key === activeTab);
+  const prevModule = currentIndex > 0 ? reportModules[currentIndex - 1] : null;
+  const nextModule = currentIndex < reportModules.length - 1 ? reportModules[currentIndex + 1] : null;
+
+  const handleSwitchReport = (key) => {
+    setActiveTab(key);
+    setSelectedReport(key);
+    setIsQuickNavOpen(false);
+  };
 
   return (
-    <div style={{ paddingBottom: 48, maxWidth: 1400, margin: "0 auto" }}>
+    <div style={{ paddingBottom: 48, maxWidth: 1400, margin: "0 auto", position: "relative" }}>
+      {/* ============================================================== */}
+      {/* FLOATING QUICK SWITCHER (Vertically Centered on Right Edge) */}
+      {/* ============================================================== */}
+      <div
+        style={{
+          position: "fixed",
+          right: 0,
+          top: "50%",
+          transform: "translateY(-50%)",
+          zIndex: 9999,
+          display: "flex",
+          alignItems: "center"
+        }}
+      >
+        {!isQuickNavOpen ? (
+          <button
+            type="button"
+            onClick={() => setIsQuickNavOpen(true)}
+            title="Click to jump to other 5 report pages directly"
+            style={{
+              background: "linear-gradient(135deg, #0F172A 0%, #1E293B 100%)",
+              color: "#FFFFFF",
+              border: "1px solid #334155",
+              borderRight: "none",
+              borderRadius: "12px 0 0 12px",
+              padding: "14px 9px",
+              cursor: "pointer",
+              boxShadow: "-4px 4px 18px rgba(15, 23, 42, 0.28)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 9,
+              transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.paddingLeft = "13px";
+              e.currentTarget.style.background = "#0284C7";
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.paddingLeft = "9px";
+              e.currentTarget.style.background = "linear-gradient(135deg, #0F172A 0%, #1E293B 100%)";
+            }}
+          >
+            <ChevronLeft size={16} />
+            <div style={{
+              writingMode: "vertical-rl",
+              textOrientation: "mixed",
+              transform: "rotate(180deg)",
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: 0.8,
+              textTransform: "uppercase"
+            }}>
+              Switch Report
+            </div>
+            <span style={{
+              background: currentModule.color,
+              color: "#FFFFFF",
+              fontSize: 10,
+              fontWeight: 800,
+              width: 20,
+              height: 20,
+              borderRadius: "50%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.3)"
+            }}>
+              {currentModule.number}
+            </span>
+          </button>
+        ) : null}
+      </div>
+
+      {/* Floating Modal / Drawer when Opened */}
+      {isQuickNavOpen && (
+        <>
+          <div
+            onClick={() => setIsQuickNavOpen(false)}
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: "rgba(15, 23, 42, 0.25)",
+              backdropFilter: "blur(2px)",
+              zIndex: 9998
+            }}
+          />
+
+          <div
+            style={{
+              position: "fixed",
+              right: 14,
+              top: "50%",
+              transform: "translateY(-50%)",
+              width: 310,
+              maxWidth: "calc(100vw - 28px)",
+              background: "#FFFFFF",
+              borderRadius: 16,
+              border: "1px solid #E2E8F0",
+              boxShadow: "0 20px 48px -8px rgba(15, 23, 42, 0.28)",
+              zIndex: 9999,
+              padding: "16px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 12
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 10, borderBottom: "1px solid #F1F5F9" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 8,
+                  background: "#E0F2FE",
+                  color: "#0284C7",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center"
+                }}>
+                  <Layers size={15} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 13.5, fontWeight: 700, color: "#0F172A" }}>Switch Report</div>
+                  <div style={{ fontSize: 11, color: "#64748B" }}>Jump directly between 6 reports</div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsQuickNavOpen(false)}
+                style={{
+                  background: "#F1F5F9",
+                  border: "none",
+                  borderRadius: 6,
+                  width: 26,
+                  height: 26,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  color: "#64748B"
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = "#E2E8F0"; e.currentTarget.style.color = "#0F172A"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "#F1F5F9"; e.currentTarget.style.color = "#64748B"; }}
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            {/* Quick Next / Prev Buttons */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <button
+                type="button"
+                disabled={!prevModule}
+                onClick={() => prevModule && handleSwitchReport(prevModule.key)}
+                style={{
+                  padding: "7px 10px",
+                  borderRadius: 8,
+                  border: "1px solid #CBD5E1",
+                  background: prevModule ? "#F8FAFC" : "#F1F5F9",
+                  color: prevModule ? "#1E293B" : "#94A3B8",
+                  fontSize: 11.5,
+                  fontWeight: 600,
+                  cursor: prevModule ? "pointer" : "not-allowed",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 5
+                }}
+              >
+                <ChevronLeft size={13} />
+                <span>Prev Report</span>
+              </button>
+
+              <button
+                type="button"
+                disabled={!nextModule}
+                onClick={() => nextModule && handleSwitchReport(nextModule.key)}
+                style={{
+                  padding: "7px 10px",
+                  borderRadius: 8,
+                  border: "1px solid #CBD5E1",
+                  background: nextModule ? "#F8FAFC" : "#F1F5F9",
+                  color: nextModule ? "#1E293B" : "#94A3B8",
+                  fontSize: 11.5,
+                  fontWeight: 600,
+                  cursor: nextModule ? "pointer" : "not-allowed",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 5
+                }}
+              >
+                <span>Next Report</span>
+                <ChevronRight size={13} />
+              </button>
+            </div>
+
+            {/* All 6 Reports List */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {reportModules.map((mod) => {
+                const isCurrent = mod.key === activeTab;
+                return (
+                  <button
+                    key={mod.key}
+                    type="button"
+                    onClick={() => handleSwitchReport(mod.key)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "8px 10px",
+                      borderRadius: 10,
+                      border: `1px solid ${isCurrent ? mod.color : "#E2E8F0"}`,
+                      background: isCurrent ? mod.bg : "#FFFFFF",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      transition: "all 0.15s ease",
+                      width: "100%"
+                    }}
+                    onMouseEnter={e => {
+                      if (!isCurrent) {
+                        e.currentTarget.style.background = "#F8FAFC";
+                        e.currentTarget.style.borderColor = "#CBD5E1";
+                      }
+                    }}
+                    onMouseLeave={e => {
+                      if (!isCurrent) {
+                        e.currentTarget.style.background = "#FFFFFF";
+                        e.currentTarget.style.borderColor = "#E2E8F0";
+                      }
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                      <div style={{
+                        width: 22,
+                        height: 22,
+                        borderRadius: 6,
+                        background: isCurrent ? mod.color : "#F1F5F9",
+                        color: isCurrent ? "#FFFFFF" : "#64748B",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center"
+                      }}>
+                        {mod.number}
+                      </div>
+                      <div style={{ fontSize: 12, fontWeight: isCurrent ? 700 : 600, color: isCurrent ? "#0F172A" : "#334155" }}>
+                        {mod.title}
+                      </div>
+                    </div>
+
+                    {isCurrent ? (
+                      <span style={{ fontSize: 10, fontWeight: 700, color: mod.color, background: "#FFFFFF", padding: "2px 7px", borderRadius: 999, border: `1px solid ${mod.border}` }}>
+                        Current
+                      </span>
+                    ) : (
+                      <ChevronRight size={13} color="#94A3B8" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Bottom: Return to Hub */}
+            <div style={{ paddingTop: 8, borderTop: "1px solid #F1F5F9" }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsQuickNavOpen(false);
+                  setSelectedReport("menu");
+                }}
+                style={{
+                  width: "100%",
+                  padding: "7px 10px",
+                  borderRadius: 8,
+                  border: "1px dashed #CBD5E1",
+                  background: "#F8FAFC",
+                  color: "#475569",
+                  fontSize: 11.5,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = "#E2E8F0"; e.currentTarget.style.color = "#0F172A"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "#F8FAFC"; e.currentTarget.style.color = "#475569"; }}
+              >
+                <ArrowLeft size={12} />
+                <span>Back to Reports Hub</span>
+              </button>
+            </div>
+          </div>
+        </>
+      )}
       {/* Navigation & Header Banner */}
       <div style={{
         background: "#FFFFFF",
@@ -1197,7 +1492,7 @@ export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = 
       {/* TAB 2: ACTIVE T&A REPORT (Order-wise Quantity Status) */}
       {/* ============================================================== */}
       {activeTab === "activeTna" && (
-        <div style={{ background: "#FFFFFF", borderRadius: 12, border: "1px solid #E5E7EB", overflow: "hidden" }}>
+        <div style={{ background: "#FFFFFF", borderRadius: 14, border: "1px solid #E2E8F0", overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
           {/* Controls Bar */}
           <div style={{ padding: "16px 20px", borderBottom: "1px solid #E2E8F0", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, background: "#FFFFFF" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
@@ -1265,7 +1560,7 @@ export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = 
             </div>
           </div>
 
-          <div style={{ overflowX: "auto" }}>
+          <div style={{ maxHeight: 600, overflowY: "auto", overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
               <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
                 <tr style={{ background: "#F8FAFC", color: "#475569", borderBottom: "1px solid #E2E8F0", textAlign: "left", whiteSpace: "nowrap", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.4 }}>
@@ -1459,8 +1754,9 @@ export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = 
               <h4 style={{ fontSize: 14, fontWeight: 700, color: "#0F172A", margin: 0 }}>Detailed WIP Gap Metrics</h4>
             </div>
 
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-              <thead>
+            <div style={{ maxHeight: 600, overflowY: "auto", overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead style={{ position: "sticky", top: 0, zIndex: 10, background: "#F8FAFC" }}>
                 <tr style={{ background: "#F8FAFC", borderBottom: "1px solid #E2E8F0", color: "#475569", textAlign: "left", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.4 }}>
                   <th style={{ padding: "12px 18px", fontWeight: 700 }}>Stage</th>
                   <th style={{ padding: "12px 18px", fontWeight: 700, textAlign: "right" }}>Qty Completed</th>
@@ -1499,6 +1795,7 @@ export function ReportsPage({ orders = [], capas = [], debitNotes = [], users = 
             </table>
           </div>
         </div>
+      </div>
       )}
 
       {/* ============================================================== */}
