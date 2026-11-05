@@ -2119,18 +2119,21 @@ export default function LoomPLM() {
     if (window.storage) window.storage.set("currentRole", JSON.stringify(newRole), true);
   };
 
-  const logEvent = useCallback(async ({ eventType, action, targetId = null, metadata = {} }) => {
+  const logEvent = useCallback(async ({ eventType, action, targetId = null, metadata = {}, timestamp = null, userName = null, userDept = null }) => {
     const dev = getDeviceInfo();
     const loc = await getLocationInfo();
     const resolvedLocation = sanitizeLocationString(loc.location);
+    const resolvedUserName = userName || activeUser?.name || role?.label?.split(" (")[0] || "System User";
+    const resolvedUsername = (userName ? userName.toLowerCase().replace(/\s+/g, '') : null) || activeUser?.username || "user";
+    const resolvedUserDept = userDept || role?.dept || "General";
     const newEntry = {
       id: `log_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-      timestamp: new Date().toISOString(),
+      timestamp: timestamp || new Date().toISOString(),
       eventType: eventType || "SYSTEM",
       action: action || "Action performed",
-      userName: activeUser?.name || role?.label?.split(" (")[0] || "System User",
-      username: activeUser?.username || "user",
-      userDept: role?.dept || "General",
+      userName: resolvedUserName,
+      username: resolvedUsername,
+      userDept: resolvedUserDept,
       device: dev.deviceSummary,
       deviceType: dev.deviceType,
       location: resolvedLocation,
@@ -3333,6 +3336,226 @@ export default function LoomPLM() {
     const cleanId = (v) => String(v || "").trim().replace(/^\.+/, "").replace(/^ord_/, "").replace(/_[a-z0-9]{4,12}$/i, "").toUpperCase();
     const targetKey = cleanId(id);
     try { clearApiCache("orders"); } catch (e) {}
+
+    const targetOrder = orders.find(o =>
+      (o.primaryId && o.primaryId === id) ||
+      (o._id && String(o._id) === String(id)) ||
+      o.id === id ||
+      (o.id && cleanId(o.id) === targetKey) ||
+      (o.primaryId && cleanId(o.primaryId) === targetKey) ||
+      (o.orderId && cleanId(o.orderId) === targetKey)
+    );
+
+    const prevStages = targetOrder?.stages || [];
+    const prevOrderNames = prevStages.map(s => s.name).join(",");
+    const newOrderNames = stages.map(s => s.name).join(",");
+    const pendingEvents = [];
+    const pendingNotifications = [];
+
+    if (prevOrderNames && newOrderNames && prevOrderNames !== newOrderNames) {
+      pendingEvents.push({
+        eventType: "STAGE",
+        action: `Realigned T&A workflow stages for order #${id}`,
+        targetId: id,
+        metadata: { orderId: id }
+      });
+    }
+
+    const nowIso = new Date().toISOString();
+    const rawUser = activeUser?.name || activeUser?.username || role?.label || "User";
+    const currentUserName = rawUser.split(" (")[0].trim() || "User";
+    const is120 = targetOrder?.template === "120";
+
+    const updatedStages = stages.map((s, idx) => {
+      const prevStage = prevStages.find(ps => ps.name === s.name) || prevStages[idx];
+      const res = { ...s };
+      const isCustomStage = s.isCustom === true;
+      if (!isCustomStage) {
+        if (
+          s.name === "Print / Emb / Hotfix Complete" ||
+          s.name === "Print/emb/out source" ||
+          s.name === "Print / Emb Complete" ||
+          s.name === "print / emb / hotfix complete"
+        ) {
+          res.name = "Print / Emb / Outsource";
+          res.dept = "Cutting";
+          res.planned = s.planned || (is120 ? "Day 56-59" : "Day 42-44");
+          delete res.supplier;
+        } else if (
+          s.name === "VAP Send" ||
+          s.name === "vap send"
+        ) {
+          res.name = "Print / Emb / IH";
+          res.dept = "Merchandising";
+          res.planned = s.planned || (is120 ? "Day 60-80" : "Day 45-60");
+          delete res.supplier;
+        } else if (
+          s.name === "Lot Card Approval" ||
+          s.name === "lot card approval"
+        ) {
+          res.name = "Fabric Inspection Report";
+          res.dept = "Quality";
+        }
+      }
+      if (s.status === "done") {
+        const wasAlreadyDone = prevStage?.status === "done";
+        res.completedAt = s.completedAt || (wasAlreadyDone ? prevStage?.completedAt : null) || nowIso;
+        res.completedBy = s.completedBy || (wasAlreadyDone ? prevStage?.completedBy : null) || currentUserName;
+      } else {
+        res.completedAt = null;
+        res.completedOn = null;
+      }
+      if (s.reason && (!prevStage || prevStage.reason !== s.reason)) {
+        res.flaggedAt = s.flaggedAt || nowIso;
+      }
+      if (s.status === "in_progress" && (!prevStage || prevStage.status !== "in_progress")) {
+        res.updatedAt = s.updatedAt || nowIso;
+        res.updatedBy = res.updatedBy || currentUserName;
+      }
+      return res;
+    });
+
+    // Auto handover: When a stage is marked done, find the next pending stage and assign it to its department
+    let nextStageToActivate = null;
+    let nextStageIdx = -1;
+
+    updatedStages.forEach((s, idx) => {
+      const prevStage = prevStages.find(ps => ps.name === s.name);
+      const isNewlyDone = s.status === "done" && (
+        prevStage?.status !== "done" ||
+        (s.completedAt && prevStage?.completedAt && s.completedAt !== prevStage?.completedAt) ||
+        (s.completedBy && prevStage?.completedBy && s.completedBy !== prevStage?.completedBy)
+      );
+
+      if (isNewlyDone) {
+        pendingEvents.push({
+          eventType: "STAGE",
+          action: `Marked stage "${s.name}" as Done on order #${id}`,
+          targetId: id,
+          timestamp: s.completedAt || nowIso,
+          userName: s.completedBy || currentUserName,
+          userDept: s.dept || role?.dept,
+          metadata: { orderId: id, stageName: s.name, dept: s.dept, completedBy: s.completedBy || currentUserName }
+        });
+
+        // Find next pending stage after this completed stage
+        for (let j = idx + 1; j < updatedStages.length; j++) {
+          if (updatedStages[j].status === "pending") {
+            nextStageToActivate = updatedStages[j];
+            nextStageIdx = j;
+            break;
+          }
+        }
+
+        // General stage done notification
+        pendingNotifications.push({
+          eventKey: `tna-stage-done-${id}-${s.name}`,
+          type: "tna",
+          title: "T&A Stage Completed",
+          message: `${s.name} stage completed for ${id} by ${s.dept}.`,
+          relatedModule: "tna",
+          relatedId: id,
+          priority: "low"
+        });
+      }
+
+      if (s.reason && (!prevStage?.reason || prevStage.reason !== s.reason)) {
+        pendingEvents.push({
+          eventType: "STAGE",
+          action: `Flagged delay on stage "${s.name}" for order #${id}: "${s.reason}"`,
+          targetId: id,
+          timestamp: s.flaggedAt || nowIso,
+          userName: currentUserName,
+          userDept: s.dept || role?.dept,
+          metadata: { orderId: id, stageName: s.name, reason: s.reason }
+        });
+        pendingNotifications.push({
+          eventKey: `tna-stage-delay-${id}-${s.name}-${s.reason}`,
+          type: "tna",
+          title: "T&A Stage Flagged",
+          message: `${s.name} delayed on order ${id}: ${s.reason}`,
+          relatedModule: "tna",
+          relatedId: id,
+          priority: targetOrder?.risk === "high" ? "critical" : "high"
+        });
+      }
+    });
+
+    // If next stage found, advance it to in_progress and send Targeted Department Notification
+    if (nextStageToActivate && nextStageIdx !== -1) {
+      const nextDeptAssignee = nextStageToActivate.assignee && nextStageToActivate.assignee !== "Unassigned"
+        ? nextStageToActivate.assignee
+        : (firstNamedAssignee(nextStageToActivate.dept) !== "Unassigned" ? firstNamedAssignee(nextStageToActivate.dept) : "Assigned");
+
+      updatedStages[nextStageIdx] = {
+        ...nextStageToActivate,
+        status: "in_progress",
+        assignee: nextDeptAssignee,
+        updatedAt: nowIso
+      };
+
+      pendingNotifications.push({
+        eventKey: `dept-task-assigned-${id}-${nextStageToActivate.name}-${nextStageToActivate.dept}`,
+        type: "task",
+        title: `New Task: ${nextStageToActivate.name}`,
+        message: `Order ${id} has moved to your department (${nextStageToActivate.dept}). Stage "${nextStageToActivate.name}" is now assigned to you!`,
+        relatedModule: "tasks",
+        relatedId: id,
+        targetDept: nextStageToActivate.dept,
+        targetUser: nextDeptAssignee && nextDeptAssignee !== "Unassigned" && nextDeptAssignee !== "Assigned" ? nextDeptAssignee : undefined,
+        priority: "high"
+      });
+    }
+
+    const doneCount = updatedStages.filter(s => s.status === "done").length;
+    const allDone = updatedStages.length > 0 && doneCount === updatedStages.length;
+    const hasFlag = updatedStages.some(s => s.reason);
+    const status = allDone
+      ? "On Track"
+      : hasFlag
+        ? "Delayed"
+        : (explicitStatus || targetOrder?.status || "On Track");
+
+    const isCompleted = allDone;
+    const completedAt = isCompleted ? (targetOrder?.completedAt || nowIso) : null;
+
+    if (targetOrder && status !== targetOrder.status) {
+      if (status === "Delayed") {
+        pendingNotifications.push({
+          eventKey: `order-delayed-${id}`,
+          type: "order",
+          title: "Order Delayed",
+          message: `Order ${id} is delayed.`,
+          relatedModule: "orders",
+          relatedId: id,
+          priority: "critical"
+        });
+      } else {
+        pendingNotifications.push({
+          eventKey: `order-status-${id}-${status}`,
+          type: "order",
+          title: "Order Status Updated",
+          message: `${id} status changed to ${status}.`,
+          relatedModule: "orders",
+          relatedId: id,
+          priority: status === "At Risk" ? "high" : "medium"
+        });
+      }
+    }
+
+    if (isCompleted && targetOrder && !targetOrder.completed) {
+      pendingNotifications.push({
+        eventKey: `order-completed-${id}`,
+        type: "order",
+        title: "Order Completed",
+        message: `Order ${id} has been completed.`,
+        relatedModule: "orders",
+        relatedId: id,
+        priority: "low"
+      });
+    }
+
+    // Clean pure state update
     setOrders(prev => prev.map(o => {
       const isTarget = (
         (o.primaryId && o.primaryId === id) ||
@@ -3343,201 +3566,7 @@ export default function LoomPLM() {
         (o.orderId && cleanId(o.orderId) === targetKey)
       );
       if (!isTarget) return o;
-      const doneCount = stages.filter(s => s.status === "done").length;
-      const allDone = stages.length > 0 && doneCount === stages.length;
-      const hasFlag = stages.some(s => s.reason);
-      const status = allDone
-        ? "On Track"
-        : hasFlag
-          ? "Delayed"
-          : (explicitStatus || o.status || "On Track");
-
-      const isCompleted = allDone;
-      const completedAt = isCompleted ? (o.completedAt || new Date().toISOString()) : null;
-
-      const prevOrder = (o.stages || []).map(s => s.name).join(",");
-      const newOrder = stages.map(s => s.name).join(",");
-      if (prevOrder && newOrder && prevOrder !== newOrder) {
-        logEvent({
-          eventType: "STAGE",
-          action: `Realigned T&A workflow stages for order #${o.id}`,
-          targetId: o.id,
-          metadata: { orderId: o.id }
-        });
-      }
-
-      // Detect stage completions / delays and attach timestamps
-      const nowIso = new Date().toISOString();
-      const rawUser = activeUser?.name || activeUser?.username || role?.label || "User";
-      const currentUserName = rawUser.split(" (")[0].trim() || "User";
-      const is120 = o.template === "120";
-      const tmplList = TA_TEMPLATES[o.template || "90"] || TA_STAGES_90;
-      const updatedStages = stages.map((s, idx) => {
-        const prevStage = (o.stages || []).find(ps => ps.name === s.name) || o.stages?.[idx];
-        const res = { ...s };
-        const isCustomStage = s.isCustom === true;
-        if (!isCustomStage) {
-          if (
-            s.name === "Print / Emb / Hotfix Complete" ||
-            s.name === "Print/emb/out source" ||
-            s.name === "Print / Emb Complete" ||
-            s.name === "print / emb / hotfix complete"
-          ) {
-            res.name = "Print / Emb / Outsource";
-            res.dept = "Cutting";
-            res.planned = s.planned || (is120 ? "Day 56-59" : "Day 42-44");
-            delete res.supplier;
-          } else if (
-            s.name === "VAP Send" ||
-            s.name === "vap send"
-          ) {
-            res.name = "Print / Emb / IH";
-            res.dept = "Merchandising";
-            res.planned = s.planned || (is120 ? "Day 60-80" : "Day 45-60");
-            delete res.supplier;
-          } else if (
-            s.name === "Lot Card Approval" ||
-            s.name === "lot card approval"
-          ) {
-            res.name = "Fabric Inspection Report";
-            res.dept = "Quality";
-          }
-        }
-        if (s.status === "done") {
-          const wasAlreadyDone = prevStage?.status === "done";
-          res.completedAt = s.completedAt || (wasAlreadyDone ? prevStage?.completedAt : null) || nowIso;
-          res.completedBy = s.completedBy || (wasAlreadyDone ? prevStage?.completedBy : null) || currentUserName;
-        } else {
-          res.completedAt = null;
-          res.completedOn = null;
-        }
-        if (s.reason && (!prevStage || prevStage.reason !== s.reason)) {
-          res.flaggedAt = s.flaggedAt || nowIso;
-        }
-        if (s.status === "in_progress" && (!prevStage || prevStage.status !== "in_progress")) {
-          res.updatedAt = s.updatedAt || nowIso;
-          res.updatedBy = res.updatedBy || currentUserName;
-        }
-        return res;
-      });
-
-      // Auto handover: When a stage is marked done, find the next pending stage and assign it to its department
-      let nextStageToActivate = null;
-      let nextStageIdx = -1;
-
-      updatedStages.forEach((s, idx) => {
-        const prevStage = (o.stages || []).find(ps => ps.name === s.name);
-        if (s.status === "done" && prevStage?.status !== "done") {
-          logEvent({
-            eventType: "STAGE",
-            action: `Marked stage "${s.name}" as Done on order #${id}`,
-            targetId: id,
-            metadata: { orderId: id, stageName: s.name, dept: s.dept }
-          });
-          // Find next pending stage after this completed stage
-          for (let j = idx + 1; j < updatedStages.length; j++) {
-            if (updatedStages[j].status === "pending") {
-              nextStageToActivate = updatedStages[j];
-              nextStageIdx = j;
-              break;
-            }
-          }
-
-          // General stage done notification
-          pushNotification({
-            eventKey: `tna-stage-done-${id}-${s.name}`,
-            type: "tna",
-            title: "T&A Stage Completed",
-            message: `${s.name} stage completed for ${id} by ${s.dept}.`,
-            relatedModule: "tna",
-            relatedId: id,
-            priority: "low"
-          });
-        }
-        if (s.reason && (!prevStage?.reason || prevStage.reason !== s.reason)) {
-          logEvent({
-            eventType: "STAGE",
-            action: `Flagged delay on stage "${s.name}" for order #${id}: "${s.reason}"`,
-            targetId: id,
-            metadata: { orderId: id, stageName: s.name, reason: s.reason }
-          });
-          pushNotification({
-            eventKey: `tna-stage-delay-${id}-${s.name}-${s.reason}`,
-            type: "tna",
-            title: "T&A Stage Flagged",
-            message: `${s.name} delayed on order ${id}: ${s.reason}`,
-            relatedModule: "tna",
-            relatedId: id,
-            priority: o.risk === "high" ? "critical" : "high"
-          });
-        }
-      });
-
-      // If next stage found, advance it to in_progress and send Targeted Department Notification
-      if (nextStageToActivate && nextStageIdx !== -1) {
-        const nextDeptAssignee = nextStageToActivate.assignee && nextStageToActivate.assignee !== "Unassigned"
-          ? nextStageToActivate.assignee
-          : (firstNamedAssignee(nextStageToActivate.dept) !== "Unassigned" ? firstNamedAssignee(nextStageToActivate.dept) : "Assigned");
-
-        updatedStages[nextStageIdx] = {
-          ...nextStageToActivate,
-          status: "in_progress",
-          assignee: nextDeptAssignee,
-          updatedAt: nowIso
-        };
-
-        // TARGETED NOTIFICATION: Goes to this specific department and assigned user!
-        pushNotification({
-          eventKey: `dept-task-assigned-${id}-${nextStageToActivate.name}-${nextStageToActivate.dept}`,
-          type: "task",
-          title: `New Task: ${nextStageToActivate.name}`,
-          message: `Order ${id} has moved to your department (${nextStageToActivate.dept}). Stage "${nextStageToActivate.name}" is now assigned to you!`,
-          relatedModule: "tasks",
-          relatedId: id,
-          targetDept: nextStageToActivate.dept, // Strict department targeting
-          targetUser: nextDeptAssignee && nextDeptAssignee !== "Unassigned" && nextDeptAssignee !== "Assigned" ? nextDeptAssignee : undefined,
-          priority: "high"
-        });
-      }
-
-      // Detect Order Status change
-      if (status !== o.status) {
-        if (status === "Delayed") {
-          pushNotification({
-            eventKey: `order-delayed-${id}`,
-            type: "order",
-            title: "Order Delayed",
-            message: `Order ${id} is delayed.`,
-            relatedModule: "orders",
-            relatedId: id,
-            priority: "critical"
-          });
-        } else {
-          pushNotification({
-            eventKey: `order-status-${id}-${status}`,
-            type: "order",
-            title: "Order Status Updated",
-            message: `${id} status changed to ${status}.`,
-            relatedModule: "orders",
-            relatedId: id,
-            priority: status === "At Risk" ? "high" : "medium"
-          });
-        }
-      }
-
-      if (isCompleted && !o.completed) {
-        pushNotification({
-          eventKey: `order-completed-${id}`,
-          type: "order",
-          title: "Order Completed",
-          message: `Order ${id} has been completed.`,
-          relatedModule: "orders",
-          relatedId: id,
-          priority: "low"
-        });
-      }
-
-      const updated = {
+      return {
         ...o,
         id: o.id,
         primaryId: o.id,
@@ -3546,17 +3575,27 @@ export default function LoomPLM() {
         completed: isCompleted,
         completedAt
       };
+    }));
 
-      const primId = o.id || o.primaryId || o._id;
+    // Perform API update and local cache update outside state reducer
+    const primId = targetOrder ? (targetOrder.id || targetOrder.primaryId || targetOrder._id) : id;
+    const updatedOrderPayload = targetOrder ? {
+      ...targetOrder,
+      stages: updatedStages,
+      status,
+      completed: isCompleted,
+      completedAt
+    } : null;
+
+    if (updatedOrderPayload) {
       try {
-        resourcesApi.update("orders", primId, updated).then(() => {
+        resourcesApi.update("orders", primId, updatedOrderPayload).then(() => {
           lastOrdersFetchTimeRef.current = Date.now();
         }).catch(err => {
           console.warn("Error updating order stages:", err.message);
         });
       } catch (e) { }
 
-      // Immediate local cache update so browser refresh retains the changes instantly
       try {
         const cachedStr = localStorage.getItem("loom_orders_cache");
         if (cachedStr) {
@@ -3564,7 +3603,7 @@ export default function LoomPLM() {
           if (Array.isArray(cachedOrders)) {
             const nextCached = cachedOrders.map(item => {
               const itemKey = cleanId(item.id || item.primaryId);
-              if (itemKey === targetKey || item.id === o.id || item.primaryId === o.id || item._id === o._id) {
+              if (itemKey === targetKey || item.id === id || item.primaryId === id || item._id === id) {
                 return { ...item, stages: updatedStages, status, completed: isCompleted, completedAt };
               }
               return item;
@@ -3573,25 +3612,17 @@ export default function LoomPLM() {
           }
         }
       } catch (e) { }
+    }
 
-      // Stage changes only apply to this particular order and do not overwrite master settings
+    // Fire all side effects cleanly
+    pendingEvents.forEach(evt => logEvent(evt));
+    pendingNotifications.forEach(notif => pushNotification(notif));
 
-      // Broadcast stage update to all other connected users in real time
-      try {
-        broadcastLiveUpdate({
-          type: "ORDER_STAGE_UPDATE",
-          orderId: id,
-          stages: updatedStages,
-          status,
-          completed: isCompleted,
-          completedAt,
-          updatedBy: currentUserName
-        });
-      } catch (err) { }
-
-      return updated;
-    }), true);
-    lastOrdersFetchTimeRef.current = Date.now();
+    try {
+      if (typeof broadcastResourceChange === "function") {
+        broadcastResourceChange("orders", primId, "update", { id, stages: updatedStages, status });
+      }
+    } catch (e) { }
   };
 
   const setOrderTemplate = (id, tmpl) => {
@@ -4936,6 +4967,7 @@ export default function LoomPLM() {
         }}
         users={users}
         teams={teams}
+        orders={orders}
       />
     );
   } else if (view === "attendance") {

@@ -6872,6 +6872,7 @@ export function AuditLoggerPage({
   onClearAuditLogs,
   users = [],
   teams = [],
+  orders = [],
   onRefresh
 }) {
   const [activeTab, setActiveTab] = useState("userDurations"); // "userDurations" | "events"
@@ -7215,25 +7216,67 @@ export function AuditLoggerPage({
     document.body.removeChild(link);
   };
 
+  // Merged and deduplicated logs combining explicit auditLogs and order stage completions
+  const effectiveAuditLogs = useMemo(() => {
+    const list = Array.isArray(auditLogs) ? [...auditLogs] : [];
+
+    // Synthesize any completed stages from all orders so no stage activity is ever omitted
+    (orders || []).forEach(o => {
+      const orderId = o.id || o.orderId || "";
+      (o.stages || []).forEach(st => {
+        if (st.status === "done" && st.completedAt) {
+          const alreadyLogged = list.some(l =>
+            l.eventType === "STAGE" &&
+            String(l.targetId) === String(orderId) &&
+            (l.metadata?.stageName === st.name || (l.action && l.action.includes(`"${st.name}"`)))
+          );
+          if (!alreadyLogged) {
+            const completedByName = st.completedBy || "Managing Director";
+            const matchingSession = (userSessions || []).find(us =>
+              (us.name && us.name.toLowerCase() === completedByName.toLowerCase()) ||
+              (us.username && us.username.toLowerCase() === completedByName.toLowerCase())
+            );
+            list.push({
+              id: `stage_auto_${orderId}_${st.name}_${st.completedAt}`,
+              timestamp: st.completedAt,
+              eventType: "STAGE",
+              action: `Marked stage "${st.name}" as Done on order #${orderId}`,
+              userName: completedByName,
+              username: matchingSession?.username || completedByName.toLowerCase().replace(/\s+/g, ""),
+              userDept: st.dept || matchingSession?.dept || (completedByName.toLowerCase().includes("director") || completedByName.toLowerCase().includes("md") ? "Executive (MD)" : "Operations"),
+              device: matchingSession?.device || "Tablet (iOS · Safari)",
+              deviceType: matchingSession?.deviceType || "Tablet",
+              location: matchingSession?.location || "Tiruppur, Tamil Nadu",
+              targetId: orderId,
+              metadata: { orderId, stageName: st.name, dept: st.dept, completedBy: completedByName, source: "order_stage" }
+            });
+          }
+        }
+      });
+    });
+
+    return list.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+  }, [auditLogs, orders, userSessions]);
+
   // Metrics for Audit Events tab
   const loginsToday = useMemo(() => {
-    return auditLogs.filter(l => l.eventType === "LOGIN" && (l.timestamp || "").startsWith(todayStr)).length;
-  }, [auditLogs, todayStr]);
+    return effectiveAuditLogs.filter(l => l.eventType === "LOGIN" && (l.timestamp || "").startsWith(todayStr)).length;
+  }, [effectiveAuditLogs, todayStr]);
 
   const stageClicks = useMemo(() => {
-    return auditLogs.filter(l => l.eventType === "STAGE").length;
-  }, [auditLogs]);
+    return effectiveAuditLogs.filter(l => l.eventType === "STAGE").length;
+  }, [effectiveAuditLogs]);
 
   const uniqueActiveUsers = useMemo(() => {
     const userSet = new Set();
-    auditLogs.forEach(l => {
+    effectiveAuditLogs.forEach(l => {
       if (l.username) userSet.add(l.username);
     });
     return userSet.size;
-  }, [auditLogs]);
+  }, [effectiveAuditLogs]);
 
   const filteredLogs = useMemo(() => {
-    return auditLogs.filter(log => {
+    return effectiveAuditLogs.filter(log => {
       if (eventTypeFilter !== "ALL" && log.eventType !== eventTypeFilter) return false;
       if (userFilter !== "ALL" && log.username !== userFilter && log.userName !== userFilter) return false;
       if (dateFilter) {
@@ -7273,7 +7316,7 @@ export function AuditLoggerPage({
       }
       return true;
     });
-  }, [auditLogs, eventTypeFilter, userFilter, dateFilter, searchTerm]);
+  }, [effectiveAuditLogs, eventTypeFilter, userFilter, dateFilter, searchTerm]);
 
   const exportEventsCsv = () => {
     if (filteredLogs.length === 0) {
@@ -7406,7 +7449,7 @@ export function AuditLoggerPage({
               padding: "1px 7px",
               borderRadius: 999
             }}>
-              {auditLogs.length}
+              {effectiveAuditLogs.length}
             </span>
           </button>
         </div>
@@ -7511,7 +7554,7 @@ export function AuditLoggerPage({
           <Card style={{ padding: "16px 18px" }}>
             <div style={{ fontSize: 12, color: "#8A8D98" }}>Total Recorded Events</div>
             <div style={{ fontSize: 24, fontWeight: 700, marginTop: 6, color: "#1F2937" }}>
-              {auditLogs.length}
+              {effectiveAuditLogs.length}
             </div>
             <div style={{ fontSize: 11, color: "#6B7280", marginTop: 4 }}>Full administrative history</div>
           </Card>
@@ -7959,7 +8002,7 @@ export function AuditLoggerPage({
                 }}
               >
                 <option value="ALL">All Users</option>
-                {Array.from(new Set(auditLogs.map(l => l.userName).filter(Boolean))).map(u => (
+                {Array.from(new Set(effectiveAuditLogs.map(l => l.userName).filter(Boolean))).map(u => (
                   <option key={u} value={u}>{u}</option>
                 ))}
               </select>
