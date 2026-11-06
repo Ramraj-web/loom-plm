@@ -4473,7 +4473,7 @@ function ExecutiveOrderDrilldownDrawer({
   );
 }
 
-export function ExecutiveOverviewPage({ orders, buyers = [], attendance, userSessions = [], financials, roster, customTasks = [], leaveRequests = [], users = [], teams = [], orgStructure = {}, complaints = [], onResolveComplaint, isAdmin = false, onOpenOrder, onNavigate, onApproveCosting, onRejectCosting, onRefresh, isRefreshing = false, lastRefreshedAt = null, onOpenDept, isSidebarCollapsed = false }) {
+export function ExecutiveOverviewPage({ orders = [], buyers = [], attendance = {}, userSessions = [], financials = {}, roster = [], customTasks = [], leaveRequests = [], users = [], teams = [], orgStructure = {}, complaints = [], onResolveComplaint, isAdmin = false, onOpenOrder, onNavigate, onApproveCosting, onRejectCosting, onRefresh, isRefreshing = false, lastRefreshedAt = null, onOpenDept, isSidebarCollapsed = false }) {
   // Only consider active, non-deleted orders for MD Executive Dashboard metrics
   const activeOrders = useMemo(() => (orders || []).filter(o => o.isDeleted !== true && o.completed !== true), [orders]);
   const allStages = useMemo(() => activeOrders.flatMap(o => (o.stages || []).map(s => ({ ...s, orderId: o.id, style: o.style, buyer: o.buyer }))), [activeOrders]);
@@ -4603,7 +4603,7 @@ export function ExecutiveOverviewPage({ orders, buyers = [], attendance, userSes
   const ordersAtRisk = activeOrders.filter(o => o.status === "At Risk").length;
   const ordersDelayed = activeOrders.filter(o => o.status === "Delayed").length;
   const ordersCompleted = activeOrders.filter(o => o.status === "On Track" && o.stages && o.stages.every(s => s.status === "done")).length;
-  const presentCount = roster.filter(s => (attendance[s.name] || "present") === "present").length;
+  const presentCount = (roster || []).filter(s => ((attendance && attendance[s.name]) || "present") === "present").length;
   const capacityUtilization = Math.round((presentCount / (roster.length || 1)) * 100);
 
   // 4. Department Performance (Dynamic across all departments added in settings or orgStructure, completely live)

@@ -33,6 +33,7 @@ import {
 } from "./components/views/InsightsViews.jsx";
 import { MyChecklistPage } from "./components/views/MyChecklistPage.jsx";
 import { ProjectChatbot } from "./components/ProjectChatbot.jsx";
+import { SystemMonitorDashboard } from "./components/views/SystemMonitorDashboard.jsx";
 import CuttingDelayAlertModal from "./components/CuttingDelayAlertModal.jsx";
 import { DEFAULT_TEAMS, DEFAULT_USERS, LoginPage, UserAccessPage } from "./components/UserAccess.jsx";
 import { MobileHomeDashboard } from "./components/views/MobileHomeDashboard.jsx";
@@ -57,6 +58,20 @@ const getBuyerScopedDepartmentField = department => Object.entries(BUYER_SCOPED_
   .find(([name]) => normalizeDepartmentName(name) === normalizeDepartmentName(department))?.[1];
 
 function roleForUser(user, teams, activeDeptOverride = null) {
+  if (user?.isDeveloper || user?.isSystemMonitor || user?.username === "dev" || user?.username === "developer" || user?.username === "monitor") {
+    return {
+      label: user.name || "Developer (System Monitor)",
+      dept: "System Audit",
+      departments: ["System Audit", "Executive (MD)", "Administrators"],
+      isMD: true,
+      isAdmin: true,
+      isDeveloper: true,
+      fullAccess: true,
+      permissions: ["dashboard",
+  "systemMonitor", "orders", "tasks", "calendar", "approvals", "departments", "production", "quality", "compliance", "attendance", "reports", "insights", "supplierPerformance", "notifications", "debitNotes", "capas", "auditLogs", "settings"],
+      userId: user.id || "user-system-developer"
+    };
+  }
   const userTeamIds = Array.isArray(user.teamIds) && user.teamIds.length > 0
     ? user.teamIds
     : (user.teamId ? [user.teamId] : []);
@@ -140,6 +155,14 @@ function parseRouteFromHash(rawHash) {
 
   const [segment1, ...rest] = parts;
 
+  if (segment1 === "system-monitor" || segment1 === "systemmonitor" || segment1 === "systemMonitor") {
+    return { view: "systemMonitor", selectedId: null, selectedDept: null };
+  }
+
+  if (segment1 === "audit-logs" || segment1 === "auditlogs" || segment1 === "auditLogs") {
+    return { view: "auditLogs", selectedId: null, selectedDept: null };
+  }
+
   if (segment1 === "orders" || segment1 === "order") {
     if (rest.length > 0 && rest[0]) {
       return { view: "order", selectedId: rest[0], selectedDept: null };
@@ -162,6 +185,12 @@ function parseRouteFromHash(rawHash) {
 }
 
 function getRouteHash(view, selectedId = null, selectedDept = null) {
+  if (view === "systemMonitor") {
+    return "#/system-monitor";
+  }
+  if (view === "auditLogs") {
+    return "#/audit-logs";
+  }
   if (view === "order" && selectedId) {
     return `#/orders/${encodeURIComponent(selectedId)}`;
   }
@@ -516,7 +545,18 @@ export default function LoomPLM() {
     return null;
   }, []);
 
-  const [view, setView] = useState(() => initialRoute?.view || "dashboard");
+  const [view, setView] = useState(() => {
+    try {
+      const savedUser = localStorage.getItem("loom_active_user");
+      if (savedUser) {
+        const u = JSON.parse(savedUser);
+        if (u.isDeveloper || u.isSystemMonitor || u.username === "dev" || u.username === "developer" || u.username === "monitor") {
+          return "systemMonitor";
+        }
+      }
+    } catch(e) {}
+    return initialRoute?.view || "dashboard";
+  });
   const [previousView, setPreviousView] = useState("dashboard");
   const [selectedId, setSelectedId] = useState(() => initialRoute?.selectedId || null);
   const [selectedDept, setSelectedDept] = useState(() => initialRoute?.selectedDept || null);
@@ -1787,6 +1827,12 @@ export default function LoomPLM() {
 
       const parsed = parseRouteFromHash(window.location.hash);
       if (parsed && parsed.view) {
+        if (parsed.view === "systemMonitor" && !role?.isDeveloper) {
+          const fallback = (role?.dept === "Executive" || role?.dept === "Executive (MD)") ? "executiveOverview" : "dashboard";
+          setView(fallback);
+          window.location.hash = getRouteHash(fallback);
+          return;
+        }
         setView(prevView => {
           if (prevView !== parsed.view) {
             setPreviousView(prevView);
@@ -2159,11 +2205,15 @@ export default function LoomPLM() {
     const nextRole = roleForUser(user, teams);
     setActiveUser(user);
     setRole(nextRole);
-    const defaultLandingView = (nextRole.dept === "Executive" || nextRole.dept === "Executive (MD)") ? "executiveOverview" : "dashboard";
-    const currentRoute = parseRouteFromHash(window.location.hash);
-    const targetView = currentRoute?.view || defaultLandingView;
-    const targetId = currentRoute?.selectedId || null;
-    const targetDept = currentRoute?.selectedDept || null;
+    const isDevUser = Boolean(nextRole.isDeveloper || user.isDeveloper || user.username === "dev" || user.username === "developer" || user.username === "monitor");
+    const defaultLandingView = isDevUser
+      ? "systemMonitor"
+      : (nextRole.dept === "Executive" || nextRole.dept === "Executive (MD)") ? "executiveOverview" : "dashboard";
+    const currentRoute = isDevUser ? null : parseRouteFromHash(window.location.hash);
+    const isBlockedFromRoute = currentRoute?.view === "systemMonitor" && !isDevUser;
+    const targetView = isDevUser ? "systemMonitor" : (isBlockedFromRoute || !currentRoute?.view ? defaultLandingView : currentRoute.view);
+    const targetId = isDevUser ? null : (currentRoute?.selectedId || null);
+    const targetDept = isDevUser ? null : (currentRoute?.selectedDept || null);
 
     setView(targetView);
     if (targetId) setSelectedId(targetId);
@@ -2723,11 +2773,12 @@ export default function LoomPLM() {
   };
 
   const deleteTask = (id) => {
+    const targetTask = customTasks.find(t => t.id === id);
     setCustomTasks(prev => prev.filter(t => t.id !== id));
     try { resourcesApi.remove("tasks", id); } catch (e) { }
     logEvent({
-      eventType: "TASK",
-      action: `Deleted task #${id}`,
+      eventType: "DELETE",
+      action: `Deleted task #${id}${targetTask?.title ? ` "${targetTask.title}"` : ""}`,
       targetId: id,
       metadata: { taskId: id }
     });
@@ -2844,8 +2895,8 @@ export default function LoomPLM() {
       console.warn("Error deleting buyer:", err.message);
     });
     logEvent({
-      eventType: "BUYER",
-      action: `Deleted buyer ${target?.name || buyerId}`,
+      eventType: "DELETE",
+      action: `Deleted buyer "${target?.name || buyerId}"`,
       targetId: buyerId,
       metadata: { buyerId }
     });
@@ -3111,10 +3162,10 @@ export default function LoomPLM() {
     }
 
     logEvent({
-      eventType: "ORDER",
-      action: `Deleted order #${orderNum}`,
+      eventType: "DELETE",
+      action: `Deleted order #${orderNum}${targetOrder?.buyer ? ` (Buyer: ${targetOrder.buyer}` : ""}${targetOrder?.style ? `, Style: ${targetOrder.style})` : targetOrder?.buyer ? ")" : ""}`,
       targetId: orderNum,
-      metadata: { orderId: orderNum, primaryId: primId }
+      metadata: { orderId: orderNum, primaryId: primId, buyer: targetOrder?.buyer, style: targetOrder?.style, actionType: "ORDER_DELETE" }
     });
     return true;
   };
@@ -3220,10 +3271,10 @@ export default function LoomPLM() {
     }
 
     logEvent({
-      eventType: "ORDER",
-      action: `Permanently deleted order #${orderNum}`,
+      eventType: "DELETE",
+      action: `Permanently deleted order #${orderNum}${targetOrder?.buyer ? ` (Buyer: ${targetOrder.buyer}` : ""}${targetOrder?.style ? `, Style: ${targetOrder.style})` : targetOrder?.buyer ? ")" : ""}`,
       targetId: orderNum,
-      metadata: { orderId: orderNum, primaryId: primId }
+      metadata: { orderId: orderNum, primaryId: primId, buyer: targetOrder?.buyer, style: targetOrder?.style, actionType: "PERMANENT_ORDER_DELETE" }
     });
   };
 
@@ -3360,6 +3411,22 @@ export default function LoomPLM() {
         metadata: { orderId: id }
       });
     }
+
+    // Detect deleted stages
+    prevStages.forEach(ps => {
+      const stillExists = stages.some(s => s.name === ps.name);
+      if (!stillExists) {
+        pendingEvents.push({
+          eventType: "DELETE",
+          action: `Deleted T&A stage "${ps.name}" on order #${id}`,
+          targetId: id,
+          timestamp: nowIso,
+          userName: currentUserName,
+          userDept: ps.dept || role?.dept,
+          metadata: { orderId: id, stageName: ps.name, dept: ps.dept, actionType: "STAGE_DELETE" }
+        });
+      }
+    });
 
     const nowIso = new Date().toISOString();
     const rawUser = activeUser?.name || activeUser?.username || role?.label || "User";
@@ -4193,13 +4260,20 @@ export default function LoomPLM() {
       section: "Management",
       items: [
         { key: "attendance", label: "Attendance & leave", icon: UserCheck },
-        { key: "auditLogs", label: "Event Logger", icon: Activity },
         { key: "debitNotes", label: "Debit notes", icon: ArrowDownRight },
         { key: "finance", label: "Finance", icon: Landmark },
         { key: "reports", label: "Reports", icon: BarChart3 },
         { key: "settings", label: "Settings", icon: SettingsIcon },
       ]
-    }
+    },
+    ...(role?.isDeveloper ? [
+      {
+        section: "Developer Console",
+        items: [
+          { key: "systemMonitor", label: "System Monitor", icon: Activity }
+        ]
+      }
+    ] : [])
   ] : [
     {
       section: null, items: [
@@ -4236,6 +4310,7 @@ export default function LoomPLM() {
     },
     {
       section: null, items: [
+        ...(role?.isDeveloper ? [{ key: "systemMonitor", label: "System Monitor", icon: Activity }] : []),
         ...(isAdmin || role?.dept === "Administrators" ? [{ key: "auditLogs", label: "Event Logger", icon: Activity }] : []),
         ...(canAccess("settings") ? [{ key: "settings", label: "Settings", icon: SettingsIcon }] : []),
       ]
@@ -4952,19 +5027,79 @@ export default function LoomPLM() {
     content = <DebitNotesPage orders={visibleOrders} notes={debitNotes} onAdd={addDebitNote} />;
   } else if (view === "capas" && canSeeAll) {
     content = <CapasPage orders={visibleOrders} capas={capas} onAdd={addCapa} onCycleStatus={cycleCapaStatus} />;
-  } else if (view === "auditLogs" && (isAdmin || isExecutive || role?.dept === "Administrators")) {
+  } else if (view === "systemMonitor") {
+    if (!role?.isDeveloper) {
+      content = isExecutive ? (
+        <ExecutiveOverviewPage
+          orders={visibleOrders}
+          buyers={buyers}
+          attendance={attendance}
+          userSessions={userSessions}
+          financials={financials}
+          roster={roster}
+          customTasks={visibleCustomTasks}
+          leaveRequests={leaveRequests}
+          users={users}
+          teams={teams}
+          orgStructure={orgStructure}
+          complaints={stageComplaints}
+          onResolveComplaint={handleResolveComplaint}
+          isAdmin={isAdmin}
+          onOpenOrder={openOrder}
+          onNavigate={navigate}
+          onApproveCosting={approveOrderCosting}
+          onRejectCosting={rejectOrderCosting}
+          onRefresh={refreshAllData}
+          isRefreshing={isRefreshing}
+          lastRefreshedAt={lastRefreshedAt}
+          onOpenDept={openDept}
+          isSidebarCollapsed={isSidebarCollapsed}
+        />
+      ) : (
+        <Dashboard
+          orders={visibleOrders}
+          onOpenOrder={openOrder}
+          role={role}
+          activeUser={activeUser}
+          onNavigate={navigate}
+          onDeleteOrder={deleteOrder}
+          onRestoreOrder={restoreOrder}
+          onPermanentDeleteOrder={permanentDeleteOrder}
+        />
+      );
+    } else {
+      content = (
+        <SystemMonitorDashboard
+          userSessions={userSessions}
+          auditLogs={auditLogs}
+          orders={orders}
+          users={users}
+          teams={teams}
+          activeUser={activeUser}
+          isDeveloper={true}
+          onRefresh={refreshUserSessions}
+          onClearAuditLogs={() => {
+            setAuditLogs([]);
+            try {
+              localStorage.removeItem("loom_audit_logs");
+              if (window.storage?.set) window.storage.set("audit_logs", JSON.stringify([]), true);
+            } catch (e) { }
+          }}
+          onNavigateToApp={() => {
+            setView("dashboard");
+            window.location.hash = "#/dashboard";
+          }}
+          onLogout={handleLogout}
+        />
+      );
+    }
+  } else if (view === "auditLogs" && (isAdmin || role?.dept === "Administrators")) {
     content = (
       <AuditLoggerPage
         auditLogs={auditLogs}
         userSessions={userSessions}
         onRefresh={refreshUserSessions}
-        onClearAuditLogs={() => {
-          setAuditLogs([]);
-          try {
-            localStorage.removeItem("loom_audit_logs");
-            if (window.storage?.set) window.storage.set("audit_logs", JSON.stringify([]), true);
-          } catch (e) { }
-        }}
+        onClearAuditLogs={null}
         users={users}
         teams={teams}
         orders={orders}
@@ -5619,7 +5754,34 @@ export default function LoomPLM() {
           </div>
 
           {/* Right Controls: 3. Notification → 4. Dark Mode (Moon/Sun) → 5. User Profile */}
-          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            {/* Developer Quick-Access System Monitor Button */}
+            {role?.isDeveloper && (
+              <button
+                type="button"
+                onClick={() => navigate("systemMonitor")}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "5px 12px",
+                  borderRadius: 8,
+                  background: view === "systemMonitor" ? "linear-gradient(135deg, #4F46E5, #6366F1)" : (isDarkMode ? "#1E293B" : "#EEF2FF"),
+                  border: `1px solid ${view === "systemMonitor" ? "#4338CA" : (isDarkMode ? "#374151" : "#C7D2FE")}`,
+                  color: view === "systemMonitor" ? "#FFFFFF" : (isDarkMode ? "#A5B4FC" : "#4338CA"),
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
+                  boxShadow: view === "systemMonitor" ? "0 2px 8px rgba(79, 70, 229, 0.3)" : "none"
+                }}
+                title="Open Developer System Monitor Dashboard"
+              >
+                <Activity size={14} />
+                <span>System Monitor</span>
+              </button>
+            )}
+
             {/* 3. Notification */}
             <div ref={notifRef} style={{ position: "relative" }}>
               <div

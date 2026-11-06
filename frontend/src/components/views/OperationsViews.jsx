@@ -6873,12 +6873,14 @@ export function AuditLoggerPage({
   users = [],
   teams = [],
   orders = [],
+  isDeveloper = false,
   onRefresh
 }) {
   const [activeTab, setActiveTab] = useState("userDurations"); // "userDurations" | "events"
   const [durationFormat, setDurationFormat] = useState("both"); // "both" | "mins" | "hours"
   const [deptFilter, setDeptFilter] = useState("ALL");
   const [userSearch, setUserSearch] = useState("");
+  const [userRoleSegment, setUserRoleSegment] = useState("ALL"); // "ALL" | "ADMIN_MD" | "STAFF"
   const [selectedUserForDetail, setSelectedUserForDetail] = useState(null);
 
   // Filter state for Audit Events tab
@@ -7103,9 +7105,15 @@ export function AuditLoggerPage({
     });
   }, [users, teams, userSessions, dateRanges, todayStr]);
 
-  // Filtered user stats based on search and department
+  // Filtered user stats based on search, department, and role segment (Admin & MD focus)
   const filteredUserStats = useMemo(() => {
     return userDurationStats.filter(u => {
+      const isMD = (u.username === "md" || u.dept.toLowerCase().includes("executive") || u.name.toLowerCase().includes("director"));
+      const isAdmin = (u.username === "admin" || u.dept.toLowerCase().includes("admin") || u.name.toLowerCase().includes("admin"));
+      
+      if (userRoleSegment === "ADMIN_MD" && !isMD && !isAdmin) return false;
+      if (userRoleSegment === "STAFF" && (isMD || isAdmin)) return false;
+
       if (deptFilter !== "ALL" && u.dept.toLowerCase() !== deptFilter.toLowerCase()) {
         const matchesAny = (u.departments || []).some(d => d.toLowerCase() === deptFilter.toLowerCase());
         if (!matchesAny) return false;
@@ -7120,7 +7128,7 @@ export function AuditLoggerPage({
       }
       return true;
     });
-  }, [userDurationStats, deptFilter, userSearch]);
+  }, [userDurationStats, deptFilter, userSearch, userRoleSegment]);
 
   // Overall totals across all users
   const totalSummary = useMemo(() => {
@@ -7267,6 +7275,30 @@ export function AuditLoggerPage({
     return effectiveAuditLogs.filter(l => l.eventType === "STAGE").length;
   }, [effectiveAuditLogs]);
 
+  const totalDeletionsCount = useMemo(() => {
+    return effectiveAuditLogs.filter(l =>
+      l.eventType === "DELETE" ||
+      (l.action && l.action.toLowerCase().includes("delet")) ||
+      l.metadata?.actionType?.includes("DELETE")
+    ).length;
+  }, [effectiveAuditLogs]);
+
+  const mdStats = useMemo(() => {
+    return userDurationStats.find(u =>
+      u.username === "md" ||
+      u.dept.toLowerCase().includes("executive") ||
+      u.name.toLowerCase().includes("director")
+    ) || null;
+  }, [userDurationStats]);
+
+  const adminStats = useMemo(() => {
+    return userDurationStats.find(u =>
+      u.username === "admin" ||
+      u.dept.toLowerCase().includes("admin") ||
+      u.name.toLowerCase().includes("admin")
+    ) || null;
+  }, [userDurationStats]);
+
   const uniqueActiveUsers = useMemo(() => {
     const userSet = new Set();
     effectiveAuditLogs.forEach(l => {
@@ -7277,7 +7309,14 @@ export function AuditLoggerPage({
 
   const filteredLogs = useMemo(() => {
     return effectiveAuditLogs.filter(log => {
-      if (eventTypeFilter !== "ALL" && log.eventType !== eventTypeFilter) return false;
+      if (eventTypeFilter === "DELETE") {
+        const isDelete = log.eventType === "DELETE" ||
+          (log.action && log.action.toLowerCase().includes("delet")) ||
+          log.metadata?.actionType?.includes("DELETE");
+        if (!isDelete) return false;
+      } else if (eventTypeFilter !== "ALL" && log.eventType !== eventTypeFilter) {
+        return false;
+      }
       if (userFilter !== "ALL" && log.username !== userFilter && log.userName !== userFilter) return false;
       if (dateFilter) {
         if (!log.timestamp) return false;
@@ -7361,6 +7400,7 @@ export function AuditLoggerPage({
     LOGOUT: { bg: "#F1F5F9", color: "#475569", border: "#CBD5E1" },
     ORDER: { bg: "#EDE9FE", color: "#534AB7", border: "#DDD6FE" },
     STAGE: { bg: "#FEF3C7", color: "#92400E", border: "#FDE68A" },
+    DELETE: { bg: "#FEF2F2", color: "#DC2626", border: "#FECACA" },
     TASK: { bg: "#E1F5EE", color: "#085041", border: "#A7F3D0" },
     ATTENDANCE: { bg: "#ECFDF5", color: "#059669", border: "#A7F3D0" },
     LEAVE: { bg: "#FAEEDA", color: "#633806", border: "#FED7AA" },
@@ -7380,8 +7420,8 @@ export function AuditLoggerPage({
   return (
     <div>
       <PageHeader
-        title="Event Logger & Screen Time Tracking"
-        sub="Administrative dashboard tracking user login minutes (per day, week, month, and overall) alongside telemetry and system audit actions."
+        title="System Monitor & Activity Tracking"
+        sub="Real-time client monitoring & telemetry control. Track MD & Admin live screen time, device platforms (Android / PC), pipeline stages, and critical deletions."
       />
 
       {/* Top Navigation Tabs */}
@@ -7606,6 +7646,61 @@ export function AuditLoggerPage({
                   }}
                 />
                 <Search size={14} color="#9CA3AF" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
+              </div>
+
+              {/* Quick Role Segment (MD & Admin Focus) */}
+              <div style={{ display: "inline-flex", alignItems: "center", background: "#F1F5F9", padding: "2px", borderRadius: 7, border: "1px solid #E2E8F0" }}>
+                <button
+                  type="button"
+                  onClick={() => setUserRoleSegment("ALL")}
+                  style={{
+                    padding: "4px 9px",
+                    borderRadius: 5,
+                    border: "none",
+                    background: userRoleSegment === "ALL" ? "#FFFFFF" : "transparent",
+                    color: userRoleSegment === "ALL" ? "#1E293B" : "#64748B",
+                    fontSize: 11.5,
+                    fontWeight: userRoleSegment === "ALL" ? 700 : 500,
+                    cursor: "pointer",
+                    boxShadow: userRoleSegment === "ALL" ? "0 1px 2px rgba(0,0,0,0.06)" : "none"
+                  }}
+                >
+                  All Users
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUserRoleSegment("ADMIN_MD")}
+                  style={{
+                    padding: "4px 9px",
+                    borderRadius: 5,
+                    border: "none",
+                    background: userRoleSegment === "ADMIN_MD" ? "#4F46E5" : "transparent",
+                    color: userRoleSegment === "ADMIN_MD" ? "#FFFFFF" : "#4F46E5",
+                    fontSize: 11.5,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    boxShadow: userRoleSegment === "ADMIN_MD" ? "0 1px 2px rgba(0,0,0,0.06)" : "none"
+                  }}
+                >
+                  👑 MD & Admin Only
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUserRoleSegment("STAFF")}
+                  style={{
+                    padding: "4px 9px",
+                    borderRadius: 5,
+                    border: "none",
+                    background: userRoleSegment === "STAFF" ? "#FFFFFF" : "transparent",
+                    color: userRoleSegment === "STAFF" ? "#1E293B" : "#64748B",
+                    fontSize: 11.5,
+                    fontWeight: userRoleSegment === "STAFF" ? 700 : 500,
+                    cursor: "pointer",
+                    boxShadow: userRoleSegment === "STAFF" ? "0 1px 2px rgba(0,0,0,0.06)" : "none"
+                  }}
+                >
+                  Staff Only
+                </button>
               </div>
 
               {/* Department Filter */}
@@ -7979,10 +8074,11 @@ export function AuditLoggerPage({
                 }}
               >
                 <option value="ALL">All Event Types</option>
+                <option value="DELETE" style={{ color: "#DC2626", fontWeight: "bold" }}>🔴 Deletions (Orders, Stages, Tasks)</option>
+                <option value="STAGE">T&A Stages (Done / Progress)</option>
+                <option value="ORDER">Order Actions</option>
                 <option value="LOGIN">Logins</option>
                 <option value="LOGOUT">Logouts</option>
-                <option value="ORDER">Order Actions</option>
-                <option value="STAGE">T&A Stages</option>
                 <option value="TASK">Tasks</option>
                 <option value="ATTENDANCE">Attendance</option>
                 <option value="LEAVE">Leaves</option>
@@ -8019,6 +8115,26 @@ export function AuditLoggerPage({
                   color: "#374151"
                 }}
               />
+
+              <button
+                type="button"
+                onClick={() => setEventTypeFilter(eventTypeFilter === "DELETE" ? "ALL" : "DELETE")}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                  padding: "6px 12px",
+                  borderRadius: 7,
+                  border: eventTypeFilter === "DELETE" ? "1.5px solid #DC2626" : "1px solid #FECACA",
+                  background: eventTypeFilter === "DELETE" ? "#DC2626" : "#FEF2F2",
+                  color: eventTypeFilter === "DELETE" ? "#FFFFFF" : "#DC2626",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: "pointer"
+                }}
+              >
+                🔴 Deletions Only ({totalDeletionsCount})
+              </button>
 
               {(searchTerm || eventTypeFilter !== "ALL" || userFilter !== "ALL" || dateFilter) && (
                 <button
@@ -8188,8 +8304,17 @@ export function AuditLoggerPage({
 
                         <td style={{ padding: "12px" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 5, color: "#1F2937", fontWeight: 600, fontSize: 12 }}>
-                            {isMobile ? <Smartphone size={14} color="#534AB7" /> : <Laptop size={14} color="#1F9E8D" />}
-                            <span>{log.deviceType || (isMobile ? "Mobile" : "Laptop / Desktop")}</span>
+                            {isMobile ? (
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "#EFF6FF", color: "#1D4ED8", padding: "2px 7px", borderRadius: 6, fontSize: 11, border: "1px solid #BFDBFE" }}>
+                                <Smartphone size={13} color="#2563EB" />
+                                {log.device?.toLowerCase().includes("android") ? "Android Mobile" : log.device?.toLowerCase().includes("ios") ? "iOS / Tablet" : "Mobile"}
+                              </span>
+                            ) : (
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "#F0FDF4", color: "#15803D", padding: "2px 7px", borderRadius: 6, fontSize: 11, border: "1px solid #BBF7D0" }}>
+                                <Laptop size={13} color="#16A34A" />
+                                {log.device?.toLowerCase().includes("windows") ? "Windows PC" : "Laptop / Desktop"}
+                              </span>
+                            )}
                           </div>
                           <div style={{ fontSize: 11, color: "#6B7280", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={log.device}>
                             {log.device || "Browser Client"}
